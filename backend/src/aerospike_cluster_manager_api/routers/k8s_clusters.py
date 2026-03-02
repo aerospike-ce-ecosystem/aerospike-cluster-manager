@@ -12,7 +12,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Path
+from fastapi import APIRouter, HTTPException, Path, Query
 from pydantic import BaseModel
 
 from aerospike_cluster_manager_api import config, db
@@ -213,9 +213,32 @@ def _build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
             "port": req.monitoring.port,
         }
 
-    # Template reference
+    # Template reference and overrides
     if req.template_ref:
         cr["spec"]["templateRef"] = {"name": req.template_ref}
+        if req.template_overrides:
+            overrides: dict[str, Any] = {}
+            if req.template_overrides.image:
+                overrides["image"] = req.template_overrides.image
+            if req.template_overrides.size is not None:
+                overrides["size"] = req.template_overrides.size
+            if req.template_overrides.resources:
+                overrides["podSpec"] = {
+                    "aerospikeContainer": {
+                        "resources": {
+                            "requests": {
+                                "cpu": req.template_overrides.resources.requests.cpu,
+                                "memory": req.template_overrides.resources.requests.memory,
+                            },
+                            "limits": {
+                                "cpu": req.template_overrides.resources.limits.cpu,
+                                "memory": req.template_overrides.resources.limits.memory,
+                            },
+                        }
+                    }
+                }
+            if overrides:
+                cr["spec"]["overrides"] = overrides
 
     # Dynamic config update
     if req.enable_dynamic_config:
@@ -277,7 +300,7 @@ async def get_k8s_cluster(
         namespace, f"app.kubernetes.io/name=aerospike-cluster,app.kubernetes.io/instance={name}"
     )
 
-    # Merge dynamic config status from CR status.pods map
+    # Merge dynamic config status and extended fields from CR status.pods map
     cr_pods_status = status.get("pods", {})
     pods = []
     for p in pods_raw:
@@ -288,6 +311,12 @@ async def get_k8s_cluster(
         last_restart_time = cr_pod.get("lastRestartTime")
         if last_restart_time and isinstance(last_restart_time, str):
             p["lastRestartTime"] = last_restart_time
+        # Rich pod status fields from operator CR status
+        p["nodeId"] = cr_pod.get("nodeID")
+        rack_val = cr_pod.get("rack")
+        p["rackId"] = rack_val if isinstance(rack_val, int) else None
+        p["configHash"] = cr_pod.get("configHash")
+        p["podSpecHash"] = cr_pod.get("podSpecHash")
         pods.append(K8sPodStatus(**p))
 
     # Extract operation status
@@ -315,6 +344,12 @@ async def get_k8s_cluster(
             )
         )
 
+    # Extract lastReconcileTime — may be a string or an RFC3339 timestamp
+    last_reconcile_time_raw = status.get("lastReconcileTime")
+    last_reconcile_time = None
+    if last_reconcile_time_raw and isinstance(last_reconcile_time_raw, str):
+        last_reconcile_time = last_reconcile_time_raw
+
     return K8sClusterDetail(
         name=metadata.get("name", ""),
         namespace=metadata.get("namespace", ""),
@@ -330,6 +365,10 @@ async def get_k8s_cluster(
         operationStatus=operation_status,
         failedReconcileCount=status.get("failedReconcileCount", 0),
         lastReconcileError=status.get("lastReconcileError"),
+        aerospikeClusterSize=status.get("aerospikeClusterSize"),
+        pendingRestartPods=status.get("pendingRestartPods", []),
+        lastReconcileTime=last_reconcile_time,
+        operatorVersion=status.get("operatorVersion"),
     )
 
 
@@ -396,6 +435,9 @@ async def update_k8s_cluster(
         and body.paused is None
         and body.enable_dynamic_config is None
         and body.aerospike_config is None
+        and body.rolling_update_batch_size is None
+        and body.max_unavailable is None
+        and body.disable_pdb is None
     ):
         raise HTTPException(status_code=400, detail="At least one field must be provided")
 
@@ -424,6 +466,12 @@ async def update_k8s_cluster(
         patch["spec"]["enableDynamicConfigUpdate"] = body.enable_dynamic_config
     if body.aerospike_config is not None:
         patch["spec"]["aerospikeConfig"] = body.aerospike_config
+    if body.rolling_update_batch_size is not None:
+        patch["spec"]["rollingUpdateBatchSize"] = body.rolling_update_batch_size
+    if body.max_unavailable is not None:
+        patch["spec"]["maxUnavailable"] = body.max_unavailable
+    if body.disable_pdb is not None:
+        patch["spec"]["disablePDB"] = body.disable_pdb
     result = await k8s_client.patch_cluster(namespace, name, patch)
     return _extract_summary(result)
 
@@ -540,11 +588,34 @@ async def get_k8s_template(
 async def get_k8s_cluster_events(
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
+    limit: int = Query(default=50, ge=1, le=500, description="Maximum number of events to return"),
 ) -> list[K8sClusterEvent]:
     _require_k8s()
     field_selector = f"involvedObject.name={name},involvedObject.kind=AerospikeCluster"
     events_raw = await k8s_client.list_events(namespace, field_selector)
-    return [K8sClusterEvent(**e) for e in events_raw]
+    events = [K8sClusterEvent(**e) for e in events_raw]
+    return events[:limit]
+
+
+@router.post(
+    "/clusters/{namespace}/{name}/resync-template",
+    summary="Trigger template resync for K8s Aerospike cluster",
+)
+@_k8s_endpoint("resync template for Kubernetes cluster")
+async def resync_k8s_cluster_template(
+    namespace: str = _K8S_NAMESPACE,
+    name: str = _K8S_NAME,
+) -> K8sClusterSummary:
+    _require_k8s()
+    patch: dict[str, Any] = {
+        "metadata": {
+            "annotations": {
+                "acko.io/resync-template": "true",
+            }
+        }
+    }
+    result = await k8s_client.patch_cluster(namespace, name, patch)
+    return _extract_summary(result)
 
 
 @router.post("/clusters/{namespace}/{name}/operations", summary="Trigger operation on K8s cluster")

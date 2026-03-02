@@ -256,9 +256,18 @@ export const api = {
   getK8sTemplate: (namespace: string, name: string) =>
     request<import("./types").K8sTemplateDetail>(`/api/k8s/templates/${namespace}/${name}`),
 
+  // K8s Template Resync
+  resyncK8sClusterTemplate: (namespace: string, name: string) =>
+    request<import("./types").K8sClusterSummary>(
+      `/api/k8s/clusters/${namespace}/${name}/resync-template`,
+      { method: "POST" },
+    ),
+
   // K8s Cluster Events
-  getK8sClusterEvents: (namespace: string, name: string) =>
-    request<import("./types").K8sClusterEvent[]>(`/api/k8s/clusters/${namespace}/${name}/events`),
+  getK8sClusterEvents: (namespace: string, name: string, limit = 50) =>
+    request<import("./types").K8sClusterEvent[]>(
+      `/api/k8s/clusters/${namespace}/${name}/events?limit=${limit}`,
+    ),
 
   // K8s Cluster Operations
   triggerK8sClusterOperation: (

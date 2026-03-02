@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { K8sClusterPhase } from "@/lib/api/types";
 
-const phaseConfig: Record<string, { label: string; className: string }> = {
+const phaseConfig = {
   InProgress: {
     label: "In Progress",
     className: "bg-warning/10 text-warning border-warning/20",
@@ -47,10 +47,10 @@ const phaseConfig: Record<string, { label: string; className: string }> = {
     label: "Unknown",
     className: "bg-muted text-muted-foreground border-muted",
   },
-};
+} satisfies Partial<Record<K8sClusterPhase, { label: string; className: string }>>;
 
 export function K8sClusterStatusBadge({ phase }: { phase: K8sClusterPhase | string }) {
-  const config = phaseConfig[phase] || phaseConfig.Unknown;
+  const config = phaseConfig[phase as K8sClusterPhase] ?? phaseConfig.Unknown;
   return (
     <Badge variant="outline" className={cn("text-[11px]", config.className)}>
       {config.label}

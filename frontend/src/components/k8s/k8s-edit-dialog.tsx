@@ -30,6 +30,9 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
   const [size, setSize] = useState(1);
   const [enableDynamicConfig, setEnableDynamicConfig] = useState(false);
   const [aerospikeConfigText, setAerospikeConfigText] = useState("");
+  const [batchSize, setBatchSize] = useState<number | undefined>(undefined);
+  const [maxUnavailable, setMaxUnavailable] = useState("");
+  const [disablePDB, setDisablePDB] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
@@ -38,6 +41,9 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
   const initialImage = cluster.image;
   const initialSize = cluster.size;
   const initialEnableDynamicConfig = Boolean(cluster.spec?.enableDynamicConfigUpdate);
+  const initialBatchSize = (cluster.spec?.rollingUpdateBatchSize as number | undefined) ?? undefined;
+  const initialMaxUnavailable = ((cluster.spec?.maxUnavailable as string | number) ?? "").toString();
+  const initialDisablePDB = Boolean(cluster.spec?.disablePDB);
   const initialAerospikeConfig = useMemo(
     () => (cluster.spec?.aerospikeConfig as Record<string, unknown>) ?? {},
     [cluster.spec?.aerospikeConfig],
@@ -54,10 +60,13 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
       setSize(initialSize);
       setEnableDynamicConfig(initialEnableDynamicConfig);
       setAerospikeConfigText(initialAerospikeConfigText);
+      setBatchSize(initialBatchSize);
+      setMaxUnavailable(initialMaxUnavailable);
+      setDisablePDB(initialDisablePDB);
       setError(null);
       setConfigError(null);
     }
-  }, [open, initialImage, initialSize, initialEnableDynamicConfig, initialAerospikeConfigText]);
+  }, [open, initialImage, initialSize, initialEnableDynamicConfig, initialAerospikeConfigText, initialBatchSize, initialMaxUnavailable, initialDisablePDB]);
 
   // Validate JSON on every keystroke
   useEffect(() => {
@@ -77,7 +86,10 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
     image !== initialImage ||
     size !== initialSize ||
     enableDynamicConfig !== initialEnableDynamicConfig ||
-    aerospikeConfigText !== initialAerospikeConfigText;
+    aerospikeConfigText !== initialAerospikeConfigText ||
+    batchSize !== initialBatchSize ||
+    maxUnavailable !== initialMaxUnavailable ||
+    disablePDB !== initialDisablePDB;
 
   const handleSave = async () => {
     setLoading(true);
@@ -97,6 +109,15 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
       if (aerospikeConfigText !== initialAerospikeConfigText) {
         const parsed = JSON.parse(aerospikeConfigText) as Record<string, unknown>;
         data.aerospikeConfig = parsed;
+      }
+      if (batchSize !== initialBatchSize && batchSize !== undefined) {
+        data.rollingUpdateBatchSize = batchSize;
+      }
+      if (maxUnavailable !== initialMaxUnavailable && maxUnavailable !== "") {
+        data.maxUnavailable = maxUnavailable;
+      }
+      if (disablePDB !== initialDisablePDB) {
+        data.disablePDB = disablePDB;
       }
 
       await onSave(data);
@@ -162,7 +183,7 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
               id="edit-dynamic-config"
               checked={enableDynamicConfig}
               onCheckedChange={(checked) => {
-                setEnableDynamicConfig(checked);
+                setEnableDynamicConfig(checked === true);
                 setError(null);
               }}
               disabled={loading}
@@ -170,6 +191,60 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
             <Label htmlFor="edit-dynamic-config" className="cursor-pointer">
               Enable Dynamic Config Update
             </Label>
+          </div>
+
+          {/* Rolling Update Strategy */}
+          <div className="grid gap-3">
+            <Label className="text-sm font-semibold">Rolling Update Strategy</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1">
+                <Label htmlFor="edit-batch-size" className="text-xs">
+                  Batch Size
+                </Label>
+                <Input
+                  id="edit-batch-size"
+                  type="number"
+                  min={1}
+                  value={batchSize ?? ""}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    setBatchSize(isNaN(val) ? undefined : Math.max(1, val));
+                    setError(null);
+                  }}
+                  placeholder="e.g. 1"
+                  disabled={loading}
+                />
+              </div>
+              <div className="grid gap-1">
+                <Label htmlFor="edit-max-unavailable" className="text-xs">
+                  Max Unavailable
+                </Label>
+                <Input
+                  id="edit-max-unavailable"
+                  value={maxUnavailable}
+                  onChange={(e) => {
+                    setMaxUnavailable(e.target.value);
+                    setError(null);
+                  }}
+                  placeholder='e.g. 1 or 25%'
+                  disabled={loading}
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="edit-disable-pdb"
+                checked={disablePDB}
+                onCheckedChange={(checked) => {
+                  setDisablePDB(checked === true);
+                  setError(null);
+                }}
+                disabled={loading}
+              />
+              <Label htmlFor="edit-disable-pdb" className="cursor-pointer text-xs">
+                Disable PodDisruptionBudget (PDB)
+              </Label>
+            </div>
           </div>
 
           {/* Aerospike Config */}

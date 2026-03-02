@@ -59,6 +59,12 @@ export function K8sPodTable({
               Status
             </th>
             <th scope="col" className="px-4 py-2 text-left font-medium">
+              Node ID
+            </th>
+            <th scope="col" className="px-4 py-2 text-left font-medium">
+              Rack
+            </th>
+            <th scope="col" className="px-4 py-2 text-left font-medium">
               Pod IP
             </th>
             <th scope="col" className="px-4 py-2 text-left font-medium">
@@ -105,6 +111,24 @@ export function K8sPodTable({
                   >
                     {pod.isReady ? "Ready" : pod.phase}
                   </Badge>
+                </td>
+                <td className="px-4 py-2 font-mono text-xs">
+                  {pod.nodeId ? (
+                    <span title={pod.nodeId} className="cursor-default">
+                      {pod.nodeId.slice(0, 8)}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </td>
+                <td className="px-4 py-2 font-mono text-xs">
+                  {pod.rackId != null ? (
+                    <Badge variant="outline" className="text-[11px]">
+                      {pod.rackId}
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
                 </td>
                 <td className="px-4 py-2 font-mono text-xs">{pod.podIP || "-"}</td>
                 <td className="px-4 py-2 font-mono text-xs">{pod.hostIP || "-"}</td>

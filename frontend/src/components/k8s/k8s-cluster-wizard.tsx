@@ -23,17 +23,22 @@ import {
   validateK8sName,
   validateK8sCpu,
   validateK8sMemory,
+  validateNamespaces,
+  MAX_CE_NAMESPACES,
   parseCpuMillis,
   parseMemoryBytes,
 } from "@/lib/validations/k8s";
 import { toast } from "sonner";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import type {
+  AerospikeNamespaceConfig,
   CreateK8sClusterRequest,
   MonitoringConfig,
   ACLConfig,
   ACLRoleSpec,
   ACLUserSpec,
   RollingUpdateConfig,
+  TemplateOverrides,
 } from "@/lib/api/types";
 
 const AEROSPIKE_IMAGES = ["aerospike:ce-8.1.1.1", "aerospike:ce-7.2.0.6"];
@@ -68,6 +73,8 @@ export function K8sClusterWizard() {
   const [fetchingOptions, setFetchingOptions] = useState(true);
   const [creationError, setCreationError] = useState<string | null>(null);
   const [k8sSecrets, setK8sSecrets] = useState<string[]>([]);
+  const [overridesOpen, setOverridesOpen] = useState(false);
+  const [templateOverrides, setTemplateOverrides] = useState<TemplateOverrides>({});
 
   const DEFAULT_RESOURCES = {
     requests: { cpu: "500m", memory: "1Gi" },
@@ -165,17 +172,32 @@ export function K8sClusterWizard() {
     });
   };
 
-  const isStoragePersistent = form.namespaces[0]?.storageEngine.type === "device";
+  const isStoragePersistent = form.namespaces.some((ns) => ns.storageEngine.type === "device");
+
+  const addNamespace = () => {
+    if (form.namespaces.length >= MAX_CE_NAMESPACES) return;
+    const newNs: AerospikeNamespaceConfig = {
+      name: "",
+      replicationFactor: Math.min(2, form.size),
+      storageEngine: { type: "memory", dataSize: 1073741824 },
+    };
+    setForm((prev) => ({ ...prev, namespaces: [...prev.namespaces, newNs] }));
+  };
+
+  const removeNamespace = (index: number) => {
+    if (form.namespaces.length <= 1) return;
+    setForm((prev) => ({
+      ...prev,
+      namespaces: prev.namespaces.filter((_, i) => i !== index),
+    }));
+  };
 
   const canProceed = () => {
     if (step === 0) {
       return validateK8sName(form.name) === null;
     }
     if (step === 1) {
-      const ns = form.namespaces[0];
-      if (!ns || !ns.name || ns.name.trim().length === 0) return false;
-      if (ns.replicationFactor > form.size) return false;
-      return true;
+      return validateNamespaces(form.namespaces, form.size) === null;
     }
     if (step === 2) {
       // Monitoring & Options step - always valid (all fields optional)
@@ -373,89 +395,165 @@ export function K8sClusterWizard() {
 
           {step === 1 && (
             <>
-              <div className="grid gap-2">
-                <Label htmlFor="ns-name">Aerospike Namespace Name</Label>
-                <Input
-                  id="ns-name"
-                  value={form.namespaces[0]?.name || "test"}
-                  onChange={(e) => updateNamespace(0, { name: e.target.value })}
-                />
-                {form.namespaces[0]?.name !== undefined &&
-                  form.namespaces[0].name.trim().length === 0 && (
-                    <p className="text-destructive text-xs">Namespace name is required</p>
-                  )}
-              </div>
+              <p className="text-muted-foreground text-xs">
+                Aerospike CE supports up to {MAX_CE_NAMESPACES} namespaces per cluster.
+              </p>
 
-              <div className="grid gap-2">
-                <Label htmlFor="storage-type">Storage Type</Label>
-                <div
-                  id="storage-type"
-                  className="flex gap-2"
-                  role="group"
-                  aria-label="Storage type"
-                >
-                  <Button
-                    type="button"
-                    variant={!isStoragePersistent ? "default" : "outline"}
-                    size="sm"
-                    onClick={() =>
-                      updateNamespace(0, {
-                        storageEngine: { type: "memory", dataSize: 1073741824 },
-                      })
-                    }
+              {form.namespaces.map((ns, ni) => {
+                const nsIsDevice = ns.storageEngine.type === "device";
+                return (
+                  <div
+                    key={`ns-${ni}`}
+                    className="space-y-3 rounded-lg border p-4"
                   >
-                    In-Memory
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={isStoragePersistent ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => {
-                      updateNamespace(0, {
-                        storageEngine: { type: "device", filesize: 4294967296 },
-                      });
-                      if (!form.storage) {
-                        updateForm({
-                          storage: {
-                            storageClass: storageClasses[0] || "standard",
-                            size: "10Gi",
-                            mountPath: "/opt/aerospike/data",
-                          },
-                        });
-                      }
-                    }}
-                  >
-                    Persistent (Device)
-                  </Button>
-                </div>
-              </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">
+                        Namespace {ni + 1}
+                      </span>
+                      {form.namespaces.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeNamespace(ni)}
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </div>
 
-              {!isStoragePersistent && (
-                <div className="grid gap-2">
-                  <Label htmlFor="memory-size">Memory Size</Label>
-                  <Select
-                    value={String(form.namespaces[0]?.storageEngine.dataSize || 1073741824)}
-                    onValueChange={(v) =>
-                      updateNamespace(0, {
-                        storageEngine: { type: "memory", dataSize: parseInt(v) },
-                      })
-                    }
-                  >
-                    <SelectTrigger id="memory-size">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1073741824">1 GiB</SelectItem>
-                      <SelectItem value="2147483648">2 GiB</SelectItem>
-                      <SelectItem value="4294967296">4 GiB</SelectItem>
-                      <SelectItem value="8589934592">8 GiB</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor={`ns-name-${ni}`}>Namespace Name</Label>
+                      <Input
+                        id={`ns-name-${ni}`}
+                        value={ns.name}
+                        onChange={(e) => updateNamespace(ni, { name: e.target.value })}
+                      />
+                      {ns.name !== undefined && ns.name.trim().length === 0 && (
+                        <p className="text-destructive text-xs">Namespace name is required</p>
+                      )}
+                      {form.namespaces.length > 1 &&
+                        ns.name.trim().length > 0 &&
+                        form.namespaces.filter((o) => o.name.trim() === ns.name.trim()).length > 1 && (
+                          <p className="text-destructive text-xs">Namespace names must be unique</p>
+                        )}
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label htmlFor={`storage-type-${ni}`}>Storage Type</Label>
+                      <div
+                        id={`storage-type-${ni}`}
+                        className="flex gap-2"
+                        role="group"
+                        aria-label={`Storage type for namespace ${ni + 1}`}
+                      >
+                        <Button
+                          type="button"
+                          variant={!nsIsDevice ? "default" : "outline"}
+                          size="sm"
+                          onClick={() =>
+                            updateNamespace(ni, {
+                              storageEngine: { type: "memory", dataSize: 1073741824 },
+                            })
+                          }
+                        >
+                          In-Memory
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={nsIsDevice ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => {
+                            updateNamespace(ni, {
+                              storageEngine: { type: "device", filesize: 4294967296 },
+                            });
+                            if (!form.storage) {
+                              updateForm({
+                                storage: {
+                                  storageClass: storageClasses[0] || "standard",
+                                  size: "10Gi",
+                                  mountPath: "/opt/aerospike/data",
+                                },
+                              });
+                            }
+                          }}
+                        >
+                          Persistent (Device)
+                        </Button>
+                      </div>
+                    </div>
+
+                    {!nsIsDevice && (
+                      <div className="grid gap-2">
+                        <Label htmlFor={`memory-size-${ni}`}>Memory Size</Label>
+                        <Select
+                          value={String(ns.storageEngine.dataSize || 1073741824)}
+                          onValueChange={(v) =>
+                            updateNamespace(ni, {
+                              storageEngine: { type: "memory", dataSize: parseInt(v) },
+                            })
+                          }
+                        >
+                          <SelectTrigger id={`memory-size-${ni}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1073741824">1 GiB</SelectItem>
+                            <SelectItem value="2147483648">2 GiB</SelectItem>
+                            <SelectItem value="4294967296">4 GiB</SelectItem>
+                            <SelectItem value="8589934592">8 GiB</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    <div className="grid gap-2">
+                      <Label htmlFor={`repl-factor-${ni}`}>
+                        Replication Factor (1 - {form.size})
+                      </Label>
+                      <Input
+                        id={`repl-factor-${ni}`}
+                        type="number"
+                        min={1}
+                        max={form.size}
+                        value={ns.replicationFactor}
+                        onChange={(e) =>
+                          updateNamespace(ni, {
+                            replicationFactor: Math.min(
+                              form.size,
+                              Math.max(1, parseInt(e.target.value) || 1),
+                            ),
+                          })
+                        }
+                      />
+                      {ns.replicationFactor > form.size && (
+                        <p className="text-destructive text-xs">
+                          Replication factor ({ns.replicationFactor}) cannot exceed cluster size (
+                          {form.size}).
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {form.namespaces.length < MAX_CE_NAMESPACES && (
+                <Button type="button" variant="outline" size="sm" onClick={addNamespace}>
+                  Add Namespace
+                </Button>
               )}
 
+              {validateNamespaces(form.namespaces, form.size) && (
+                <p className="text-destructive text-xs">
+                  {validateNamespaces(form.namespaces, form.size)}
+                </p>
+              )}
+
+              {/* Shared persistent storage settings (shown when any namespace uses device) */}
               {isStoragePersistent && (
-                <>
+                <div className="space-y-3 rounded-lg border border-dashed p-4">
+                  <span className="text-sm font-medium">Persistent Volume Settings</span>
+
                   <div className="grid gap-2">
                     <Label htmlFor="storage-class">Storage Class</Label>
                     <Select
@@ -511,33 +609,8 @@ export function K8sClusterWizard() {
                       </SelectContent>
                     </Select>
                   </div>
-                </>
+                </div>
               )}
-
-              <div className="grid gap-2">
-                <Label htmlFor="repl-factor">Replication Factor (1 - {form.size})</Label>
-                <Input
-                  id="repl-factor"
-                  type="number"
-                  min={1}
-                  max={form.size}
-                  value={form.namespaces[0]?.replicationFactor || 1}
-                  onChange={(e) =>
-                    updateNamespace(0, {
-                      replicationFactor: Math.min(
-                        form.size,
-                        Math.max(1, parseInt(e.target.value) || 1),
-                      ),
-                    })
-                  }
-                />
-                {(form.namespaces[0]?.replicationFactor || 1) > form.size && (
-                  <p className="text-destructive text-xs">
-                    Replication factor ({form.namespaces[0]?.replicationFactor}) cannot exceed
-                    cluster size ({form.size}).
-                  </p>
-                )}
-              </div>
             </>
           )}
 
@@ -588,9 +661,14 @@ export function K8sClusterWizard() {
                 <Label htmlFor="template-ref">Cluster Template (optional)</Label>
                 <Select
                   value={form.templateRef || "__none__"}
-                  onValueChange={(v) =>
-                    updateForm({ templateRef: v === "__none__" ? undefined : v })
-                  }
+                  onValueChange={(v) => {
+                    const selected = v === "__none__" ? undefined : v;
+                    updateForm({ templateRef: selected, templateOverrides: undefined });
+                    if (!selected) {
+                      setTemplateOverrides({});
+                      setOverridesOpen(false);
+                    }
+                  }}
                 >
                   <SelectTrigger id="template-ref">
                     <SelectValue placeholder="No template" />
@@ -610,6 +688,250 @@ export function K8sClusterWizard() {
                   Apply default settings from an AerospikeClusterTemplate resource.
                 </p>
               </div>
+
+              {form.templateRef && (
+                <div className="rounded-lg border p-3">
+                  <button
+                    type="button"
+                    className="text-foreground flex w-full items-center gap-2 text-sm font-medium"
+                    onClick={() => setOverridesOpen(!overridesOpen)}
+                  >
+                    {overridesOpen ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                    Template Overrides
+                    {(templateOverrides.image ||
+                      templateOverrides.size != null ||
+                      templateOverrides.resources) && (
+                      <span className="bg-accent/20 text-accent rounded-full px-2 py-0.5 text-[10px]">
+                        Active
+                      </span>
+                    )}
+                  </button>
+                  {overridesOpen && (
+                    <div className="mt-3 space-y-3">
+                      <p className="text-muted-foreground text-xs">
+                        Override specific fields from the template. These values take precedence
+                        over the template defaults.
+                      </p>
+                      <div className="grid gap-2">
+                        <Label htmlFor="override-image" className="text-xs">
+                          Image Override
+                        </Label>
+                        <Select
+                          value={templateOverrides.image || "__default__"}
+                          onValueChange={(v) => {
+                            const updated = {
+                              ...templateOverrides,
+                              image: v === "__default__" ? undefined : v,
+                            };
+                            setTemplateOverrides(updated);
+                            updateForm({
+                              templateOverrides:
+                                updated.image || updated.size != null || updated.resources
+                                  ? updated
+                                  : undefined,
+                            });
+                          }}
+                        >
+                          <SelectTrigger id="override-image">
+                            <SelectValue placeholder="Use template default" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__default__">Use template default</SelectItem>
+                            {AEROSPIKE_IMAGES.map((img) => (
+                              <SelectItem key={img} value={img}>
+                                {img}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="override-size" className="text-xs">
+                          Size Override (1-8 nodes)
+                        </Label>
+                        <Input
+                          id="override-size"
+                          type="number"
+                          min={1}
+                          max={8}
+                          placeholder="Use template default"
+                          value={templateOverrides.size ?? ""}
+                          onChange={(e) => {
+                            const val = e.target.value
+                              ? Math.min(8, Math.max(1, parseInt(e.target.value) || 1))
+                              : undefined;
+                            const updated = { ...templateOverrides, size: val };
+                            setTemplateOverrides(updated);
+                            updateForm({
+                              templateOverrides:
+                                updated.image || updated.size != null || updated.resources
+                                  ? updated
+                                  : undefined,
+                            });
+                          }}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label className="text-xs">Resource Overrides</Label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="grid gap-1">
+                            <Label htmlFor="override-cpu-req" className="text-muted-foreground text-[10px]">
+                              CPU Request
+                            </Label>
+                            <Input
+                              id="override-cpu-req"
+                              placeholder="e.g. 500m"
+                              value={templateOverrides.resources?.requests?.cpu ?? ""}
+                              onChange={(e) => {
+                                const val = e.target.value || undefined;
+                                const currentRes = templateOverrides.resources ?? {
+                                  requests: { cpu: "", memory: "" },
+                                  limits: { cpu: "", memory: "" },
+                                };
+                                const newRes = {
+                                  requests: { ...currentRes.requests, cpu: val ?? "" },
+                                  limits: { ...currentRes.limits },
+                                };
+                                const hasValues =
+                                  newRes.requests.cpu ||
+                                  newRes.requests.memory ||
+                                  newRes.limits.cpu ||
+                                  newRes.limits.memory;
+                                const updated = {
+                                  ...templateOverrides,
+                                  resources: hasValues ? newRes : undefined,
+                                };
+                                setTemplateOverrides(updated);
+                                updateForm({
+                                  templateOverrides:
+                                    updated.image || updated.size != null || updated.resources
+                                      ? updated
+                                      : undefined,
+                                });
+                              }}
+                            />
+                          </div>
+                          <div className="grid gap-1">
+                            <Label htmlFor="override-cpu-lim" className="text-muted-foreground text-[10px]">
+                              CPU Limit
+                            </Label>
+                            <Input
+                              id="override-cpu-lim"
+                              placeholder="e.g. 2"
+                              value={templateOverrides.resources?.limits?.cpu ?? ""}
+                              onChange={(e) => {
+                                const val = e.target.value || undefined;
+                                const currentRes = templateOverrides.resources ?? {
+                                  requests: { cpu: "", memory: "" },
+                                  limits: { cpu: "", memory: "" },
+                                };
+                                const newRes = {
+                                  requests: { ...currentRes.requests },
+                                  limits: { ...currentRes.limits, cpu: val ?? "" },
+                                };
+                                const hasValues =
+                                  newRes.requests.cpu ||
+                                  newRes.requests.memory ||
+                                  newRes.limits.cpu ||
+                                  newRes.limits.memory;
+                                const updated = {
+                                  ...templateOverrides,
+                                  resources: hasValues ? newRes : undefined,
+                                };
+                                setTemplateOverrides(updated);
+                                updateForm({
+                                  templateOverrides:
+                                    updated.image || updated.size != null || updated.resources
+                                      ? updated
+                                      : undefined,
+                                });
+                              }}
+                            />
+                          </div>
+                          <div className="grid gap-1">
+                            <Label htmlFor="override-mem-req" className="text-muted-foreground text-[10px]">
+                              Memory Request
+                            </Label>
+                            <Input
+                              id="override-mem-req"
+                              placeholder="e.g. 1Gi"
+                              value={templateOverrides.resources?.requests?.memory ?? ""}
+                              onChange={(e) => {
+                                const val = e.target.value || undefined;
+                                const currentRes = templateOverrides.resources ?? {
+                                  requests: { cpu: "", memory: "" },
+                                  limits: { cpu: "", memory: "" },
+                                };
+                                const newRes = {
+                                  requests: { ...currentRes.requests, memory: val ?? "" },
+                                  limits: { ...currentRes.limits },
+                                };
+                                const hasValues =
+                                  newRes.requests.cpu ||
+                                  newRes.requests.memory ||
+                                  newRes.limits.cpu ||
+                                  newRes.limits.memory;
+                                const updated = {
+                                  ...templateOverrides,
+                                  resources: hasValues ? newRes : undefined,
+                                };
+                                setTemplateOverrides(updated);
+                                updateForm({
+                                  templateOverrides:
+                                    updated.image || updated.size != null || updated.resources
+                                      ? updated
+                                      : undefined,
+                                });
+                              }}
+                            />
+                          </div>
+                          <div className="grid gap-1">
+                            <Label htmlFor="override-mem-lim" className="text-muted-foreground text-[10px]">
+                              Memory Limit
+                            </Label>
+                            <Input
+                              id="override-mem-lim"
+                              placeholder="e.g. 4Gi"
+                              value={templateOverrides.resources?.limits?.memory ?? ""}
+                              onChange={(e) => {
+                                const val = e.target.value || undefined;
+                                const currentRes = templateOverrides.resources ?? {
+                                  requests: { cpu: "", memory: "" },
+                                  limits: { cpu: "", memory: "" },
+                                };
+                                const newRes = {
+                                  requests: { ...currentRes.requests },
+                                  limits: { ...currentRes.limits, memory: val ?? "" },
+                                };
+                                const hasValues =
+                                  newRes.requests.cpu ||
+                                  newRes.requests.memory ||
+                                  newRes.limits.cpu ||
+                                  newRes.limits.memory;
+                                const updated = {
+                                  ...templateOverrides,
+                                  resources: hasValues ? newRes : undefined,
+                                };
+                                setTemplateOverrides(updated);
+                                updateForm({
+                                  templateOverrides:
+                                    updated.image || updated.size != null || updated.resources
+                                      ? updated
+                                      : undefined,
+                                });
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="flex items-center space-x-2">
                 <Checkbox
@@ -754,7 +1076,7 @@ export function K8sClusterWizard() {
                     <Input
                       id="admin-timeout"
                       type="number"
-                      min={500}
+                      min={100}
                       max={30000}
                       value={form.acl.adminPolicyTimeout}
                       onChange={(e) =>
@@ -1072,18 +1394,25 @@ export function K8sClusterWizard() {
                 <span className="text-muted-foreground">Image</span>
                 <span className="font-mono text-xs font-medium">{form.image}</span>
 
-                <span className="text-muted-foreground">Aerospike Namespace</span>
-                <span className="font-medium">{form.namespaces[0]?.name}</span>
+                <span className="text-muted-foreground">Namespaces</span>
+                <span className="font-medium">{form.namespaces.length}</span>
 
-                <span className="text-muted-foreground">Storage</span>
-                <span className="font-medium">
-                  {isStoragePersistent
-                    ? `Persistent (${form.storage?.size || "10Gi"})`
-                    : `In-Memory (${formatBytes(form.namespaces[0]?.storageEngine.dataSize || 1073741824)})`}
-                </span>
-
-                <span className="text-muted-foreground">Replication</span>
-                <span className="font-medium">{form.namespaces[0]?.replicationFactor}</span>
+                {form.namespaces.map((ns, ni) => (
+                  <div key={`review-ns-${ni}`} className="col-span-2 ml-2 rounded border p-2 text-xs">
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                      <span className="text-muted-foreground">Name</span>
+                      <span className="font-medium">{ns.name}</span>
+                      <span className="text-muted-foreground">Storage</span>
+                      <span className="font-medium">
+                        {ns.storageEngine.type === "device"
+                          ? `Persistent (${form.storage?.size || "10Gi"})`
+                          : `In-Memory (${formatBytes(ns.storageEngine.dataSize || 1073741824)})`}
+                      </span>
+                      <span className="text-muted-foreground">Replication</span>
+                      <span className="font-medium">{ns.replicationFactor}</span>
+                    </div>
+                  </div>
+                ))}
 
                 {form.resources && (
                   <>
@@ -1104,6 +1433,23 @@ export function K8sClusterWizard() {
                   <>
                     <span className="text-muted-foreground">Template</span>
                     <span className="font-medium">{form.templateRef}</span>
+                  </>
+                )}
+
+                {form.templateRef && form.templateOverrides && (
+                  <>
+                    <span className="text-muted-foreground">Template Overrides</span>
+                    <span className="font-medium">
+                      {[
+                        form.templateOverrides.image && `Image: ${form.templateOverrides.image}`,
+                        form.templateOverrides.size != null &&
+                          `Size: ${form.templateOverrides.size}`,
+                        form.templateOverrides.resources &&
+                          `Resources: CPU ${form.templateOverrides.resources.requests.cpu || "-"}/${form.templateOverrides.resources.limits.cpu || "-"}, Mem ${form.templateOverrides.resources.requests.memory || "-"}/${form.templateOverrides.resources.limits.memory || "-"}`,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </span>
                   </>
                 )}
 

@@ -31,6 +31,7 @@ interface K8sClusterState {
     podList?: string[],
   ) => Promise<void>;
   updateCluster: (namespace: string, name: string, data: UpdateK8sClusterRequest) => Promise<void>;
+  resyncTemplate: (namespace: string, name: string) => Promise<void>;
   pauseCluster: (namespace: string, name: string) => Promise<void>;
   resumeCluster: (namespace: string, name: string) => Promise<void>;
 }
@@ -150,6 +151,18 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => ({
       await api.updateK8sCluster(namespace, name, data);
       set({ loading: false });
       await get().fetchClusters();
+      await get().fetchCluster(namespace, name);
+    } catch (error) {
+      set({ error: getErrorMessage(error), loading: false });
+      throw error;
+    }
+  },
+
+  resyncTemplate: async (namespace: string, name: string) => {
+    set({ loading: true, error: null });
+    try {
+      await api.resyncK8sClusterTemplate(namespace, name);
+      set({ loading: false });
       await get().fetchCluster(namespace, name);
     } catch (error) {
       set({ error: getErrorMessage(error), loading: false });

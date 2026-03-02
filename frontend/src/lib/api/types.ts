@@ -458,6 +458,10 @@ export interface K8sPodStatus {
   dynamicConfigStatus?: "Applied" | "Failed" | "Pending";
   lastRestartReason?: string;
   lastRestartTime?: string;
+  nodeId?: string;
+  rackId?: number;
+  configHash?: string;
+  podSpecHash?: string;
 }
 
 export interface K8sClusterSummary {
@@ -487,6 +491,10 @@ export interface K8sClusterDetail {
   operationStatus?: OperationStatusResponse;
   failedReconcileCount: number;
   lastReconcileError?: string;
+  aerospikeClusterSize?: number;
+  pendingRestartPods: string[];
+  lastReconcileTime?: string;
+  operatorVersion?: string;
 }
 
 export interface AerospikeNamespaceStorage {
@@ -533,6 +541,7 @@ export interface CreateK8sClusterRequest {
   resources?: ResourceConfig;
   monitoring?: MonitoringConfig;
   templateRef?: string;
+  templateOverrides?: TemplateOverrides;
   enableDynamicConfig?: boolean;
   autoConnect: boolean;
   acl?: ACLConfig;
@@ -547,6 +556,9 @@ export interface UpdateK8sClusterRequest {
   paused?: boolean;
   enableDynamicConfig?: boolean;
   aerospikeConfig?: Record<string, unknown>;
+  rollingUpdateBatchSize?: number;
+  maxUnavailable?: string;
+  disablePDB?: boolean;
 }
 
 export interface ScaleK8sClusterRequest {
@@ -572,4 +584,18 @@ export interface K8sTemplateDetail {
   namespace: string;
   spec: Record<string, unknown>;
   age?: string;
+}
+
+export interface TemplateSnapshot {
+  synced?: boolean;
+  templateName?: string;
+  resourceVersion?: string;
+  snapshotTimestamp?: string;
+  spec?: unknown;
+}
+
+export interface TemplateOverrides {
+  image?: string;
+  size?: number;
+  resources?: ResourceConfig;
 }
