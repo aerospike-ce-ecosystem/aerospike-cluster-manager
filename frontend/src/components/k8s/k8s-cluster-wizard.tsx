@@ -40,6 +40,7 @@ import type {
   RollingUpdateConfig,
   RackAwareConfig,
   TemplateOverrides,
+  K8sNodeInfo,
 } from "@/lib/api/types";
 
 const AEROSPIKE_IMAGES = ["aerospike:ce-8.1.1.1", "aerospike:ce-7.2.0.6"];
@@ -105,7 +106,7 @@ export function K8sClusterWizard() {
     rackConfig: { racks: [] },
   });
 
-  const [nodes, setNodes] = useState<import("@/lib/api/types").K8sNodeInfo[]>([]);
+  const [nodes, setNodes] = useState<K8sNodeInfo[]>([]);
 
   useEffect(() => {
     setFetchingOptions(true);
@@ -151,7 +152,13 @@ export function K8sClusterWizard() {
   // Fetch K8s nodes when on the Rack Config step
   useEffect(() => {
     if (step === 6) {
-      api.getK8sNodes().then(setNodes).catch(() => {});
+      api
+        .getK8sNodes()
+        .then(setNodes)
+        .catch((err) => {
+          console.error("Failed to fetch K8s nodes:", err);
+          toast.error("Failed to load node information for zone selection");
+        });
     }
   }, [step]);
 
@@ -431,14 +438,9 @@ export function K8sClusterWizard() {
               {form.namespaces.map((ns, ni) => {
                 const nsIsDevice = ns.storageEngine.type === "device";
                 return (
-                  <div
-                    key={`ns-${ni}`}
-                    className="space-y-3 rounded-lg border p-4"
-                  >
+                  <div key={`ns-${ni}`} className="space-y-3 rounded-lg border p-4">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">
-                        Namespace {ni + 1}
-                      </span>
+                      <span className="text-sm font-medium">Namespace {ni + 1}</span>
                       {form.namespaces.length > 1 && (
                         <Button
                           type="button"
@@ -463,7 +465,8 @@ export function K8sClusterWizard() {
                       )}
                       {form.namespaces.length > 1 &&
                         ns.name.trim().length > 0 &&
-                        form.namespaces.filter((o) => o.name.trim() === ns.name.trim()).length > 1 && (
+                        form.namespaces.filter((o) => o.name.trim() === ns.name.trim()).length >
+                          1 && (
                           <p className="text-destructive text-xs">Namespace names must be unique</p>
                         )}
                     </div>
@@ -808,7 +811,10 @@ export function K8sClusterWizard() {
                         <Label className="text-xs">Resource Overrides</Label>
                         <div className="grid grid-cols-2 gap-2">
                           <div className="grid gap-1">
-                            <Label htmlFor="override-cpu-req" className="text-muted-foreground text-[10px]">
+                            <Label
+                              htmlFor="override-cpu-req"
+                              className="text-muted-foreground text-[10px]"
+                            >
                               CPU Request
                             </Label>
                             <Input
@@ -845,7 +851,10 @@ export function K8sClusterWizard() {
                             />
                           </div>
                           <div className="grid gap-1">
-                            <Label htmlFor="override-cpu-lim" className="text-muted-foreground text-[10px]">
+                            <Label
+                              htmlFor="override-cpu-lim"
+                              className="text-muted-foreground text-[10px]"
+                            >
                               CPU Limit
                             </Label>
                             <Input
@@ -882,7 +891,10 @@ export function K8sClusterWizard() {
                             />
                           </div>
                           <div className="grid gap-1">
-                            <Label htmlFor="override-mem-req" className="text-muted-foreground text-[10px]">
+                            <Label
+                              htmlFor="override-mem-req"
+                              className="text-muted-foreground text-[10px]"
+                            >
                               Memory Request
                             </Label>
                             <Input
@@ -919,7 +931,10 @@ export function K8sClusterWizard() {
                             />
                           </div>
                           <div className="grid gap-1">
-                            <Label htmlFor="override-mem-lim" className="text-muted-foreground text-[10px]">
+                            <Label
+                              htmlFor="override-mem-lim"
+                              className="text-muted-foreground text-[10px]"
+                            >
                               Memory Limit
                             </Label>
                             <Input
@@ -1406,132 +1421,136 @@ export function K8sClusterWizard() {
             </>
           )}
 
-          {step === 6 && (() => {
-            const racks = form.rackConfig?.racks ?? [];
-            return (
-              <div className="space-y-4">
-                <p className="text-muted-foreground text-sm">
-                  Configure multi-rack deployment for zone-aware pod distribution. Each rack
-                  gets its own StatefulSet with optional zone affinity.
-                </p>
+          {step === 6 &&
+            (() => {
+              const racks = form.rackConfig?.racks ?? [];
+              return (
+                <div className="space-y-4">
+                  <p className="text-muted-foreground text-sm">
+                    Configure multi-rack deployment for zone-aware pod distribution. Each rack gets
+                    its own StatefulSet with optional zone affinity.
+                  </p>
 
-                {racks.length === 0 ? (
-                  <div className="rounded-lg border border-dashed p-6 text-center">
-                    <p className="text-muted-foreground text-sm mb-3">
-                      No racks configured. The cluster will use a single default rack.
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        updateForm({
-                          rackConfig: {
-                            racks: [{ id: 1, zone: "", region: "" }],
-                          },
-                        });
-                      }}
-                    >
-                      Enable Multi-Rack
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {(() => {
-                      const uniqueZones = [...new Set(nodes.map((n) => n.zone).filter(Boolean))];
-                      return racks.map((rack, idx) => (
-                        <div key={idx} className="rounded-lg border p-4 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <Label className="font-medium">Rack #{rack.id}</Label>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-destructive h-7 px-2"
-                              onClick={() => {
-                                const newRacks = racks.filter((_, i) => i !== idx);
-                                updateForm({ rackConfig: { racks: newRacks } });
-                              }}
-                            >
-                              Remove
-                            </Button>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="grid gap-1">
-                              <Label className="text-xs">Zone</Label>
-                              {uniqueZones.length > 0 ? (
-                                <Select
-                                  value={rack.zone || ""}
-                                  onValueChange={(v) => {
-                                    const newRacks = [...racks];
-                                    newRacks[idx] = { ...rack, zone: v };
-                                    updateForm({ rackConfig: { racks: newRacks } });
-                                  }}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select zone" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {uniqueZones.map((z) => (
-                                      <SelectItem key={z} value={z}>{z}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              ) : (
-                                <Input
-                                  value={rack.zone || ""}
-                                  onChange={(e) => {
-                                    const newRacks = [...racks];
-                                    newRacks[idx] = { ...rack, zone: e.target.value };
-                                    updateForm({ rackConfig: { racks: newRacks } });
-                                  }}
-                                  placeholder="e.g. us-east-1a"
-                                />
-                              )}
-                            </div>
-                            <div className="grid gap-1">
-                              <Label className="text-xs">Max Pods Per Node</Label>
-                              <Input
-                                type="number"
-                                min={1}
-                                value={rack.maxPodsPerNode ?? ""}
-                                onChange={(e) => {
-                                  const val = parseInt(e.target.value);
-                                  const newRacks = [...racks];
-                                  newRacks[idx] = { ...rack, maxPodsPerNode: isNaN(val) ? undefined : Math.max(1, val) };
+                  {racks.length === 0 ? (
+                    <div className="rounded-lg border border-dashed p-6 text-center">
+                      <p className="text-muted-foreground mb-3 text-sm">
+                        No racks configured. The cluster will use a single default rack.
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          updateForm({
+                            rackConfig: {
+                              racks: [{ id: 1, zone: "", region: "" }],
+                            },
+                          });
+                        }}
+                      >
+                        Enable Multi-Rack
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {(() => {
+                        const uniqueZones = [...new Set(nodes.map((n) => n.zone).filter(Boolean))];
+                        return racks.map((rack, idx) => (
+                          <div key={idx} className="space-y-3 rounded-lg border p-4">
+                            <div className="flex items-center justify-between">
+                              <Label className="font-medium">Rack #{rack.id}</Label>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive h-7 px-2"
+                                onClick={() => {
+                                  const newRacks = racks.filter((_, i) => i !== idx);
                                   updateForm({ rackConfig: { racks: newRacks } });
                                 }}
-                                placeholder="No limit"
-                              />
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="grid gap-1">
+                                <Label className="text-xs">Zone</Label>
+                                {uniqueZones.length > 0 ? (
+                                  <Select
+                                    value={rack.zone || ""}
+                                    onValueChange={(v) => {
+                                      const newRacks = [...racks];
+                                      newRacks[idx] = { ...rack, zone: v };
+                                      updateForm({ rackConfig: { racks: newRacks } });
+                                    }}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select zone" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {uniqueZones.map((z) => (
+                                        <SelectItem key={z} value={z}>
+                                          {z}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  <Input
+                                    value={rack.zone || ""}
+                                    onChange={(e) => {
+                                      const newRacks = [...racks];
+                                      newRacks[idx] = { ...rack, zone: e.target.value };
+                                      updateForm({ rackConfig: { racks: newRacks } });
+                                    }}
+                                    placeholder="e.g. us-east-1a"
+                                  />
+                                )}
+                              </div>
+                              <div className="grid gap-1">
+                                <Label className="text-xs">Max Pods Per Node</Label>
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  value={rack.maxPodsPerNode ?? ""}
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value);
+                                    const newRacks = [...racks];
+                                    newRacks[idx] = {
+                                      ...rack,
+                                      maxPodsPerNode: isNaN(val) ? undefined : Math.max(1, val),
+                                    };
+                                    updateForm({ rackConfig: { racks: newRacks } });
+                                  }}
+                                  placeholder="No limit"
+                                />
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ));
-                    })()}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const maxId = Math.max(0, ...racks.map((r) => r.id));
-                        updateForm({
-                          rackConfig: {
-                            racks: [
-                              ...racks,
-                              { id: maxId + 1, zone: "", region: "" },
-                            ],
-                          },
-                        });
-                      }}
-                    >
-                      + Add Rack
-                    </Button>
-                    <p className="text-muted-foreground text-xs">
-                      Tip: For {form.size} nodes across {racks.length} racks,
-                      approximately {`${Math.floor(form.size / racks.length)}-${Math.ceil(form.size / racks.length)}`} pods per rack.
-                    </p>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
+                        ));
+                      })()}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const maxId = Math.max(0, ...racks.map((r) => r.id));
+                          updateForm({
+                            rackConfig: {
+                              racks: [...racks, { id: maxId + 1, zone: "", region: "" }],
+                            },
+                          });
+                        }}
+                      >
+                        + Add Rack
+                      </Button>
+                      <p className="text-muted-foreground text-xs">
+                        Tip: For {form.size} nodes across {racks.length} racks, approximately{" "}
+                        {`${Math.floor(form.size / racks.length)}-${Math.ceil(form.size / racks.length)}`}{" "}
+                        pods per rack.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
           {step === 7 && (
             <div className="space-y-3">
@@ -1554,7 +1573,10 @@ export function K8sClusterWizard() {
                 <span className="font-medium">{form.namespaces.length}</span>
 
                 {form.namespaces.map((ns, ni) => (
-                  <div key={`review-ns-${ni}`} className="col-span-2 ml-2 rounded border p-2 text-xs">
+                  <div
+                    key={`review-ns-${ni}`}
+                    className="col-span-2 ml-2 rounded border p-2 text-xs"
+                  >
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                       <span className="text-muted-foreground">Name</span>
                       <span className="font-medium">{ns.name}</span>
@@ -1648,8 +1670,10 @@ export function K8sClusterWizard() {
                     <span className="text-muted-foreground">Racks</span>
                     <div className="space-y-1">
                       {form.rackConfig!.racks.map((rack) => (
-                        <span key={rack.id} className="font-mono text-xs block">
-                          Rack #{rack.id}{rack.zone ? ` (zone: ${rack.zone})` : ""}{rack.maxPodsPerNode ? ` max: ${rack.maxPodsPerNode}/node` : ""}
+                        <span key={rack.id} className="block font-mono text-xs">
+                          Rack #{rack.id}
+                          {rack.zone ? ` (zone: ${rack.zone})` : ""}
+                          {rack.maxPodsPerNode ? ` max: ${rack.maxPodsPerNode}/node` : ""}
                         </span>
                       ))}
                     </div>

@@ -41,8 +41,11 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
   const initialImage = cluster.image;
   const initialSize = cluster.size;
   const initialEnableDynamicConfig = Boolean(cluster.spec?.enableDynamicConfigUpdate);
-  const initialBatchSize = (cluster.spec?.rollingUpdateBatchSize as number | undefined) ?? undefined;
-  const initialMaxUnavailable = ((cluster.spec?.maxUnavailable as string | number) ?? "").toString();
+  const initialBatchSize =
+    (cluster.spec?.rollingUpdateBatchSize as number | undefined) ?? undefined;
+  const initialMaxUnavailable = (
+    (cluster.spec?.maxUnavailable as string | number) ?? ""
+  ).toString();
   const initialDisablePDB = Boolean(cluster.spec?.disablePDB);
   const initialAerospikeConfig = useMemo(
     () => (cluster.spec?.aerospikeConfig as Record<string, unknown>) ?? {},
@@ -66,7 +69,16 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
       setError(null);
       setConfigError(null);
     }
-  }, [open, initialImage, initialSize, initialEnableDynamicConfig, initialAerospikeConfigText, initialBatchSize, initialMaxUnavailable, initialDisablePDB]);
+  }, [
+    open,
+    initialImage,
+    initialSize,
+    initialEnableDynamicConfig,
+    initialAerospikeConfigText,
+    initialBatchSize,
+    initialMaxUnavailable,
+    initialDisablePDB,
+  ]);
 
   // Validate JSON on every keystroke
   useEffect(() => {
@@ -226,7 +238,7 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
                     setMaxUnavailable(e.target.value);
                     setError(null);
                   }}
-                  placeholder='e.g. 1 or 25%'
+                  placeholder="e.g. 1 or 25%"
                   disabled={loading}
                 />
               </div>

@@ -402,9 +402,9 @@ class ClusterHealthResponse(BaseModel):
     model_config = {"populate_by_name": True}
 
     phase: str = "Unknown"
-    total_pods: int = Field(alias="totalPods")
-    ready_pods: int = Field(alias="readyPods")
-    desired_pods: int = Field(alias="desiredPods")
+    total_pods: int = Field(default=0, alias="totalPods")
+    ready_pods: int = Field(default=0, alias="readyPods")
+    desired_pods: int = Field(default=0, alias="desiredPods")
     migrating: bool = False
     available: bool = False
     config_applied: bool = Field(default=False, alias="configApplied")

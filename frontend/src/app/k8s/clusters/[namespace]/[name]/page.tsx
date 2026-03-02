@@ -101,9 +101,12 @@ export default function K8sClusterDetailPage() {
         .catch((err) => {
           console.error("Failed to fetch cluster events:", err);
         });
-      api.getK8sClusterHealth(namespace, name).then(setHealth).catch((err) => {
-        console.error("Failed to fetch cluster health:", err);
-      });
+      api
+        .getK8sClusterHealth(namespace, name)
+        .then(setHealth)
+        .catch((err) => {
+          console.error("Failed to fetch cluster health:", err);
+        });
     }
   }, [namespace, name, fetchCluster]);
 
@@ -122,9 +125,12 @@ export default function K8sClusterDetailPage() {
         .catch((err) => {
           console.error("Failed to fetch cluster events:", err);
         });
-      api.getK8sClusterHealth(namespace, name).then(setHealth).catch((err) => {
-        console.error("Failed to fetch cluster health:", err);
-      });
+      api
+        .getK8sClusterHealth(namespace, name)
+        .then(setHealth)
+        .catch((err) => {
+          console.error("Failed to fetch cluster health:", err);
+        });
     }, 5000);
     return () => clearInterval(interval);
   }, [selectedCluster?.phase, namespace, name, fetchCluster]);
@@ -357,30 +363,56 @@ export default function K8sClusterDetailPage() {
           <CardContent>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-6">
               <div className="text-center">
-                <p className="text-2xl font-bold">{health.readyPods}/{health.desiredPods}</p>
+                <p className="text-2xl font-bold">
+                  {health.readyPods}/{health.desiredPods}
+                </p>
                 <p className="text-muted-foreground text-xs">Pods Ready</p>
               </div>
               <div className="text-center">
-                <Badge variant="outline" className={cn("text-[11px]", health.migrating ? "bg-warning/10 text-warning border-warning/20" : "bg-success/10 text-success border-success/20")}>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "text-[11px]",
+                    health.migrating
+                      ? "bg-warning/10 text-warning border-warning/20"
+                      : "bg-success/10 text-success border-success/20",
+                  )}
+                >
                   {health.migrating ? "Migrating" : "Stable"}
                 </Badge>
-                <p className="text-muted-foreground text-xs mt-1">Migration</p>
+                <p className="text-muted-foreground mt-1 text-xs">Migration</p>
               </div>
               <div className="text-center">
-                <Badge variant="outline" className={cn("text-[11px]", health.configApplied ? "bg-success/10 text-success border-success/20" : "bg-warning/10 text-warning border-warning/20")}>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "text-[11px]",
+                    health.configApplied
+                      ? "bg-success/10 text-success border-success/20"
+                      : "bg-warning/10 text-warning border-warning/20",
+                  )}
+                >
                   {health.configApplied ? "Applied" : "Pending"}
                 </Badge>
-                <p className="text-muted-foreground text-xs mt-1">Config</p>
+                <p className="text-muted-foreground mt-1 text-xs">Config</p>
               </div>
               <div className="text-center">
-                <Badge variant="outline" className={cn("text-[11px]", health.available ? "bg-success/10 text-success border-success/20" : "bg-destructive/10 text-destructive border-destructive/20")}>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    "text-[11px]",
+                    health.available
+                      ? "bg-success/10 text-success border-success/20"
+                      : "bg-destructive/10 text-destructive border-destructive/20",
+                  )}
+                >
                   {health.available ? "Available" : "Unavailable"}
                 </Badge>
-                <p className="text-muted-foreground text-xs mt-1">Availability</p>
+                <p className="text-muted-foreground mt-1 text-xs">Availability</p>
               </div>
               {health.pendingRestartCount > 0 && (
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-warning">{health.pendingRestartCount}</p>
+                  <p className="text-warning text-2xl font-bold">{health.pendingRestartCount}</p>
                   <p className="text-muted-foreground text-xs">Pending Restart</p>
                 </div>
               )}
@@ -388,12 +420,12 @@ export default function K8sClusterDetailPage() {
                 <div className="text-center">
                   <div className="flex items-center justify-center gap-1">
                     {health.rackDistribution.map((r) => (
-                      <Badge key={r.id} variant="outline" className="text-[10px] px-1.5">
+                      <Badge key={r.id} variant="outline" className="px-1.5 text-[10px]">
                         R{r.id}: {r.ready}/{r.total}
                       </Badge>
                     ))}
                   </div>
-                  <p className="text-muted-foreground text-xs mt-1">Rack Distribution</p>
+                  <p className="text-muted-foreground mt-1 text-xs">Rack Distribution</p>
                 </div>
               )}
             </div>
@@ -426,7 +458,7 @@ export default function K8sClusterDetailPage() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-muted-foreground flex items-center gap-1.5 text-sm font-normal">
-                  <AlertTriangle className="h-3.5 w-3.5 text-warning" />
+                  <AlertTriangle className="text-warning h-3.5 w-3.5" />
                   Pending Restart
                 </CardTitle>
               </CardHeader>
@@ -468,7 +500,10 @@ export default function K8sClusterDetailPage() {
                 <p className="text-lg font-semibold">
                   {formatRelativeTime(selectedCluster.lastReconcileTime)}
                 </p>
-                <p className="text-muted-foreground mt-1 text-[10px]" title={selectedCluster.lastReconcileTime}>
+                <p
+                  className="text-muted-foreground mt-1 text-[10px]"
+                  title={selectedCluster.lastReconcileTime}
+                >
                   {selectedCluster.lastReconcileTime}
                 </p>
               </CardContent>
@@ -492,8 +527,8 @@ export default function K8sClusterDetailPage() {
       {/* Rolling Update Strategy */}
       {Boolean(
         selectedCluster.spec?.rollingUpdateBatchSize ||
-          selectedCluster.spec?.maxUnavailable ||
-          selectedCluster.spec?.disablePDB,
+        selectedCluster.spec?.maxUnavailable ||
+        selectedCluster.spec?.disablePDB,
       ) && (
         <Card>
           <CardHeader className="pb-2">
@@ -509,9 +544,7 @@ export default function K8sClusterDetailPage() {
               </div>
               <div>
                 <span className="text-muted-foreground text-xs">Max Unavailable</span>
-                <p className="font-medium">
-                  {String(selectedCluster.spec?.maxUnavailable ?? "-")}
-                </p>
+                <p className="font-medium">{String(selectedCluster.spec?.maxUnavailable ?? "-")}</p>
               </div>
               <div>
                 <span className="text-muted-foreground text-xs">PDB</span>
@@ -746,9 +779,7 @@ export default function K8sClusterDetailPage() {
                 <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
                   <div>
                     <span className="text-muted-foreground text-xs">Template Name</span>
-                    <p className="font-medium">
-                      {String(templateSnapshot.templateName || "-")}
-                    </p>
+                    <p className="font-medium">{String(templateSnapshot.templateName || "-")}</p>
                   </div>
                   <div>
                     <span className="text-muted-foreground text-xs">Resource Version</span>
@@ -758,9 +789,7 @@ export default function K8sClusterDetailPage() {
                   </div>
                   <div>
                     <span className="text-muted-foreground text-xs">Snapshot Time</span>
-                    <p className="text-xs">
-                      {String(templateSnapshot.snapshotTimestamp || "-")}
-                    </p>
+                    <p className="text-xs">{String(templateSnapshot.snapshotTimestamp || "-")}</p>
                   </div>
                   <div>
                     <span className="text-muted-foreground text-xs">Sync Status</span>
@@ -786,11 +815,7 @@ export default function K8sClusterDetailPage() {
                   </button>
                   {templateSpecOpen && (
                     <pre className="bg-muted mt-2 max-h-60 overflow-auto rounded-lg p-4 font-mono text-xs">
-                      {JSON.stringify(
-                        templateSnapshot.spec || templateSnapshot,
-                        null,
-                        2,
-                      )}
+                      {JSON.stringify(templateSnapshot.spec || templateSnapshot, null, 2)}
                     </pre>
                   )}
                 </div>
@@ -839,9 +864,7 @@ export default function K8sClusterDetailPage() {
             const pods = selectedPods.length > 0 ? selectedPods : undefined;
             await triggerOperation(namespace, name, "WarmRestart", pods);
             toast.success(
-              pods
-                ? `Warm restart initiated for ${pods.length} pod(s)`
-                : "Warm restart initiated",
+              pods ? `Warm restart initiated for ${pods.length} pod(s)` : "Warm restart initiated",
             );
             setSelectedPods([]);
           } catch (err) {

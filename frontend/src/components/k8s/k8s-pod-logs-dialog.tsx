@@ -1,14 +1,15 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { api } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/utils";
 import { Copy, Download, RefreshCw } from "lucide-react";
@@ -78,7 +79,7 @@ export function K8sPodLogsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+      <DialogContent className="flex max-h-[80vh] max-w-4xl flex-col">
         <DialogHeader>
           <DialogTitle className="font-mono text-sm">{podName} — Logs</DialogTitle>
         </DialogHeader>
@@ -109,7 +110,7 @@ export function K8sPodLogsDialog({
         </div>
         <pre
           ref={logRef}
-          className="bg-muted flex-1 overflow-auto rounded-lg p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap min-h-[300px] max-h-[60vh]"
+          className="bg-muted max-h-[60vh] min-h-[300px] flex-1 overflow-auto rounded-lg p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap"
         >
           {loading ? "Loading logs..." : logs}
         </pre>

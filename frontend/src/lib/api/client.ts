@@ -271,10 +271,18 @@ export const api = {
 
   // K8s Cluster Health
   getK8sClusterHealth: (namespace: string, name: string) =>
-    request<import("./types").ClusterHealthSummary>(`/api/k8s/clusters/${namespace}/${name}/health`),
+    request<import("./types").ClusterHealthSummary>(
+      `/api/k8s/clusters/${namespace}/${name}/health`,
+    ),
 
   // K8s Pod Logs
-  getK8sPodLogs: (namespace: string, clusterName: string, pod: string, tail = 500, container?: string) =>
+  getK8sPodLogs: (
+    namespace: string,
+    clusterName: string,
+    pod: string,
+    tail = 500,
+    container?: string,
+  ) =>
     request<import("./types").PodLogsResponse>(
       `/api/k8s/clusters/${namespace}/${clusterName}/pods/${pod}/logs?tail=${tail}${container ? `&container=${container}` : ""}`,
     ),

@@ -31,6 +31,7 @@ from aerospike_cluster_manager_api.models.k8s_cluster import (
     K8sTemplateSummary,
     OperationRequest,
     OperationStatusResponse,
+    RackConfig,
     RackDistribution,
     ScaleK8sClusterRequest,
     UpdateK8sClusterRequest,
@@ -119,7 +120,7 @@ def _extract_summary(item: dict[str, Any], connection_id: str | None = None) -> 
     )
 
 
-def _build_rack_list(racks: list) -> list[dict[str, Any]]:
+def _build_rack_list(racks: list[RackConfig]) -> list[dict[str, Any]]:
     """Convert RackConfig models into CR-compatible dicts."""
     result = []
     for rack in racks:
@@ -450,6 +451,9 @@ async def get_k8s_pod_logs(
     container: str | None = Query(default=None, description="Container name"),
 ) -> dict[str, Any]:
     _require_k8s()
+    # Verify pod belongs to this cluster (pods are named <cluster>-<rackID>-<ordinal>)
+    if not pod.startswith(f"{name}-"):
+        raise HTTPException(status_code=403, detail=f"Pod '{pod}' does not belong to cluster '{name}'")
     logs = await k8s_client.read_pod_log(namespace, pod, container=container, tail_lines=tail)
     return {"pod": pod, "logs": logs, "tailLines": tail}
 
@@ -466,6 +470,11 @@ async def get_k8s_cluster_yaml(
     metadata = dict(item.get("metadata", {}))
     for key in ("managedFields", "resourceVersion", "uid", "generation", "creationTimestamp"):
         metadata.pop(key, None)
+    # Strip internal annotations that may contain sensitive data
+    annotations = metadata.get("annotations")
+    if annotations and isinstance(annotations, dict):
+        annotations = {k: v for k, v in annotations.items() if k != "kubectl.kubernetes.io/last-applied-configuration"}
+        metadata["annotations"] = annotations if annotations else None
     clean_cr = {
         "apiVersion": item.get("apiVersion", "acko.io/v1alpha1"),
         "kind": item.get("kind", "AerospikeCluster"),
