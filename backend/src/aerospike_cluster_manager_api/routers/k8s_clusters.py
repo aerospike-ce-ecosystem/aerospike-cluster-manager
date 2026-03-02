@@ -21,9 +21,14 @@ from aerospike_cluster_manager_api.k8s_client import K8sApiError, k8s_client
 from aerospike_cluster_manager_api.models.connection import ConnectionProfile
 from aerospike_cluster_manager_api.models.k8s_cluster import (
     CreateK8sClusterRequest,
+    K8sClusterCondition,
     K8sClusterDetail,
+    K8sClusterEvent,
     K8sClusterSummary,
     K8sPodStatus,
+    K8sTemplateDetail,
+    K8sTemplateSummary,
+    OperationRequest,
     ScaleK8sClusterRequest,
     UpdateK8sClusterRequest,
 )
@@ -112,7 +117,7 @@ def _extract_summary(item: dict[str, Any], connection_id: str | None = None) -> 
 
 
 def _build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
-    """Convert CreateK8sClusterRequest to AerospikeCECluster CR dict."""
+    """Convert CreateK8sClusterRequest to AerospikeCluster CR dict."""
     ns_configs = []
     for ns in req.namespaces:
         storage_engine: dict[str, Any] = {"type": ns.storage_engine.type}
@@ -133,7 +138,7 @@ def _build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
 
     cr: dict[str, Any] = {
         "apiVersion": "acko.io/v1alpha1",
-        "kind": "AerospikeCECluster",
+        "kind": "AerospikeCluster",
         "metadata": {
             "name": req.name,
             "namespace": req.namespace,
@@ -200,6 +205,21 @@ def _build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
             }
         }
 
+    # Monitoring
+    if req.monitoring:
+        cr["spec"]["monitoring"] = {
+            "enabled": req.monitoring.enabled,
+            "port": req.monitoring.port,
+        }
+
+    # Template reference
+    if req.template_ref:
+        cr["spec"]["templateRef"] = {"name": req.template_ref}
+
+    # Dynamic config update
+    if req.enable_dynamic_config:
+        cr["spec"]["enableDynamicConfigUpdate"] = True
+
     return cr
 
 
@@ -234,16 +254,31 @@ async def get_k8s_cluster(
     )
     pods = [K8sPodStatus(**p) for p in pods_raw]
 
+    # Extract conditions from operator status
+    conditions = []
+    for cond in status.get("conditions", []):
+        conditions.append(
+            K8sClusterCondition(
+                type=cond.get("type", ""),
+                status=cond.get("status", ""),
+                reason=cond.get("reason"),
+                message=cond.get("message"),
+                lastTransitionTime=cond.get("lastTransitionTime"),
+            )
+        )
+
     return K8sClusterDetail(
         name=metadata.get("name", ""),
         namespace=metadata.get("namespace", ""),
         size=spec.get("size", 0),
         image=spec.get("image", ""),
         phase=status.get("phase", "Unknown"),
+        phaseReason=status.get("phaseReason"),
         age=_calculate_age(metadata.get("creationTimestamp")),
         spec=spec,
         status=status,
         pods=pods,
+        conditions=conditions,
     )
 
 
@@ -302,7 +337,13 @@ async def update_k8s_cluster(
     _require_k8s()
 
     # Validate that at least one field is provided
-    if body.size is None and body.image is None and body.resources is None:
+    if (
+        body.size is None
+        and body.image is None
+        and body.resources is None
+        and body.monitoring is None
+        and body.paused is None
+    ):
         raise HTTPException(status_code=400, detail="At least one field must be provided")
 
     patch: dict[str, Any] = {"spec": {}}
@@ -319,6 +360,13 @@ async def update_k8s_cluster(
                 }
             }
         }
+    if body.monitoring is not None:
+        patch["spec"]["monitoring"] = {
+            "enabled": body.monitoring.enabled,
+            "port": body.monitoring.port,
+        }
+    if body.paused is not None:
+        patch["spec"]["paused"] = body.paused
     result = await k8s_client.patch_cluster(namespace, name, patch)
     return _extract_summary(result)
 
@@ -373,3 +421,79 @@ async def list_k8s_namespaces() -> list[str]:
 async def list_k8s_storage_classes() -> list[str]:
     _require_k8s()
     return await k8s_client.list_storage_classes()
+
+
+# ---------------------------------------------------------------------------
+# Template endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/templates", summary="List K8s AerospikeClusterTemplates")
+@_k8s_endpoint("list Kubernetes templates")
+async def list_k8s_templates(namespace: str | None = None) -> list[K8sTemplateSummary]:
+    _require_k8s()
+    items = await k8s_client.list_templates(namespace)
+    summaries = []
+    for item in items:
+        metadata = item.get("metadata", {})
+        spec = item.get("spec", {})
+        summaries.append(
+            K8sTemplateSummary(
+                name=metadata.get("name", ""),
+                namespace=metadata.get("namespace", ""),
+                image=spec.get("image"),
+                size=spec.get("size"),
+                age=_calculate_age(metadata.get("creationTimestamp")),
+            )
+        )
+    return summaries
+
+
+@router.get("/templates/{namespace}/{name}", summary="Get K8s AerospikeClusterTemplate detail")
+@_k8s_endpoint("get Kubernetes template")
+async def get_k8s_template(
+    namespace: str = _K8S_NAMESPACE,
+    name: str = _K8S_NAME,
+) -> K8sTemplateDetail:
+    _require_k8s()
+    item = await k8s_client.get_template(namespace, name)
+    metadata = item.get("metadata", {})
+    return K8sTemplateDetail(
+        name=metadata.get("name", ""),
+        namespace=metadata.get("namespace", ""),
+        spec=item.get("spec", {}),
+        age=_calculate_age(metadata.get("creationTimestamp")),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Cluster event & operation endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/clusters/{namespace}/{name}/events", summary="Get K8s cluster events")
+@_k8s_endpoint("get Kubernetes cluster events")
+async def get_k8s_cluster_events(
+    namespace: str = _K8S_NAMESPACE,
+    name: str = _K8S_NAME,
+) -> list[K8sClusterEvent]:
+    _require_k8s()
+    field_selector = f"involvedObject.name={name},involvedObject.kind=AerospikeCluster"
+    events_raw = await k8s_client.list_events(namespace, field_selector)
+    return [K8sClusterEvent(**e) for e in events_raw]
+
+
+@router.post("/clusters/{namespace}/{name}/operations", summary="Trigger operation on K8s cluster")
+@_k8s_endpoint("trigger operation on Kubernetes cluster")
+async def trigger_k8s_cluster_operation(
+    body: OperationRequest,
+    namespace: str = _K8S_NAMESPACE,
+    name: str = _K8S_NAME,
+) -> K8sClusterSummary:
+    _require_k8s()
+    operation: dict[str, Any] = {"type": body.type}
+    if body.pod_names:
+        operation["podNames"] = body.pod_names
+    patch: dict[str, Any] = {"spec": {"operations": [operation]}}
+    result = await k8s_client.patch_cluster(namespace, name, patch)
+    return _extract_summary(result)

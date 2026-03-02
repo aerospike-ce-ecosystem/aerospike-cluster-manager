@@ -25,10 +25,11 @@ export default function K8sClustersPage() {
     fetchClusters();
   }, [fetchClusters]);
 
-  // Auto-refresh polling when any cluster is in progress
+  // Auto-refresh polling when any cluster is in a transitional phase
   useEffect(() => {
-    const hasInProgress = clusters.some((c) => c.phase === "InProgress");
-    if (!hasInProgress) return;
+    const transitionalPhases = ["InProgress", "ScalingUp", "ScalingDown", "WaitingForMigration", "RollingRestart", "ACLSync", "Deleting"];
+    const hasTransitional = clusters.some((c) => transitionalPhases.includes(c.phase));
+    if (!hasTransitional) return;
     const interval = setInterval(() => {
       fetchClusters();
     }, 10000);

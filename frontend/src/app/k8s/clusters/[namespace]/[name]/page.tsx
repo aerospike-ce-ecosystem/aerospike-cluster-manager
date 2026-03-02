@@ -14,12 +14,12 @@ import { K8sScaleDialog } from "@/components/k8s/k8s-scale-dialog";
 import { K8sDeleteDialog } from "@/components/k8s/k8s-delete-dialog";
 import { useK8sClusterStore } from "@/stores/k8s-cluster-store";
 import { toast } from "sonner";
-import { getErrorMessage } from "@/lib/utils";
+import { cn, getErrorMessage } from "@/lib/utils";
 
 export default function K8sClusterDetailPage() {
   const params = useParams<{ namespace: string; name: string }>();
   const router = useRouter();
-  const { selectedCluster, loading, error, fetchCluster, scaleCluster, deleteCluster } =
+  const { selectedCluster, loading, error, fetchCluster, scaleCluster, deleteCluster, triggerOperation, pauseCluster, resumeCluster } =
     useK8sClusterStore();
   const [scaleOpen, setScaleOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -34,9 +34,10 @@ export default function K8sClusterDetailPage() {
     }
   }, [namespace, name, fetchCluster]);
 
-  // Auto-refresh polling when cluster is in progress
+  // Auto-refresh polling when cluster is in a transitional phase
   useEffect(() => {
-    if (selectedCluster?.phase !== "InProgress") return;
+    const transitionalPhases = ["InProgress", "ScalingUp", "ScalingDown", "WaitingForMigration", "RollingRestart", "ACLSync", "Deleting"];
+    if (!selectedCluster?.phase || !transitionalPhases.includes(selectedCluster.phase)) return;
     const interval = setInterval(() => {
       fetchCluster(namespace, name);
     }, 5000);
@@ -104,6 +105,51 @@ export default function K8sClusterDetailPage() {
               <Scale className="mr-2 h-4 w-4" />
               Scale
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  await triggerOperation(namespace, name, "WarmRestart");
+                  toast.success("Warm restart initiated");
+                } catch (err) {
+                  toast.error(getErrorMessage(err));
+                }
+              }}
+            >
+              Warm Restart
+            </Button>
+            {selectedCluster.phase === "Paused" ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    await resumeCluster(namespace, name);
+                    toast.success("Reconciliation resumed");
+                  } catch (err) {
+                    toast.error(getErrorMessage(err));
+                  }
+                }}
+              >
+                Resume
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    await pauseCluster(namespace, name);
+                    toast.success("Reconciliation paused");
+                  } catch (err) {
+                    toast.error(getErrorMessage(err));
+                  }
+                }}
+              >
+                Pause
+              </Button>
+            )}
             <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
               <Trash2 className="mr-2 h-4 w-4" />
               Delete
@@ -149,6 +195,34 @@ export default function K8sClusterDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Conditions */}
+      {selectedCluster.conditions && selectedCluster.conditions.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Conditions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {selectedCluster.conditions.map((cond, i) => (
+                <div key={i} className="flex items-center justify-between rounded-lg border p-3 text-sm">
+                  <div className="flex items-center gap-3">
+                    <span className={cn(
+                      "h-2 w-2 rounded-full",
+                      cond.status === "True" ? "bg-success" : "bg-muted-foreground"
+                    )} />
+                    <span className="font-medium">{cond.type}</span>
+                  </div>
+                  <div className="flex items-center gap-4 text-muted-foreground">
+                    {cond.reason && <span>{cond.reason}</span>}
+                    {cond.message && <span className="max-w-xs truncate" title={cond.message}>{cond.message}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Pods */}
       <Card>

@@ -1,11 +1,12 @@
 import { create } from "zustand";
-import type { K8sClusterSummary, K8sClusterDetail, CreateK8sClusterRequest } from "@/lib/api/types";
+import type { K8sClusterSummary, K8sClusterDetail, K8sTemplateSummary, CreateK8sClusterRequest } from "@/lib/api/types";
 import { api } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/utils";
 
 interface K8sClusterState {
   clusters: K8sClusterSummary[];
   selectedCluster: K8sClusterDetail | null;
+  templates: K8sTemplateSummary[];
   loading: boolean;
   error: string | null;
   k8sAvailable: boolean;
@@ -16,11 +17,16 @@ interface K8sClusterState {
   createCluster: (data: CreateK8sClusterRequest) => Promise<K8sClusterSummary>;
   deleteCluster: (namespace: string, name: string) => Promise<void>;
   scaleCluster: (namespace: string, name: string, size: number) => Promise<void>;
+  fetchTemplates: (namespace?: string) => Promise<void>;
+  triggerOperation: (namespace: string, name: string, type: "WarmRestart" | "PodRestart", podNames?: string[]) => Promise<void>;
+  pauseCluster: (namespace: string, name: string) => Promise<void>;
+  resumeCluster: (namespace: string, name: string) => Promise<void>;
 }
 
 export const useK8sClusterStore = create<K8sClusterState>()((set, get) => ({
   clusters: [],
   selectedCluster: null,
+  templates: [],
   loading: false,
   error: null,
   k8sAvailable: false,
@@ -94,6 +100,51 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => ({
       if (selectedCluster?.name === name && selectedCluster?.namespace === namespace) {
         await get().fetchCluster(namespace, name);
       }
+    } catch (error) {
+      set({ error: getErrorMessage(error), loading: false });
+      throw error;
+    }
+  },
+
+  fetchTemplates: async (namespace?: string) => {
+    try {
+      const templates = await api.getK8sTemplates(namespace);
+      set({ templates });
+    } catch (error) {
+      set({ error: getErrorMessage(error) });
+    }
+  },
+
+  triggerOperation: async (namespace: string, name: string, type: "WarmRestart" | "PodRestart", podNames?: string[]) => {
+    set({ loading: true, error: null });
+    try {
+      await api.triggerK8sClusterOperation(namespace, name, { type, podNames });
+      set({ loading: false });
+      await get().fetchCluster(namespace, name);
+    } catch (error) {
+      set({ error: getErrorMessage(error), loading: false });
+      throw error;
+    }
+  },
+
+  pauseCluster: async (namespace: string, name: string) => {
+    set({ loading: true, error: null });
+    try {
+      await api.updateK8sCluster(namespace, name, { paused: true });
+      set({ loading: false });
+      await get().fetchCluster(namespace, name);
+    } catch (error) {
+      set({ error: getErrorMessage(error), loading: false });
+      throw error;
+    }
+  },
+
+  resumeCluster: async (namespace: string, name: string) => {
+    set({ loading: true, error: null });
+    try {
+      await api.updateK8sCluster(namespace, name, { paused: false });
+      set({ loading: false });
+      await get().fetchCluster(namespace, name);
     } catch (error) {
       set({ error: getErrorMessage(error), loading: false });
       throw error;

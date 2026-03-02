@@ -27,15 +27,15 @@ import {
   parseMemoryBytes,
 } from "@/lib/validations/k8s";
 import { toast } from "sonner";
-import type { CreateK8sClusterRequest } from "@/lib/api/types";
+import type { CreateK8sClusterRequest, MonitoringConfig } from "@/lib/api/types";
 
 const AEROSPIKE_IMAGES = ["aerospike:ce-8.1.1.1", "aerospike:ce-7.2.0.6"];
 
-const STEPS = ["Basic", "Namespace & Storage", "Resources", "Review"];
+const STEPS = ["Basic", "Namespace & Storage", "Monitoring & Options", "Resources", "Review"];
 
 export function K8sClusterWizard() {
   const router = useRouter();
-  const { createCluster } = useK8sClusterStore();
+  const { createCluster, templates, fetchTemplates } = useK8sClusterStore();
   const [step, setStep] = useState(0);
   const [creating, setCreating] = useState(false);
   const [k8sNamespaces, setK8sNamespaces] = useState<string[]>([]);
@@ -62,6 +62,9 @@ export function K8sClusterWizard() {
       },
     ],
     resources: DEFAULT_RESOURCES,
+    monitoring: undefined as MonitoringConfig | undefined,
+    templateRef: undefined as string | undefined,
+    enableDynamicConfig: false,
     autoConnect: true,
   });
 
@@ -88,10 +91,13 @@ export function K8sClusterWizard() {
             `Failed to fetch storage classes: ${getErrorMessage(err)}. Using defaults.`,
           );
         }),
+      fetchTemplates().catch(() => {
+        // Templates are optional, silently ignore fetch failures
+      }),
     ]).finally(() => {
       setFetchingOptions(false);
     });
-  }, []);
+  }, [fetchTemplates]);
 
   const updateForm = (updates: Partial<CreateK8sClusterRequest>) => {
     setForm((prev) => ({ ...prev, ...updates }));
@@ -135,6 +141,10 @@ export function K8sClusterWizard() {
       return true;
     }
     if (step === 2) {
+      // Monitoring & Options step - always valid (all fields optional)
+      return true;
+    }
+    if (step === 3) {
       const res = form.resources ?? DEFAULT_RESOURCES;
       if (validateK8sCpu(res.requests.cpu) !== null) return false;
       if (validateK8sCpu(res.limits.cpu) !== null) return false;
@@ -471,6 +481,87 @@ export function K8sClusterWizard() {
 
           {step === 2 && (
             <>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="monitoring-enabled"
+                  checked={form.monitoring?.enabled ?? false}
+                  onCheckedChange={(checked) => {
+                    if (checked === true) {
+                      updateForm({ monitoring: { enabled: true, port: 9145 } });
+                    } else {
+                      updateForm({ monitoring: undefined });
+                    }
+                  }}
+                />
+                <Label htmlFor="monitoring-enabled" className="text-sm font-normal">
+                  Enable Prometheus monitoring
+                </Label>
+              </div>
+
+              {form.monitoring?.enabled && (
+                <div className="grid gap-2">
+                  <Label htmlFor="monitoring-port">Exporter Port</Label>
+                  <Input
+                    id="monitoring-port"
+                    type="number"
+                    min={1024}
+                    max={65535}
+                    value={form.monitoring.port}
+                    onChange={(e) =>
+                      updateForm({
+                        monitoring: {
+                          enabled: true,
+                          port: Math.min(65535, Math.max(1024, parseInt(e.target.value) || 9145)),
+                        },
+                      })
+                    }
+                  />
+                  <p className="text-muted-foreground text-xs">
+                    Port for the Aerospike Prometheus exporter sidecar (default: 9145).
+                  </p>
+                </div>
+              )}
+
+              <div className="grid gap-2">
+                <Label htmlFor="template-ref">Cluster Template (optional)</Label>
+                <Select
+                  value={form.templateRef || "__none__"}
+                  onValueChange={(v) => updateForm({ templateRef: v === "__none__" ? undefined : v })}
+                >
+                  <SelectTrigger id="template-ref">
+                    <SelectValue placeholder="No template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No template</SelectItem>
+                    {templates.map((t) => (
+                      <SelectItem key={`${t.namespace}/${t.name}`} value={`${t.namespace}/${t.name}`}>
+                        {t.namespace}/{t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-muted-foreground text-xs">
+                  Apply default settings from an AerospikeClusterTemplate resource.
+                </p>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="dynamic-config"
+                  checked={form.enableDynamicConfig ?? false}
+                  onCheckedChange={(checked) =>
+                    updateForm({ enableDynamicConfig: checked === true })
+                  }
+                />
+                <Label htmlFor="dynamic-config" className="text-sm font-normal">
+                  Enable dynamic config (apply config changes without restart)
+                </Label>
+              </div>
+            </>
+          )}
+
+          {step === 3 && (
+            <>
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="cpu-request">CPU Request</Label>
@@ -564,7 +655,7 @@ export function K8sClusterWizard() {
             </>
           )}
 
-          {step === 3 && (
+          {step === 4 && (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
                 <span className="text-muted-foreground">Name</span>
@@ -603,6 +694,21 @@ export function K8sClusterWizard() {
                     </span>
                   </>
                 )}
+
+                <span className="text-muted-foreground">Monitoring</span>
+                <span className="font-medium">
+                  {form.monitoring?.enabled ? `Enabled (port ${form.monitoring.port})` : "Disabled"}
+                </span>
+
+                {form.templateRef && (
+                  <>
+                    <span className="text-muted-foreground">Template</span>
+                    <span className="font-medium">{form.templateRef}</span>
+                  </>
+                )}
+
+                <span className="text-muted-foreground">Dynamic Config</span>
+                <span className="font-medium">{form.enableDynamicConfig ? "Enabled" : "Disabled"}</span>
 
                 <span className="text-muted-foreground">Auto-connect</span>
                 <span className="font-medium">{form.autoConnect ? "Yes" : "No"}</span>

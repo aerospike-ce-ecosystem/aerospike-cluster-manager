@@ -54,8 +54,9 @@ aerospike-cluster-manager/
 │       ├── main.py        # FastAPI app, CORS, router registration, /api/health
 │       ├── config.py      # Environment variable based configuration
 │       ├── store.py       # in-memory mock data store (for development)
-│       ├── models/        # Pydantic models (connection, cluster, record, index, admin, udf, metrics, query, terminal)
-│       ├── routers/       # REST endpoints (/api/* prefix)
+│       ├── models/        # Pydantic models (connection, cluster, record, index, admin, udf, metrics, query, terminal, k8s_cluster)
+│       ├── routers/       # REST endpoints (/api/* prefix, incl. k8s_clusters.py)
+│       ├── k8s_client.py  # Kubernetes API client (clusters, templates, pods, events, namespaces, storage classes)
 │       └── mock_data/     # Mock data generators for development
 ├── frontend/          # Next.js 16 App Router (React 19, TypeScript)
 │   └── src/
@@ -64,8 +65,9 @@ aerospike-cluster-manager/
 │       │   ├── ui/        # Radix-based shared primitives (shadcn/ui pattern)
 │       │   ├── common/    # Reusable components (json-viewer, code-editor, status-badge, etc.)
 │       │   ├── layout/    # App shell (header, sidebar, tab-bar)
+│       │   ├── k8s/       # K8s cluster management (wizard, cards, status badge, scale/delete dialogs, pod table)
 │       │   └── connection/, admin/  # Domain-specific components
-│       ├── stores/        # Zustand stores (connection, browser, query, admin, metrics, ui)
+│       ├── stores/        # Zustand stores (connection, browser, query, admin, metrics, ui, k8s-cluster)
 │       ├── hooks/         # Custom hooks (use-async-data, use-debounce, use-pagination, etc.)
 │       └── lib/
 │           ├── api/       # API client (auto retry, timeout, type-safe)
@@ -129,6 +131,9 @@ Local dev with `compose.dev.yaml` requires setting `AEROSPIKE_HOST=localhost AER
 | `/admin/[connId]` | User/role management |
 | `/udfs/[connId]` | UDF management |
 | `/terminal/[connId]` | AQL terminal |
+| `/k8s/clusters` | K8s AerospikeCluster list (auto-refresh for transitional phases) |
+| `/k8s/clusters/new` | K8s cluster creation wizard (5 steps) |
+| `/k8s/clusters/[namespace]/[name]` | K8s cluster detail (status, conditions, pods, operations) |
 
 ## Code Style
 
@@ -143,3 +148,4 @@ See `.env.example`. Used in podman Compose:
 - `AEROSPIKE_HOST`, `AEROSPIKE_PORT` — Aerospike server connection info
 - `BACKEND_PORT` (default 8000), `FRONTEND_PORT` (default 3100)
 - `CORS_ORIGINS` — Backend CORS allowed origins
+- `K8S_MANAGEMENT_ENABLED` — Enable K8s cluster management endpoints (default: `false`; requires in-cluster or kubeconfig access)

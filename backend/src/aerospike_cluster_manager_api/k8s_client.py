@@ -1,4 +1,4 @@
-"""Kubernetes API client for managing AerospikeCECluster custom resources.
+"""Kubernetes API client for managing AerospikeCluster custom resources.
 
 Uses the official kubernetes-client with asyncio.to_thread() wrappers
 to avoid blocking the event loop (same pattern as client_manager.py).
@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 # CRD constants
 GROUP = "acko.io"
 VERSION = "v1alpha1"
-PLURAL = "aerospikececlusters"
+PLURAL = "aerospikeclusters"
+TEMPLATE_PLURAL = "aerospikeclustertemplates"
 # Default timeout for K8s API calls (seconds)
 _K8S_API_TIMEOUT = 10
 
@@ -220,6 +221,70 @@ class K8sClient:
         except Exception as e:
             raise self._wrap_api_exception(e) from e
 
+    def _list_templates_sync(self, namespace: str | None = None) -> list[dict[str, Any]]:
+        logger.debug("_list_templates_sync(namespace=%s)", namespace)
+        self._ensure_initialized()
+        try:
+            if namespace:
+                result = self._custom_api.list_namespaced_custom_object(
+                    group=GROUP,
+                    version=VERSION,
+                    namespace=namespace,
+                    plural=TEMPLATE_PLURAL,
+                    _request_timeout=_K8S_API_TIMEOUT,
+                )
+            else:
+                result = self._custom_api.list_cluster_custom_object(
+                    group=GROUP,
+                    version=VERSION,
+                    plural=TEMPLATE_PLURAL,
+                    _request_timeout=_K8S_API_TIMEOUT,
+                )
+            return result.get("items", [])
+        except Exception as e:
+            raise self._wrap_api_exception(e) from e
+
+    def _get_template_sync(self, namespace: str, name: str) -> dict[str, Any]:
+        logger.debug("_get_template_sync(namespace=%s, name=%s)", namespace, name)
+        self._ensure_initialized()
+        try:
+            return self._custom_api.get_namespaced_custom_object(
+                group=GROUP,
+                version=VERSION,
+                namespace=namespace,
+                plural=TEMPLATE_PLURAL,
+                name=name,
+                _request_timeout=_K8S_API_TIMEOUT,
+            )
+        except Exception as e:
+            raise self._wrap_api_exception(e) from e
+
+    def _list_events_sync(self, namespace: str, field_selector: str) -> list[dict[str, Any]]:
+        logger.debug("_list_events_sync(namespace=%s)", namespace)
+        self._ensure_initialized()
+        try:
+            result = self._core_api.list_namespaced_event(
+                namespace=namespace,
+                field_selector=field_selector,
+                _request_timeout=_K8S_API_TIMEOUT,
+            )
+            events = []
+            for event in result.items:
+                events.append(
+                    {
+                        "type": event.type,
+                        "reason": event.reason,
+                        "message": event.message,
+                        "count": event.count,
+                        "firstTimestamp": event.first_timestamp.isoformat() if event.first_timestamp else None,
+                        "lastTimestamp": event.last_timestamp.isoformat() if event.last_timestamp else None,
+                        "source": event.source.component if event.source else None,
+                    }
+                )
+            return sorted(events, key=lambda e: e.get("lastTimestamp") or "", reverse=True)
+        except Exception as e:
+            raise self._wrap_api_exception(e) from e
+
     # ------------------------------------------------------------------
     # Async public API
     # ------------------------------------------------------------------
@@ -247,6 +312,15 @@ class K8sClient:
 
     async def list_pods(self, namespace: str, label_selector: str) -> list[dict[str, Any]]:
         return await asyncio.to_thread(self._list_pods_sync, namespace, label_selector)
+
+    async def list_templates(self, namespace: str | None = None) -> list[dict[str, Any]]:
+        return await asyncio.to_thread(self._list_templates_sync, namespace)
+
+    async def get_template(self, namespace: str, name: str) -> dict[str, Any]:
+        return await asyncio.to_thread(self._get_template_sync, namespace, name)
+
+    async def list_events(self, namespace: str, field_selector: str) -> list[dict[str, Any]]:
+        return await asyncio.to_thread(self._list_events_sync, namespace, field_selector)
 
 
 k8s_client = K8sClient()

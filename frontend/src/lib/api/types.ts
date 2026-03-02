@@ -372,7 +372,36 @@ export interface CreateSampleDataResponse {
 }
 
 // === K8s Cluster Management ===
-export type K8sClusterPhase = "InProgress" | "Completed" | "Error" | "Unknown";
+export type K8sClusterPhase =
+  | "InProgress"
+  | "Completed"
+  | "Error"
+  | "ScalingUp"
+  | "ScalingDown"
+  | "WaitingForMigration"
+  | "RollingRestart"
+  | "ACLSync"
+  | "Paused"
+  | "Deleting"
+  | "Unknown";
+
+export interface K8sClusterCondition {
+  type: string;
+  status: string;
+  reason?: string;
+  message?: string;
+  lastTransitionTime?: string;
+}
+
+export interface K8sClusterEvent {
+  type?: string;
+  reason?: string;
+  message?: string;
+  count?: number;
+  firstTimestamp?: string;
+  lastTimestamp?: string;
+  source?: string;
+}
 
 export interface K8sPodStatus {
   name: string;
@@ -400,10 +429,12 @@ export interface K8sClusterDetail {
   size: number;
   image: string;
   phase: K8sClusterPhase;
+  phaseReason?: string;
   age: string | null;
   spec: Record<string, unknown>;
   status: Record<string, unknown>;
   pods: K8sPodStatus[];
+  conditions: K8sClusterCondition[];
   connectionId: string | null;
 }
 
@@ -436,6 +467,11 @@ export interface ResourceConfig {
   limits: ResourceSpec;
 }
 
+export interface MonitoringConfig {
+  enabled: boolean;
+  port: number;
+}
+
 export interface CreateK8sClusterRequest {
   name: string;
   namespace: string;
@@ -444,6 +480,9 @@ export interface CreateK8sClusterRequest {
   namespaces: AerospikeNamespaceConfig[];
   storage?: StorageVolumeConfig;
   resources?: ResourceConfig;
+  monitoring?: MonitoringConfig;
+  templateRef?: string;
+  enableDynamicConfig?: boolean;
   autoConnect: boolean;
 }
 
@@ -451,8 +490,30 @@ export interface UpdateK8sClusterRequest {
   size?: number;
   image?: string;
   resources?: ResourceConfig;
+  monitoring?: MonitoringConfig;
+  paused?: boolean;
 }
 
 export interface ScaleK8sClusterRequest {
   size: number;
+}
+
+export interface OperationRequest {
+  type: "WarmRestart" | "PodRestart";
+  podNames?: string[];
+}
+
+export interface K8sTemplateSummary {
+  name: string;
+  namespace: string;
+  image?: string;
+  size?: number;
+  age?: string;
+}
+
+export interface K8sTemplateDetail {
+  name: string;
+  namespace: string;
+  spec: Record<string, unknown>;
+  age?: string;
 }

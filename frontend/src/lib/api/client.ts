@@ -245,4 +245,29 @@ export const api = {
     }),
   getK8sNamespaces: () => request<string[]>("/api/k8s/namespaces"),
   getK8sStorageClasses: () => request<string[]>("/api/k8s/storageclasses"),
+
+  // K8s Templates
+  getK8sTemplates: (namespace?: string) =>
+    request<import("./types").K8sTemplateSummary[]>(
+      `/api/k8s/templates${namespace ? `?namespace=${namespace}` : ""}`,
+    ),
+  getK8sTemplate: (namespace: string, name: string) =>
+    request<import("./types").K8sTemplateDetail>(`/api/k8s/templates/${namespace}/${name}`),
+
+  // K8s Cluster Events
+  getK8sClusterEvents: (namespace: string, name: string) =>
+    request<import("./types").K8sClusterEvent[]>(
+      `/api/k8s/clusters/${namespace}/${name}/events`,
+    ),
+
+  // K8s Cluster Operations
+  triggerK8sClusterOperation: (
+    namespace: string,
+    name: string,
+    data: import("./types").OperationRequest,
+  ) =>
+    request<import("./types").K8sClusterSummary>(
+      `/api/k8s/clusters/${namespace}/${name}/operations`,
+      { method: "POST", body: JSON.stringify(data) },
+    ),
 };

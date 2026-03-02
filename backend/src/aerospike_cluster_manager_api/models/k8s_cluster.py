@@ -106,6 +106,15 @@ class ResourceConfig(BaseModel):
         return self
 
 
+class MonitoringConfig(BaseModel):
+    """Optional monitoring configuration for the cluster."""
+
+    model_config = {"populate_by_name": True}
+
+    enabled: bool = Field(default=False)
+    port: int = Field(default=9145, ge=1024, le=65535)
+
+
 class CreateK8sClusterRequest(BaseModel):
     name: str = Field(min_length=1, max_length=63, pattern=r"^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$")
     namespace: str = Field(
@@ -125,6 +134,11 @@ class CreateK8sClusterRequest(BaseModel):
     )
     storage: StorageVolumeConfig | None = None
     resources: ResourceConfig | None = None
+    monitoring: MonitoringConfig | None = None
+    template_ref: str | None = Field(
+        default=None, alias="templateRef", description="Name of AerospikeClusterTemplate to use"
+    )
+    enable_dynamic_config: bool = Field(default=False, alias="enableDynamicConfig")
     auto_connect: bool = Field(default=True, alias="autoConnect")
 
     model_config = {"populate_by_name": True}
@@ -147,6 +161,8 @@ class UpdateK8sClusterRequest(BaseModel):
         pattern=r"^[a-z0-9]([a-z0-9._/-]*[a-z0-9])?:[a-zA-Z0-9._-]+$",
     )
     resources: ResourceConfig | None = None
+    monitoring: MonitoringConfig | None = None
+    paused: bool | None = None
 
     model_config = {"populate_by_name": True}
 
@@ -175,14 +191,62 @@ class K8sClusterSummary(BaseModel):
     autoConnectWarning: str | None = None
 
 
+class K8sClusterCondition(BaseModel):
+    """Condition from the operator's status.conditions[]."""
+
+    model_config = {"populate_by_name": True}
+
+    type: str
+    status: str
+    reason: str | None = None
+    message: str | None = None
+    lastTransitionTime: str | None = None
+
+
 class K8sClusterDetail(BaseModel):
     name: str
     namespace: str
     size: int
     image: str
     phase: str = "Unknown"
+    phaseReason: str | None = None
     age: str | None = None
     spec: dict = Field(default_factory=dict)
     status: dict = Field(default_factory=dict)
     pods: list[K8sPodStatus] = Field(default_factory=list)
+    conditions: list[K8sClusterCondition] = Field(default_factory=list)
     connectionId: str | None = None
+
+
+class K8sClusterEvent(BaseModel):
+    type: str | None = None
+    reason: str | None = None
+    message: str | None = None
+    count: int | None = None
+    firstTimestamp: str | None = None
+    lastTimestamp: str | None = None
+    source: str | None = None
+
+
+class K8sTemplateSummary(BaseModel):
+    name: str
+    namespace: str
+    image: str | None = None
+    size: int | None = None
+    age: str | None = None
+
+
+class K8sTemplateDetail(BaseModel):
+    name: str
+    namespace: str
+    spec: dict = Field(default_factory=dict)
+    age: str | None = None
+
+
+class OperationRequest(BaseModel):
+    """Request to trigger an operation on the cluster."""
+
+    model_config = {"populate_by_name": True}
+
+    type: Literal["WarmRestart", "PodRestart"] = Field(description="Operation type")
+    pod_names: list[str] | None = Field(default=None, alias="podNames", description="Specific pods (all if empty)")

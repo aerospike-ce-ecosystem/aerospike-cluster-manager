@@ -92,7 +92,92 @@ npm run dev                        # http://localhost:3000
 - **UDF Management** — Lua UDF upload/delete
 - **AQL Terminal** — Web-based AQL command execution
 - **Prometheus Metrics** — Cluster metrics export
+- **K8s Cluster Management** — Full lifecycle management of Aerospike clusters on Kubernetes (see below)
 - **Light/Dark Mode** — System theme integration
+
+## K8s Cluster Management
+
+When running inside a Kubernetes cluster (or with `K8S_MANAGEMENT_ENABLED=true`), the Aerospike Cluster Manager provides a full GUI for managing `AerospikeCluster` custom resources (`acko.io/v1alpha1`) deployed by the [Aerospike CE Kubernetes Operator](https://github.com/KimSoungRyoul/aerospike-ce-kubernetes-operator).
+
+### Cluster Lifecycle
+
+Create, scale, update, and delete Aerospike clusters through a guided 5-step wizard:
+
+1. **Basic** — Cluster name, Kubernetes namespace, size (1-8 nodes), Aerospike image selection
+2. **Namespace & Storage** — Aerospike namespace configuration with in-memory or persistent (PVC) storage, replication factor, storage class selection
+3. **Monitoring & Options** — Enable Prometheus metrics exporter, select an AerospikeClusterTemplate, enable dynamic configuration updates
+4. **Resources** — CPU/memory requests and limits with validation, auto-connect toggle
+5. **Review** — Summary of all settings before creation
+
+### Cluster Phases
+
+Full support for all 10 operator-reported cluster phases with color-coded status badges:
+
+| Phase | Description |
+|---|---|
+| **InProgress** | Cluster is being reconciled |
+| **Completed** | Cluster is healthy and fully reconciled |
+| **Error** | Reconciliation encountered an error |
+| **ScalingUp** | Nodes are being added |
+| **ScalingDown** | Nodes are being removed |
+| **WaitingForMigration** | Waiting for data migration to complete |
+| **RollingRestart** | Rolling restart is in progress |
+| **ACLSync** | Access control list synchronization in progress |
+| **Paused** | Reconciliation is paused for maintenance |
+| **Deleting** | Cluster is being deleted |
+
+### Status Conditions
+
+The cluster detail page displays real-time operator conditions (Available, Ready, ConfigApplied, etc.) with visual indicators for True/False status, transition reasons, and messages.
+
+### Template Management
+
+Browse available `AerospikeClusterTemplate` resources across namespaces and reference them during cluster creation. Templates provide reusable default settings that are applied as a base configuration.
+
+### Operations
+
+From the cluster detail page, you can:
+
+- **Scale** — Change cluster size (1-8 nodes) via a scale dialog
+- **Warm Restart** — Trigger a warm restart operation across all pods
+- **Pod Restart** — Trigger a full pod restart operation (with optional pod selection)
+- **Pause / Resume** — Pause reconciliation for maintenance windows, then resume when ready
+- **Delete** — Delete a cluster with a confirmation dialog (auto-cleans associated connection profiles)
+
+### Dynamic Config
+
+Enable dynamic configuration updates during cluster creation. When enabled, the operator applies configuration changes without requiring pod restarts.
+
+### Events Timeline
+
+View Kubernetes events associated with cluster resources, including event type, reason, message, occurrence count, and timestamps.
+
+### Auto-refresh
+
+The cluster list and detail pages automatically poll for updates when any cluster is in a transitional phase (InProgress, ScalingUp, ScalingDown, WaitingForMigration, RollingRestart, ACLSync, Deleting). The list page polls every 10 seconds; the detail page polls every 5 seconds.
+
+### Auto-connect
+
+When creating a cluster, the "Auto-connect" option (enabled by default) automatically creates a connection profile pointing to the cluster's headless service (`<name>.<namespace>.svc.cluster.local`), so you can immediately browse data through the Aerospike connection features.
+
+### K8s API Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/k8s/clusters` | List all AerospikeCluster resources |
+| `GET` | `/api/k8s/clusters/{namespace}/{name}` | Get cluster detail (spec, status, pods, conditions) |
+| `POST` | `/api/k8s/clusters` | Create a new AerospikeCluster |
+| `PATCH` | `/api/k8s/clusters/{namespace}/{name}` | Update cluster (size, image, resources, monitoring, paused) |
+| `DELETE` | `/api/k8s/clusters/{namespace}/{name}` | Delete a cluster |
+| `POST` | `/api/k8s/clusters/{namespace}/{name}/scale` | Scale cluster to a specific size |
+| `GET` | `/api/k8s/clusters/{namespace}/{name}/events` | Get Kubernetes events for the cluster |
+| `POST` | `/api/k8s/clusters/{namespace}/{name}/operations` | Trigger operations (WarmRestart, PodRestart) |
+| `GET` | `/api/k8s/templates` | List AerospikeClusterTemplate resources |
+| `GET` | `/api/k8s/templates/{namespace}/{name}` | Get template detail |
+| `GET` | `/api/k8s/namespaces` | List available Kubernetes namespaces |
+| `GET` | `/api/k8s/storageclasses` | List available Kubernetes storage classes |
+
+All K8s endpoints are gated by the `K8S_MANAGEMENT_ENABLED` configuration flag. When disabled, a 404 is returned so the frontend can hide K8s features gracefully.
 
 ## Project Structure
 
@@ -101,18 +186,21 @@ aerospike-cluster-manager/
 ├── backend/                # FastAPI REST API
 │   ├── src/aerospike_cluster_manager_api/
 │   │   ├── main.py         # App entry point
-│   │   ├── models/         # Pydantic models
-│   │   ├── routers/        # API endpoints
+│   │   ├── models/         # Pydantic models (incl. k8s_cluster.py)
+│   │   ├── routers/        # API endpoints (incl. k8s_clusters.py)
+│   │   ├── k8s_client.py   # Kubernetes API client
 │   │   └── mock_data/      # Dev mock data
 │   ├── Dockerfile
 │   └── pyproject.toml
 ├── frontend/               # Next.js App Router
 │   ├── src/
 │   │   ├── app/            # Pages & routing
+│   │   │   └── k8s/        # K8s cluster management pages
 │   │   ├── components/     # UI components
-│   │   ├── stores/         # Zustand state
+│   │   │   └── k8s/        # K8s-specific components (wizard, cards, dialogs)
+│   │   ├── stores/         # Zustand state (incl. k8s-cluster-store.ts)
 │   │   ├── hooks/          # Custom hooks
-│   │   └── lib/            # API client, utils, types
+│   │   └── lib/            # API client, utils, types, validations
 │   ├── Dockerfile
 │   └── package.json
 ├── compose.yaml            # Full stack (all containers)
@@ -159,6 +247,7 @@ pre-commit run --all-files
 | `FRONTEND_PORT` | `3100` | Frontend port |
 | `CORS_ORIGINS` | `http://localhost:3100` | Allowed CORS origins |
 | `BACKEND_URL` | `http://localhost:8000` | Backend URL (frontend proxy target) |
+| `K8S_MANAGEMENT_ENABLED` | `false` | Enable K8s cluster management endpoints (requires in-cluster or kubeconfig access) |
 
 ## License
 
