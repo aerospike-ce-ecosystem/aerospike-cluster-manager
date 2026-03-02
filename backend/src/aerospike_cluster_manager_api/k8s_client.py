@@ -20,6 +20,8 @@ PLURAL = "aerospikeclusters"
 TEMPLATE_PLURAL = "aerospikeclustertemplates"
 # Default timeout for K8s API calls (seconds)
 _K8S_API_TIMEOUT = 10
+# Longer timeout for streaming operations (pod logs)
+_K8S_LOG_TIMEOUT = 30
 
 
 class K8sApiError(Exception):
@@ -360,7 +362,7 @@ class K8sClient:
                 "namespace": namespace,
                 "name": pod_name,
                 "tail_lines": tail_lines,
-                "_request_timeout": _K8S_API_TIMEOUT,
+                "_request_timeout": _K8S_LOG_TIMEOUT,
             }
             if container:
                 kwargs["container"] = container

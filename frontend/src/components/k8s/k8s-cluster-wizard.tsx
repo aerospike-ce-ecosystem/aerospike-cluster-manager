@@ -87,6 +87,12 @@ export function K8sClusterWizard() {
     limits: { cpu: "2", memory: "4Gi" },
   };
 
+  const DEFAULT_STORAGE: StorageVolumeConfig = {
+    storageClass: "standard",
+    size: "10Gi",
+    mountPath: "/opt/aerospike/data",
+  };
+
   const [form, setForm] = useState<CreateK8sClusterRequest>({
     name: "",
     namespace: "aerospike",
@@ -113,31 +119,25 @@ export function K8sClusterWizard() {
 
   useEffect(() => {
     setFetchingOptions(true);
+    const errors: string[] = [];
     Promise.allSettled([
       api
         .getK8sNamespaces()
-        .then((ns) => {
-          setK8sNamespaces(ns);
-          setFetchError(null);
-        })
+        .then((ns) => setK8sNamespaces(ns))
         .catch((err) => {
-          setFetchError(`Failed to fetch K8s namespaces: ${getErrorMessage(err)}. Using defaults.`);
+          errors.push(`Failed to fetch K8s namespaces: ${getErrorMessage(err)}`);
         }),
       api
         .getK8sStorageClasses()
-        .then((sc) => {
-          setStorageClasses(sc);
-          setFetchError(null);
-        })
+        .then((sc) => setStorageClasses(sc))
         .catch((err) => {
-          setFetchError(
-            `Failed to fetch storage classes: ${getErrorMessage(err)}. Using defaults.`,
-          );
+          errors.push(`Failed to fetch storage classes: ${getErrorMessage(err)}`);
         }),
       fetchTemplates().catch(() => {
         // Templates are optional, silently ignore fetch failures
       }),
     ]).finally(() => {
+      setFetchError(errors.length > 0 ? `${errors.join(". ")}. Using defaults.` : null);
       setFetchingOptions(false);
     });
   }, [fetchTemplates]);
@@ -603,11 +603,7 @@ export function K8sClusterWizard() {
                     <Select
                       value={form.storage?.storageClass || "standard"}
                       onValueChange={(v) => {
-                        const base = form.storage ?? {
-                          storageClass: "standard",
-                          size: "10Gi",
-                          mountPath: "/opt/aerospike/data",
-                        };
+                        const base = form.storage ?? DEFAULT_STORAGE;
                         updateForm({ storage: { ...base, storageClass: v } });
                       }}
                     >
@@ -633,11 +629,7 @@ export function K8sClusterWizard() {
                     <Select
                       value={form.storage?.size || "10Gi"}
                       onValueChange={(v) => {
-                        const base = form.storage ?? {
-                          storageClass: "standard",
-                          size: "10Gi",
-                          mountPath: "/opt/aerospike/data",
-                        };
+                        const base = form.storage ?? DEFAULT_STORAGE;
                         updateForm({ storage: { ...base, size: v } });
                       }}
                     >
@@ -731,11 +723,7 @@ export function K8sClusterWizard() {
                       id="cascade-delete"
                       checked={form.storage?.cascadeDelete ?? true}
                       onCheckedChange={(checked) => {
-                        const base = form.storage ?? {
-                          storageClass: "standard",
-                          size: "10Gi",
-                          mountPath: "/opt/aerospike/data",
-                        };
+                        const base = form.storage ?? DEFAULT_STORAGE;
                         updateForm({ storage: { ...base, cascadeDelete: checked === true } });
                       }}
                     />
