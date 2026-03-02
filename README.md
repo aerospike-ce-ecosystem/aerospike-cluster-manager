@@ -98,6 +98,7 @@ npm run dev                        # http://localhost:3000
   - Operation status tracking (WarmRestart/PodRestart progress, completed/failed pods)
   - Pod selection for targeted restart operations (checkbox-based)
   - Cluster edit dialog (image, size, dynamic config, aerospike config)
+  - Template CRUD: create, browse, view details, and delete AerospikeClusterTemplates
   - Template snapshot viewer with sync status
   - Dynamic config status per pod (Applied/Failed/Pending)
   - Last restart reason and timestamp per pod
@@ -152,7 +153,13 @@ The cluster detail page displays real-time operator conditions (Available, Ready
 
 ### Template Management
 
-Browse available `AerospikeClusterTemplate` resources across namespaces and reference them during cluster creation. Templates provide reusable default settings that are applied as a base configuration.
+Full lifecycle management of `AerospikeClusterTemplate` resources:
+
+- **Browse** — List available templates across namespaces with image, size, and age
+- **Create** — Define new templates with defaults for image, size, resources, scheduling (anti-affinity, pod management policy), storage (class, volume mode, size), monitoring, and network access
+- **View Details** — Inspect template spec, resource defaults, and see which clusters reference the template
+- **Delete** — Remove unused templates (protected against deletion while referenced by clusters)
+- **Reference** — Select templates during cluster creation via the wizard
 
 ### Operations
 
@@ -202,7 +209,9 @@ When creating a cluster, the "Auto-connect" option (enabled by default) automati
 | `GET` | `/api/k8s/clusters/{namespace}/{name}/yaml` | Export cluster CR as clean YAML |
 | `POST` | `/api/k8s/clusters/{namespace}/{name}/resync-template` | Trigger template resync via annotation |
 | `GET` | `/api/k8s/templates` | List AerospikeClusterTemplate resources |
-| `GET` | `/api/k8s/templates/{namespace}/{name}` | Get template detail |
+| `POST` | `/api/k8s/templates` | Create a new AerospikeClusterTemplate |
+| `GET` | `/api/k8s/templates/{namespace}/{name}` | Get template detail (spec, status, usedBy) |
+| `DELETE` | `/api/k8s/templates/{namespace}/{name}` | Delete a template (fails if referenced by clusters) |
 | `GET` | `/api/k8s/namespaces` | List available Kubernetes namespaces |
 | `GET` | `/api/k8s/storageclasses` | List available Kubernetes storage classes |
 | `GET` | `/api/k8s/secrets` | List K8s Secrets (for ACL picker) |
@@ -226,7 +235,7 @@ aerospike-cluster-manager/
 ├── frontend/               # Next.js App Router
 │   ├── src/
 │   │   ├── app/            # Pages & routing
-│   │   │   └── k8s/        # K8s cluster management pages
+│   │   │   └── k8s/        # K8s cluster & template management pages
 │   │   ├── components/     # UI components
 │   │   │   └── k8s/        # K8s-specific components (wizard, cards, dialogs)
 │   │   ├── stores/         # Zustand state (incl. k8s-cluster-store.ts)
