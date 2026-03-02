@@ -1,6 +1,10 @@
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { FileText } from "lucide-react";
+import { K8sPodLogsDialog } from "@/components/k8s/k8s-pod-logs-dialog";
 import type { K8sPodStatus } from "@/lib/api/types";
 
 interface K8sPodTableProps {
@@ -8,6 +12,8 @@ interface K8sPodTableProps {
   selectable?: boolean;
   selectedPods?: string[];
   onSelectionChange?: (selected: string[]) => void;
+  namespace?: string;
+  clusterName?: string;
 }
 
 export function K8sPodTable({
@@ -15,7 +21,10 @@ export function K8sPodTable({
   selectable = false,
   selectedPods = [],
   onSelectionChange,
+  namespace,
+  clusterName,
 }: K8sPodTableProps) {
+  const [logsPodName, setLogsPodName] = useState<string | null>(null);
   if (pods.length === 0) {
     return <p className="text-muted-foreground py-4 text-center text-sm">No pods found</p>;
   }
@@ -36,6 +45,7 @@ export function K8sPodTable({
   };
 
   return (
+    <>
     <div className="overflow-x-auto rounded-md border">
       <table className="w-full text-sm">
         <thead>
@@ -79,6 +89,11 @@ export function K8sPodTable({
             <th scope="col" className="px-4 py-2 text-left font-medium">
               Last Restart
             </th>
+            {namespace && clusterName && (
+              <th scope="col" className="px-4 py-2 text-left font-medium">
+                Actions
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -165,11 +180,34 @@ export function K8sPodTable({
                     <span className="text-muted-foreground text-xs">-</span>
                   )}
                 </td>
+                {namespace && clusterName && (
+                  <td className="px-4 py-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2"
+                      onClick={() => setLogsPodName(pod.name)}
+                      title="View logs"
+                    >
+                      <FileText className="h-3.5 w-3.5" />
+                    </Button>
+                  </td>
+                )}
               </tr>
             );
           })}
         </tbody>
       </table>
     </div>
+    {namespace && clusterName && logsPodName && (
+      <K8sPodLogsDialog
+        open={!!logsPodName}
+        onOpenChange={(open) => { if (!open) setLogsPodName(null); }}
+        namespace={namespace}
+        clusterName={clusterName}
+        podName={logsPodName}
+      />
+    )}
+    </>
   );
 }

@@ -277,8 +277,6 @@ class K8sClient:
         logger.debug("_list_nodes_sync()")
         self._ensure_initialized()
         try:
-            from kubernetes.client.rest import ApiException
-
             result = self._core_api.list_node(_request_timeout=_K8S_API_TIMEOUT)
             nodes = []
             for node in result.items:
@@ -292,8 +290,6 @@ class K8sClient:
                     }
                 )
             return nodes
-        except ApiException as e:
-            raise K8sApiError(status=e.status, reason=e.reason or "", message=str(e.body)) from e
         except Exception as e:
             raise self._wrap_api_exception(e) from e
 
@@ -320,6 +316,25 @@ class K8sClient:
                     }
                 )
             return sorted(events, key=lambda e: e.get("lastTimestamp") or "", reverse=True)
+        except Exception as e:
+            raise self._wrap_api_exception(e) from e
+
+    def _read_pod_log_sync(
+        self, namespace: str, pod_name: str, container: str | None = None, tail_lines: int = 500
+    ) -> str:
+        """Read logs from a pod."""
+        logger.debug("_read_pod_log_sync(namespace=%s, pod=%s)", namespace, pod_name)
+        self._ensure_initialized()
+        try:
+            kwargs: dict[str, Any] = {
+                "namespace": namespace,
+                "name": pod_name,
+                "tail_lines": tail_lines,
+                "_request_timeout": _K8S_API_TIMEOUT,
+            }
+            if container:
+                kwargs["container"] = container
+            return self._core_api.read_namespaced_pod_log(**kwargs)
         except Exception as e:
             raise self._wrap_api_exception(e) from e
 
@@ -366,6 +381,11 @@ class K8sClient:
 
     async def list_nodes(self) -> list[dict[str, Any]]:
         return await asyncio.to_thread(self._list_nodes_sync)
+
+    async def read_pod_log(
+        self, namespace: str, pod_name: str, container: str | None = None, tail_lines: int = 500
+    ) -> str:
+        return await asyncio.to_thread(self._read_pod_log_sync, namespace, pod_name, container, tail_lines)
 
 
 k8s_client = K8sClient()

@@ -1436,9 +1436,9 @@ export function K8sClusterWizard() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {racks.map((rack, idx) => {
+                    {(() => {
                       const uniqueZones = [...new Set(nodes.map((n) => n.zone).filter(Boolean))];
-                      return (
+                      return racks.map((rack, idx) => (
                         <div key={idx} className="rounded-lg border p-4 space-y-3">
                           <div className="flex items-center justify-between">
                             <Label className="font-medium">Rack #{rack.id}</Label>
@@ -1504,8 +1504,8 @@ export function K8sClusterWizard() {
                             </div>
                           </div>
                         </div>
-                      );
-                    })}
+                      ));
+                    })()}
                     <Button
                       variant="outline"
                       size="sm"
@@ -1525,7 +1525,7 @@ export function K8sClusterWizard() {
                     </Button>
                     <p className="text-muted-foreground text-xs">
                       Tip: For {form.size} nodes across {racks.length} racks,
-                      approximately {Math.ceil(form.size / racks.length)} pods per rack.
+                      approximately {`${Math.floor(form.size / racks.length)}-${Math.ceil(form.size / racks.length)}`} pods per rack.
                     </p>
                   </div>
                 )}

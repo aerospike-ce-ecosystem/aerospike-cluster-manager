@@ -14,6 +14,7 @@ import {
   Pencil,
   Clock,
   AlertTriangle,
+  Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -100,7 +101,9 @@ export default function K8sClusterDetailPage() {
         .catch((err) => {
           console.error("Failed to fetch cluster events:", err);
         });
-      api.getK8sClusterHealth(namespace, name).then(setHealth).catch(() => {});
+      api.getK8sClusterHealth(namespace, name).then(setHealth).catch((err) => {
+        console.error("Failed to fetch cluster health:", err);
+      });
     }
   }, [namespace, name, fetchCluster]);
 
@@ -119,7 +122,9 @@ export default function K8sClusterDetailPage() {
         .catch((err) => {
           console.error("Failed to fetch cluster events:", err);
         });
-      api.getK8sClusterHealth(namespace, name).then(setHealth).catch(() => {});
+      api.getK8sClusterHealth(namespace, name).then(setHealth).catch((err) => {
+        console.error("Failed to fetch cluster health:", err);
+      });
     }, 5000);
     return () => clearInterval(interval);
   }, [selectedCluster?.phase, namespace, name, fetchCluster]);
@@ -606,6 +611,8 @@ export default function K8sClusterDetailPage() {
             selectable
             selectedPods={selectedPods}
             onSelectionChange={setSelectedPods}
+            namespace={namespace}
+            clusterName={name}
           />
         </CardContent>
       </Card>
@@ -650,7 +657,25 @@ export default function K8sClusterDetailPage() {
       {/* Spec (collapsible JSON) */}
       <Card>
         <CardHeader>
-          <CardTitle>Spec</CardTitle>
+          <CardTitle className="flex items-center justify-between">
+            Spec
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  const result = await api.getK8sClusterYaml(namespace, name);
+                  await navigator.clipboard.writeText(JSON.stringify(result.yaml, null, 2));
+                  toast.success("CR YAML copied to clipboard");
+                } catch (err) {
+                  toast.error(getErrorMessage(err));
+                }
+              }}
+            >
+              <Copy className="mr-2 h-3 w-3" />
+              Copy CR
+            </Button>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <pre className="bg-muted max-h-80 overflow-auto rounded-lg p-4 font-mono text-xs">

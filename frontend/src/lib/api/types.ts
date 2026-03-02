@@ -634,3 +634,13 @@ export interface TemplateOverrides {
   size?: number;
   resources?: ResourceConfig;
 }
+
+export interface PodLogsResponse {
+  pod: string;
+  logs: string;
+  tailLines: number;
+}
+
+export interface ClusterYamlResponse {
+  yaml: Record<string, unknown>;
+}

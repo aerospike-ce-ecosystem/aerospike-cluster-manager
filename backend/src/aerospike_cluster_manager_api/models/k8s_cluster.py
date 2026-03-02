@@ -386,3 +386,29 @@ class OperationRequest(BaseModel):
         default=None, min_length=1, max_length=20, description="Unique operation ID (auto-generated if omitted)"
     )
     pod_list: list[str] | None = Field(default=None, alias="podList", description="Specific pods (all if empty)")
+
+
+class RackDistribution(BaseModel):
+    """Per-rack pod distribution."""
+
+    id: int
+    total: int
+    ready: int
+
+
+class ClusterHealthResponse(BaseModel):
+    """Cluster health summary response."""
+
+    model_config = {"populate_by_name": True}
+
+    phase: str = "Unknown"
+    total_pods: int = Field(alias="totalPods")
+    ready_pods: int = Field(alias="readyPods")
+    desired_pods: int = Field(alias="desiredPods")
+    migrating: bool = False
+    available: bool = False
+    config_applied: bool = Field(default=False, alias="configApplied")
+    acl_synced: bool = Field(default=True, alias="aclSynced")
+    failed_reconcile_count: int = Field(default=0, alias="failedReconcileCount")
+    pending_restart_count: int = Field(default=0, alias="pendingRestartCount")
+    rack_distribution: list[RackDistribution] = Field(default_factory=list, alias="rackDistribution")

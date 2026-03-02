@@ -20,6 +20,7 @@ from aerospike_cluster_manager_api.client_manager import client_manager
 from aerospike_cluster_manager_api.k8s_client import K8sApiError, k8s_client
 from aerospike_cluster_manager_api.models.connection import ConnectionProfile
 from aerospike_cluster_manager_api.models.k8s_cluster import (
+    ClusterHealthResponse,
     CreateK8sClusterRequest,
     K8sClusterCondition,
     K8sClusterDetail,
@@ -30,6 +31,7 @@ from aerospike_cluster_manager_api.models.k8s_cluster import (
     K8sTemplateSummary,
     OperationRequest,
     OperationStatusResponse,
+    RackDistribution,
     ScaleK8sClusterRequest,
     UpdateK8sClusterRequest,
 )
@@ -115,6 +117,23 @@ def _extract_summary(item: dict[str, Any], connection_id: str | None = None) -> 
         age=_calculate_age(metadata.get("creationTimestamp")),
         connectionId=connection_id,
     )
+
+
+def _build_rack_list(racks: list) -> list[dict[str, Any]]:
+    """Convert RackConfig models into CR-compatible dicts."""
+    result = []
+    for rack in racks:
+        r: dict[str, Any] = {"id": rack.id}
+        if rack.zone:
+            r["zone"] = rack.zone
+        if rack.region:
+            r["region"] = rack.region
+        if rack.max_pods_per_node is not None:
+            r["maxPodsPerNode"] = rack.max_pods_per_node
+        if rack.node_name:
+            r["nodeName"] = rack.node_name
+        result.append(r)
+    return result
 
 
 def _build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
@@ -269,19 +288,7 @@ def _build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
 
     # Rack config
     if req.rack_config and req.rack_config.racks:
-        rack_list = []
-        for rack in req.rack_config.racks:
-            r: dict[str, Any] = {"id": rack.id}
-            if rack.zone:
-                r["zone"] = rack.zone
-            if rack.region:
-                r["region"] = rack.region
-            if rack.max_pods_per_node is not None:
-                r["maxPodsPerNode"] = rack.max_pods_per_node
-            if rack.node_name:
-                r["nodeName"] = rack.node_name
-            rack_list.append(r)
-        cr["spec"]["rackConfig"] = {"racks": rack_list}
+        cr["spec"]["rackConfig"] = {"racks": _build_rack_list(req.rack_config.racks)}
 
     return cr
 
@@ -388,7 +395,7 @@ async def get_k8s_cluster(
     )
 
 
-def _compute_rack_distribution(pods_status: dict) -> list[dict[str, Any]]:
+def _compute_rack_distribution(pods_status: dict) -> list[RackDistribution]:
     """Group pods by rack ID for distribution display."""
     racks: dict[int, dict[str, int]] = {}
     for pod_info in pods_status.values():
@@ -398,7 +405,7 @@ def _compute_rack_distribution(pods_status: dict) -> list[dict[str, Any]]:
         racks[rack_id]["total"] += 1
         if pod_info.get("isRunningAndReady"):
             racks[rack_id]["ready"] += 1
-    return sorted(racks.values(), key=lambda r: r["id"])
+    return sorted([RackDistribution(**r) for r in racks.values()], key=lambda r: r.id)
 
 
 @router.get("/clusters/{namespace}/{name}/health", summary="Get cluster health summary")
@@ -406,7 +413,7 @@ def _compute_rack_distribution(pods_status: dict) -> list[dict[str, Any]]:
 async def get_k8s_cluster_health(
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
-) -> dict[str, Any]:
+) -> ClusterHealthResponse:
     _require_k8s()
     item = await k8s_client.get_cluster(namespace, name)
     status = item.get("status", {})
@@ -418,19 +425,54 @@ async def get_k8s_cluster_health(
 
     conditions = {c.get("type"): c.get("status") == "True" for c in status.get("conditions", [])}
 
-    return {
-        "phase": status.get("phase", "Unknown"),
-        "totalPods": total_pods,
-        "readyPods": ready_pods,
-        "desiredPods": spec.get("size", 0),
-        "migrating": not conditions.get("MigrationComplete", True),
-        "available": conditions.get("Available", False),
-        "configApplied": conditions.get("ConfigApplied", False),
-        "aclSynced": conditions.get("ACLSynced", True),
-        "failedReconcileCount": status.get("failedReconcileCount", 0),
-        "pendingRestartCount": len(status.get("pendingRestartPods", [])),
-        "rackDistribution": _compute_rack_distribution(pods_status),
+    return ClusterHealthResponse(
+        phase=status.get("phase", "Unknown"),
+        totalPods=total_pods,
+        readyPods=ready_pods,
+        desiredPods=spec.get("size", 0),
+        migrating=not conditions.get("MigrationComplete", True),
+        available=conditions.get("Available", False),
+        configApplied=conditions.get("ConfigApplied", False),
+        aclSynced=conditions.get("ACLSynced", True),
+        failedReconcileCount=status.get("failedReconcileCount", 0),
+        pendingRestartCount=len(status.get("pendingRestartPods", [])),
+        rackDistribution=_compute_rack_distribution(pods_status),
+    )
+
+
+@router.get("/clusters/{namespace}/{name}/pods/{pod}/logs", summary="Get pod logs")
+@_k8s_endpoint("get pod logs")
+async def get_k8s_pod_logs(
+    namespace: str = _K8S_NAMESPACE,
+    name: str = _K8S_NAME,
+    pod: str = Path(..., min_length=1, max_length=253),
+    tail: int = Query(default=500, ge=1, le=10000, description="Number of tail lines"),
+    container: str | None = Query(default=None, description="Container name"),
+) -> dict[str, Any]:
+    _require_k8s()
+    logs = await k8s_client.read_pod_log(namespace, pod, container=container, tail_lines=tail)
+    return {"pod": pod, "logs": logs, "tailLines": tail}
+
+
+@router.get("/clusters/{namespace}/{name}/yaml", summary="Get cluster CR as YAML")
+@_k8s_endpoint("export cluster YAML")
+async def get_k8s_cluster_yaml(
+    namespace: str = _K8S_NAMESPACE,
+    name: str = _K8S_NAME,
+) -> dict[str, Any]:
+    _require_k8s()
+    item = await k8s_client.get_cluster(namespace, name)
+    # Strip internal metadata fields for cleaner export
+    metadata = dict(item.get("metadata", {}))
+    for key in ("managedFields", "resourceVersion", "uid", "generation", "creationTimestamp"):
+        metadata.pop(key, None)
+    clean_cr = {
+        "apiVersion": item.get("apiVersion", "acko.io/v1alpha1"),
+        "kind": item.get("kind", "AerospikeCluster"),
+        "metadata": metadata,
+        "spec": item.get("spec", {}),
     }
+    return {"yaml": clean_cr}
 
 
 @router.post("/clusters", status_code=201, summary="Create K8s Aerospike cluster")
@@ -536,21 +578,8 @@ async def update_k8s_cluster(
         patch["spec"]["disablePDB"] = body.disable_pdb
     if body.rack_config is not None:
         if body.rack_config.racks:
-            rack_list = []
-            for rack in body.rack_config.racks:
-                r: dict[str, Any] = {"id": rack.id}
-                if rack.zone:
-                    r["zone"] = rack.zone
-                if rack.region:
-                    r["region"] = rack.region
-                if rack.max_pods_per_node is not None:
-                    r["maxPodsPerNode"] = rack.max_pods_per_node
-                if rack.node_name:
-                    r["nodeName"] = rack.node_name
-                rack_list.append(r)
-            patch["spec"]["rackConfig"] = {"racks": rack_list}
+            patch["spec"]["rackConfig"] = {"racks": _build_rack_list(body.rack_config.racks)}
         else:
-            # Empty racks list clears the rack config
             patch["spec"]["rackConfig"] = {"racks": []}
     result = await k8s_client.patch_cluster(namespace, name, patch)
     return _extract_summary(result)
