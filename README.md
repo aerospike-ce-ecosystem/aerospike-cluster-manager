@@ -96,9 +96,14 @@ npm run dev                        # http://localhost:3000
   - ACL/Security configuration with role and user management via wizard
   - Rolling update strategy (batch size, max unavailable, PDB control)
   - Operation status tracking (WarmRestart/PodRestart progress, completed/failed pods)
+  - Pod selection for targeted restart operations (checkbox-based)
+  - Cluster edit dialog (image, size, dynamic config, aerospike config)
+  - Template snapshot viewer with sync status
+  - Dynamic config status per pod (Applied/Failed/Pending)
+  - Last restart reason and timestamp per pod
   - Reconciliation error monitoring
-  - K8s events timeline on cluster detail page
-  - K8s secrets listing for ACL credential management
+  - K8s events timeline with auto-refresh
+  - K8s secrets picker for ACL credential management
 - **Light/Dark Mode** — System theme integration
 
 ## K8s Cluster Management
@@ -147,18 +152,23 @@ Browse available `AerospikeClusterTemplate` resources across namespaces and refe
 From the cluster detail page, you can:
 
 - **Scale** — Change cluster size (1-8 nodes) via a scale dialog
-- **Warm Restart** — Trigger a warm restart operation across all pods
-- **Pod Restart** — Trigger a full pod restart operation (with optional pod selection)
+- **Edit** — Modify running cluster settings (image, size, dynamic config, aerospike config) with diff-based patching
+- **Warm Restart** — Trigger a warm restart operation (all pods or selected pods via checkboxes)
+- **Pod Restart** — Trigger a full pod restart operation (all pods or selected pods via checkboxes)
 - **Pause / Resume** — Pause reconciliation for maintenance windows, then resume when ready
 - **Delete** — Delete a cluster with a confirmation dialog (auto-cleans associated connection profiles)
 
 ### Dynamic Config
 
-Enable dynamic configuration updates during cluster creation. When enabled, the operator applies configuration changes without requiring pod restarts.
+Enable dynamic configuration updates during cluster creation. When enabled, the operator applies configuration changes without requiring pod restarts. The cluster detail page shows the dynamic config toggle status and per-pod config status (Applied/Failed/Pending).
+
+### Template Snapshot
+
+When a cluster references an AerospikeClusterTemplate, the detail page shows a Template Snapshot card with sync status (Synced/Out of Sync), template name, resource version, snapshot timestamp, and a collapsible template spec viewer.
 
 ### Events Timeline
 
-View Kubernetes events associated with cluster resources, including event type, reason, message, occurrence count, and timestamps.
+View Kubernetes events associated with cluster resources, including event type, reason, message, occurrence count, and timestamps. Events auto-refresh during transitional phases.
 
 ### Auto-refresh
 
@@ -175,7 +185,7 @@ When creating a cluster, the "Auto-connect" option (enabled by default) automati
 | `GET` | `/api/k8s/clusters` | List all AerospikeCluster resources |
 | `GET` | `/api/k8s/clusters/{namespace}/{name}` | Get cluster detail (spec, status, pods, conditions) |
 | `POST` | `/api/k8s/clusters` | Create a new AerospikeCluster |
-| `PATCH` | `/api/k8s/clusters/{namespace}/{name}` | Update cluster (size, image, resources, monitoring, paused) |
+| `PATCH` | `/api/k8s/clusters/{namespace}/{name}` | Update cluster (size, image, resources, monitoring, paused, dynamic config, aerospike config) |
 | `DELETE` | `/api/k8s/clusters/{namespace}/{name}` | Delete a cluster |
 | `POST` | `/api/k8s/clusters/{namespace}/{name}/scale` | Scale cluster to a specific size |
 | `GET` | `/api/k8s/clusters/{namespace}/{name}/events` | Get Kubernetes events for the cluster |

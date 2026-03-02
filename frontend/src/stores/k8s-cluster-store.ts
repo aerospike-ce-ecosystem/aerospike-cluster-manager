@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import type { K8sClusterSummary, K8sClusterDetail, K8sTemplateSummary, CreateK8sClusterRequest } from "@/lib/api/types";
+import type {
+  K8sClusterSummary,
+  K8sClusterDetail,
+  K8sTemplateSummary,
+  CreateK8sClusterRequest,
+  UpdateK8sClusterRequest,
+} from "@/lib/api/types";
 import { api } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/utils";
 
@@ -18,7 +24,13 @@ interface K8sClusterState {
   deleteCluster: (namespace: string, name: string) => Promise<void>;
   scaleCluster: (namespace: string, name: string, size: number) => Promise<void>;
   fetchTemplates: (namespace?: string) => Promise<void>;
-  triggerOperation: (namespace: string, name: string, kind: "WarmRestart" | "PodRestart", podList?: string[]) => Promise<void>;
+  triggerOperation: (
+    namespace: string,
+    name: string,
+    kind: "WarmRestart" | "PodRestart",
+    podList?: string[],
+  ) => Promise<void>;
+  updateCluster: (namespace: string, name: string, data: UpdateK8sClusterRequest) => Promise<void>;
   pauseCluster: (namespace: string, name: string) => Promise<void>;
   resumeCluster: (namespace: string, name: string) => Promise<void>;
 }
@@ -115,11 +127,29 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => ({
     }
   },
 
-  triggerOperation: async (namespace: string, name: string, kind: "WarmRestart" | "PodRestart", podList?: string[]) => {
+  triggerOperation: async (
+    namespace: string,
+    name: string,
+    kind: "WarmRestart" | "PodRestart",
+    podList?: string[],
+  ) => {
     set({ loading: true, error: null });
     try {
       await api.triggerK8sClusterOperation(namespace, name, { kind, podList });
       set({ loading: false });
+      await get().fetchCluster(namespace, name);
+    } catch (error) {
+      set({ error: getErrorMessage(error), loading: false });
+      throw error;
+    }
+  },
+
+  updateCluster: async (namespace: string, name: string, data: UpdateK8sClusterRequest) => {
+    set({ loading: true, error: null });
+    try {
+      await api.updateK8sCluster(namespace, name, data);
+      set({ loading: false });
+      await get().fetchClusters();
       await get().fetchCluster(namespace, name);
     } catch (error) {
       set({ error: getErrorMessage(error), loading: false });

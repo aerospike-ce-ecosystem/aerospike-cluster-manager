@@ -27,7 +27,9 @@ export default function K8sClustersPage() {
 
   // Auto-refresh polling when any cluster is in a transitional phase
   useEffect(() => {
-    const hasTransitional = clusters.some((c) => (TRANSITIONAL_PHASES as string[]).includes(c.phase));
+    const hasTransitional = clusters.some((c) =>
+      (TRANSITIONAL_PHASES as string[]).includes(c.phase),
+    );
     if (!hasTransitional) return;
     const interval = setInterval(() => {
       fetchClusters();

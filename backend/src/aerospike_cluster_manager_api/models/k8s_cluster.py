@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import re
 import warnings
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -220,6 +220,8 @@ class UpdateK8sClusterRequest(BaseModel):
     resources: ResourceConfig | None = None
     monitoring: MonitoringConfig | None = None
     paused: bool | None = None
+    enable_dynamic_config: bool | None = Field(default=None, alias="enableDynamicConfig")
+    aerospike_config: dict[str, Any] | None = Field(default=None, alias="aerospikeConfig")
 
     model_config = {"populate_by_name": True}
 
@@ -235,6 +237,9 @@ class K8sPodStatus(BaseModel):
     isReady: bool = False
     phase: str = "Unknown"
     image: str | None = None
+    dynamicConfigStatus: str | None = None
+    lastRestartReason: str | None = None
+    lastRestartTime: str | None = None
 
 
 class K8sClusterSummary(BaseModel):
@@ -316,6 +321,10 @@ class OperationRequest(BaseModel):
 
     model_config = {"populate_by_name": True}
 
-    kind: Literal["WarmRestart", "PodRestart"] = Field(description="Operation kind (maps to CRD spec.operations[].kind)")
-    id: str | None = Field(default=None, min_length=1, max_length=20, description="Unique operation ID (auto-generated if omitted)")
+    kind: Literal["WarmRestart", "PodRestart"] = Field(
+        description="Operation kind (maps to CRD spec.operations[].kind)"
+    )
+    id: str | None = Field(
+        default=None, min_length=1, max_length=20, description="Unique operation ID (auto-generated if omitted)"
+    )
     pod_list: list[str] | None = Field(default=None, alias="podList", description="Specific pods (all if empty)")

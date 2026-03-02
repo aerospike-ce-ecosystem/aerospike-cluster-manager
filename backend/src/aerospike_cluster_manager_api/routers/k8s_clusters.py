@@ -228,10 +228,7 @@ def _build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
                 {"name": r.name, "privileges": r.privileges, **({"whitelist": r.whitelist} if r.whitelist else {})}
                 for r in req.acl.roles
             ],
-            "users": [
-                {"name": u.name, "secretName": u.secret_name, "roles": u.roles}
-                for u in req.acl.users
-            ],
+            "users": [{"name": u.name, "secretName": u.secret_name, "roles": u.roles} for u in req.acl.users],
             "adminPolicy": {"timeout": req.acl.admin_policy_timeout},
         }
         cr["spec"]["aerospikeAccessControl"] = acl_config
@@ -279,7 +276,19 @@ async def get_k8s_cluster(
     pods_raw = await k8s_client.list_pods(
         namespace, f"app.kubernetes.io/name=aerospike-cluster,app.kubernetes.io/instance={name}"
     )
-    pods = [K8sPodStatus(**p) for p in pods_raw]
+
+    # Merge dynamic config status from CR status.pods map
+    cr_pods_status = status.get("pods", {})
+    pods = []
+    for p in pods_raw:
+        pod_name = p.get("name", "")
+        cr_pod = cr_pods_status.get(pod_name, {})
+        p["dynamicConfigStatus"] = cr_pod.get("dynamicConfigStatus")
+        p["lastRestartReason"] = cr_pod.get("lastRestartReason")
+        last_restart_time = cr_pod.get("lastRestartTime")
+        if last_restart_time and isinstance(last_restart_time, str):
+            p["lastRestartTime"] = last_restart_time
+        pods.append(K8sPodStatus(**p))
 
     # Extract operation status
     op_status_raw = status.get("operationStatus")
@@ -385,6 +394,8 @@ async def update_k8s_cluster(
         and body.resources is None
         and body.monitoring is None
         and body.paused is None
+        and body.enable_dynamic_config is None
+        and body.aerospike_config is None
     ):
         raise HTTPException(status_code=400, detail="At least one field must be provided")
 
@@ -409,6 +420,10 @@ async def update_k8s_cluster(
         }
     if body.paused is not None:
         patch["spec"]["paused"] = body.paused
+    if body.enable_dynamic_config is not None:
+        patch["spec"]["enableDynamicConfigUpdate"] = body.enable_dynamic_config
+    if body.aerospike_config is not None:
+        patch["spec"]["aerospikeConfig"] = body.aerospike_config
     result = await k8s_client.patch_cluster(namespace, name, patch)
     return _extract_summary(result)
 

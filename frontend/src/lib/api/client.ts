@@ -258,9 +258,7 @@ export const api = {
 
   // K8s Cluster Events
   getK8sClusterEvents: (namespace: string, name: string) =>
-    request<import("./types").K8sClusterEvent[]>(
-      `/api/k8s/clusters/${namespace}/${name}/events`,
-    ),
+    request<import("./types").K8sClusterEvent[]>(`/api/k8s/clusters/${namespace}/${name}/events`),
 
   // K8s Cluster Operations
   triggerK8sClusterOperation: (

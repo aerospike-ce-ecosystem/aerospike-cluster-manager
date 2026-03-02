@@ -38,7 +38,15 @@ import type {
 
 const AEROSPIKE_IMAGES = ["aerospike:ce-8.1.1.1", "aerospike:ce-7.2.0.6"];
 
-const STEPS = ["Basic", "Namespace & Storage", "Monitoring & Options", "Resources", "Security (ACL)", "Rolling Update", "Review"];
+const STEPS = [
+  "Basic",
+  "Namespace & Storage",
+  "Monitoring & Options",
+  "Resources",
+  "Security (ACL)",
+  "Rolling Update",
+  "Review",
+];
 
 const AEROSPIKE_PRIVILEGES = [
   "read",
@@ -59,6 +67,7 @@ export function K8sClusterWizard() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [fetchingOptions, setFetchingOptions] = useState(true);
   const [creationError, setCreationError] = useState<string | null>(null);
+  const [k8sSecrets, setK8sSecrets] = useState<string[]>([]);
 
   const DEFAULT_RESOURCES = {
     requests: { cpu: "500m", memory: "1Gi" },
@@ -116,6 +125,16 @@ export function K8sClusterWizard() {
       setFetchingOptions(false);
     });
   }, [fetchTemplates]);
+
+  // Fetch K8s secrets when on the ACL step and namespace is available
+  useEffect(() => {
+    if (step === 4 && form.acl?.enabled && form.namespace) {
+      api
+        .getK8sSecrets(form.namespace)
+        .then(setK8sSecrets)
+        .catch(() => setK8sSecrets([]));
+    }
+  }, [step, form.acl?.enabled, form.namespace]);
 
   const updateForm = (updates: Partial<CreateK8sClusterRequest>) => {
     setForm((prev) => ({ ...prev, ...updates }));
@@ -197,7 +216,15 @@ export function K8sClusterWizard() {
     setCreationError(null);
     setCreating(true);
     try {
-      await createCluster(form);
+      // Only include rollingUpdate if the user actually set non-default values
+      const payload = { ...form };
+      if (payload.rollingUpdate) {
+        const ru = payload.rollingUpdate;
+        if (ru.batchSize == null && !ru.maxUnavailable && !ru.disablePDB) {
+          payload.rollingUpdate = undefined;
+        }
+      }
+      await createCluster(payload);
       toast.success(`Cluster "${form.name}" creation initiated`);
       router.push("/k8s/clusters");
     } catch (err) {
@@ -561,18 +588,22 @@ export function K8sClusterWizard() {
                 <Label htmlFor="template-ref">Cluster Template (optional)</Label>
                 <Select
                   value={form.templateRef || "__none__"}
-                  onValueChange={(v) => updateForm({ templateRef: v === "__none__" ? undefined : v })}
+                  onValueChange={(v) =>
+                    updateForm({ templateRef: v === "__none__" ? undefined : v })
+                  }
                 >
                   <SelectTrigger id="template-ref">
                     <SelectValue placeholder="No template" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">No template</SelectItem>
-                    {templates.map((t) => (
-                      <SelectItem key={`${t.namespace}/${t.name}`} value={t.name}>
-                        {t.namespace}/{t.name}
-                      </SelectItem>
-                    ))}
+                    {templates
+                      .filter((t) => t.namespace === form.namespace)
+                      .map((t) => (
+                        <SelectItem key={`${t.namespace}/${t.name}`} value={t.name}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
                 <p className="text-muted-foreground text-xs">
@@ -761,7 +792,10 @@ export function K8sClusterWizard() {
                       </Button>
                     </div>
                     {form.acl.roles.map((role, ri) => (
-                      <div key={ri} className="space-y-2 rounded-lg border p-3">
+                      <div
+                        key={`role-${ri}-${role.name || ri}`}
+                        className="space-y-2 rounded-lg border p-3"
+                      >
                         <div className="flex items-center gap-2">
                           <Input
                             placeholder="Role name"
@@ -785,7 +819,7 @@ export function K8sClusterWizard() {
                           </Button>
                         </div>
                         <div className="grid gap-1">
-                          <Label className="text-xs text-muted-foreground">Privileges</Label>
+                          <Label className="text-muted-foreground text-xs">Privileges</Label>
                           <div className="flex flex-wrap gap-2">
                             {AEROSPIKE_PRIVILEGES.map((priv) => (
                               <label key={priv} className="flex items-center gap-1 text-xs">
@@ -806,7 +840,7 @@ export function K8sClusterWizard() {
                           </div>
                         </div>
                         <div className="grid gap-1">
-                          <Label className="text-xs text-muted-foreground">
+                          <Label className="text-muted-foreground text-xs">
                             Whitelist CIDRs (comma-separated, optional)
                           </Label>
                           <Input
@@ -818,7 +852,10 @@ export function K8sClusterWizard() {
                               roles[ri] = {
                                 ...roles[ri],
                                 whitelist: raw
-                                  ? raw.split(",").map((s) => s.trim()).filter(Boolean)
+                                  ? raw
+                                      .split(",")
+                                      .map((s) => s.trim())
+                                      .filter(Boolean)
                                   : [],
                               };
                               updateForm({ acl: { ...form.acl!, roles } });
@@ -841,10 +878,7 @@ export function K8sClusterWizard() {
                           updateForm({
                             acl: {
                               ...form.acl!,
-                              users: [
-                                ...form.acl!.users,
-                                { name: "", secretName: "", roles: [] },
-                              ],
+                              users: [...form.acl!.users, { name: "", secretName: "", roles: [] }],
                             },
                           })
                         }
@@ -853,7 +887,10 @@ export function K8sClusterWizard() {
                       </Button>
                     </div>
                     {form.acl.users.map((user, ui) => (
-                      <div key={ui} className="space-y-2 rounded-lg border p-3">
+                      <div
+                        key={`user-${ui}-${user.name || ui}`}
+                        className="space-y-2 rounded-lg border p-3"
+                      >
                         <div className="flex items-center gap-2">
                           <Input
                             placeholder="Username"
@@ -877,21 +914,47 @@ export function K8sClusterWizard() {
                           </Button>
                         </div>
                         <div className="grid gap-1">
-                          <Label className="text-xs text-muted-foreground">
+                          <Label className="text-muted-foreground text-xs">
                             K8s Secret Name (password)
                           </Label>
-                          <Input
-                            placeholder="my-aerospike-secret"
-                            value={user.secretName}
-                            onChange={(e) => {
-                              const users = [...form.acl!.users];
-                              users[ui] = { ...users[ui], secretName: e.target.value };
-                              updateForm({ acl: { ...form.acl!, users } });
-                            }}
-                          />
+                          {k8sSecrets.length > 0 ? (
+                            <Select
+                              value={user.secretName || "__none__"}
+                              onValueChange={(v) => {
+                                const users = [...form.acl!.users];
+                                users[ui] = {
+                                  ...users[ui],
+                                  secretName: v === "__none__" ? "" : v,
+                                };
+                                updateForm({ acl: { ...form.acl!, users } });
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select a secret" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">Select a secret...</SelectItem>
+                                {k8sSecrets.map((s) => (
+                                  <SelectItem key={s} value={s}>
+                                    {s}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Input
+                              placeholder="my-aerospike-secret"
+                              value={user.secretName}
+                              onChange={(e) => {
+                                const users = [...form.acl!.users];
+                                users[ui] = { ...users[ui], secretName: e.target.value };
+                                updateForm({ acl: { ...form.acl!, users } });
+                              }}
+                            />
+                          )}
                         </div>
                         <div className="grid gap-1">
-                          <Label className="text-xs text-muted-foreground">Roles</Label>
+                          <Label className="text-muted-foreground text-xs">Roles</Label>
                           <div className="flex flex-wrap gap-2">
                             {[
                               ...AEROSPIKE_PRIVILEGES.map((p) => p),
@@ -1045,7 +1108,9 @@ export function K8sClusterWizard() {
                 )}
 
                 <span className="text-muted-foreground">Dynamic Config</span>
-                <span className="font-medium">{form.enableDynamicConfig ? "Enabled" : "Disabled"}</span>
+                <span className="font-medium">
+                  {form.enableDynamicConfig ? "Enabled" : "Disabled"}
+                </span>
 
                 <span className="text-muted-foreground">ACL</span>
                 <span className="font-medium">
@@ -1065,8 +1130,10 @@ export function K8sClusterWizard() {
                 <span className="font-medium">
                   {form.rollingUpdate
                     ? [
-                        form.rollingUpdate.batchSize != null && `batch: ${form.rollingUpdate.batchSize}`,
-                        form.rollingUpdate.maxUnavailable && `maxUnavail: ${form.rollingUpdate.maxUnavailable}`,
+                        form.rollingUpdate.batchSize != null &&
+                          `batch: ${form.rollingUpdate.batchSize}`,
+                        form.rollingUpdate.maxUnavailable &&
+                          `maxUnavail: ${form.rollingUpdate.maxUnavailable}`,
                         form.rollingUpdate.disablePDB && "PDB disabled",
                       ]
                         .filter(Boolean)

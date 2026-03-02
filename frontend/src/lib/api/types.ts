@@ -421,7 +421,13 @@ export type K8sClusterPhase =
 
 /** Phases that indicate the cluster is transitioning and should trigger auto-refresh. */
 export const TRANSITIONAL_PHASES: K8sClusterPhase[] = [
-  "InProgress", "ScalingUp", "ScalingDown", "WaitingForMigration", "RollingRestart", "ACLSync", "Deleting",
+  "InProgress",
+  "ScalingUp",
+  "ScalingDown",
+  "WaitingForMigration",
+  "RollingRestart",
+  "ACLSync",
+  "Deleting",
 ];
 
 export interface K8sClusterCondition {
@@ -449,6 +455,9 @@ export interface K8sPodStatus {
   isReady: boolean;
   phase: string;
   image: string | null;
+  dynamicConfigStatus?: "Applied" | "Failed" | "Pending";
+  lastRestartReason?: string;
+  lastRestartTime?: string;
 }
 
 export interface K8sClusterSummary {
@@ -536,6 +545,8 @@ export interface UpdateK8sClusterRequest {
   resources?: ResourceConfig;
   monitoring?: MonitoringConfig;
   paused?: boolean;
+  enableDynamicConfig?: boolean;
+  aerospikeConfig?: Record<string, unknown>;
 }
 
 export interface ScaleK8sClusterRequest {
