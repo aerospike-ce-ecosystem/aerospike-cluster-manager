@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Scale, Trash2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Scale, Trash2, RefreshCw, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,6 +15,8 @@ import { K8sDeleteDialog } from "@/components/k8s/k8s-delete-dialog";
 import { useK8sClusterStore } from "@/stores/k8s-cluster-store";
 import { toast } from "sonner";
 import { cn, getErrorMessage } from "@/lib/utils";
+import { TRANSITIONAL_PHASES, type K8sClusterEvent } from "@/lib/api/types";
+import { api } from "@/lib/api/client";
 
 export default function K8sClusterDetailPage() {
   const params = useParams<{ namespace: string; name: string }>();
@@ -24,6 +26,7 @@ export default function K8sClusterDetailPage() {
   const [scaleOpen, setScaleOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [events, setEvents] = useState<K8sClusterEvent[]>([]);
 
   const namespace = params?.namespace || "";
   const name = params?.name || "";
@@ -31,13 +34,13 @@ export default function K8sClusterDetailPage() {
   useEffect(() => {
     if (namespace && name) {
       fetchCluster(namespace, name);
+      api.getK8sClusterEvents(namespace, name).then(setEvents).catch(() => {});
     }
   }, [namespace, name, fetchCluster]);
 
   // Auto-refresh polling when cluster is in a transitional phase
   useEffect(() => {
-    const transitionalPhases = ["InProgress", "ScalingUp", "ScalingDown", "WaitingForMigration", "RollingRestart", "ACLSync", "Deleting"];
-    if (!selectedCluster?.phase || !transitionalPhases.includes(selectedCluster.phase)) return;
+    if (!selectedCluster?.phase || !(TRANSITIONAL_PHASES as string[]).includes(selectedCluster.phase)) return;
     const interval = setInterval(() => {
       fetchCluster(namespace, name);
     }, 5000);
@@ -108,6 +111,7 @@ export default function K8sClusterDetailPage() {
             <Button
               variant="outline"
               size="sm"
+              disabled={loading}
               onClick={async () => {
                 try {
                   await triggerOperation(namespace, name, "WarmRestart");
@@ -123,6 +127,7 @@ export default function K8sClusterDetailPage() {
               <Button
                 variant="outline"
                 size="sm"
+                disabled={loading}
                 onClick={async () => {
                   try {
                     await resumeCluster(namespace, name);
@@ -138,6 +143,7 @@ export default function K8sClusterDetailPage() {
               <Button
                 variant="outline"
                 size="sm"
+                disabled={loading}
                 onClick={async () => {
                   try {
                     await pauseCluster(namespace, name);
@@ -168,6 +174,9 @@ export default function K8sClusterDetailPage() {
           </CardHeader>
           <CardContent>
             <K8sClusterStatusBadge phase={selectedCluster.phase} />
+            {selectedCluster.phaseReason && (
+              <p className="text-muted-foreground mt-1 text-xs">{selectedCluster.phaseReason}</p>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -233,6 +242,41 @@ export default function K8sClusterDetailPage() {
           <K8sPodTable pods={selectedCluster.pods} />
         </CardContent>
       </Card>
+
+      {/* Events */}
+      {events.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-4 w-4" />
+              Events
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {events.slice(0, 20).map((event, i) => (
+                <div key={i} className="flex items-start gap-3 rounded-lg border p-3 text-sm">
+                  <span className={cn(
+                    "mt-0.5 h-2 w-2 shrink-0 rounded-full",
+                    event.type === "Warning" ? "bg-warning" : "bg-info"
+                  )} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{event.reason}</span>
+                      {event.count && event.count > 1 && (
+                        <span className="text-muted-foreground text-xs">x{event.count}</span>
+                      )}
+                    </div>
+                    {event.message && (
+                      <p className="text-muted-foreground mt-0.5 text-xs">{event.message}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Spec (collapsible JSON) */}
       <Card>

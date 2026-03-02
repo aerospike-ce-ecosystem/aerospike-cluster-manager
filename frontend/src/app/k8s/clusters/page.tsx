@@ -13,7 +13,7 @@ import { K8sDeleteDialog } from "@/components/k8s/k8s-delete-dialog";
 import { useK8sClusterStore } from "@/stores/k8s-cluster-store";
 import { toast } from "sonner";
 import { getErrorMessage } from "@/lib/utils";
-import type { K8sClusterSummary } from "@/lib/api/types";
+import { TRANSITIONAL_PHASES, type K8sClusterSummary } from "@/lib/api/types";
 
 export default function K8sClustersPage() {
   const router = useRouter();
@@ -27,8 +27,7 @@ export default function K8sClustersPage() {
 
   // Auto-refresh polling when any cluster is in a transitional phase
   useEffect(() => {
-    const transitionalPhases = ["InProgress", "ScalingUp", "ScalingDown", "WaitingForMigration", "RollingRestart", "ACLSync", "Deleting"];
-    const hasTransitional = clusters.some((c) => transitionalPhases.includes(c.phase));
+    const hasTransitional = clusters.some((c) => (TRANSITIONAL_PHASES as string[]).includes(c.phase));
     if (!hasTransitional) return;
     const interval = setInterval(() => {
       fetchClusters();

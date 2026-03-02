@@ -244,9 +244,16 @@ class K8sTemplateDetail(BaseModel):
 
 
 class OperationRequest(BaseModel):
-    """Request to trigger an operation on the cluster."""
+    """Request to trigger an operation on the cluster.
+
+    Maps to the operator CRD OperationSpec:
+      kind:    OperationKind (WarmRestart | PodRestart) — required
+      id:      unique tracking ID (1-20 chars) — auto-generated if omitted
+      podList: target pods (all pods if empty)
+    """
 
     model_config = {"populate_by_name": True}
 
-    type: Literal["WarmRestart", "PodRestart"] = Field(description="Operation type")
-    pod_names: list[str] | None = Field(default=None, alias="podNames", description="Specific pods (all if empty)")
+    kind: Literal["WarmRestart", "PodRestart"] = Field(description="Operation kind (maps to CRD spec.operations[].kind)")
+    id: str | None = Field(default=None, min_length=1, max_length=20, description="Unique operation ID (auto-generated if omitted)")
+    pod_list: list[str] | None = Field(default=None, alias="podList", description="Specific pods (all if empty)")

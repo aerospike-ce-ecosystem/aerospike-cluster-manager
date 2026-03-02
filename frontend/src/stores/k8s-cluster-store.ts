@@ -18,7 +18,7 @@ interface K8sClusterState {
   deleteCluster: (namespace: string, name: string) => Promise<void>;
   scaleCluster: (namespace: string, name: string, size: number) => Promise<void>;
   fetchTemplates: (namespace?: string) => Promise<void>;
-  triggerOperation: (namespace: string, name: string, type: "WarmRestart" | "PodRestart", podNames?: string[]) => Promise<void>;
+  triggerOperation: (namespace: string, name: string, kind: "WarmRestart" | "PodRestart", podList?: string[]) => Promise<void>;
   pauseCluster: (namespace: string, name: string) => Promise<void>;
   resumeCluster: (namespace: string, name: string) => Promise<void>;
 }
@@ -110,15 +110,15 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => ({
     try {
       const templates = await api.getK8sTemplates(namespace);
       set({ templates });
-    } catch (error) {
-      set({ error: getErrorMessage(error) });
+    } catch {
+      // Don't set global error — template fetch failures should not block cluster pages
     }
   },
 
-  triggerOperation: async (namespace: string, name: string, type: "WarmRestart" | "PodRestart", podNames?: string[]) => {
+  triggerOperation: async (namespace: string, name: string, kind: "WarmRestart" | "PodRestart", podList?: string[]) => {
     set({ loading: true, error: null });
     try {
-      await api.triggerK8sClusterOperation(namespace, name, { type, podNames });
+      await api.triggerK8sClusterOperation(namespace, name, { kind, podList });
       set({ loading: false });
       await get().fetchCluster(namespace, name);
     } catch (error) {

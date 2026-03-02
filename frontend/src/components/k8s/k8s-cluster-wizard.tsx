@@ -534,7 +534,7 @@ export function K8sClusterWizard() {
                   <SelectContent>
                     <SelectItem value="__none__">No template</SelectItem>
                     {templates.map((t) => (
-                      <SelectItem key={`${t.namespace}/${t.name}`} value={`${t.namespace}/${t.name}`}>
+                      <SelectItem key={`${t.namespace}/${t.name}`} value={t.name}>
                         {t.namespace}/{t.name}
                       </SelectItem>
                     ))}

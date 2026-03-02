@@ -491,9 +491,10 @@ async def trigger_k8s_cluster_operation(
     name: str = _K8S_NAME,
 ) -> K8sClusterSummary:
     _require_k8s()
-    operation: dict[str, Any] = {"type": body.type}
-    if body.pod_names:
-        operation["podNames"] = body.pod_names
+    op_id = body.id or f"ui-{uuid.uuid4().hex[:8]}"
+    operation: dict[str, Any] = {"kind": body.kind, "id": op_id}
+    if body.pod_list:
+        operation["podList"] = body.pod_list
     patch: dict[str, Any] = {"spec": {"operations": [operation]}}
     result = await k8s_client.patch_cluster(namespace, name, patch)
     return _extract_summary(result)

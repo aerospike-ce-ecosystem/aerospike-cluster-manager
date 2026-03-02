@@ -385,6 +385,11 @@ export type K8sClusterPhase =
   | "Deleting"
   | "Unknown";
 
+/** Phases that indicate the cluster is transitioning and should trigger auto-refresh. */
+export const TRANSITIONAL_PHASES: K8sClusterPhase[] = [
+  "InProgress", "ScalingUp", "ScalingDown", "WaitingForMigration", "RollingRestart", "ACLSync", "Deleting",
+];
+
 export interface K8sClusterCondition {
   type: string;
   status: string;
@@ -499,8 +504,9 @@ export interface ScaleK8sClusterRequest {
 }
 
 export interface OperationRequest {
-  type: "WarmRestart" | "PodRestart";
-  podNames?: string[];
+  kind: "WarmRestart" | "PodRestart";
+  id?: string;
+  podList?: string[];
 }
 
 export interface K8sTemplateSummary {
