@@ -14,6 +14,7 @@ import {
   Wifi,
   WifiOff,
   Check,
+  Boxes,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,6 +43,7 @@ import { InlineAlert } from "@/components/common/inline-alert";
 import { LoadingButton } from "@/components/common/loading-button";
 import { PageHeader } from "@/components/common/page-header";
 import { useConnectionStore } from "@/stores/connection-store";
+import { useK8sClusterStore } from "@/stores/k8s-cluster-store";
 import type { ConnectionProfile } from "@/lib/api/types";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { PRESET_COLORS } from "@/lib/constants";
@@ -81,6 +83,7 @@ export default function ConnectionsPage() {
     deleteConnection,
     testConnection,
   } = useConnectionStore();
+  const { k8sAvailable, checkAvailability } = useK8sClusterStore();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -102,6 +105,10 @@ export default function ConnectionsPage() {
       })
       .catch((err) => console.error("Failed to load connections:", err));
   }, [fetchConnections, fetchAllHealth]);
+
+  useEffect(() => {
+    checkAvailability();
+  }, [checkAvailability]);
 
   const openCreateDialog = useCallback(() => {
     setEditingId(null);
@@ -278,7 +285,7 @@ export default function ConnectionsPage() {
   return (
     <div className="animate-fade-in space-y-6 p-6 lg:p-8">
       <PageHeader
-        title="Connections"
+        title="Clusters"
         description="Manage your Aerospike connections"
         actions={
           <>
@@ -296,6 +303,12 @@ export default function ConnectionsPage() {
               <Download className="mr-2 h-4 w-4" />
               Export
             </Button>
+            {k8sAvailable && (
+              <Button variant="outline" onClick={() => router.push("/k8s/clusters/new")}>
+                <Boxes className="mr-2 h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Create Cluster</span>
+              </Button>
+            )}
             <Button onClick={openCreateDialog}>
               <Plus className="mr-2 h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">New Connection</span>

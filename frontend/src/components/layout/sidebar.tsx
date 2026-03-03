@@ -259,7 +259,7 @@ export function Sidebar() {
       >
         {/* Close button */}
         <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-sidebar-foreground text-sm font-semibold">Connections</span>
+          <span className="text-sidebar-foreground text-sm font-semibold">Clusters</span>
           <Button
             variant="ghost"
             size="icon"
