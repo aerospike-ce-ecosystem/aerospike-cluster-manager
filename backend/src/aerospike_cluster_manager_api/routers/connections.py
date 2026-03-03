@@ -14,7 +14,7 @@ from starlette.responses import Response
 from aerospike_cluster_manager_api import db
 from aerospike_cluster_manager_api.client_manager import client_manager
 from aerospike_cluster_manager_api.constants import INFO_BUILD, INFO_EDITION, INFO_NAMESPACES
-from aerospike_cluster_manager_api.dependencies import AerospikeClient, _get_verified_connection
+from aerospike_cluster_manager_api.dependencies import _get_verified_connection
 from aerospike_cluster_manager_api.info_parser import parse_list
 from aerospike_cluster_manager_api.models.connection import (
     ConnectionProfile,
@@ -85,9 +85,14 @@ async def update_connection(
     summary="Check connection health",
     description="Check the health status of an Aerospike cluster connection.",
 )
-async def get_connection_health(client: AerospikeClient) -> ConnectionStatus:
-    """Check the health status of an Aerospike cluster connection."""
+async def get_connection_health(conn_id: str = Depends(_get_verified_connection)) -> ConnectionStatus:
+    """Check the health status of an Aerospike cluster connection.
+
+    Always returns HTTP 200. Uses ``connected: false`` to signal unreachable clusters
+    so that the frontend health indicator never mistakes a transient 503 for a permanent failure.
+    """
     try:
+        client = await client_manager.get_client(conn_id)
         node_names = await client.get_node_names()
         ns_raw = await client.info_random_node(INFO_NAMESPACES)
         namespaces = parse_list(ns_raw)
@@ -102,7 +107,7 @@ async def get_connection_health(client: AerospikeClient) -> ConnectionStatus:
             edition=edition,
         )
     except Exception:
-        logger.exception("Health check failed for connection")
+        logger.warning("Health check failed for connection '%s'", conn_id, exc_info=True)
         return ConnectionStatus(connected=False, nodeCount=0, namespaceCount=0)
 
 

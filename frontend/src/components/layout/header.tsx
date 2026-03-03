@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Moon, Sun, Monitor, PanelLeft, Menu } from "lucide-react";
+import { Moon, Sun, Monitor, PanelLeft, Menu, Github } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -64,6 +64,26 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-0.5">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-foreground h-10 w-10 md:h-8 md:w-8"
+              aria-label="GitHub repository"
+              asChild
+            >
+              <a
+                href="https://github.com/KimSoungRyoul/aerospike-cluster-manager"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Github className="h-4 w-4" />
+              </a>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">GitHub Repository</TooltipContent>
+        </Tooltip>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button

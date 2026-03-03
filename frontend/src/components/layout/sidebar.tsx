@@ -124,6 +124,12 @@ function SidebarContent({ isMobileOrTablet }: { isMobileOrTablet: boolean }) {
         fetchAllHealth();
       })
       .catch((err) => console.error("Failed to load sidebar connections:", err));
+
+    const interval = setInterval(() => {
+      fetchAllHealth();
+    }, 30_000);
+
+    return () => clearInterval(interval);
   }, [fetchConnections, fetchAllHealth]);
 
   useEffect(() => {
