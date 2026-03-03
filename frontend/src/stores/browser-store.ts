@@ -8,6 +8,7 @@ import type {
   RecordWriteRequest,
 } from "@/lib/api/types";
 import { api } from "@/lib/api/client";
+import { withLoading } from "@/lib/store-utils";
 import { getErrorMessage } from "@/lib/utils";
 import { DEFAULT_PAGE_SIZE } from "@/lib/constants";
 
@@ -69,8 +70,7 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
   fetchRecords: async (connId, ns, setName, page, pageSize) => {
     const p = page ?? get().page;
     const ps = pageSize ?? get().pageSize;
-    set({ loading: true, error: null });
-    try {
+    await withLoading(set, async () => {
       const result: RecordListResponse = await api.getRecords(connId, ns, setName, p, ps);
       set({
         records: result.records,
@@ -78,18 +78,14 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
         page: result.page,
         pageSize: result.pageSize,
         hasMore: result.hasMore,
-        loading: false,
       });
-    } catch (error) {
-      set({ error: getErrorMessage(error), loading: false });
-    }
+    });
   },
 
   fetchFilteredRecords: async (connId, ns, setName, filters, page, pageSize, primaryKey) => {
     const p = page ?? get().page;
     const ps = pageSize ?? get().pageSize;
-    set({ loading: true, error: null });
-    try {
+    await withLoading(set, async () => {
       const body: FilteredQueryRequest = {
         namespace: ns,
         set: setName,
@@ -107,11 +103,8 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
         hasMore: result.hasMore,
         executionTimeMs: result.executionTimeMs,
         scannedRecords: result.scannedRecords,
-        loading: false,
       });
-    } catch (error) {
-      set({ error: getErrorMessage(error), loading: false });
-    }
+    });
   },
 
   putRecord: async (connId, data) => {

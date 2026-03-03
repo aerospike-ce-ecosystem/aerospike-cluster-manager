@@ -52,21 +52,16 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
   const initialImage = cluster.image;
   const initialSize = cluster.size;
   const initialEnableDynamicConfig = Boolean(cluster.spec?.enableDynamicConfigUpdate);
-  const initialBatchSize =
-    (cluster.spec?.rollingUpdateBatchSize as number | undefined) ?? undefined;
-  const initialMaxUnavailable = (
-    (cluster.spec?.maxUnavailable as string | number) ?? ""
-  ).toString();
+  const initialBatchSize = cluster.spec?.rollingUpdateBatchSize ?? undefined;
+  const initialMaxUnavailable = String(cluster.spec?.maxUnavailable ?? "");
   const initialDisablePDB = Boolean(cluster.spec?.disablePDB);
-  const initialAccessType = ((cluster.spec?.aerospikeNetworkPolicy as Record<string, string>)
-    ?.accessType || "pod") as NetworkAccessType;
-  const initialFabricType = ((cluster.spec?.aerospikeNetworkPolicy as Record<string, string>)
-    ?.fabricType || "") as NetworkAccessType | "";
-  const initialAlternateAccessType = ((cluster.spec?.aerospikeNetworkPolicy as Record<string, string>)
-    ?.alternateAccessType || "") as NetworkAccessType | "";
-  const initialNodeBlockList = ((cluster.spec?.k8sNodeBlockList as string[]) ?? []).join(", ");
+  const networkPolicy = cluster.spec?.aerospikeNetworkPolicy;
+  const initialAccessType = (networkPolicy?.accessType || "pod") as NetworkAccessType;
+  const initialFabricType = (networkPolicy?.fabricType || "") as NetworkAccessType | "";
+  const initialAlternateAccessType = (networkPolicy?.alternateAccessType || "") as NetworkAccessType | "";
+  const initialNodeBlockList = (cluster.spec?.k8sNodeBlockList ?? []).join(", ");
   const initialAerospikeConfig = useMemo(
-    () => (cluster.spec?.aerospikeConfig as Record<string, unknown>) ?? {},
+    () => cluster.spec?.aerospikeConfig ?? {},
     [cluster.spec?.aerospikeConfig],
   );
   const initialAerospikeConfigText = useMemo(

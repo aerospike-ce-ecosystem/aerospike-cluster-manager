@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { LoadingButton } from "@/components/common/loading-button";
+import { InlineAlert } from "@/components/common/inline-alert";
 import { getErrorMessage } from "@/lib/utils";
 
 interface K8sScaleDialogProps {
@@ -84,7 +85,7 @@ export function K8sScaleDialog({
               Scaling down will remove nodes. Data may be lost if not replicated.
             </p>
           )}
-          {error && <p className="text-destructive text-sm">{error}</p>}
+          <InlineAlert message={error} />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>

@@ -225,7 +225,7 @@ export function FilterToolbar({
             className="text-muted-foreground hover:text-foreground h-7 gap-1 px-2 text-xs"
           >
             <X className="h-3 w-3" />
-            <span className="hidden sm:inline">Clear</span>
+            <span className="hidden sm:inline">Clear all</span>
           </Button>
         )}
 

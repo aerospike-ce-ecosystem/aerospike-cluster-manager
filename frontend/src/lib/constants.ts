@@ -117,3 +117,5 @@ export const NO_VALUE_OPERATORS: FilterOperator[] = ["exists", "not_exists", "is
 
 /** Operators that require TWO value inputs */
 export const DUAL_VALUE_OPERATORS: FilterOperator[] = ["between"];
+
+export const AEROSPIKE_IMAGES = ["aerospike:ce-8.1.1.1", "aerospike:ce-7.2.0.6"] as const;

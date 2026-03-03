@@ -43,7 +43,15 @@ export function ConnectionCard({
         "hover:border-accent/30",
       )}
       style={{ animationDelay: `${index * 0.05}s`, animationFillMode: "backwards" }}
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
     >
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">

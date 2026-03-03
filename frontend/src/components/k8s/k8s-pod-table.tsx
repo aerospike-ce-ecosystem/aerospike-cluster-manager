@@ -3,8 +3,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { FileText } from "lucide-react";
+import { FileText, Database } from "lucide-react";
 import { K8sPodLogsDialog } from "@/components/k8s/k8s-pod-logs-dialog";
+import { EmptyState } from "@/components/common/empty-state";
 import type { K8sPodStatus } from "@/lib/api/types";
 
 interface K8sPodTableProps {
@@ -26,7 +27,13 @@ export function K8sPodTable({
 }: K8sPodTableProps) {
   const [logsPodName, setLogsPodName] = useState<string | null>(null);
   if (pods.length === 0) {
-    return <p className="text-muted-foreground py-4 text-center text-sm">No pods found</p>;
+    return (
+      <EmptyState
+        icon={Database}
+        title="No pods found"
+        description="There are no pods running for this cluster yet."
+      />
+    );
   }
 
   const allSelected = pods.length > 0 && selectedPods.length === pods.length;

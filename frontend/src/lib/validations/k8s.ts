@@ -57,6 +57,18 @@ export const k8sStorageSizeSchema = z
   .min(1, "Size is required")
   .regex(/^[0-9]+[KMGTPE]i$/, "Invalid storage size (e.g., '10Gi', '100Gi')");
 
+// K8s Rolling Update config
+export const rollingUpdateConfigSchema = z.object({
+  batchSize: z.number().int().min(1, "Batch size must be at least 1").optional(),
+  maxUnavailable: z
+    .union([
+      z.number().int().min(0, "Must be a non-negative integer"),
+      z.string().regex(/^\d+%$/, "Must be a number or percentage like '30%'"),
+    ])
+    .optional(),
+  disablePDB: z.boolean().optional(),
+});
+
 // Validation helpers
 export function validateK8sName(value: string): string | null {
   const result = k8sNameSchema.safeParse(value);

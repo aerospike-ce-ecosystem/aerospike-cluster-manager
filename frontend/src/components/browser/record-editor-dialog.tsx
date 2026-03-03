@@ -20,18 +20,12 @@ import {
 } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CodeEditor } from "@/components/common/code-editor";
-import type { BinValue } from "@/lib/api/types";
+import type { BinValue, BinEntry } from "@/lib/api/types";
+export type { BinEntry } from "@/lib/api/types";
 import { BIN_TYPES, type BinType } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
-/* ─── Types & Helpers ────────────────────────────────── */
-
-export interface BinEntry {
-  id: string;
-  name: string;
-  value: string;
-  type: BinType;
-}
+/* ─── Helpers ────────────────────────────────────────── */
 
 export function parseBinValue(value: string, type: BinType): BinValue {
   switch (type) {
@@ -156,7 +150,7 @@ export function RecordEditorDialog({
                   placeholder="Record key"
                   value={pk}
                   onChange={(e) => onPKChange(e.target.value)}
-                  disabled={mode === "edit"}
+                  disabled={mode === "edit" || saving}
                   className="border-border/50 focus-visible:ring-accent/30 h-9 font-mono text-sm"
                 />
               </div>
@@ -169,6 +163,7 @@ export function RecordEditorDialog({
                   placeholder="0 = default"
                   value={ttl}
                   onChange={(e) => onTTLChange(e.target.value)}
+                  disabled={saving}
                   className="border-border/50 focus-visible:ring-accent/30 h-9 font-mono text-sm"
                 />
               </div>
@@ -184,6 +179,7 @@ export function RecordEditorDialog({
                   variant="outline"
                   size="sm"
                   onClick={onAddBin}
+                  disabled={saving}
                   className="border-border/40 text-muted-foreground hover:text-accent hover:border-accent/30 h-6 gap-1 font-mono text-[11px]"
                 >
                   <Plus className="h-3 w-3" />
@@ -207,13 +203,14 @@ export function RecordEditorDialog({
                         placeholder="Bin name"
                         value={bin.name}
                         onChange={(e) => onUpdateBin(bin.id, "name", e.target.value)}
+                        disabled={saving}
                         className="border-border/40 h-8 flex-1 font-mono text-sm"
                       />
                       <Select
                         value={bin.type}
                         onValueChange={(v) => onUpdateBin(bin.id, "type", v)}
                       >
-                        <SelectTrigger className="border-border/40 h-8 w-[110px] font-mono text-xs">
+                        <SelectTrigger className="border-border/40 h-8 w-[110px] font-mono text-xs" disabled={saving}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -227,8 +224,9 @@ export function RecordEditorDialog({
                       {bins.length > 1 && (
                         <button
                           type="button"
-                          className="text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors"
+                          className="text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors disabled:pointer-events-none disabled:opacity-50"
                           onClick={() => onRemoveBin(bin.id)}
+                          disabled={saving}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -238,8 +236,9 @@ export function RecordEditorDialog({
                     {isComplex && (
                       <button
                         type="button"
-                        className="text-muted-foreground/60 hover:text-accent font-mono text-[11px] transition-colors"
+                        className="text-muted-foreground/60 hover:text-accent font-mono text-[11px] transition-colors disabled:pointer-events-none disabled:opacity-50"
                         onClick={() => onToggleCodeEditor(bin.id)}
+                        disabled={saving}
                       >
                         {showCode ? "↩ simple input" : "⌨ code editor"}
                       </button>
@@ -265,6 +264,7 @@ export function RecordEditorDialog({
                         }
                         value={bin.value}
                         onChange={(e) => onUpdateBin(bin.id, "value", e.target.value)}
+                        disabled={saving}
                         className="border-border/40 h-8 font-mono text-sm"
                       />
                     )}

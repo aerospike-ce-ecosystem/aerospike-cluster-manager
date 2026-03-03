@@ -516,7 +516,7 @@ export interface K8sClusterDetail {
   phase: K8sClusterPhase;
   phaseReason?: string;
   age: string | null;
-  spec: Record<string, unknown>;
+  spec: AerospikeClusterSpec;
   status: Record<string, unknown>;
   pods: K8sPodStatus[];
   conditions: K8sClusterCondition[];
@@ -690,4 +690,39 @@ export interface PodLogsResponse {
 
 export interface ClusterYamlResponse {
   yaml: Record<string, unknown>;
+}
+
+// === Bin Editor ===
+export interface BinEntry {
+  id: string;
+  name: string;
+  value: string;
+  type: "string" | "integer" | "float" | "bool" | "list" | "map" | "bytes" | "geojson";
+}
+
+// === AerospikeCluster Spec (typed subset of the CRD spec) ===
+export interface AerospikeNetworkPolicySpec {
+  accessType?: string;
+  alternateAccessType?: string;
+  fabricType?: string;
+}
+
+export interface AerospikeClusterSpec {
+  image?: string;
+  size?: number;
+  aerospikeConfig?: Record<string, unknown>;
+  rackConfig?: RackAwareConfig;
+  storage?: StorageVolumeConfig;
+  podSpec?: Record<string, unknown>;
+  operationsList?: Record<string, unknown>[];
+  rollingUpdateBatchSize?: number;
+  maxUnavailable?: string | number;
+  disablePDB?: boolean;
+  enableDynamicConfigUpdate?: boolean;
+  aerospikeNetworkPolicy?: AerospikeNetworkPolicySpec;
+  k8sNodeBlockList?: string[];
+  monitoring?: MonitoringConfig;
+  acl?: ACLConfig;
+  resources?: ResourceConfig;
+  [key: string]: unknown;
 }

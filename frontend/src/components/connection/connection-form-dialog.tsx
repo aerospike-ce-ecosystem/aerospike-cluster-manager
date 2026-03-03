@@ -133,6 +133,7 @@ export function ConnectionFormDialog({
                 <button
                   key={color}
                   type="button"
+                  aria-label={`Select ${color} color`}
                   className={cn(
                     "h-8 w-8 rounded-full transition-all duration-150",
                     form.color === color
