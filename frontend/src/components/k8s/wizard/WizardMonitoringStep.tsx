@@ -66,7 +66,7 @@ export function WizardMonitoringStep({
       )}
 
       <div className="grid gap-2">
-        <Label htmlFor="template-ref">Cluster Template (optional)</Label>
+        <Label htmlFor="template-ref">AerospikeClusterTemplate (optional)</Label>
         <Select
           value={form.templateRef || "__none__"}
           onValueChange={(v) => {

@@ -42,7 +42,7 @@ def is_per_node_command(cmd: str) -> bool:
 
 
 # Shared error messages
-EE_MSG = "User/role management requires Aerospike Enterprise Edition"
+EE_MSG = "Security is not enabled. Add a 'security { }' block to aerospike.conf to manage users and roles."
 
 # Namespace stat keys that must be summed across nodes
 NS_SUM_KEYS = frozenset(

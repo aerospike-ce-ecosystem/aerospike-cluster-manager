@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useEffect, useState, useCallback, useMemo } from "react";
-import { Plus, Trash2, Key, Shield, ShieldAlert, Users, RefreshCw } from "lucide-react";
+import { Plus, Trash2, Key, Shield, ShieldOff, Users, RefreshCw } from "lucide-react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/common/page-header";
@@ -46,7 +46,7 @@ export default function AdminPage({ params }: { params: Promise<{ connId: string
     usersLoading,
     rolesLoading,
     error,
-    isEnterpriseRequired,
+    isSecurityDisabled,
     fetchUsers,
     fetchRoles,
     createUser,
@@ -340,13 +340,14 @@ export default function AdminPage({ params }: { params: Promise<{ connId: string
 
       <InlineAlert message={error} />
 
-      {isEnterpriseRequired ? (
+      {isSecurityDisabled ? (
         <div className="border-warning/30 bg-warning/5 flex flex-col items-center justify-center rounded-lg border p-12 text-center">
-          <ShieldAlert className="text-warning mb-4 h-12 w-12" />
-          <h3 className="text-lg font-semibold">Enterprise Edition Required</h3>
+          <ShieldOff className="text-warning mb-4 h-12 w-12" />
+          <h3 className="text-lg font-semibold">Security Not Enabled</h3>
           <p className="text-muted-foreground mt-2 max-w-md">
-            User and role management requires Aerospike Enterprise Edition. The connected Aerospike
-            instance is running Community Edition.
+            User and role management requires security to be enabled. Add a{" "}
+            <code className="bg-muted rounded px-1 py-0.5 font-mono text-xs">security {"{ }"}</code>{" "}
+            block to your <code className="bg-muted rounded px-1 py-0.5 font-mono text-xs">aerospike.conf</code> to enable this feature.
           </p>
         </div>
       ) : (

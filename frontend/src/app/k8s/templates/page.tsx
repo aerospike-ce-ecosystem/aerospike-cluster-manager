@@ -57,7 +57,7 @@ export default function K8sTemplatesPage() {
   return (
     <div className="animate-fade-in space-y-6 p-6 lg:p-8">
       <PageHeader
-        title="K8s Templates"
+        title="AerospikeClusterTemplates"
         description="Reusable cluster configuration templates"
         actions={
           <div className="flex gap-2">
@@ -67,7 +67,7 @@ export default function K8sTemplatesPage() {
             </Button>
             <Button onClick={() => router.push("/k8s/templates/new")}>
               <Plus className="mr-2 h-4 w-4" />
-              <span className="hidden sm:inline">Create Template</span>
+              <span className="hidden sm:inline">New Template</span>
             </Button>
           </div>
         }
@@ -78,12 +78,12 @@ export default function K8sTemplatesPage() {
       {templates.length === 0 ? (
         <EmptyState
           icon={FileCode}
-          title="No templates"
+          title="No AerospikeClusterTemplates"
           description="Create a reusable cluster template to standardize deployments."
           action={
             <Button onClick={() => router.push("/k8s/templates/new")}>
               <Plus className="mr-2 h-4 w-4" />
-              Create Template
+              New Template
             </Button>
           }
         />
@@ -115,6 +115,9 @@ export default function K8sTemplatesPage() {
                   <Trash2 className="h-3.5 w-3.5 text-destructive" />
                 </Button>
               </div>
+              {tmpl.description && (
+                <p className="text-muted-foreground mt-2 line-clamp-2 text-xs">{tmpl.description}</p>
+              )}
               <div className="mt-3 flex gap-4 text-xs">
                 {tmpl.image && (
                   <span className="text-muted-foreground truncate">
@@ -138,9 +141,9 @@ export default function K8sTemplatesPage() {
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open: boolean) => !open && setDeleteTarget(null)}
-        title="Delete Template"
+        title="Delete AerospikeClusterTemplate"
         description={`Are you sure you want to delete "${deleteTarget?.name}"? Clusters referencing this template must be updated first. This action cannot be undone.`}
-        confirmLabel="Delete Template"
+        confirmLabel="Delete"
         variant="destructive"
         onConfirm={handleDelete}
         loading={deleting}

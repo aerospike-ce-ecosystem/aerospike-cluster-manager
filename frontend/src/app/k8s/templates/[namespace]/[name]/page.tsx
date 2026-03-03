@@ -64,7 +64,7 @@ export default function TemplateDetailPage() {
         <InlineAlert message={error || "Template not found"} />
         <Button variant="outline" className="mt-4" onClick={() => router.push("/k8s/templates")}>
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Templates
+          Back to AerospikeClusterTemplates
         </Button>
       </div>
     );
@@ -86,7 +86,7 @@ export default function TemplateDetailPage() {
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => router.push("/k8s/templates")}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
+              Back to Templates
             </Button>
             <Button variant="outline" size="sm" onClick={handleCopySpec}>
               <Copy className="mr-2 h-4 w-4" />
@@ -113,6 +113,12 @@ export default function TemplateDetailPage() {
         <div className="bg-card rounded-xl border p-5">
           <h3 className="mb-3 text-sm font-semibold">Overview</h3>
           <dl className="space-y-2 text-sm">
+            {spec.description ? (
+              <>
+                <dt className="text-muted-foreground text-xs">Description</dt>
+                <dd className="text-xs">{String(spec.description)}</dd>
+              </>
+            ) : null}
             {spec.image ? (
               <>
                 <dt className="text-muted-foreground text-xs">Image</dt>
@@ -193,7 +199,7 @@ export default function TemplateDetailPage() {
       <ConfirmDialog
         open={showDelete}
         onOpenChange={setShowDelete}
-        title="Delete Template"
+        title="Delete AerospikeClusterTemplate"
         description={`Are you sure you want to delete "${selectedTemplate.name}"? This action cannot be undone.`}
         confirmLabel="Delete"
         variant="destructive"

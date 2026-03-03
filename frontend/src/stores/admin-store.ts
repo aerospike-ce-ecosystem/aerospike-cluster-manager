@@ -15,7 +15,7 @@ interface AdminState {
   usersLoading: boolean;
   rolesLoading: boolean;
   error: string | null;
-  isEnterpriseRequired: boolean;
+  isSecurityDisabled: boolean;
 
   fetchUsers: (connId: string) => Promise<void>;
   fetchRoles: (connId: string) => Promise<void>;
@@ -32,16 +32,16 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
   usersLoading: false,
   rolesLoading: false,
   error: null,
-  isEnterpriseRequired: false,
+  isSecurityDisabled: false,
 
   fetchUsers: async (connId) => {
     set({ usersLoading: true, error: null });
     try {
       const users = await api.getUsers(connId);
-      set({ users, usersLoading: false, isEnterpriseRequired: false });
+      set({ users, usersLoading: false, isSecurityDisabled: false });
     } catch (error) {
       if (isApiError(error) && error.status === 403) {
-        set({ isEnterpriseRequired: true, usersLoading: false, error: null });
+        set({ isSecurityDisabled: true, usersLoading: false, error: null });
       } else {
         set({ error: getErrorMessage(error), usersLoading: false });
       }
@@ -52,10 +52,10 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
     set({ rolesLoading: true, error: null });
     try {
       const roles = await api.getRoles(connId);
-      set({ roles, rolesLoading: false, isEnterpriseRequired: false });
+      set({ roles, rolesLoading: false, isSecurityDisabled: false });
     } catch (error) {
       if (isApiError(error) && error.status === 403) {
-        set({ isEnterpriseRequired: true, rolesLoading: false, error: null });
+        set({ isSecurityDisabled: true, rolesLoading: false, error: null });
       } else {
         set({ error: getErrorMessage(error), rolesLoading: false });
       }

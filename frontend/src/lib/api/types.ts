@@ -633,6 +633,7 @@ export interface K8sTemplateSummary {
   image?: string;
   size?: number;
   age?: string;
+  description?: string;
 }
 
 export interface K8sTemplateDetail {
@@ -658,6 +659,7 @@ export interface TemplateStorageConfig {
 export interface CreateK8sTemplateRequest {
   name: string;
   namespace: string;
+  description?: string;
   image?: string;
   size?: number;
   resources?: ResourceConfig;

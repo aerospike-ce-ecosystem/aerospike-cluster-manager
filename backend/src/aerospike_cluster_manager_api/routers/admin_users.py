@@ -19,10 +19,10 @@ router = APIRouter(prefix="/api/admin", tags=["admin-users"])
 @router.get(
     "/{conn_id}/users",
     summary="List users",
-    description="Retrieve all Aerospike users and their roles. Requires Enterprise Edition.",
+    description="Retrieve all Aerospike users and their roles. Requires security to be enabled in aerospike.conf.",
 )
 async def get_users(client: AerospikeClient) -> list[AerospikeUser]:
-    """Retrieve all Aerospike users and their roles. Requires Enterprise Edition."""
+    """Retrieve all Aerospike users and their roles. Requires security to be enabled in aerospike.conf."""
     try:
         raw_users = await client.admin_query_users_info()
         users: list[AerospikeUser] = []
@@ -49,10 +49,10 @@ async def get_users(client: AerospikeClient) -> list[AerospikeUser]:
     "/{conn_id}/users",
     status_code=201,
     summary="Create user",
-    description="Create a new Aerospike user with specified roles. Requires Enterprise Edition.",
+    description="Create a new Aerospike user with specified roles. Requires security to be enabled in aerospike.conf.",
 )
 async def create_user(body: CreateUserRequest, client: AerospikeClient) -> AerospikeUser:
-    """Create a new Aerospike user with specified roles. Requires Enterprise Edition."""
+    """Create a new Aerospike user with specified roles. Requires security to be enabled in aerospike.conf."""
     if not body.username or not body.password:
         raise HTTPException(status_code=400, detail="Missing required fields: username, password")
 
@@ -74,10 +74,10 @@ async def create_user(body: CreateUserRequest, client: AerospikeClient) -> Aeros
     "/{conn_id}/users",
     response_model=MessageResponse,
     summary="Change user password",
-    description="Change the password for an existing Aerospike user. Requires Enterprise Edition.",
+    description="Change the password for an existing Aerospike user. Requires security to be enabled in aerospike.conf.",
 )
 async def change_password(body: ChangePasswordRequest, client: AerospikeClient) -> MessageResponse:
-    """Change the password for an existing Aerospike user. Requires Enterprise Edition."""
+    """Change the password for an existing Aerospike user. Requires security to be enabled in aerospike.conf."""
     if not body.username or not body.password:
         raise HTTPException(status_code=400, detail="Missing required fields: username, password")
 
@@ -93,13 +93,13 @@ async def change_password(body: ChangePasswordRequest, client: AerospikeClient) 
     "/{conn_id}/users",
     status_code=204,
     summary="Delete user",
-    description="Delete an Aerospike user by username. Requires Enterprise Edition.",
+    description="Delete an Aerospike user by username. Requires security to be enabled in aerospike.conf.",
 )
 async def delete_user(
     client: AerospikeClient,
     username: str = Query(..., min_length=1),
 ) -> Response:
-    """Delete an Aerospike user by username. Requires Enterprise Edition."""
+    """Delete an Aerospike user by username. Requires security to be enabled in aerospike.conf."""
     try:
         await client.admin_drop_user(username)
     except AdminError:

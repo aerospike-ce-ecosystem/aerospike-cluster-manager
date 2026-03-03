@@ -6,6 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LoadingButton } from "@/components/common/loading-button";
 import { PageHeader } from "@/components/common/page-header";
@@ -32,6 +33,7 @@ export default function CreateTemplatePage() {
   // Form state
   const [name, setName] = useState("");
   const [namespace, setNamespace] = useState("aerospike");
+  const [description, setDescription] = useState("");
   const [image, setImage] = useState("aerospike:ce-8.1.1.1");
   const [size, setSize] = useState<number | undefined>(undefined);
   const [includeResources, setIncludeResources] = useState(false);
@@ -64,6 +66,7 @@ export default function CreateTemplatePage() {
         name: name.trim(),
         namespace,
       };
+      if (description.trim()) data.description = description.trim();
       if (image) data.image = image;
       if (size != null && size > 0) data.size = size;
       if (includeResources) {
@@ -105,7 +108,7 @@ export default function CreateTemplatePage() {
   return (
     <div className="animate-fade-in space-y-6 p-6 lg:p-8">
       <PageHeader
-        title="Create Template"
+        title="Create AerospikeClusterTemplate"
         description="Define a reusable cluster configuration template"
         actions={
           <Button variant="outline" size="sm" onClick={() => router.push("/k8s/templates")}>
@@ -119,6 +122,22 @@ export default function CreateTemplatePage() {
         {/* Basic Info */}
         <div className="bg-card space-y-4 rounded-xl border p-6">
           <h3 className="text-sm font-semibold">Basic Information</h3>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="tmpl-description">Description</Label>
+              <Textarea
+                id="tmpl-description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="e.g. Production multi-rack cluster for high availability"
+                rows={2}
+                maxLength={500}
+                disabled={loading}
+                className="resize-none"
+              />
+              <p className="text-muted-foreground text-xs">{description.length}/500</p>
+            </div>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="tmpl-name">Template Name</Label>
@@ -324,7 +343,7 @@ export default function CreateTemplatePage() {
             Cancel
           </Button>
           <LoadingButton onClick={handleSubmit} loading={loading} disabled={!name.trim()}>
-            Create Template
+            Create AerospikeClusterTemplate
           </LoadingButton>
         </div>
       </div>

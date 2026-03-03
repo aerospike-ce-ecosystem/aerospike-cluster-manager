@@ -732,6 +732,7 @@ async def list_k8s_templates(namespace: str | None = None) -> list[K8sTemplateSu
                 image=spec.get("image"),
                 size=spec.get("size"),
                 age=_calculate_age(metadata.get("creationTimestamp")),
+                description=spec.get("description"),
             )
         )
     return summaries
@@ -767,6 +768,8 @@ def _build_template_cr(req: CreateK8sTemplateRequest) -> dict[str, Any]:
         "spec": {},
     }
 
+    if req.description:
+        cr["spec"]["description"] = req.description
     if req.image:
         cr["spec"]["image"] = req.image
     if req.size is not None:
@@ -820,6 +823,7 @@ async def create_k8s_template(body: CreateK8sTemplateRequest) -> K8sTemplateSumm
         image=spec.get("image"),
         size=spec.get("size"),
         age=_calculate_age(metadata.get("creationTimestamp")),
+        description=spec.get("description"),
     )
 
 

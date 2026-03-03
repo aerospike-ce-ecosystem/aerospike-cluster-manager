@@ -202,7 +202,7 @@ function SidebarContent({ isMobileOrTablet }: { isMobileOrTablet: boolean }) {
               onClick={() => handleNavigation("/k8s/templates")}
             >
               <FileCode className="h-3.5 w-3.5" />
-              K8s Templates
+              AerospikeClusterTemplate
             </Button>
           </>
         )}

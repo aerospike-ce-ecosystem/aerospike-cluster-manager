@@ -33,7 +33,7 @@ export function BatchReadDialog({
             <span className="text-accent ml-4 font-mono text-[11px]">{selectedCount} keys</span>
           </div>
           <DialogDescription className="text-muted-foreground/60 font-mono text-xs">
-            Python aerospike client batch_read snippet
+            Python aerospike-py async client batch_read snippet
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className="max-h-[calc(80vh-100px)]">

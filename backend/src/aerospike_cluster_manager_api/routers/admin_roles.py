@@ -18,10 +18,10 @@ router = APIRouter(prefix="/api/admin", tags=["admin-roles"])
 @router.get(
     "/{conn_id}/roles",
     summary="List roles",
-    description="Retrieve all Aerospike roles and their privileges. Requires Enterprise Edition.",
+    description="Retrieve all Aerospike roles and their privileges. Requires security to be enabled in aerospike.conf.",
 )
 async def get_roles(client: AerospikeClient) -> list[AerospikeRole]:
-    """Retrieve all Aerospike roles and their privileges. Requires Enterprise Edition."""
+    """Retrieve all Aerospike roles and their privileges. Requires security to be enabled in aerospike.conf."""
     try:
         raw_roles = await client.admin_query_roles()
         roles: list[AerospikeRole] = []
@@ -62,10 +62,10 @@ async def get_roles(client: AerospikeClient) -> list[AerospikeRole]:
     "/{conn_id}/roles",
     status_code=201,
     summary="Create role",
-    description="Create a new Aerospike role with specified privileges. Requires Enterprise Edition.",
+    description="Create a new Aerospike role with specified privileges. Requires security to be enabled in aerospike.conf.",
 )
 async def create_role(body: CreateRoleRequest, client: AerospikeClient) -> AerospikeRole:
-    """Create a new Aerospike role with specified privileges. Requires Enterprise Edition."""
+    """Create a new Aerospike role with specified privileges. Requires security to be enabled in aerospike.conf."""
     if not body.name or not body.privileges:
         raise HTTPException(status_code=400, detail="Missing required fields: name, privileges")
 
@@ -94,13 +94,13 @@ async def create_role(body: CreateRoleRequest, client: AerospikeClient) -> Aeros
     "/{conn_id}/roles",
     status_code=204,
     summary="Delete role",
-    description="Delete an Aerospike role by name. Requires Enterprise Edition.",
+    description="Delete an Aerospike role by name. Requires security to be enabled in aerospike.conf.",
 )
 async def delete_role(
     client: AerospikeClient,
     name: str = Query(..., min_length=1),
 ) -> Response:
-    """Delete an Aerospike role by name. Requires Enterprise Edition."""
+    """Delete an Aerospike role by name. Requires security to be enabled in aerospike.conf."""
     try:
         await client.admin_drop_role(name)
     except AdminError:

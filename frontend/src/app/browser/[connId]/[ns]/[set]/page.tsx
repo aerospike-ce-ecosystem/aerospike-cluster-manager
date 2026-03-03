@@ -331,28 +331,31 @@ export default function BrowserPage({
     const host = currentConnection?.hosts?.[0] ?? "127.0.0.1";
     const port = currentConnection?.port ?? 3000;
     const keysStr = selected
-      .map((r) => `    ("${decodedNs}", "${decodedSet}", "${r.key.pk}")`)
+      .map((r) => `        ("${decodedNs}", "${decodedSet}", "${r.key.pk}")`)
       .join(",\n");
 
-    return `import aerospike
+    return `import asyncio
+import aerospike_py as aerospike
 
-config = {"hosts": [("${host}", ${port})]}
-client = aerospike.client(config).connect()
+async def main():
+    client = aerospike.AsyncClient({"hosts": [("${host}", ${port})]})
+    await client.connect()
 
-keys = [
+    keys = [
 ${keysStr},
-]
+    ]
 
-batch_results = client.batch_read(keys)
+    batch = await client.batch_read(keys)
 
-for br in batch_results.batch_records:
-    if br.result == 0:
-        (key, meta, bins) = br.record
-        print(key, meta, bins)
-    else:
-        print(f"Failed to read {br.key}: error code {br.result}")
+    for br in batch.batch_records:
+        if br.record:
+            print(br.record.bins)
+        else:
+            print(f"Failed to read key: {br.key}")
 
-client.close()`;
+    await client.close()
+
+asyncio.run(main())`;
   }, [displayRecords, selectedPKs, decodedNs, decodedSet, currentConnection]);
 
   // Export handlers for current records

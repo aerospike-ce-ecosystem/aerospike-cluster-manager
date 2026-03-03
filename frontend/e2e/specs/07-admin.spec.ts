@@ -3,7 +3,7 @@ import { AdminPage } from "../pages/admin-page";
 import { screenshot } from "../fixtures/base-page";
 import { getTestConnectionId } from "../fixtures/test-data";
 
-test.describe("07 - Admin (CE Error Handling)", () => {
+test.describe("07 - Admin (Security Disabled Handling)", () => {
   let connId: string;
   let adminPage: AdminPage;
 
@@ -17,40 +17,38 @@ test.describe("07 - Admin (CE Error Handling)", () => {
     adminPage = new AdminPage(page);
   });
 
-  test("1. Admin page loads and shows CE enterprise notice", async ({ page }) => {
+  test("1. Admin page loads and shows security notice or tabs", async ({ page }) => {
     await adminPage.goto(connId);
 
-    // CE edition: should show "Enterprise Edition Required" message instead of tabs
-    // Or if tabs appear, that's fine too (Enterprise Edition)
-    const enterpriseNotice = page.getByText(/Enterprise Edition Required/i).first();
+    // Security disabled: shows "Security Not Enabled" notice
+    // Security enabled: shows Users/Roles tabs
+    const securityNotice = page.getByText(/Security Not Enabled/i).first();
     const usersTab = adminPage.usersTab;
 
-    await expect(enterpriseNotice.or(usersTab)).toBeVisible({ timeout: 15_000 });
+    await expect(securityNotice.or(usersTab)).toBeVisible({ timeout: 15_000 });
     await screenshot(page, "07-01-admin-page");
   });
 
-  test("2. CE shows enterprise required message for users", async ({ page }) => {
+  test("2. Admin shows security notice or users when security disabled/enabled", async ({ page }) => {
     await adminPage.goto(connId);
 
-    // CE edition: expect enterprise notice or error message
     await expect(
       page
         .getByText(
-          /Enterprise Edition Required|not supported|forbidden|error|No users|security is not enabled/i,
+          /Security Not Enabled|not supported|forbidden|error|No users|security is not enabled/i,
         )
         .first(),
     ).toBeVisible({ timeout: 15_000 });
     await screenshot(page, "07-02-users-ce-error");
   });
 
-  test("3. CE shows enterprise required message for roles", async ({ page }) => {
+  test("3. Admin shows security notice or roles when security disabled/enabled", async ({ page }) => {
     await adminPage.goto(connId);
 
-    // CE edition: same enterprise notice covers both users and roles
     await expect(
       page
         .getByText(
-          /Enterprise Edition Required|not supported|forbidden|error|No roles|security is not enabled/i,
+          /Security Not Enabled|not supported|forbidden|error|No roles|security is not enabled/i,
         )
         .first(),
     ).toBeVisible({ timeout: 15_000 });
