@@ -516,14 +516,11 @@ async def get_k8s_cluster_yaml(
 async def create_k8s_cluster(body: CreateK8sClusterRequest) -> K8sClusterSummary:
     _require_k8s()
 
-    # Validate that the target namespace exists in K8s
+    # Auto-create the namespace if it doesn't exist
     existing_namespaces = await k8s_client.list_namespaces()
     if body.namespace not in existing_namespaces:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Namespace '{body.namespace}' does not exist in the Kubernetes cluster. "
-            f"Available namespaces: {', '.join(sorted(existing_namespaces))}",
-        )
+        logger.info("Namespace '%s' not found — creating it automatically", body.namespace)
+        await k8s_client.create_namespace(body.namespace)
 
     cr = _build_cr(body)
     result = await k8s_client.create_cluster(body.namespace, cr)

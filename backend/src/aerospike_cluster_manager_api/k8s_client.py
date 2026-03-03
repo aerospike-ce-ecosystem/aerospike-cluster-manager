@@ -179,6 +179,26 @@ class K8sClient:
         except Exception as e:
             raise self._wrap_api_exception(e) from e
 
+    def _create_namespace_sync(self, name: str) -> None:
+        logger.debug("_create_namespace_sync(name=%s)", name)
+        self._ensure_initialized()
+        from kubernetes import client
+        from kubernetes.client.rest import ApiException
+
+        try:
+            self._core_api.create_namespace(
+                client.V1Namespace(metadata=client.V1ObjectMeta(name=name)),
+                _request_timeout=_K8S_API_TIMEOUT,
+            )
+            logger.info("Created namespace '%s'", name)
+        except ApiException as e:
+            if e.status == 409:
+                # Already exists — not an error
+                return
+            raise self._wrap_api_exception(e) from e
+        except Exception as e:
+            raise self._wrap_api_exception(e) from e
+
     def _list_storage_classes_sync(self) -> list[str]:
         logger.debug("_list_storage_classes_sync()")
         self._ensure_initialized()
@@ -391,6 +411,9 @@ class K8sClient:
 
     async def list_namespaces(self) -> list[str]:
         return await asyncio.to_thread(self._list_namespaces_sync)
+
+    async def create_namespace(self, name: str) -> None:
+        return await asyncio.to_thread(self._create_namespace_sync, name)
 
     async def list_storage_classes(self) -> list[str]:
         return await asyncio.to_thread(self._list_storage_classes_sync)
