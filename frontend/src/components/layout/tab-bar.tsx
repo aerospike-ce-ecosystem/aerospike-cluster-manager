@@ -6,8 +6,8 @@ import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 const tabs = [
-  { label: "Namespaces", icon: Table2, path: "browser" },
   { label: "Overview", icon: Server, path: "cluster" },
+  { label: "Namespaces", icon: Table2, path: "browser" },
   { label: "Indexes", icon: Database, path: "indexes" },
   { label: "Admin", icon: Shield, path: "admin" },
   { label: "UDFs", icon: Code2, path: "udfs" },

@@ -10,6 +10,7 @@ import type {
 } from "@/lib/api/types";
 import { api } from "@/lib/api/client";
 import { withLoading } from "@/lib/store-utils";
+import { getErrorMessage } from "@/lib/utils";
 
 interface K8sClusterState {
   clusters: K8sClusterSummary[];
@@ -62,10 +63,15 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => ({
 
   fetchClusters: async (namespace?: string) => {
     if (get().loading) return;
-    await withLoading(set, async () => {
+    set({ loading: true, error: null });
+    try {
       const clusters = await api.getK8sClusters(namespace);
-      set({ clusters, k8sAvailable: true });
-    });
+      // Single atomic set so consumers see `loading: false` and updated clusters simultaneously,
+      // preventing a race where a subscriber re-renders with new clusters but loading still true.
+      set({ clusters, k8sAvailable: true, loading: false, error: null });
+    } catch (error) {
+      set({ error: getErrorMessage(error), loading: false });
+    }
   },
 
   fetchCluster: async (namespace: string, name: string) => {

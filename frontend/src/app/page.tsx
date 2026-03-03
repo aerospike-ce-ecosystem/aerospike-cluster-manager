@@ -4,8 +4,6 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus,
-  Import,
-  Download,
   Server,
   Pencil,
   Trash2,
@@ -47,7 +45,6 @@ import { useK8sClusterStore } from "@/stores/k8s-cluster-store";
 import type { ConnectionProfile } from "@/lib/api/types";
 import { cn, getErrorMessage } from "@/lib/utils";
 import { PRESET_COLORS } from "@/lib/constants";
-import { connectionImportSchema } from "@/lib/validations/connection";
 import { toast } from "sonner";
 
 interface ConnectionFormData {
@@ -96,7 +93,6 @@ export default function ConnectionsPage() {
   } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ConnectionProfile | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [exportConfirmOpen, setExportConfirmOpen] = useState(false);
 
   useEffect(() => {
     fetchConnections()
@@ -197,63 +193,6 @@ export default function ConnectionsPage() {
     }
   };
 
-  const doExport = useCallback(() => {
-    const data = connections.map(({ name, hosts, port, color, username }) => ({
-      name,
-      hosts,
-      port,
-      color,
-      ...(username ? { username } : {}),
-    }));
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "aerospike-connections.json";
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("Connections exported");
-  }, [connections]);
-
-  const handleExport = useCallback(() => {
-    setExportConfirmOpen(true);
-  }, []);
-
-  const handleImport = useCallback(() => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json";
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      try {
-        const text = await file.text();
-        const imported = JSON.parse(text);
-        if (!Array.isArray(imported)) {
-          toast.error("Invalid file format");
-          return;
-        }
-        let importedCount = 0;
-        for (let i = 0; i < imported.length; i++) {
-          const result = connectionImportSchema.safeParse(imported[i]);
-          if (!result.success) {
-            toast.error(`Invalid connection at index ${i}: ${result.error.issues[0]?.message}`);
-            continue;
-          }
-          await createConnection(result.data);
-          importedCount++;
-        }
-        toast.success(`Imported ${importedCount} connection(s)`);
-        fetchAllHealth();
-      } catch {
-        toast.error("Failed to import connections");
-      }
-    };
-    input.click();
-  }, [createConnection, fetchAllHealth]);
-
   const navigateToConnection = useCallback(
     (conn: ConnectionProfile) => {
       const status = healthStatuses[conn.id];
@@ -289,27 +228,13 @@ export default function ConnectionsPage() {
         description="Manage your Aerospike connections"
         actions={
           <>
-            <Button variant="outline" size="sm" onClick={handleImport} className="hidden sm:flex">
-              <Import className="mr-2 h-4 w-4" />
-              Import
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExport}
-              disabled={connections.length === 0}
-              className="hidden sm:flex"
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Export
-            </Button>
             {k8sAvailable && (
               <Button variant="outline" onClick={() => router.push("/k8s/clusters/new")}>
                 <Boxes className="mr-2 h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Create Cluster</span>
               </Button>
             )}
-            <Button onClick={openCreateDialog}>
+            <Button variant="outline" onClick={openCreateDialog}>
               <Plus className="mr-2 h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">New Connection</span>
             </Button>
@@ -604,16 +529,6 @@ export default function ConnectionsPage() {
         loading={deleting}
       />
 
-      {/* Export Confirmation */}
-      <ConfirmDialog
-        open={exportConfirmOpen}
-        onOpenChange={setExportConfirmOpen}
-        title="Export Connections"
-        description="Export connections? Passwords will NOT be included for security."
-        confirmLabel="Export"
-        variant="default"
-        onConfirm={doExport}
-      />
     </div>
   );
 }
