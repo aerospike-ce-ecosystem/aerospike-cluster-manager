@@ -106,6 +106,28 @@ describe("api client", () => {
         expect.any(Object),
       );
     });
+
+    it("encodes connection ID path segments for connection health requests", async () => {
+      mockFetch.mockResolvedValueOnce(createResponse(200, { isConnected: true }));
+
+      await api.getConnectionHealth("team/a connection");
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/connections/team%2Fa%20connection/health",
+        expect.any(Object),
+      );
+    });
+
+    it("encodes pod log path segments with special characters", async () => {
+      mockFetch.mockResolvedValueOnce(createResponse(200, { lines: [] }));
+
+      await api.getK8sPodLogs("team/a", "cluster name", "pod#1", 100, "x/y");
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/k8s/clusters/team%2Fa/cluster%20name/pods/pod%231/logs?tail=100&container=x%2Fy",
+        expect.any(Object),
+      );
+    });
   });
 
   describe("error responses", () => {

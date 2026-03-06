@@ -22,6 +22,10 @@ function withQuery(
   return queryString ? `${path}?${queryString}` : path;
 }
 
+function encodePathSegment(segment: string): string {
+  return encodeURIComponent(segment);
+}
+
 function isRetryable(status: number): boolean {
   return status >= 500 || status === 429;
 }
@@ -96,7 +100,7 @@ export const api = {
   // Connections
   getConnections: () => request<import("./types").ConnectionProfile[]>("/api/connections"),
   getConnectionHealth: (id: string) =>
-    request<import("./types").ConnectionStatus>(`/api/connections/${id}/health`, {
+    request<import("./types").ConnectionStatus>(`/api/connections/${encodePathSegment(id)}/health`, {
       timeout: 10_000,
     }),
   createConnection: (data: Partial<import("./types").ConnectionProfile>) =>
@@ -105,11 +109,11 @@ export const api = {
       body: JSON.stringify(data),
     }),
   updateConnection: (id: string, data: Partial<import("./types").ConnectionProfile>) =>
-    request<import("./types").ConnectionProfile>(`/api/connections/${id}`, {
+    request<import("./types").ConnectionProfile>(`/api/connections/${encodePathSegment(id)}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
-  deleteConnection: (id: string) => request<void>(`/api/connections/${id}`, { method: "DELETE" }),
+  deleteConnection: (id: string) => request<void>(`/api/connections/${encodePathSegment(id)}`, { method: "DELETE" }),
   testConnection: (data: { hosts: string[]; port: number; username?: string; password?: string }) =>
     request<{ success: boolean; message: string }>("/api/connections/test", {
       method: "POST",
@@ -117,9 +121,9 @@ export const api = {
     }),
 
   // Cluster
-  getCluster: (connId: string) => request<import("./types").ClusterInfo>(`/api/clusters/${connId}`),
+  getCluster: (connId: string) => request<import("./types").ClusterInfo>(`/api/clusters/${encodePathSegment(connId)}`),
   configureNamespace: (connId: string, data: import("./types").ConfigureNamespaceRequest) =>
-    request<{ message: string }>(`/api/clusters/${connId}/namespaces`, {
+    request<{ message: string }>(`/api/clusters/${encodePathSegment(connId)}/namespaces`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
@@ -127,90 +131,90 @@ export const api = {
   // Records
   getRecords: (connId: string, ns: string, set: string, page = 1, pageSize = 25) =>
     request<import("./types").RecordListResponse>(
-      withQuery(`/api/records/${connId}`, { ns, set, page, pageSize }),
+      withQuery(`/api/records/${encodePathSegment(connId)}`, { ns, set, page, pageSize }),
     ),
   putRecord: (connId: string, data: import("./types").RecordWriteRequest) =>
-    request<import("./types").AerospikeRecord>(`/api/records/${connId}`, {
+    request<import("./types").AerospikeRecord>(`/api/records/${encodePathSegment(connId)}`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
   deleteRecord: (connId: string, ns: string, set: string, pk: string) =>
-    request<void>(withQuery(`/api/records/${connId}`, { ns, set, pk }), {
+    request<void>(withQuery(`/api/records/${encodePathSegment(connId)}`, { ns, set, pk }), {
       method: "DELETE",
     }),
   getFilteredRecords: (
     connId: string,
     body: import("./types").FilteredQueryRequest,
   ): Promise<import("./types").FilteredQueryResponse> =>
-    request<import("./types").FilteredQueryResponse>(`/api/records/${connId}/filter`, {
+    request<import("./types").FilteredQueryResponse>(`/api/records/${encodePathSegment(connId)}/filter`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
 
   // Query
   executeQuery: (connId: string, query: import("./types").QueryRequest) =>
-    request<import("./types").QueryResponse>(`/api/query/${connId}`, {
+    request<import("./types").QueryResponse>(`/api/query/${encodePathSegment(connId)}`, {
       method: "POST",
       body: JSON.stringify(query),
     }),
 
   // Indexes
   getIndexes: (connId: string) =>
-    request<import("./types").SecondaryIndex[]>(`/api/indexes/${connId}`),
+    request<import("./types").SecondaryIndex[]>(`/api/indexes/${encodePathSegment(connId)}`),
   createIndex: (connId: string, data: import("./types").CreateIndexRequest) =>
-    request<import("./types").SecondaryIndex>(`/api/indexes/${connId}`, {
+    request<import("./types").SecondaryIndex>(`/api/indexes/${encodePathSegment(connId)}`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
   deleteIndex: (connId: string, name: string, ns: string) =>
-    request<void>(withQuery(`/api/indexes/${connId}`, { name, ns }), {
+    request<void>(withQuery(`/api/indexes/${encodePathSegment(connId)}`, { name, ns }), {
       method: "DELETE",
     }),
 
   // Admin
   getUsers: (connId: string) =>
-    request<import("./types").AerospikeUser[]>(`/api/admin/${connId}/users`),
+    request<import("./types").AerospikeUser[]>(`/api/admin/${encodePathSegment(connId)}/users`),
   createUser: (connId: string, data: import("./types").CreateUserRequest) =>
-    request<import("./types").AerospikeUser>(`/api/admin/${connId}/users`, {
+    request<import("./types").AerospikeUser>(`/api/admin/${encodePathSegment(connId)}/users`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
   changePassword: (connId: string, username: string, password: string) =>
-    request<{ message: string }>(`/api/admin/${connId}/users`, {
+    request<{ message: string }>(`/api/admin/${encodePathSegment(connId)}/users`, {
       method: "PATCH",
       body: JSON.stringify({ username, password }),
     }),
   deleteUser: (connId: string, username: string) =>
-    request<void>(withQuery(`/api/admin/${connId}/users`, { username }), {
+    request<void>(withQuery(`/api/admin/${encodePathSegment(connId)}/users`, { username }), {
       method: "DELETE",
     }),
   getRoles: (connId: string) =>
-    request<import("./types").AerospikeRole[]>(`/api/admin/${connId}/roles`),
+    request<import("./types").AerospikeRole[]>(`/api/admin/${encodePathSegment(connId)}/roles`),
   createRole: (connId: string, data: import("./types").CreateRoleRequest) =>
-    request<import("./types").AerospikeRole>(`/api/admin/${connId}/roles`, {
+    request<import("./types").AerospikeRole>(`/api/admin/${encodePathSegment(connId)}/roles`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
   deleteRole: (connId: string, name: string) =>
-    request<void>(withQuery(`/api/admin/${connId}/roles`, { name }), {
+    request<void>(withQuery(`/api/admin/${encodePathSegment(connId)}/roles`, { name }), {
       method: "DELETE",
     }),
 
   // UDFs
-  getUDFs: (connId: string) => request<import("./types").UDFModule[]>(`/api/udfs/${connId}`),
+  getUDFs: (connId: string) => request<import("./types").UDFModule[]>(`/api/udfs/${encodePathSegment(connId)}`),
   uploadUDF: (connId: string, data: { filename: string; content: string }) =>
-    request<import("./types").UDFModule>(`/api/udfs/${connId}`, {
+    request<import("./types").UDFModule>(`/api/udfs/${encodePathSegment(connId)}`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
   deleteUDF: (connId: string, filename: string) =>
-    request<void>(withQuery(`/api/udfs/${connId}`, { filename }), {
+    request<void>(withQuery(`/api/udfs/${encodePathSegment(connId)}`, { filename }), {
       method: "DELETE",
     }),
 
   // Sample Data
   createSampleData: (connId: string, data: import("./types").CreateSampleDataRequest) =>
-    request<import("./types").CreateSampleDataResponse>(`/api/sample-data/${connId}`, {
+    request<import("./types").CreateSampleDataResponse>(`/api/sample-data/${encodePathSegment(connId)}`, {
       method: "POST",
       body: JSON.stringify(data),
       timeout: 60_000,
@@ -218,14 +222,14 @@ export const api = {
 
   // Terminal
   executeCommand: (connId: string, command: string) =>
-    request<import("./types").TerminalCommand>(`/api/terminal/${connId}`, {
+    request<import("./types").TerminalCommand>(`/api/terminal/${encodePathSegment(connId)}`, {
       method: "POST",
       body: JSON.stringify({ command }),
     }),
 
   // Metrics
   getMetrics: (connId: string) =>
-    request<import("./types").ClusterMetrics>(`/api/metrics/${connId}`),
+    request<import("./types").ClusterMetrics>(`/api/metrics/${encodePathSegment(connId)}`),
 
   // K8s Clusters
   getK8sClusters: (namespace?: string) =>
@@ -233,7 +237,7 @@ export const api = {
       withQuery("/api/k8s/clusters", { namespace }),
     ),
   getK8sCluster: (namespace: string, name: string) =>
-    request<import("./types").K8sClusterDetail>(`/api/k8s/clusters/${namespace}/${name}`),
+    request<import("./types").K8sClusterDetail>(`/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}`),
   createK8sCluster: (data: import("./types").CreateK8sClusterRequest) =>
     request<import("./types").K8sClusterSummary>("/api/k8s/clusters", {
       method: "POST",
@@ -244,18 +248,18 @@ export const api = {
     name: string,
     data: import("./types").UpdateK8sClusterRequest,
   ) =>
-    request<import("./types").K8sClusterSummary>(`/api/k8s/clusters/${namespace}/${name}`, {
+    request<import("./types").K8sClusterSummary>(`/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}`, {
       method: "PATCH",
       body: JSON.stringify(data),
     }),
   deleteK8sCluster: (namespace: string, name: string) =>
-    request<void>(`/api/k8s/clusters/${namespace}/${name}`, { method: "DELETE" }),
+    request<void>(`/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}`, { method: "DELETE" }),
   scaleK8sCluster: (
     namespace: string,
     name: string,
     data: import("./types").ScaleK8sClusterRequest,
   ) =>
-    request<import("./types").K8sClusterSummary>(`/api/k8s/clusters/${namespace}/${name}/scale`, {
+    request<import("./types").K8sClusterSummary>(`/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/scale`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
@@ -270,34 +274,34 @@ export const api = {
       withQuery("/api/k8s/templates", { namespace }),
     ),
   getK8sTemplate: (namespace: string, name: string) =>
-    request<import("./types").K8sTemplateDetail>(`/api/k8s/templates/${namespace}/${name}`),
+    request<import("./types").K8sTemplateDetail>(`/api/k8s/templates/${encodePathSegment(namespace)}/${encodePathSegment(name)}`),
   createK8sTemplate: (data: import("./types").CreateK8sTemplateRequest) =>
     request<import("./types").K8sTemplateSummary>("/api/k8s/templates", {
       method: "POST",
       body: JSON.stringify(data),
     }),
   deleteK8sTemplate: (namespace: string, name: string) =>
-    request<{ message: string }>(`/api/k8s/templates/${namespace}/${name}`, {
+    request<{ message: string }>(`/api/k8s/templates/${encodePathSegment(namespace)}/${encodePathSegment(name)}`, {
       method: "DELETE",
     }),
 
   // K8s Template Resync
   resyncK8sClusterTemplate: (namespace: string, name: string) =>
     request<import("./types").K8sClusterSummary>(
-      `/api/k8s/clusters/${namespace}/${name}/resync-template`,
+      `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/resync-template`,
       { method: "POST" },
     ),
 
   // K8s Cluster Events
   getK8sClusterEvents: (namespace: string, name: string, limit = 50) =>
     request<import("./types").K8sClusterEvent[]>(
-      withQuery(`/api/k8s/clusters/${namespace}/${name}/events`, { limit }),
+      withQuery(`/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/events`, { limit }),
     ),
 
   // K8s Cluster Health
   getK8sClusterHealth: (namespace: string, name: string) =>
     request<import("./types").ClusterHealthSummary>(
-      `/api/k8s/clusters/${namespace}/${name}/health`,
+      `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/health`,
     ),
 
   // K8s Pod Logs
@@ -309,7 +313,7 @@ export const api = {
     container?: string,
   ) =>
     request<import("./types").PodLogsResponse>(
-      withQuery(`/api/k8s/clusters/${namespace}/${clusterName}/pods/${pod}/logs`, {
+      withQuery(`/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(clusterName)}/pods/${encodePathSegment(pod)}/logs`, {
         tail,
         container,
       }),
@@ -317,7 +321,7 @@ export const api = {
 
   // K8s Cluster YAML Export
   getK8sClusterYaml: (namespace: string, name: string) =>
-    request<import("./types").ClusterYamlResponse>(`/api/k8s/clusters/${namespace}/${name}/yaml`),
+    request<import("./types").ClusterYamlResponse>(`/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/yaml`),
 
   // K8s Nodes
   getK8sNodes: () => request<import("./types").K8sNodeInfo[]>("/api/k8s/nodes"),
@@ -329,7 +333,7 @@ export const api = {
     data: import("./types").OperationRequest,
   ) =>
     request<import("./types").K8sClusterSummary>(
-      `/api/k8s/clusters/${namespace}/${name}/operations`,
+      `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/operations`,
       { method: "POST", body: JSON.stringify(data) },
     ),
 };
