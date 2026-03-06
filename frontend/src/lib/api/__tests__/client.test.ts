@@ -6,10 +6,13 @@ const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
 function createResponse(status: number, body: unknown) {
+  const rawBody = typeof body === "string" ? body : JSON.stringify(body);
+
   return {
     ok: status >= 200 && status < 300,
     status,
     statusText: `Status ${status}`,
+    text: vi.fn().mockResolvedValue(rawBody),
     json: vi.fn().mockResolvedValue(body),
   };
 }
@@ -128,6 +131,19 @@ describe("api client", () => {
         expect.any(Object),
       );
     });
+
+    it("returns undefined when a successful response has an empty body", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        text: vi.fn().mockResolvedValue(""),
+      });
+
+      const result = await api.getConnections();
+
+      expect(result).toBeUndefined();
+    });
   });
 
   describe("error responses", () => {
@@ -151,12 +167,26 @@ describe("api client", () => {
         ok: false,
         status: 403,
         statusText: "Forbidden",
-        json: vi.fn().mockRejectedValue(new SyntaxError("invalid json")),
+        text: vi.fn().mockResolvedValue("{invalid"),
       });
 
       await expect(api.getConnections()).rejects.toMatchObject({
         message: "Forbidden",
         status: 403,
+      });
+    });
+
+    it("throws a readable ApiError when a success response contains invalid JSON", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        text: vi.fn().mockResolvedValue("{invalid"),
+      });
+
+      await expect(api.getConnections()).rejects.toMatchObject({
+        message: "Invalid JSON response",
+        status: 200,
       });
     });
 

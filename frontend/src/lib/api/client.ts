@@ -64,6 +64,20 @@ function toErrorMessage(detail: unknown): string | undefined {
   return undefined;
 }
 
+async function parseResponseBody<T>(res: Response): Promise<T | undefined> {
+  if (typeof res.text !== "function") {
+    return res.json();
+  }
+
+  const bodyText = await res.text();
+
+  if (!bodyText.trim()) {
+    return undefined;
+  }
+
+  return JSON.parse(bodyText) as T;
+}
+
 async function request<T>(path: string, options?: RequestInit & { timeout?: number }): Promise<T> {
   const { timeout = DEFAULT_TIMEOUT, ...fetchOptions } = options ?? {};
   let lastError: Error | null = null;
@@ -85,16 +99,14 @@ async function request<T>(path: string, options?: RequestInit & { timeout?: numb
       clearTimeout(timeoutId);
 
       if (!res.ok) {
-        const error = await res.json().catch(() => ({ message: res.statusText }));
+        const error =
+          (await parseResponseBody<{ message?: unknown; detail?: unknown; code?: string }>(res).catch(() => undefined)) ??
+          { message: res.statusText };
         const message =
-          toErrorMessage((error as { message?: unknown; detail?: unknown }).message) ??
-          toErrorMessage((error as { detail?: unknown }).detail) ??
+          toErrorMessage(error.message) ??
+          toErrorMessage(error.detail) ??
           `Request failed: ${res.status}`;
-        const apiError = new ApiError(
-          message,
-          res.status,
-          (error as { code?: string }).code,
-        );
+        const apiError = new ApiError(message, res.status, error.code);
 
         // Only retry on server errors
         if (isRetryable(res.status) && attempt < MAX_RETRIES) {
@@ -110,7 +122,15 @@ async function request<T>(path: string, options?: RequestInit & { timeout?: numb
         return undefined as T;
       }
 
-      return res.json();
+      try {
+        const data = await parseResponseBody<T>(res);
+        return data as T;
+      } catch (err) {
+        if (err instanceof SyntaxError) {
+          throw new ApiError("Invalid JSON response", res.status);
+        }
+        throw err;
+      }
     } catch (err) {
       clearTimeout(timeoutId);
 
