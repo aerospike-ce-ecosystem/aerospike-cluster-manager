@@ -92,17 +92,17 @@ export function DataTable<TData, TValue>({
 
       {loading && data.length === 0 ? (
         <div
-          className="overflow-hidden rounded-lg border border-border/50 bg-card"
+          className="border-border/50 bg-card overflow-hidden rounded-lg border"
           data-testid={`${testId}-skeleton`}
         >
-          <table className={cn("table table-fixed w-full")}>
+          <table className={cn("table w-full table-fixed")}>
             <thead className="grid-header sticky top-0 z-20">
               <tr>
                 {columns.map((_, i) => (
                   <th
                     key={i}
                     className={cn(
-                      "bg-muted/50 text-muted-foreground text-[11px] font-semibold uppercase tracking-wider dark:bg-muted/30",
+                      "bg-muted/50 text-muted-foreground dark:bg-muted/30 text-[11px] font-semibold tracking-wider uppercase",
                       pad.th,
                     )}
                   >
@@ -134,7 +134,7 @@ export function DataTable<TData, TValue>({
       ) : data.length === 0 ? (
         emptyState || <EmptyState title="No records" description="No data available to display" />
       ) : (
-        <div className="overflow-hidden rounded-lg border border-border/50 bg-card">
+        <div className="border-border/50 bg-card overflow-hidden rounded-lg border">
           <table
             className={cn("table table-fixed", !tableMinWidth && "w-full")}
             style={tableMinWidth ? { minWidth: tableMinWidth } : undefined}
@@ -150,7 +150,7 @@ export function DataTable<TData, TValue>({
                       <th
                         key={header.id}
                         className={cn(
-                          "bg-muted/50 text-muted-foreground overflow-hidden text-left text-[11px] font-semibold uppercase tracking-wider text-ellipsis whitespace-nowrap dark:bg-muted/30",
+                          "bg-muted/50 text-muted-foreground dark:bg-muted/30 overflow-hidden text-left text-[11px] font-semibold tracking-wider text-ellipsis whitespace-nowrap uppercase",
                           pad.th,
                           canSort && "cursor-pointer select-none",
                           (header.column.columnDef.meta as Record<string, unknown>)?.className as

@@ -27,7 +27,7 @@ export function TabBar({ connId }: TabBarProps) {
   };
 
   return (
-    <div className="bg-card/60 relative border-b border-border/60 backdrop-blur-md">
+    <div className="bg-card/60 border-border/60 relative border-b backdrop-blur-md">
       <ScrollArea className="w-full">
         <div className="flex h-10 items-center gap-0 px-1">
           {tabs.map((tab) => {

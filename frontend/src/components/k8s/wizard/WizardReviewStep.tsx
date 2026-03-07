@@ -135,8 +135,7 @@ export function WizardReviewStep({
         if (val && form.storage) updateForm({ storage: { ...form.storage, size: val } });
         break;
       case "storageClass":
-        if (val && form.storage)
-          updateForm({ storage: { ...form.storage, storageClass: val } });
+        if (val && form.storage) updateForm({ storage: { ...form.storage, storageClass: val } });
         break;
     }
     cancelEdit();
@@ -384,9 +383,7 @@ export function WizardReviewStep({
             {form.enableDynamicConfig ? "Enabled" : "Disabled"}
           </span>
         ) : (
-          <span className="font-medium">
-            {form.enableDynamicConfig ? "Enabled" : "Disabled"}
-          </span>
+          <span className="font-medium">{form.enableDynamicConfig ? "Enabled" : "Disabled"}</span>
         )}
 
         <span className="text-muted-foreground">ACL</span>

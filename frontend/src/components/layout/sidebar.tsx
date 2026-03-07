@@ -231,7 +231,7 @@ export function Sidebar() {
     if (!sidebarOpen) return null;
     return (
       <aside className="border-sidebar-border bg-sidebar relative flex w-56 flex-col border-r">
-        <div className="pointer-events-none absolute top-0 right-0 bottom-0 w-px bg-gradient-to-b from-transparent via-accent/15 to-transparent" />
+        <div className="via-accent/15 pointer-events-none absolute top-0 right-0 bottom-0 w-px bg-gradient-to-b from-transparent to-transparent" />
         <SidebarContent isMobileOrTablet={false} />
       </aside>
     );

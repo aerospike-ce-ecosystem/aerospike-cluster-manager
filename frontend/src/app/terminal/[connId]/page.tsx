@@ -86,7 +86,9 @@ export default function TerminalPage({ params }: { params: Promise<{ connId: str
           {history.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <Terminal className="mb-3 h-8 w-8 text-[hsl(var(--terminal-text-dim))]" />
-              <p className="text-[hsl(var(--terminal-text-muted))]">Type a command below or use a quick command above.</p>
+              <p className="text-[hsl(var(--terminal-text-muted))]">
+                Type a command below or use a quick command above.
+              </p>
               <p className="mt-1 text-xs text-[hsl(var(--terminal-text-dim))]">
                 Use Up/Down arrows to navigate command history.
               </p>
@@ -128,7 +130,7 @@ export default function TerminalPage({ params }: { params: Promise<{ connId: str
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Enter aql command..."
-            className="flex-1 border-[hsl(var(--terminal-border))] bg-[hsl(var(--terminal-input))] font-mono text-base text-[hsl(var(--terminal-text))] placeholder:text-[hsl(var(--terminal-text-dim))] focus-visible:ring-accent/30 sm:text-sm"
+            className="focus-visible:ring-accent/30 flex-1 border-[hsl(var(--terminal-border))] bg-[hsl(var(--terminal-input))] font-mono text-base text-[hsl(var(--terminal-text))] placeholder:text-[hsl(var(--terminal-text-dim))] sm:text-sm"
             disabled={loading}
             autoComplete="off"
             spellCheck={false}

@@ -80,9 +80,7 @@ export function K8sPodTable({
       {
         accessorKey: "name",
         header: "Name",
-        cell: ({ getValue }) => (
-          <span className="font-mono text-xs">{getValue<string>()}</span>
-        ),
+        cell: ({ getValue }) => <span className="font-mono text-xs">{getValue<string>()}</span>,
       },
       {
         accessorKey: "isReady",
@@ -188,9 +186,7 @@ export function K8sPodTable({
             <div className="space-y-0.5">
               <p className="text-xs font-medium">{row.original.lastRestartReason}</p>
               {row.original.lastRestartTime && (
-                <p className="text-muted-foreground text-[10px]">
-                  {row.original.lastRestartTime}
-                </p>
+                <p className="text-muted-foreground text-[10px]">{row.original.lastRestartTime}</p>
               )}
             </div>
           ) : (

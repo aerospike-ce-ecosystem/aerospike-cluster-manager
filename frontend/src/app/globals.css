@@ -244,7 +244,9 @@
 /* Card elevation — glass effect in dark mode */
 .card-elevated {
   box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+  transition:
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
 }
 .dark .card-elevated {
   background: hsl(var(--card) / 0.85);
@@ -276,25 +278,38 @@
 
 /* Button hover glow (primary) */
 .btn-glow {
-  transition: box-shadow 0.2s ease, transform 0.15s ease;
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.15s ease;
 }
 .btn-glow:hover:not(:disabled) {
-  box-shadow: 0 0 12px 2px hsl(var(--accent) / 0.25), 0 4px 8px -2px hsl(var(--accent) / 0.15);
+  box-shadow:
+    0 0 12px 2px hsl(var(--accent) / 0.25),
+    0 4px 8px -2px hsl(var(--accent) / 0.15);
 }
 .dark .btn-glow:hover:not(:disabled) {
-  box-shadow: 0 0 16px 3px hsl(var(--accent) / 0.3), 0 4px 8px -2px hsl(var(--accent) / 0.2);
+  box-shadow:
+    0 0 16px 3px hsl(var(--accent) / 0.3),
+    0 4px 8px -2px hsl(var(--accent) / 0.2);
 }
 
 /* Input/Select focus glow */
-.input-glow:focus, .input-glow:focus-within {
-  box-shadow: 0 0 0 1px hsl(var(--ring)), 0 0 8px 1px hsl(var(--ring) / 0.15);
+.input-glow:focus,
+.input-glow:focus-within {
+  box-shadow:
+    0 0 0 1px hsl(var(--ring)),
+    0 0 8px 1px hsl(var(--ring) / 0.15);
 }
-.dark .input-glow:focus, .dark .input-glow:focus-within {
-  box-shadow: 0 0 0 1px hsl(var(--ring)), 0 0 12px 2px hsl(var(--ring) / 0.2);
+.dark .input-glow:focus,
+.dark .input-glow:focus-within {
+  box-shadow:
+    0 0 0 1px hsl(var(--ring)),
+    0 0 12px 2px hsl(var(--ring) / 0.2);
 }
 
 /* Terminal theme-aware variables */
-:root, .dark {
+:root,
+.dark {
   --terminal-bg: 222 50% 5%;
   --terminal-text: 213 31% 85%;
   --terminal-text-muted: 215 20% 45%;

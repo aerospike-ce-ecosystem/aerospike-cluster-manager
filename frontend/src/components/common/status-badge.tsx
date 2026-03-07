@@ -65,13 +65,7 @@ interface StatusBadgeProps {
   showDot?: boolean;
 }
 
-export function StatusBadge({
-  status,
-  label,
-  className,
-  pulse,
-  showDot = true,
-}: StatusBadgeProps) {
+export function StatusBadge({ status, label, className, pulse, showDot = true }: StatusBadgeProps) {
   const config = statusConfig[status];
   const showPulse =
     pulse ||
@@ -95,9 +89,7 @@ export function StatusBadge({
               )}
             />
           )}
-          <span
-            className={cn("relative inline-flex h-1.5 w-1.5 rounded-full", config.dotColor)}
-          />
+          <span className={cn("relative inline-flex h-1.5 w-1.5 rounded-full", config.dotColor)} />
         </span>
       )}
       {label || config.label}

@@ -261,7 +261,9 @@ class CreateK8sClusterRequest(BaseModel):
     resources: ResourceConfig | None = None
     monitoring: MonitoringConfig | None = None
     template_ref: TemplateRefConfig | None = Field(
-        default=None, alias="templateRef", description="Reference to AerospikeClusterTemplate (name + optional namespace)"
+        default=None,
+        alias="templateRef",
+        description="Reference to AerospikeClusterTemplate (name + optional namespace)",
     )
 
     @field_validator("template_ref", mode="before")
@@ -271,6 +273,7 @@ class CreateK8sClusterRequest(BaseModel):
         if isinstance(v, str):
             return TemplateRefConfig(name=v)
         return v
+
     template_overrides: TemplateOverrides | None = Field(
         default=None, alias="templateOverrides", description="Fields to override from template"
     )
