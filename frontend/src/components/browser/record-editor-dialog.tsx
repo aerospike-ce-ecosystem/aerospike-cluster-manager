@@ -50,7 +50,7 @@ export function parseBinValue(value: string, type: BinType): BinValue {
   }
 }
 
-export function detectBinType(value: BinValue): BinType {
+export function detectBinType(value: BinValue | undefined): BinType {
   if (value === null || value === undefined) return "string";
   if (typeof value === "boolean") return "bool";
   if (typeof value === "number") return Number.isInteger(value) ? "integer" : "float";

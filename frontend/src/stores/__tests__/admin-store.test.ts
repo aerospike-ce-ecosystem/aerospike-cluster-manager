@@ -48,7 +48,7 @@ describe("useAdminStore", () => {
       usersLoading: false,
       rolesLoading: false,
       error: null,
-      isEnterpriseRequired: false,
+      isSecurityDisabled: false,
     });
     vi.clearAllMocks();
   });
@@ -60,7 +60,7 @@ describe("useAdminStore", () => {
     expect(state.usersLoading).toBe(false);
     expect(state.rolesLoading).toBe(false);
     expect(state.error).toBeNull();
-    expect(state.isEnterpriseRequired).toBe(false);
+    expect(state.isSecurityDisabled).toBe(false);
   });
 
   // --- fetchUsers ---
@@ -74,7 +74,7 @@ describe("useAdminStore", () => {
     expect(state.users).toEqual(mockUsers);
     expect(state.usersLoading).toBe(false);
     expect(state.error).toBeNull();
-    expect(state.isEnterpriseRequired).toBe(false);
+    expect(state.isSecurityDisabled).toBe(false);
     expect(mockApi.getUsers).toHaveBeenCalledWith("conn-1");
   });
 
@@ -86,16 +86,16 @@ describe("useAdminStore", () => {
     const state = useAdminStore.getState();
     expect(state.error).toBe("Network error");
     expect(state.usersLoading).toBe(false);
-    expect(state.isEnterpriseRequired).toBe(false);
+    expect(state.isSecurityDisabled).toBe(false);
   });
 
-  it("fetchUsers sets isEnterpriseRequired on 403 ApiError", async () => {
+  it("fetchUsers sets isSecurityDisabled on 403 ApiError", async () => {
     mockApi.getUsers.mockRejectedValue(new ApiError("Forbidden", 403));
 
     await useAdminStore.getState().fetchUsers("conn-1");
 
     const state = useAdminStore.getState();
-    expect(state.isEnterpriseRequired).toBe(true);
+    expect(state.isSecurityDisabled).toBe(true);
     expect(state.usersLoading).toBe(false);
     expect(state.error).toBeNull();
   });
@@ -106,7 +106,7 @@ describe("useAdminStore", () => {
     await useAdminStore.getState().fetchUsers("conn-1");
 
     const state = useAdminStore.getState();
-    expect(state.isEnterpriseRequired).toBe(false);
+    expect(state.isSecurityDisabled).toBe(false);
     expect(state.error).toBe("Server error");
     expect(state.usersLoading).toBe(false);
   });
@@ -122,7 +122,7 @@ describe("useAdminStore", () => {
     expect(state.roles).toEqual(mockRoles);
     expect(state.rolesLoading).toBe(false);
     expect(state.error).toBeNull();
-    expect(state.isEnterpriseRequired).toBe(false);
+    expect(state.isSecurityDisabled).toBe(false);
     expect(mockApi.getRoles).toHaveBeenCalledWith("conn-1");
   });
 
@@ -136,13 +136,13 @@ describe("useAdminStore", () => {
     expect(state.rolesLoading).toBe(false);
   });
 
-  it("fetchRoles sets isEnterpriseRequired on 403 ApiError", async () => {
+  it("fetchRoles sets isSecurityDisabled on 403 ApiError", async () => {
     mockApi.getRoles.mockRejectedValue(new ApiError("Forbidden", 403));
 
     await useAdminStore.getState().fetchRoles("conn-1");
 
     const state = useAdminStore.getState();
-    expect(state.isEnterpriseRequired).toBe(true);
+    expect(state.isSecurityDisabled).toBe(true);
     expect(state.rolesLoading).toBe(false);
     expect(state.error).toBeNull();
   });
@@ -153,7 +153,7 @@ describe("useAdminStore", () => {
     await useAdminStore.getState().fetchRoles("conn-1");
 
     const state = useAdminStore.getState();
-    expect(state.isEnterpriseRequired).toBe(false);
+    expect(state.isSecurityDisabled).toBe(false);
     expect(state.error).toBe("Bad request");
   });
 
@@ -310,13 +310,13 @@ describe("useAdminStore", () => {
     expect(useAdminStore.getState().error).toBeNull();
   });
 
-  it("fetchUsers resets isEnterpriseRequired on success after previous 403", async () => {
-    useAdminStore.setState({ isEnterpriseRequired: true });
+  it("fetchUsers resets isSecurityDisabled on success after previous 403", async () => {
+    useAdminStore.setState({ isSecurityDisabled: true });
 
     mockApi.getUsers.mockResolvedValue(mockUsers as any);
 
     await useAdminStore.getState().fetchUsers("conn-1");
 
-    expect(useAdminStore.getState().isEnterpriseRequired).toBe(false);
+    expect(useAdminStore.getState().isSecurityDisabled).toBe(false);
   });
 });

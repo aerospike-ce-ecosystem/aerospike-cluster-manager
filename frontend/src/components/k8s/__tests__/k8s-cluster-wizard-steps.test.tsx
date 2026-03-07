@@ -62,10 +62,7 @@ describe("Wizard canProceed logic", () => {
   });
 
   describe("Step 1: Namespace & Storage", () => {
-    const makeNs = (
-      name: string,
-      rf: number = 1,
-    ): AerospikeNamespaceConfig => ({
+    const makeNs = (name: string, rf: number = 1): AerospikeNamespaceConfig => ({
       name,
       replicationFactor: rf,
       storageEngine: { type: "memory", dataSize: 1073741824 },
@@ -87,10 +84,7 @@ describe("Wizard canProceed logic", () => {
     });
 
     it("fails with more than 2 namespaces (CE limit)", () => {
-      const error = validateNamespaces(
-        [makeNs("ns1"), makeNs("ns2"), makeNs("ns3")],
-        1,
-      );
+      const error = validateNamespaces([makeNs("ns1"), makeNs("ns2"), makeNs("ns3")], 1);
       expect(error).not.toBeNull();
     });
 
@@ -117,10 +111,14 @@ describe("Wizard canProceed logic", () => {
   });
 
   describe("Step 4: ACL (Security)", () => {
-    it("passes when ACL is disabled (undefined)", () => {
-      // canProceed returns true when form.acl is undefined or not enabled
-      const acl = undefined;
-      expect(acl?.enabled).toBeFalsy();
+    it("passes when ACL is disabled", () => {
+      const acl: ACLConfig = {
+        enabled: false,
+        roles: [],
+        users: [],
+        adminPolicyTimeout: 0,
+      };
+      expect(validateACLConfig(acl)).toBeNull();
     });
 
     it("fails when ACL is enabled but no users configured", () => {
@@ -180,9 +178,7 @@ describe("Wizard canProceed logic", () => {
         users: [{ name: "admin", secretName: "admin-secret", roles: [""] }],
         adminPolicyTimeout: 0,
       };
-      const roleInvalid = acl.roles.some(
-        (r) => !r.name.trim() || r.privileges.length === 0,
-      );
+      const roleInvalid = acl.roles.some((r) => !r.name.trim() || r.privileges.length === 0);
       expect(roleInvalid).toBe(true);
     });
 
@@ -193,9 +189,7 @@ describe("Wizard canProceed logic", () => {
         users: [{ name: "admin", secretName: "admin-secret", roles: ["empty-role"] }],
         adminPolicyTimeout: 0,
       };
-      const roleInvalid = acl.roles.some(
-        (r) => !r.name.trim() || r.privileges.length === 0,
-      );
+      const roleInvalid = acl.roles.some((r) => !r.name.trim() || r.privileges.length === 0);
       expect(roleInvalid).toBe(true);
     });
 
@@ -208,12 +202,8 @@ describe("Wizard canProceed logic", () => {
       };
       const usersOk =
         acl.users.length > 0 &&
-        !acl.users.some(
-          (u) => !u.name.trim() || !u.secretName.trim() || u.roles.length === 0,
-        );
-      const rolesOk = !acl.roles.some(
-        (r) => !r.name.trim() || r.privileges.length === 0,
-      );
+        !acl.users.some((u) => !u.name.trim() || !u.secretName.trim() || u.roles.length === 0);
+      const rolesOk = !acl.roles.some((r) => !r.name.trim() || r.privileges.length === 0);
       expect(usersOk && rolesOk).toBe(true);
     });
 
