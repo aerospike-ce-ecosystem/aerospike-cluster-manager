@@ -78,6 +78,35 @@ describe("useBrowserStore", () => {
     expect(useBrowserStore.getState().error).toBe("Fetch failed");
   });
 
+  it("putRecord uses custom refresh callback instead of default list fetch", async () => {
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    mockApi.putRecord.mockResolvedValue(undefined as any);
+
+    await useBrowserStore.getState().putRecord(
+      "conn-1",
+      {
+        key: { namespace: "ns", set: "users", pk: "pk-1" },
+        bins: { name: "alice" },
+      } as any,
+      { refresh },
+    );
+
+    expect(mockApi.putRecord).toHaveBeenCalledTimes(1);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(mockApi.getRecords).not.toHaveBeenCalled();
+  });
+
+  it("deleteRecord uses custom refresh callback instead of default list fetch", async () => {
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    mockApi.deleteRecord.mockResolvedValue(undefined as any);
+
+    await useBrowserStore.getState().deleteRecord("conn-1", "ns", "users", "pk-1", { refresh });
+
+    expect(mockApi.deleteRecord).toHaveBeenCalledWith("conn-1", "ns", "users", "pk-1");
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(mockApi.getRecords).not.toHaveBeenCalled();
+  });
+
   it("reset clears all state", () => {
     useBrowserStore.setState({
       records: [{ key: {} } as any],

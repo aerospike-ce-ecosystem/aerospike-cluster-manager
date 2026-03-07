@@ -46,7 +46,9 @@ function isRetryable(status: number): boolean {
 
 function isRetryableMethod(method?: string): boolean {
   const normalizedMethod = method?.toUpperCase() ?? "GET";
-  return normalizedMethod === "GET" || normalizedMethod === "HEAD" || normalizedMethod === "OPTIONS";
+  return (
+    normalizedMethod === "GET" || normalizedMethod === "HEAD" || normalizedMethod === "OPTIONS"
+  );
 }
 
 function getRetryDelay(attempt: number, retryAfter: string | null): number {
@@ -138,9 +140,11 @@ async function request<T>(path: string, options?: RequestInit & { timeout?: numb
       clearTimeout(timeoutId);
 
       if (!res.ok) {
-        const error =
-          (await parseResponseBody<{ message?: unknown; detail?: unknown; code?: string }>(res).catch(() => undefined)) ??
-          { message: res.statusText };
+        const error = (await parseResponseBody<{
+          message?: unknown;
+          detail?: unknown;
+          code?: string;
+        }>(res).catch(() => undefined)) ?? { message: res.statusText };
         const message =
           toErrorMessage(error.message) ??
           toErrorMessage(error.detail) ??
@@ -150,7 +154,8 @@ async function request<T>(path: string, options?: RequestInit & { timeout?: numb
         // Retry only safe/idempotent reads to avoid duplicate write side-effects.
         if (isRetryableMethod(method) && isRetryable(res.status) && attempt < MAX_RETRIES) {
           lastError = apiError;
-          const retryAfter = typeof res.headers?.get === "function" ? res.headers.get("Retry-After") : null;
+          const retryAfter =
+            typeof res.headers?.get === "function" ? res.headers.get("Retry-After") : null;
           const delay = getRetryDelay(attempt, retryAfter);
           await new Promise((r) => setTimeout(r, delay));
           continue;
@@ -203,9 +208,12 @@ export const api = {
   // Connections
   getConnections: () => request<import("./types").ConnectionProfile[]>("/api/connections"),
   getConnectionHealth: (id: string) =>
-    request<import("./types").ConnectionStatus>(`/api/connections/${encodePathSegment(id)}/health`, {
-      timeout: 10_000,
-    }),
+    request<import("./types").ConnectionStatus>(
+      `/api/connections/${encodePathSegment(id)}/health`,
+      {
+        timeout: 10_000,
+      },
+    ),
   createConnection: (data: Partial<import("./types").ConnectionProfile>) =>
     request<import("./types").ConnectionProfile>("/api/connections", {
       method: "POST",
@@ -216,7 +224,8 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
-  deleteConnection: (id: string) => request<void>(`/api/connections/${encodePathSegment(id)}`, { method: "DELETE" }),
+  deleteConnection: (id: string) =>
+    request<void>(`/api/connections/${encodePathSegment(id)}`, { method: "DELETE" }),
   testConnection: (data: { hosts: string[]; port: number; username?: string; password?: string }) =>
     request<{ success: boolean; message: string }>("/api/connections/test", {
       method: "POST",
@@ -224,7 +233,8 @@ export const api = {
     }),
 
   // Cluster
-  getCluster: (connId: string) => request<import("./types").ClusterInfo>(`/api/clusters/${encodePathSegment(connId)}`),
+  getCluster: (connId: string) =>
+    request<import("./types").ClusterInfo>(`/api/clusters/${encodePathSegment(connId)}`),
   configureNamespace: (connId: string, data: import("./types").ConfigureNamespaceRequest) =>
     request<{ message: string }>(`/api/clusters/${encodePathSegment(connId)}/namespaces`, {
       method: "POST",
@@ -249,10 +259,13 @@ export const api = {
     connId: string,
     body: import("./types").FilteredQueryRequest,
   ): Promise<import("./types").FilteredQueryResponse> =>
-    request<import("./types").FilteredQueryResponse>(`/api/records/${encodePathSegment(connId)}/filter`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
+    request<import("./types").FilteredQueryResponse>(
+      `/api/records/${encodePathSegment(connId)}/filter`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    ),
 
   // Query
   executeQuery: (connId: string, query: import("./types").QueryRequest) =>
@@ -304,7 +317,8 @@ export const api = {
     }),
 
   // UDFs
-  getUDFs: (connId: string) => request<import("./types").UDFModule[]>(`/api/udfs/${encodePathSegment(connId)}`),
+  getUDFs: (connId: string) =>
+    request<import("./types").UDFModule[]>(`/api/udfs/${encodePathSegment(connId)}`),
   uploadUDF: (connId: string, data: { filename: string; content: string }) =>
     request<import("./types").UDFModule>(`/api/udfs/${encodePathSegment(connId)}`, {
       method: "POST",
@@ -317,11 +331,14 @@ export const api = {
 
   // Sample Data
   createSampleData: (connId: string, data: import("./types").CreateSampleDataRequest) =>
-    request<import("./types").CreateSampleDataResponse>(`/api/sample-data/${encodePathSegment(connId)}`, {
-      method: "POST",
-      body: JSON.stringify(data),
-      timeout: 60_000,
-    }),
+    request<import("./types").CreateSampleDataResponse>(
+      `/api/sample-data/${encodePathSegment(connId)}`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+        timeout: 60_000,
+      },
+    ),
 
   // Terminal
   executeCommand: (connId: string, command: string) =>
@@ -336,11 +353,11 @@ export const api = {
 
   // K8s Clusters
   getK8sClusters: (namespace?: string) =>
-    request<import("./types").K8sClusterSummary[]>(
-      withQuery("/api/k8s/clusters", { namespace }),
-    ),
+    request<import("./types").K8sClusterSummary[]>(withQuery("/api/k8s/clusters", { namespace })),
   getK8sCluster: (namespace: string, name: string) =>
-    request<import("./types").K8sClusterDetail>(`/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}`),
+    request<import("./types").K8sClusterDetail>(
+      `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}`,
+    ),
   createK8sCluster: (data: import("./types").CreateK8sClusterRequest) =>
     request<import("./types").K8sClusterSummary>("/api/k8s/clusters", {
       method: "POST",
@@ -351,21 +368,29 @@ export const api = {
     name: string,
     data: import("./types").UpdateK8sClusterRequest,
   ) =>
-    request<import("./types").K8sClusterSummary>(`/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}`, {
-      method: "PATCH",
-      body: JSON.stringify(data),
-    }),
+    request<import("./types").K8sClusterSummary>(
+      `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      },
+    ),
   deleteK8sCluster: (namespace: string, name: string) =>
-    request<void>(`/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}`, { method: "DELETE" }),
+    request<void>(`/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}`, {
+      method: "DELETE",
+    }),
   scaleK8sCluster: (
     namespace: string,
     name: string,
     data: import("./types").ScaleK8sClusterRequest,
   ) =>
-    request<import("./types").K8sClusterSummary>(`/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/scale`, {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
+    request<import("./types").K8sClusterSummary>(
+      `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/scale`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+    ),
   getK8sNamespaces: () => request<string[]>("/api/k8s/namespaces"),
   getK8sStorageClasses: () => request<string[]>("/api/k8s/storageclasses"),
   getK8sSecrets: (namespace: string) =>
@@ -373,20 +398,23 @@ export const api = {
 
   // K8s Templates
   getK8sTemplates: (namespace?: string) =>
-    request<import("./types").K8sTemplateSummary[]>(
-      withQuery("/api/k8s/templates", { namespace }),
-    ),
+    request<import("./types").K8sTemplateSummary[]>(withQuery("/api/k8s/templates", { namespace })),
   getK8sTemplate: (namespace: string, name: string) =>
-    request<import("./types").K8sTemplateDetail>(`/api/k8s/templates/${encodePathSegment(namespace)}/${encodePathSegment(name)}`),
+    request<import("./types").K8sTemplateDetail>(
+      `/api/k8s/templates/${encodePathSegment(namespace)}/${encodePathSegment(name)}`,
+    ),
   createK8sTemplate: (data: import("./types").CreateK8sTemplateRequest) =>
     request<import("./types").K8sTemplateSummary>("/api/k8s/templates", {
       method: "POST",
       body: JSON.stringify(data),
     }),
   deleteK8sTemplate: (namespace: string, name: string) =>
-    request<{ message: string }>(`/api/k8s/templates/${encodePathSegment(namespace)}/${encodePathSegment(name)}`, {
-      method: "DELETE",
-    }),
+    request<{ message: string }>(
+      `/api/k8s/templates/${encodePathSegment(namespace)}/${encodePathSegment(name)}`,
+      {
+        method: "DELETE",
+      },
+    ),
 
   // K8s Template Resync
   resyncK8sClusterTemplate: (namespace: string, name: string) =>
@@ -398,7 +426,10 @@ export const api = {
   // K8s Cluster Events
   getK8sClusterEvents: (namespace: string, name: string, limit = 50) =>
     request<import("./types").K8sClusterEvent[]>(
-      withQuery(`/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/events`, { limit }),
+      withQuery(
+        `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/events`,
+        { limit },
+      ),
     ),
 
   // K8s Cluster Health
@@ -416,15 +447,20 @@ export const api = {
     container?: string,
   ) =>
     request<import("./types").PodLogsResponse>(
-      withQuery(`/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(clusterName)}/pods/${encodePathSegment(pod)}/logs`, {
-        tail,
-        container,
-      }),
+      withQuery(
+        `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(clusterName)}/pods/${encodePathSegment(pod)}/logs`,
+        {
+          tail,
+          container,
+        },
+      ),
     ),
 
   // K8s Cluster YAML Export
   getK8sClusterYaml: (namespace: string, name: string) =>
-    request<import("./types").ClusterYamlResponse>(`/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/yaml`),
+    request<import("./types").ClusterYamlResponse>(
+      `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/yaml`,
+    ),
 
   // K8s Nodes
   getK8sNodes: () => request<import("./types").K8sNodeInfo[]>("/api/k8s/nodes"),

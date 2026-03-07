@@ -287,7 +287,9 @@ describe("api client", () => {
       vi.useFakeTimers();
       const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
       mockFetch
-        .mockResolvedValueOnce(createResponse(429, { message: "Rate limited" }, { "Retry-After": "3" }))
+        .mockResolvedValueOnce(
+          createResponse(429, { message: "Rate limited" }, { "Retry-After": "3" }),
+        )
         .mockResolvedValueOnce(createResponse(200, [{ id: "1" }]));
 
       const promise = api.getConnections();

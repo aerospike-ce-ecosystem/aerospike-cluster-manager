@@ -178,19 +178,35 @@ export default function BrowserPage({
   );
 
   // Execute filtered query
+  const refreshCurrentView = useCallback(
+    async (currentPage: number, currentPageSize: number, primaryKeyOverride?: string) => {
+      const filters = filterStore.toFilterGroup();
+      const primaryKey = primaryKeyOverride ?? (filterStore.primaryKey.trim() || undefined);
+      await fetchFilteredRecords(
+        connId,
+        decodedNs,
+        decodedSet,
+        filters,
+        currentPage,
+        currentPageSize,
+        primaryKey,
+      );
+    },
+    [connId, decodedNs, decodedSet, filterStore, fetchFilteredRecords],
+  );
+
   const handleFilterExecute = useCallback(() => {
     setSelectedPKs(new Set());
-    const filters = filterStore.toFilterGroup();
-    fetchFilteredRecords(connId, decodedNs, decodedSet, filters, 1, pageSize);
-  }, [connId, decodedNs, decodedSet, pageSize, filterStore, fetchFilteredRecords]);
+    refreshCurrentView(1, pageSize);
+  }, [pageSize, refreshCurrentView]);
 
   // PK lookup
   const handlePKLookup = useCallback(
     (pk: string) => {
       setSelectedPKs(new Set());
-      fetchFilteredRecords(connId, decodedNs, decodedSet, undefined, 1, pageSize, pk);
+      refreshCurrentView(1, pageSize, pk);
     },
-    [connId, decodedNs, decodedSet, pageSize, fetchFilteredRecords],
+    [pageSize, refreshCurrentView],
   );
 
   const openEditor = useCallback(
@@ -251,7 +267,9 @@ export default function BrowserPage({
         bins,
         ttl: parseInt(editorTTL, 10) || 0,
       };
-      await putRecord(connId, data);
+      await putRecord(connId, data, {
+        refresh: () => refreshCurrentView(page, pageSize),
+      });
       toast.success(
         editorMode === "create"
           ? "Record created"
@@ -260,9 +278,6 @@ export default function BrowserPage({
             : "Record updated",
       );
       setEditorOpen(false);
-      // Refresh current view
-      const filters = filterStore.toFilterGroup();
-      await fetchFilteredRecords(connId, decodedNs, decodedSet, filters, page, pageSize);
     } catch (err) {
       toast.error(getErrorMessage(err));
     } finally {
@@ -279,12 +294,10 @@ export default function BrowserPage({
         deleteTarget.key.namespace,
         deleteTarget.key.set,
         deleteTarget.key.pk,
+        { refresh: () => refreshCurrentView(page, pageSize) },
       );
       toast.success("Record deleted");
       setDeleteTarget(null);
-      // Refresh current view
-      const filters = filterStore.toFilterGroup();
-      await fetchFilteredRecords(connId, decodedNs, decodedSet, filters, page, pageSize);
     } catch (err) {
       toast.error(getErrorMessage(err));
     } finally {
@@ -295,19 +308,17 @@ export default function BrowserPage({
   const handlePageChange = useCallback(
     (newPage: number) => {
       setPage(newPage);
-      const filters = filterStore.toFilterGroup();
-      fetchFilteredRecords(connId, decodedNs, decodedSet, filters, newPage);
+      refreshCurrentView(newPage, pageSize);
     },
-    [connId, decodedNs, decodedSet, setPage, filterStore, fetchFilteredRecords],
+    [pageSize, refreshCurrentView, setPage],
   );
 
   const handlePageSizeChange = useCallback(
     (newSize: number) => {
       setPageSize(newSize);
-      const filters = filterStore.toFilterGroup();
-      fetchFilteredRecords(connId, decodedNs, decodedSet, filters, 1, newSize);
+      refreshCurrentView(1, newSize);
     },
-    [connId, decodedNs, decodedSet, setPageSize, filterStore, fetchFilteredRecords],
+    [refreshCurrentView, setPageSize],
   );
 
   const togglePK = useCallback((pk: string) => {

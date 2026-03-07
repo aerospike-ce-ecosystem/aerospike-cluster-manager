@@ -12,6 +12,10 @@ import { withLoading } from "@/lib/store-utils";
 import { getErrorMessage } from "@/lib/utils";
 import { DEFAULT_PAGE_SIZE } from "@/lib/constants";
 
+interface BrowserMutationOptions {
+  refresh?: () => Promise<void>;
+}
+
 interface BrowserState {
   records: AerospikeRecord[];
   total: number;
@@ -44,8 +48,18 @@ interface BrowserState {
     pageSize?: number,
     primaryKey?: string,
   ) => Promise<void>;
-  putRecord: (connId: string, data: RecordWriteRequest) => Promise<void>;
-  deleteRecord: (connId: string, ns: string, set: string, pk: string) => Promise<void>;
+  putRecord: (
+    connId: string,
+    data: RecordWriteRequest,
+    options?: BrowserMutationOptions,
+  ) => Promise<void>;
+  deleteRecord: (
+    connId: string,
+    ns: string,
+    set: string,
+    pk: string,
+    options?: BrowserMutationOptions,
+  ) => Promise<void>;
   setPage: (page: number) => void;
   setPageSize: (size: number) => void;
   reset: () => void;
@@ -107,22 +121,30 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
     });
   },
 
-  putRecord: async (connId, data) => {
+  putRecord: async (connId, data, options) => {
     try {
       await api.putRecord(connId, data);
-      const { page, pageSize } = get();
-      await get().fetchRecords(connId, data.key.namespace, data.key.set, page, pageSize);
+      if (options?.refresh) {
+        await options.refresh();
+      } else {
+        const { page, pageSize } = get();
+        await get().fetchRecords(connId, data.key.namespace, data.key.set, page, pageSize);
+      }
     } catch (error) {
       set({ error: getErrorMessage(error) });
       throw error;
     }
   },
 
-  deleteRecord: async (connId, ns, setName, pk) => {
+  deleteRecord: async (connId, ns, setName, pk, options) => {
     try {
       await api.deleteRecord(connId, ns, setName, pk);
-      const { page, pageSize } = get();
-      await get().fetchRecords(connId, ns, setName, page, pageSize);
+      if (options?.refresh) {
+        await options.refresh();
+      } else {
+        const { page, pageSize } = get();
+        await get().fetchRecords(connId, ns, setName, page, pageSize);
+      }
     } catch (error) {
       set({ error: getErrorMessage(error) });
       throw error;
