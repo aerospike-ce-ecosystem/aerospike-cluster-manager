@@ -81,13 +81,13 @@ export default function TerminalPage({ params }: { params: Promise<{ connId: str
       </div>
 
       {/* Output Area */}
-      <ScrollArea className="flex-1 bg-zinc-950">
+      <ScrollArea className="flex-1 bg-[hsl(var(--terminal-bg))]">
         <div className="space-y-3 p-4 font-mono text-sm">
           {history.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Terminal className="mb-3 h-8 w-8 text-zinc-600" />
-              <p className="text-zinc-500">Type a command below or use a quick command above.</p>
-              <p className="mt-1 text-xs text-zinc-600">
+              <Terminal className="mb-3 h-8 w-8 text-[hsl(var(--terminal-text-dim))]" />
+              <p className="text-[hsl(var(--terminal-text-muted))]">Type a command below or use a quick command above.</p>
+              <p className="mt-1 text-xs text-[hsl(var(--terminal-text-dim))]">
                 Use Up/Down arrows to navigate command history.
               </p>
             </div>
@@ -96,22 +96,22 @@ export default function TerminalPage({ params }: { params: Promise<{ connId: str
             <div key={entry.id} className="space-y-1">
               {/* Timestamp + Command */}
               <div className="flex items-start gap-2">
-                <span className="text-xs whitespace-nowrap text-zinc-600">
+                <span className="text-xs whitespace-nowrap text-[hsl(var(--terminal-text-dim))]">
                   {new Date(entry.timestamp).toLocaleTimeString()}
                 </span>
-                <span className="text-green-400">$</span>
-                <span className="text-zinc-200">{entry.command}</span>
+                <span className="text-[hsl(var(--terminal-prompt))]">$</span>
+                <span className="text-[hsl(var(--terminal-text))]">{entry.command}</span>
               </div>
               {/* Output */}
               <div
                 className={cn(
                   "ml-[4.5rem] break-all whitespace-pre-wrap",
-                  entry.success ? "text-zinc-400" : "text-destructive",
+                  entry.success ? "text-[hsl(var(--terminal-text-muted))]" : "text-destructive",
                 )}
               >
                 {entry.output}
               </div>
-              <Separator className="bg-zinc-800" />
+              <Separator className="bg-[hsl(var(--terminal-border))]" />
             </div>
           ))}
           <div ref={outputEndRef} />
@@ -119,16 +119,16 @@ export default function TerminalPage({ params }: { params: Promise<{ connId: str
       </ScrollArea>
 
       {/* Input */}
-      <div className="border-t bg-zinc-950 px-4 py-3">
+      <div className="border-t bg-[hsl(var(--terminal-bg))] px-4 py-3">
         <form onSubmit={handleSubmit} className="flex items-center gap-2">
-          <span className="font-mono text-sm text-green-400">$</span>
+          <span className="font-mono text-sm text-[hsl(var(--terminal-prompt))]">$</span>
           <Input
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Enter aql command..."
-            className="flex-1 border-zinc-700 bg-zinc-900 font-mono text-base text-zinc-200 placeholder:text-zinc-600 focus-visible:ring-zinc-600 sm:text-sm"
+            className="flex-1 border-[hsl(var(--terminal-border))] bg-[hsl(var(--terminal-input))] font-mono text-base text-[hsl(var(--terminal-text))] placeholder:text-[hsl(var(--terminal-text-dim))] focus-visible:ring-accent/30 sm:text-sm"
             disabled={loading}
             autoComplete="off"
             spellCheck={false}
@@ -138,7 +138,7 @@ export default function TerminalPage({ params }: { params: Promise<{ connId: str
             size="sm"
             disabled={loading || !input.trim()}
             variant="outline"
-            className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+            className="border-[hsl(var(--terminal-border))] text-[hsl(var(--terminal-text))] hover:bg-[hsl(var(--terminal-border))]"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>

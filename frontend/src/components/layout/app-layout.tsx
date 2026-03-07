@@ -82,7 +82,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
             )}
             <main
-              className={`dot-pattern flex-1 overflow-auto ${connId && !isConnectionPage ? "pb-16 md:pb-0" : ""}`}
+              className={`dot-pattern ambient-glow flex-1 overflow-auto ${connId && !isConnectionPage ? "pb-16 md:pb-0" : ""}`}
             >
               <ErrorBoundary>{children}</ErrorBoundary>
             </main>

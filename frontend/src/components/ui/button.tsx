@@ -42,6 +42,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           "btn",
           variantClasses[variant],
           sizeClasses[size],
+          variant === "default" && "btn-glow",
           "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
           className,
         )}

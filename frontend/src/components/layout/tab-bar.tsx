@@ -27,7 +27,7 @@ export function TabBar({ connId }: TabBarProps) {
   };
 
   return (
-    <div className="bg-card/60 relative border-b backdrop-blur-sm">
+    <div className="bg-card/60 relative border-b border-border/60 backdrop-blur-md">
       <ScrollArea className="w-full">
         <div className="flex h-10 items-center gap-0 px-1">
           {tabs.map((tab) => {
@@ -49,7 +49,7 @@ export function TabBar({ connId }: TabBarProps) {
                 />
                 {tab.label}
                 {isActive && (
-                  <span className="bg-accent absolute right-2 bottom-0 left-2 h-0.5 rounded-full" />
+                  <span className="bg-accent absolute right-2 bottom-0 left-2 h-0.5 rounded-full shadow-[0_0_6px_1px_hsl(var(--accent)/0.3)]" />
                 )}
               </button>
             );

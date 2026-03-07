@@ -18,7 +18,7 @@ export const StatCard = React.memo(function StatCard({
   subtitle,
 }: StatCardProps) {
   return (
-    <Card className="card-interactive">
+    <Card className="card-interactive gradient-border-top">
       <CardContent className="px-4 pt-4 pb-3">
         <div className="flex items-center justify-between">
           <div className="space-y-1">
