@@ -53,13 +53,10 @@ describe("api client", () => {
 
       expect(result).toEqual(data);
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(mockFetch).toHaveBeenCalledWith(
-        "/api/connections",
-        expect.objectContaining({
-          headers: expect.not.objectContaining({ "Content-Type": "application/json" }),
-          signal: expect.any(AbortSignal),
-        }),
-      );
+      const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+      const headers = init.headers as Headers;
+      expect(headers.get("Content-Type")).toBeNull();
+      expect(init.signal).toBeInstanceOf(AbortSignal);
     });
 
     it("sends body and returns JSON for a POST request", async () => {
@@ -80,14 +77,13 @@ describe("api client", () => {
       const result = await api.createConnection(connectionData);
 
       expect(result).toEqual(responseData);
-      expect(mockFetch).toHaveBeenCalledWith(
-        "/api/connections",
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify(connectionData),
-          headers: expect.objectContaining({ "Content-Type": "application/json" }),
-        }),
-      );
+      const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+      const headers = init.headers as Headers;
+
+      expect(url).toBe("/api/connections");
+      expect(init.method).toBe("POST");
+      expect(init.body).toBe(JSON.stringify(connectionData));
+      expect(headers.get("Content-Type")).toBe("application/json");
     });
 
     it("encodes record query parameters with special characters", async () => {
