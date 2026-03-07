@@ -179,9 +179,9 @@ export default function BrowserPage({
 
   // Execute filtered query
   const refreshCurrentView = useCallback(
-    async (currentPage = page, currentPageSize = pageSize) => {
+    async (currentPage: number, currentPageSize: number, primaryKeyOverride?: string) => {
       const filters = filterStore.toFilterGroup();
-      const primaryKey = filterStore.primaryKey.trim() || undefined;
+      const primaryKey = primaryKeyOverride ?? (filterStore.primaryKey.trim() || undefined);
       await fetchFilteredRecords(
         connId,
         decodedNs,
@@ -192,7 +192,7 @@ export default function BrowserPage({
         primaryKey,
       );
     },
-    [connId, decodedNs, decodedSet, filterStore, fetchFilteredRecords, page, pageSize],
+    [connId, decodedNs, decodedSet, filterStore, fetchFilteredRecords],
   );
 
   const handleFilterExecute = useCallback(() => {
@@ -202,9 +202,9 @@ export default function BrowserPage({
 
   // PK lookup
   const handlePKLookup = useCallback(
-    (_pk: string) => {
+    (pk: string) => {
       setSelectedPKs(new Set());
-      refreshCurrentView(1, pageSize);
+      refreshCurrentView(1, pageSize, pk);
     },
     [pageSize, refreshCurrentView],
   );
