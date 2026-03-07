@@ -210,7 +210,10 @@ export function RecordEditorDialog({
                         value={bin.type}
                         onValueChange={(v) => onUpdateBin(bin.id, "type", v)}
                       >
-                        <SelectTrigger className="border-border/40 h-8 w-[110px] font-mono text-xs" disabled={saving}>
+                        <SelectTrigger
+                          className="border-border/40 h-8 w-[110px] font-mono text-xs"
+                          disabled={saving}
+                        >
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
