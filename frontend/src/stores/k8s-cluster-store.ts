@@ -92,7 +92,7 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
     },
 
     createCluster: async (data: CreateK8sClusterRequest) => {
-      if (get().loading) return {} as K8sClusterSummary;
+      if (get().loading) throw new Error("Another operation is in progress");
       const result = await withLoading(
         set,
         async () => {
