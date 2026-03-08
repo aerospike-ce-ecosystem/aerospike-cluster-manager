@@ -132,8 +132,10 @@ Local dev with `compose.dev.yaml` requires setting `AEROSPIKE_HOST=localhost AER
 | `/udfs/[connId]` | UDF management |
 | `/terminal/[connId]` | AQL terminal |
 | `/k8s/clusters` | K8s AerospikeCluster list (auto-refresh for transitional phases) |
-| `/k8s/clusters/new` | K8s cluster creation wizard (7 steps: Basic, Namespace & Storage, Monitoring & Options, ACL / Security, Rolling Update, Resources, Review) |
-| `/k8s/clusters/[namespace]/[name]` | K8s cluster detail (status, conditions, pods, operations) |
+| `/k8s/clusters/new` | K8s cluster creation wizard (9 steps: Basic, Namespace & Storage, Monitoring & Options, Resources, ACL / Security, Rolling Update, Rack Config, Advanced, Review) |
+| `/k8s/clusters/[namespace]/[name]` | K8s cluster detail (status, conditions, pods, operations, event timeline, config drift, reconciliation health) |
+| `/k8s/templates` | K8s AerospikeClusterTemplate list (cluster-scoped) |
+| `/k8s/templates/[name]` | K8s template detail (cluster-scoped, no namespace in path) |
 
 ## Code Style
 
