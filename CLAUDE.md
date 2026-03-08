@@ -65,7 +65,7 @@ aerospike-cluster-manager/
 │       │   ├── ui/        # Radix-based shared primitives (shadcn/ui pattern)
 │       │   ├── common/    # Reusable components (json-viewer, code-editor, status-badge, etc.)
 │       │   ├── layout/    # App shell (header, sidebar, tab-bar)
-│       │   ├── k8s/       # K8s cluster management (wizard, cards, status badge, scale/delete dialogs, pod table)
+│       │   ├── k8s/       # K8s cluster management (wizard, cards, status badge, scale/delete dialogs, pod table, event timeline with category filters, config drift card, circuit breaker dashboard)
 │       │   └── connection/, admin/  # Domain-specific components
 │       ├── stores/        # Zustand stores (connection, browser, query, admin, metrics, ui, k8s-cluster)
 │       ├── hooks/         # Custom hooks (use-async-data, use-debounce, use-pagination, etc.)

@@ -103,7 +103,9 @@ npm run dev                        # http://localhost:3000
   - Dynamic config status per pod (Applied/Failed/Pending)
   - Last restart reason and timestamp per pod
   - Reconciliation error monitoring
-  - K8s events timeline with auto-refresh
+  - K8s events timeline with category filtering (Lifecycle, Rolling Restart, Configuration, ACL, Scaling, Rack, Network, Monitoring, Template, Circuit Breaker, Other)
+  - Configuration drift detection (spec vs appliedSpec comparison, per-pod config hash groups)
+  - Circuit breaker / reconciliation health dashboard (threshold progress, backoff timer, manual reset)
   - K8s secrets picker for ACL credential management
   - Storage volume policies (init method, wipe method, cascade delete)
   - Network access type configuration (Pod IP, Host Internal/External, Configured IP) with custom network names for configuredIP
@@ -184,7 +186,15 @@ When a cluster references an AerospikeClusterTemplate, the detail page shows a T
 
 ### Events Timeline
 
-View Kubernetes events associated with cluster resources, including event type, reason, message, occurrence count, and timestamps. Events auto-refresh during transitional phases.
+View Kubernetes events associated with cluster resources, including event type, reason, message, occurrence count, and timestamps. Events auto-refresh during transitional phases. Events are categorized into 11 categories (Lifecycle, Rolling Restart, Configuration, ACL Security, Scaling, Rack Management, Network, Monitoring, Template, Circuit Breaker, Other) with clickable filter chips to narrow the view.
+
+### Configuration Drift Detection
+
+The cluster detail page includes a Config Status card that detects drift between the desired spec and the currently applied spec. Per-pod config hash groups show which pods are running identical configurations and which have diverged, making it easy to identify partial rollout states.
+
+### Reconciliation Health Dashboard
+
+A circuit breaker health dashboard shows the operator's reconciliation state, including a visual progress bar toward the circuit breaker threshold, the current backoff timer, and detailed error information. A manual reset button allows operators to clear the circuit breaker and force a fresh reconciliation attempt.
 
 ### Auto-refresh
 
