@@ -11,6 +11,7 @@ import {
   Plus,
   Settings,
   FlaskConical,
+  WifiOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +30,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EmptyState } from "@/components/common/empty-state";
+import { FullPageError } from "@/components/common/full-page-error";
 import { PageHeader } from "@/components/common/page-header";
 import { InlineAlert } from "@/components/common/inline-alert";
 import { StatusBadge } from "@/components/common/status-badge";
@@ -37,12 +39,19 @@ import { useAsyncData } from "@/hooks/use-async-data";
 import { api } from "@/lib/api/client";
 import { formatNumber, formatBytes, formatPercent } from "@/lib/formatters";
 import { cn, getErrorMessage } from "@/lib/utils";
+import { useConnectionStore } from "@/stores/connection-store";
 import { CreateSampleDataDialog } from "@/components/browser/create-sample-data-dialog";
 import { toast } from "sonner";
 
 export default function BrowserSetListPage({ params }: { params: Promise<{ connId: string }> }) {
   const { connId } = use(params);
   const router = useRouter();
+
+  // Connection health check
+  const healthStatus = useConnectionStore((s) => s.healthStatuses[connId]);
+  const fetchConnectionHealth = useConnectionStore((s) => s.fetchConnectionHealth);
+  const isDisconnected = healthStatus !== undefined && !healthStatus.connected;
+
   const {
     data: clusterInfo,
     loading,
@@ -128,6 +137,22 @@ export default function BrowserSetListPage({ params }: { params: Promise<{ connI
     setSetName("");
     setCreateSetOpen(true);
   };
+
+  // Disconnected state — show immediately instead of infinite skeleton loading
+  if (isDisconnected) {
+    return (
+      <FullPageError
+        icon={WifiOff}
+        title="Connection is not available"
+        message="The Aerospike connection is disconnected. Check the server status and try again."
+        onRetry={() => {
+          fetchConnectionHealth(connId);
+          fetchData();
+        }}
+        retryLabel="Refresh"
+      />
+    );
+  }
 
   return (
     <div className="animate-fade-in space-y-6 p-6 lg:p-8">

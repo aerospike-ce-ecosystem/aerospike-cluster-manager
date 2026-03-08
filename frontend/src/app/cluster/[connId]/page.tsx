@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import { Pencil, RefreshCw, Scale, Trash2 } from "lucide-react";
+import { Pencil, RefreshCw, Scale, Trash2, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/common/page-header";
@@ -24,10 +24,16 @@ import {
   type UpdateK8sClusterRequest,
 } from "@/lib/api/types";
 import { getErrorMessage } from "@/lib/utils";
+import { useConnectionStore } from "@/stores/connection-store";
 import { toast } from "sonner";
 
 export default function ClusterPage({ params }: { params: Promise<{ connId: string }> }) {
   const { connId } = use(params);
+
+  // Connection health check
+  const healthStatus = useConnectionStore((s) => s.healthStatuses[connId]);
+  const fetchConnectionHealth = useConnectionStore((s) => s.fetchConnectionHealth);
+  const isDisconnected = healthStatus !== undefined && !healthStatus.connected;
 
   // Static cluster data (Aerospike direct API)
   const {
@@ -143,6 +149,22 @@ export default function ClusterPage({ params }: { params: Promise<{ connId: stri
       setDeleting(false);
     }
   };
+
+  // Disconnected state — show immediately instead of infinite skeleton loading
+  if (isDisconnected) {
+    return (
+      <FullPageError
+        icon={WifiOff}
+        title="Connection is not available"
+        message="The Aerospike connection is disconnected. Check the server status and try again."
+        onRetry={() => {
+          fetchConnectionHealth(connId);
+          refetchCluster();
+        }}
+        retryLabel="Refresh"
+      />
+    );
+  }
 
   // Loading state
   if (clusterLoading) {

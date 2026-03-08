@@ -40,6 +40,7 @@ import { EmptyState } from "@/components/common/empty-state";
 import { InlineAlert } from "@/components/common/inline-alert";
 import { LoadingButton } from "@/components/common/loading-button";
 import { PageHeader } from "@/components/common/page-header";
+import { K8sClusterCard } from "@/components/k8s/k8s-cluster-card";
 import { useConnectionStore } from "@/stores/connection-store";
 import { useK8sClusterStore } from "@/stores/k8s-cluster-store";
 import type { ConnectionProfile } from "@/lib/api/types";
@@ -80,7 +81,13 @@ export default function ConnectionsPage() {
     deleteConnection,
     testConnection,
   } = useConnectionStore();
-  const { k8sAvailable, checkAvailability } = useK8sClusterStore();
+  const {
+    k8sAvailable,
+    clusters: k8sClusters,
+    loading: k8sLoading,
+    checkAvailability,
+    fetchClusters: fetchK8sClusters,
+  } = useK8sClusterStore();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -103,8 +110,16 @@ export default function ConnectionsPage() {
   }, [fetchConnections, fetchAllHealth]);
 
   useEffect(() => {
-    checkAvailability();
+    checkAvailability().then(() => {
+      // Fetch clusters after availability is confirmed (store sets k8sAvailable in checkAvailability)
+    });
   }, [checkAvailability]);
+
+  useEffect(() => {
+    if (k8sAvailable) {
+      fetchK8sClusters();
+    }
+  }, [k8sAvailable, fetchK8sClusters]);
 
   const openCreateDialog = useCallback(() => {
     setEditingId(null);
@@ -375,6 +390,46 @@ export default function ConnectionsPage() {
               </Card>
             );
           })}
+        </div>
+      )}
+
+      {/* K8s Clusters Section */}
+      {k8sAvailable && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Boxes className="text-muted-foreground h-5 w-5" />
+            <h2 className="text-lg font-semibold">Kubernetes Clusters</h2>
+          </div>
+          {k8sLoading && k8sClusters.length === 0 ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <Skeleton key={i} className="h-[140px] rounded-xl" />
+              ))}
+            </div>
+          ) : k8sClusters.length === 0 ? (
+            <EmptyState
+              icon={Boxes}
+              title="No Kubernetes clusters"
+              description="Deploy an Aerospike cluster on Kubernetes to manage it here."
+              action={
+                <Button onClick={() => router.push("/k8s/clusters/new")}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Cluster
+                </Button>
+              }
+            />
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {k8sClusters.map((cluster, idx) => (
+                <K8sClusterCard
+                  key={`${cluster.namespace}/${cluster.name}`}
+                  cluster={cluster}
+                  index={idx}
+                  onClick={() => router.push(`/k8s/clusters/${cluster.namespace}/${cluster.name}`)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
