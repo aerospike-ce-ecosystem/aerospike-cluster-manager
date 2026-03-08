@@ -23,7 +23,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { K8sClusterDetail, UpdateK8sClusterRequest, NetworkAccessType } from "@/lib/api/types";
+import type {
+  K8sClusterDetail,
+  UpdateK8sClusterRequest,
+  NetworkAccessType,
+  NetworkPolicyAutoConfig,
+} from "@/lib/api/types";
 
 interface K8sEditDialogProps {
   open: boolean;
@@ -43,6 +48,12 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
   const [accessType, setAccessType] = useState<NetworkAccessType>("pod");
   const [fabricType, setFabricType] = useState<NetworkAccessType | "">("");
   const [alternateAccessType, setAlternateAccessType] = useState<NetworkAccessType | "">("");
+  const [customAccessNames, setCustomAccessNames] = useState("");
+  const [customAltAccessNames, setCustomAltAccessNames] = useState("");
+  const [customFabricNames, setCustomFabricNames] = useState("");
+  const [networkPolicyConfig, setNetworkPolicyConfig] = useState<NetworkPolicyAutoConfig | null>(
+    null,
+  );
   const [nodeBlockList, setNodeBlockList] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +72,12 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
   const initialAlternateAccessType = (networkPolicy?.alternateAccessType || "") as
     | NetworkAccessType
     | "";
+  const initialCustomAccessNames = (networkPolicy?.customAccessNetworkNames ?? []).join(", ");
+  const initialCustomAltAccessNames = (
+    networkPolicy?.customAlternateAccessNetworkNames ?? []
+  ).join(", ");
+  const initialCustomFabricNames = (networkPolicy?.customFabricNetworkNames ?? []).join(", ");
+  const initialNetworkPolicyConfig = cluster.spec?.networkPolicyConfig ?? null;
   const initialNodeBlockList = (cluster.spec?.k8sNodeBlockList ?? []).join(", ");
   const initialAerospikeConfig = useMemo(
     () => cluster.spec?.aerospikeConfig ?? {},
@@ -84,6 +101,10 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
       setAccessType(initialAccessType);
       setFabricType(initialFabricType);
       setAlternateAccessType(initialAlternateAccessType);
+      setCustomAccessNames(initialCustomAccessNames);
+      setCustomAltAccessNames(initialCustomAltAccessNames);
+      setCustomFabricNames(initialCustomFabricNames);
+      setNetworkPolicyConfig(initialNetworkPolicyConfig);
       setNodeBlockList(initialNodeBlockList);
       setError(null);
       setConfigError(null);
@@ -100,6 +121,10 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
     initialAccessType,
     initialFabricType,
     initialAlternateAccessType,
+    initialCustomAccessNames,
+    initialCustomAltAccessNames,
+    initialCustomFabricNames,
+    initialNetworkPolicyConfig,
     initialNodeBlockList,
   ]);
 
@@ -128,6 +153,10 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
     accessType !== initialAccessType ||
     fabricType !== initialFabricType ||
     alternateAccessType !== initialAlternateAccessType ||
+    customAccessNames !== initialCustomAccessNames ||
+    customAltAccessNames !== initialCustomAltAccessNames ||
+    customFabricNames !== initialCustomFabricNames ||
+    JSON.stringify(networkPolicyConfig) !== JSON.stringify(initialNetworkPolicyConfig) ||
     nodeBlockList !== initialNodeBlockList;
 
   const handleSave = async () => {
@@ -161,15 +190,39 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
       if (
         accessType !== initialAccessType ||
         fabricType !== initialFabricType ||
-        alternateAccessType !== initialAlternateAccessType
+        alternateAccessType !== initialAlternateAccessType ||
+        customAccessNames !== initialCustomAccessNames ||
+        customAltAccessNames !== initialCustomAltAccessNames ||
+        customFabricNames !== initialCustomFabricNames
       ) {
+        const parseNames = (s: string) => {
+          const names = s
+            .split(",")
+            .map((n) => n.trim())
+            .filter(Boolean);
+          return names.length > 0 ? names : undefined;
+        };
         data.networkPolicy = {
           accessType,
           ...(fabricType ? { fabricType: fabricType as NetworkAccessType } : {}),
           ...(alternateAccessType
             ? { alternateAccessType: alternateAccessType as NetworkAccessType }
             : {}),
+          ...(accessType === "configuredIP"
+            ? { customAccessNetworkNames: parseNames(customAccessNames) }
+            : {}),
+          ...(alternateAccessType === "configuredIP"
+            ? { customAlternateAccessNetworkNames: parseNames(customAltAccessNames) }
+            : {}),
+          ...(fabricType === "configuredIP"
+            ? { customFabricNetworkNames: parseNames(customFabricNames) }
+            : {}),
         };
+      }
+      if (
+        JSON.stringify(networkPolicyConfig) !== JSON.stringify(initialNetworkPolicyConfig)
+      ) {
+        data.networkPolicyConfig = networkPolicyConfig ?? undefined;
       }
       if (nodeBlockList !== initialNodeBlockList) {
         const nodes = nodeBlockList
@@ -378,6 +431,101 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
                 </Select>
               </div>
             </div>
+          </div>
+
+          {/* Custom Network Names (shown when configuredIP is selected) */}
+          {(accessType === "configuredIP" ||
+            alternateAccessType === "configuredIP" ||
+            fabricType === "configuredIP") && (
+            <div className="grid gap-2 rounded border border-amber-200 p-3 dark:border-amber-800">
+              <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                Custom network names required for configuredIP
+              </span>
+              {accessType === "configuredIP" && (
+                <div className="grid gap-1">
+                  <Label htmlFor="edit-custom-access" className="text-xs">
+                    Access Network Names
+                  </Label>
+                  <Input
+                    id="edit-custom-access"
+                    value={customAccessNames}
+                    onChange={(e) => setCustomAccessNames(e.target.value)}
+                    placeholder="networkName1, networkName2"
+                    disabled={loading}
+                  />
+                </div>
+              )}
+              {alternateAccessType === "configuredIP" && (
+                <div className="grid gap-1">
+                  <Label htmlFor="edit-custom-alt-access" className="text-xs">
+                    Alternate Access Network Names
+                  </Label>
+                  <Input
+                    id="edit-custom-alt-access"
+                    value={customAltAccessNames}
+                    onChange={(e) => setCustomAltAccessNames(e.target.value)}
+                    placeholder="networkName1, networkName2"
+                    disabled={loading}
+                  />
+                </div>
+              )}
+              {fabricType === "configuredIP" && (
+                <div className="grid gap-1">
+                  <Label htmlFor="edit-custom-fabric" className="text-xs">
+                    Fabric Network Names
+                  </Label>
+                  <Input
+                    id="edit-custom-fabric"
+                    value={customFabricNames}
+                    onChange={(e) => setCustomFabricNames(e.target.value)}
+                    placeholder="networkName1, networkName2"
+                    disabled={loading}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* NetworkPolicy Auto-generation */}
+          <div className="grid gap-2">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="edit-netpol-auto"
+                checked={networkPolicyConfig?.enabled ?? false}
+                onCheckedChange={(checked) => {
+                  if (checked === true) {
+                    setNetworkPolicyConfig({ enabled: true, type: "kubernetes" });
+                  } else {
+                    setNetworkPolicyConfig(null);
+                  }
+                  setError(null);
+                }}
+                disabled={loading}
+              />
+              <Label htmlFor="edit-netpol-auto" className="cursor-pointer text-xs">
+                Auto-generate K8s NetworkPolicy
+              </Label>
+            </div>
+            {networkPolicyConfig?.enabled && (
+              <Select
+                value={networkPolicyConfig.type}
+                onValueChange={(v) => {
+                  setNetworkPolicyConfig({
+                    enabled: true,
+                    type: v as "kubernetes" | "cilium",
+                  });
+                  setError(null);
+                }}
+              >
+                <SelectTrigger disabled={loading}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="kubernetes">Kubernetes (standard)</SelectItem>
+                  <SelectItem value="cilium">Cilium</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           {/* Node Block List */}

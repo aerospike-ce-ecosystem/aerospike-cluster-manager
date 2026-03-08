@@ -56,6 +56,66 @@ class NetworkAccessConfig(BaseModel):
     fabric_type: Literal["pod", "hostInternal", "hostExternal", "configuredIP"] | None = Field(
         default=None, alias="fabricType", description="Network type for inter-node communication"
     )
+    custom_access_network_names: list[str] | None = Field(
+        default=None, alias="customAccessNetworkNames", description="Network names for configuredIP access type"
+    )
+    custom_alternate_access_network_names: list[str] | None = Field(
+        default=None,
+        alias="customAlternateAccessNetworkNames",
+        description="Network names for configuredIP alternate access type",
+    )
+    custom_fabric_network_names: list[str] | None = Field(
+        default=None, alias="customFabricNetworkNames", description="Network names for configuredIP fabric type"
+    )
+
+    @model_validator(mode="after")
+    def configured_ip_requires_network_names(self) -> NetworkAccessConfig:
+        """Validate that configuredIP types have corresponding network names."""
+        if self.access_type == "configuredIP" and not self.custom_access_network_names:
+            raise ValueError("customAccessNetworkNames required when accessType is configuredIP")
+        if self.alternate_access_type == "configuredIP" and not self.custom_alternate_access_network_names:
+            raise ValueError("customAlternateAccessNetworkNames required when alternateAccessType is configuredIP")
+        if self.fabric_type == "configuredIP" and not self.custom_fabric_network_names:
+            raise ValueError("customFabricNetworkNames required when fabricType is configuredIP")
+        return self
+
+
+class LoadBalancerSpec(BaseModel):
+    """LoadBalancer service configuration for seed discovery."""
+
+    model_config = {"populate_by_name": True}
+
+    annotations: dict[str, str] | None = Field(default=None, description="Service annotations")
+    labels: dict[str, str] | None = Field(default=None, description="Service labels")
+    external_traffic_policy: Literal["Cluster", "Local"] | None = Field(
+        default=None, alias="externalTrafficPolicy", description="External traffic policy"
+    )
+    port: int = Field(default=3000, ge=1, le=65535, description="Service port")
+    target_port: int = Field(default=3000, ge=1, le=65535, alias="targetPort", description="Target port")
+    load_balancer_source_ranges: list[str] | None = Field(
+        default=None, alias="loadBalancerSourceRanges", description="Allowed source IP ranges"
+    )
+
+
+class SeedsFinderServicesConfig(BaseModel):
+    """Seeds finder services configuration for external seed discovery."""
+
+    model_config = {"populate_by_name": True}
+
+    load_balancer: LoadBalancerSpec | None = Field(
+        default=None, alias="loadBalancer", description="LoadBalancer service for seed discovery"
+    )
+
+
+class NetworkPolicyAutoConfig(BaseModel):
+    """Auto-generate Kubernetes NetworkPolicy resources."""
+
+    model_config = {"populate_by_name": True}
+
+    enabled: bool = Field(default=False, description="Enable automatic NetworkPolicy creation")
+    type: Literal["kubernetes", "cilium"] = Field(
+        default="kubernetes", description="NetworkPolicy type: kubernetes or cilium"
+    )
 
 
 def _parse_cpu_millis(cpu: str) -> float:
@@ -229,6 +289,9 @@ class TemplateOverrides(BaseModel):
     image: str | None = None
     size: int | None = Field(default=None, ge=1, le=8)
     resources: ResourceConfig | None = None
+    monitoring: MonitoringConfig | None = None
+    network_policy: NetworkAccessConfig | None = Field(default=None, alias="networkPolicy")
+    enable_dynamic_config: bool | None = Field(default=None, alias="enableDynamicConfig")
 
 
 class TemplateRefConfig(BaseModel):
@@ -284,6 +347,12 @@ class CreateK8sClusterRequest(BaseModel):
     auto_connect: bool = Field(default=True, alias="autoConnect")
     network_policy: NetworkAccessConfig | None = Field(default=None, alias="networkPolicy")
     k8s_node_block_list: list[str] | None = Field(default=None, alias="k8sNodeBlockList")
+    seeds_finder_services: SeedsFinderServicesConfig | None = Field(
+        default=None, alias="seedsFinderServices", description="LoadBalancer service for seed discovery"
+    )
+    network_policy_config: NetworkPolicyAutoConfig | None = Field(
+        default=None, alias="networkPolicyConfig", description="Auto-generate K8s NetworkPolicy"
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -319,6 +388,12 @@ class UpdateK8sClusterRequest(BaseModel):
     rack_config: RackAwareConfig | None = Field(default=None, alias="rackConfig")
     network_policy: NetworkAccessConfig | None = Field(default=None, alias="networkPolicy")
     k8s_node_block_list: list[str] | None = Field(default=None, alias="k8sNodeBlockList")
+    seeds_finder_services: SeedsFinderServicesConfig | None = Field(
+        default=None, alias="seedsFinderServices", description="LoadBalancer service for seed discovery"
+    )
+    network_policy_config: NetworkPolicyAutoConfig | None = Field(
+        default=None, alias="networkPolicyConfig", description="Auto-generate K8s NetworkPolicy"
+    )
 
     model_config = {"populate_by_name": True}
 

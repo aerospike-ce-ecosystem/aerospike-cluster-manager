@@ -23,9 +23,6 @@ PORT: int = _get_int("PORT", 8000)
 
 DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://aerospike:aerospike@localhost:5432/aerospike_manager")
 
-AEROSPIKE_HOST: str = os.getenv("AEROSPIKE_HOST", "localhost")
-AEROSPIKE_PORT: int = _get_int("AEROSPIKE_PORT", 3000)
-
 LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
 LOG_FORMAT: str = os.getenv("LOG_FORMAT", "text")  # "text" or "json"
 
