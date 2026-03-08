@@ -129,13 +129,72 @@ class ResourceConfig(BaseModel):
         return self
 
 
+class TolerationConfig(BaseModel):
+    """Kubernetes toleration for pod scheduling."""
+
+    model_config = {"populate_by_name": True}
+
+    key: str | None = None
+    operator: Literal["Exists", "Equal"] = Field(default="Equal")
+    value: str | None = None
+    effect: Literal["NoSchedule", "PreferNoSchedule", "NoExecute", ""] | None = None
+    toleration_seconds: int | None = Field(default=None, alias="tolerationSeconds")
+
+
+class PodSchedulingConfig(BaseModel):
+    """Pod scheduling configuration (nodeSelector, tolerations, affinity)."""
+
+    model_config = {"populate_by_name": True}
+
+    node_selector: dict[str, str] | None = Field(
+        default=None, alias="nodeSelector", description="Node labels for pod scheduling"
+    )
+    tolerations: list[TolerationConfig] | None = Field(default=None, description="Pod tolerations")
+    multi_pod_per_host: bool | None = Field(
+        default=None, alias="multiPodPerHost", description="Allow multiple pods per node"
+    )
+    host_network: bool | None = Field(default=None, alias="hostNetwork", description="Enable host networking")
+    service_account_name: str | None = Field(
+        default=None, alias="serviceAccountName", description="ServiceAccount to use"
+    )
+    termination_grace_period: int | None = Field(
+        default=None, ge=0, alias="terminationGracePeriodSeconds", description="Grace period for termination"
+    )
+
+
+class ServiceMonitorConfig(BaseModel):
+    """ServiceMonitor configuration for Prometheus Operator."""
+
+    model_config = {"populate_by_name": True}
+
+    enabled: bool = Field(default=False)
+    interval: str | None = Field(default=None, description="Scrape interval (e.g. '30s')")
+    labels: dict[str, str] | None = Field(default=None, description="Additional labels for discovery")
+
+
+class PrometheusRuleConfig(BaseModel):
+    """PrometheusRule configuration for Aerospike alerts."""
+
+    model_config = {"populate_by_name": True}
+
+    enabled: bool = Field(default=False)
+    labels: dict[str, str] | None = Field(default=None, description="Additional labels for discovery")
+
+
 class MonitoringConfig(BaseModel):
-    """Optional monitoring configuration for the cluster."""
+    """Monitoring configuration for the cluster."""
 
     model_config = {"populate_by_name": True}
 
     enabled: bool = Field(default=False)
     port: int = Field(default=9145, ge=1024, le=65535)
+    exporter_image: str | None = Field(default=None, alias="exporterImage", description="Prometheus exporter image")
+    service_monitor: ServiceMonitorConfig | None = Field(
+        default=None, alias="serviceMonitor", description="ServiceMonitor configuration"
+    )
+    prometheus_rule: PrometheusRuleConfig | None = Field(
+        default=None, alias="prometheusRule", description="PrometheusRule configuration"
+    )
 
 
 class ACLRoleSpec(BaseModel):
@@ -284,6 +343,9 @@ class CreateK8sClusterRequest(BaseModel):
     auto_connect: bool = Field(default=True, alias="autoConnect")
     network_policy: NetworkAccessConfig | None = Field(default=None, alias="networkPolicy")
     k8s_node_block_list: list[str] | None = Field(default=None, alias="k8sNodeBlockList")
+    pod_scheduling: PodSchedulingConfig | None = Field(
+        default=None, alias="podScheduling", description="Pod scheduling configuration"
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -319,6 +381,9 @@ class UpdateK8sClusterRequest(BaseModel):
     rack_config: RackAwareConfig | None = Field(default=None, alias="rackConfig")
     network_policy: NetworkAccessConfig | None = Field(default=None, alias="networkPolicy")
     k8s_node_block_list: list[str] | None = Field(default=None, alias="k8sNodeBlockList")
+    pod_scheduling: PodSchedulingConfig | None = Field(
+        default=None, alias="podScheduling", description="Pod scheduling configuration"
+    )
 
     model_config = {"populate_by_name": True}
 

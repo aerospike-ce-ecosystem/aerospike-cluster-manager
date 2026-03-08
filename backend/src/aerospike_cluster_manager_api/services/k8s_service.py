@@ -75,6 +75,60 @@ def build_rack_list(racks: list[RackConfig]) -> list[dict[str, Any]]:
     return result
 
 
+def build_pod_scheduling(sched: Any) -> dict[str, Any]:
+    """Convert PodSchedulingConfig to CR-compatible podSpec fields."""
+    result: dict[str, Any] = {}
+    if sched.node_selector:
+        result["nodeSelector"] = sched.node_selector
+    if sched.tolerations:
+        tols = []
+        for t in sched.tolerations:
+            tol: dict[str, Any] = {}
+            if t.key is not None:
+                tol["key"] = t.key
+            tol["operator"] = t.operator
+            if t.value is not None:
+                tol["value"] = t.value
+            if t.effect is not None:
+                tol["effect"] = t.effect
+            if t.toleration_seconds is not None:
+                tol["tolerationSeconds"] = t.toleration_seconds
+            tols.append(tol)
+        result["tolerations"] = tols
+    if sched.multi_pod_per_host is not None:
+        result["multiPodPerHost"] = sched.multi_pod_per_host
+    if sched.host_network is not None:
+        result["hostNetwork"] = sched.host_network
+    if sched.service_account_name:
+        result["serviceAccountName"] = sched.service_account_name
+    if sched.termination_grace_period is not None:
+        result["terminationGracePeriodSeconds"] = sched.termination_grace_period
+    return result
+
+
+def build_monitoring(mon: Any) -> dict[str, Any]:
+    """Convert MonitoringConfig to CR-compatible monitoring dict."""
+    result: dict[str, Any] = {
+        "enabled": mon.enabled,
+        "port": mon.port,
+    }
+    if mon.exporter_image:
+        result["exporterImage"] = mon.exporter_image
+    if mon.service_monitor:
+        sm: dict[str, Any] = {"enabled": mon.service_monitor.enabled}
+        if mon.service_monitor.interval:
+            sm["interval"] = mon.service_monitor.interval
+        if mon.service_monitor.labels:
+            sm["labels"] = mon.service_monitor.labels
+        result["serviceMonitor"] = sm
+    if mon.prometheus_rule:
+        pr: dict[str, Any] = {"enabled": mon.prometheus_rule.enabled}
+        if mon.prometheus_rule.labels:
+            pr["labels"] = mon.prometheus_rule.labels
+        result["prometheusRule"] = pr
+    return result
+
+
 def build_network_policy(policy) -> dict[str, Any]:
     """Convert a network policy model into a CR-compatible dict."""
     net_policy: dict[str, Any] = {"accessType": policy.access_type}
@@ -181,10 +235,13 @@ def build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
 
     # Monitoring
     if req.monitoring:
-        cr["spec"]["monitoring"] = {
-            "enabled": req.monitoring.enabled,
-            "port": req.monitoring.port,
-        }
+        cr["spec"]["monitoring"] = build_monitoring(req.monitoring)
+
+    # Pod scheduling
+    if req.pod_scheduling:
+        pod_spec = cr["spec"].get("podSpec", {})
+        pod_spec.update(build_pod_scheduling(req.pod_scheduling))
+        cr["spec"]["podSpec"] = pod_spec
 
     # Template reference and overrides
     if req.template_ref:
@@ -446,6 +503,7 @@ def has_update_fields(body: UpdateK8sClusterRequest) -> bool:
             body.rack_config,
             body.network_policy,
             body.k8s_node_block_list,
+            body.pod_scheduling,
         )
     )
 
@@ -467,10 +525,7 @@ def build_update_patch(body: UpdateK8sClusterRequest) -> dict[str, Any]:
             }
         }
     if body.monitoring is not None:
-        patch["spec"]["monitoring"] = {
-            "enabled": body.monitoring.enabled,
-            "port": body.monitoring.port,
-        }
+        patch["spec"]["monitoring"] = build_monitoring(body.monitoring)
     if body.paused is not None:
         patch["spec"]["paused"] = body.paused
     if body.enable_dynamic_config is not None:
@@ -492,6 +547,10 @@ def build_update_patch(body: UpdateK8sClusterRequest) -> dict[str, Any]:
         patch["spec"]["aerospikeNetworkPolicy"] = build_network_policy(body.network_policy)
     if body.k8s_node_block_list is not None:
         patch["spec"]["k8sNodeBlockList"] = body.k8s_node_block_list
+    if body.pod_scheduling is not None:
+        pod_spec = patch["spec"].get("podSpec", {})
+        pod_spec.update(build_pod_scheduling(body.pod_scheduling))
+        patch["spec"]["podSpec"] = pod_spec
     return patch
 
 
