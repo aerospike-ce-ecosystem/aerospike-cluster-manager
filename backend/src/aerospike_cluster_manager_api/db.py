@@ -17,8 +17,6 @@ from aerospike_cluster_manager_api.models.connection import ConnectionProfile
 logger = logging.getLogger(__name__)
 
 _pool: asyncpg.Pool | None = None
-DEFAULT_CONNECTION_ID = "conn-default"
-
 CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS connections (
     id           TEXT PRIMARY KEY,
@@ -41,46 +39,6 @@ def _get_pool() -> asyncpg.Pool:
     return _pool
 
 
-def _build_default_connection() -> ConnectionProfile:
-    now = datetime.now(UTC).isoformat()
-    return ConnectionProfile(
-        id=DEFAULT_CONNECTION_ID,
-        name="Default Aerospike",
-        hosts=[config.AEROSPIKE_HOST],
-        port=config.AEROSPIKE_PORT,
-        clusterName=None,
-        username=None,
-        password=None,
-        color="#0097D3",
-        createdAt=now,
-        updatedAt=now,
-    )
-
-
-async def _seed_if_empty() -> None:
-    pool = _get_pool()
-    has_rows = await pool.fetchval("SELECT EXISTS(SELECT 1 FROM connections)")
-    if has_rows:
-        return
-
-    default_connection = _build_default_connection()
-    await pool.execute(
-        """INSERT INTO connections (id, name, hosts, port, cluster_name, username, password, color, created_at, updated_at)
-           VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10)
-           ON CONFLICT (id) DO NOTHING""",
-        default_connection.id,
-        default_connection.name,
-        json.dumps(default_connection.hosts),
-        default_connection.port,
-        default_connection.clusterName,
-        default_connection.username,
-        default_connection.password,
-        default_connection.color,
-        default_connection.createdAt,
-        default_connection.updatedAt,
-    )
-
-
 async def init_db() -> None:
     global _pool
     logger.info("Connecting to PostgreSQL …")
@@ -90,7 +48,6 @@ async def init_db() -> None:
         async with pool.acquire() as conn:
             await conn.execute(CREATE_TABLE_SQL)
         _pool = pool
-        await _seed_if_empty()
     except Exception:
         _pool = old_pool
         await pool.close()

@@ -108,14 +108,22 @@ async def list_k8s_clusters(namespace: str | None = None) -> list[K8sClusterSumm
 
     connections = await db.get_all_connections()
     conn_by_host: dict[str, str] = {}
+    conn_by_name: dict[str, str] = {}
     for conn in connections:
         for host in conn.hosts:
             conn_by_host[host.lower()] = conn.id
+        conn_by_name[conn.name] = conn.id
 
     def _find_connection_id(item: dict[str, Any]) -> str | None:
         meta = item.get("metadata", {})
-        svc = f"{meta.get('name', '')}.{meta.get('namespace', '')}.svc.cluster.local"
-        return conn_by_host.get(svc.lower())
+        name = meta.get("name", "")
+        ns = meta.get("namespace", "")
+        # In-cluster DNS match
+        svc = f"{name}.{ns}.svc.cluster.local"
+        conn_id = conn_by_host.get(svc.lower())
+        if conn_id:
+            return conn_id
+        return conn_by_name.get(f"[K8s] {name}")
 
     return [extract_summary(item, connection_id=_find_connection_id(item)) for item in items]
 
@@ -197,12 +205,15 @@ async def create_k8s_cluster(body: CreateK8sClusterRequest) -> K8sClusterSummary
     if body.auto_connect:
         try:
             service_host = f"{body.name}.{body.namespace}.svc.cluster.local"
+            service_port = 3000
+
             now = datetime.now(UTC).isoformat()
             conn = ConnectionProfile(
                 id=f"conn-{uuid.uuid4().hex[:12]}",
                 name=f"[K8s] {body.name}",
                 hosts=[service_host],
-                port=3000,
+                port=service_port,
+                clusterName=f"{body.namespace}/{body.name}",
                 color="#10B981",
                 createdAt=now,
                 updatedAt=now,

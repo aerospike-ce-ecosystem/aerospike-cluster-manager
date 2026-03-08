@@ -7,8 +7,6 @@ on connection profiles.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, patch
-
 import asyncpg
 import pytest
 
@@ -23,61 +21,10 @@ class TestInitDb:
         row = await pool.fetchrow("SELECT table_name FROM information_schema.tables WHERE table_name = 'connections'")
         assert row is not None
 
-    async def test_init_seeds_default_connection(self, init_test_db):
-        """init_db() should seed a default connection if the table is empty."""
+    async def test_init_starts_with_empty_table(self, init_test_db):
+        """init_db() should create an empty connections table (no seed data)."""
         profiles = await db.get_all_connections()
-        assert len(profiles) >= 1
-        assert any(p.id == "conn-default" for p in profiles)
-
-    async def test_seed_only_runs_once(self, init_test_db):
-        """Calling _seed_if_empty() again should not duplicate the seed data."""
-        initial = await db.get_all_connections()
-        await db._seed_if_empty()
-        after = await db.get_all_connections()
-        assert len(after) == len(initial)
-
-    async def test_init_db_closes_new_pool_when_seeding_fails(self):
-        """A failed init should not leave a half-initialized pool behind."""
-
-        class _AcquireContext:
-            def __init__(self, connection):
-                self._connection = connection
-
-            async def __aenter__(self):
-                return self._connection
-
-            async def __aexit__(self, exc_type, exc, tb):
-                return False
-
-        class _FakePool:
-            def __init__(self, connection):
-                self._connection = connection
-                self.close = AsyncMock()
-
-            def acquire(self):
-                return _AcquireContext(self._connection)
-
-        connection = AsyncMock()
-        pool = _FakePool(connection)
-        original_pool = db._pool
-        db._pool = None
-
-        try:
-            with (
-                patch("aerospike_cluster_manager_api.db.asyncpg.create_pool", AsyncMock(return_value=pool)),
-                patch(
-                    "aerospike_cluster_manager_api.db._seed_if_empty",
-                    AsyncMock(side_effect=RuntimeError("seed failed")),
-                ),
-                pytest.raises(RuntimeError, match="seed failed"),
-            ):
-                await db.init_db()
-
-            connection.execute.assert_awaited_once()
-            pool.close.assert_awaited_once()
-            assert db._pool is None
-        finally:
-            db._pool = original_pool
+        assert len(profiles) == 0
 
 
 class TestGetAllConnections:
@@ -89,6 +36,7 @@ class TestGetAllConnections:
 
     async def test_ordered_by_created_at(self, init_test_db, sample_connection):
         """Connections should come back ordered by created_at."""
+        await db.create_connection(sample_connection)
         later = ConnectionProfile(
             id="conn-later",
             name="Later Connection",
@@ -102,15 +50,16 @@ class TestGetAllConnections:
 
         all_profiles = await db.get_all_connections()
         ids = [p.id for p in all_profiles]
-        assert ids.index("conn-default") < ids.index("conn-later")
+        assert ids.index(sample_connection.id) < ids.index("conn-later")
 
 
 class TestGetConnection:
-    async def test_existing(self, init_test_db):
-        result = await db.get_connection("conn-default")
+    async def test_existing(self, init_test_db, sample_connection):
+        await db.create_connection(sample_connection)
+        result = await db.get_connection(sample_connection.id)
         assert result is not None
-        assert result.id == "conn-default"
-        assert result.name == "Default Aerospike"
+        assert result.id == sample_connection.id
+        assert result.name == sample_connection.name
 
     async def test_not_found(self, init_test_db):
         result = await db.get_connection("nonexistent-id")
@@ -215,12 +164,22 @@ class TestDeleteConnection:
         assert deleted is False
 
     async def test_delete_does_not_affect_others(self, init_test_db, sample_connection):
+        other = ConnectionProfile(
+            id="conn-other",
+            name="Other Connection",
+            hosts=["10.0.0.1"],
+            port=3000,
+            color="#FF0000",
+            createdAt=sample_connection.createdAt,
+            updatedAt=sample_connection.updatedAt,
+        )
         await db.create_connection(sample_connection)
+        await db.create_connection(other)
 
         await db.delete_connection(sample_connection.id)
 
         remaining = await db.get_all_connections()
-        assert any(p.id == "conn-default" for p in remaining)
+        assert any(p.id == "conn-other" for p in remaining)
 
 
 class TestCloseDb:
