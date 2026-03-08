@@ -666,6 +666,11 @@ export default function K8sClusterDetailPage() {
                       <p className="text-muted-foreground mt-0.5 text-xs">{event.message}</p>
                     )}
                   </div>
+                  {event.lastTimestamp && (
+                    <span className="text-muted-foreground shrink-0 text-xs">
+                      {formatRelativeTime(event.lastTimestamp)}
+                    </span>
+                  )}
                 </div>
               ))}
             </div>

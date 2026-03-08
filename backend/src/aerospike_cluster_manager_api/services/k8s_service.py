@@ -136,7 +136,33 @@ def build_network_policy(policy) -> dict[str, Any]:
         net_policy["alternateAccessType"] = policy.alternate_access_type
     if policy.fabric_type:
         net_policy["fabricType"] = policy.fabric_type
+    if policy.custom_access_network_names:
+        net_policy["customAccessNetworkNames"] = policy.custom_access_network_names
+    if policy.custom_alternate_access_network_names:
+        net_policy["customAlternateAccessNetworkNames"] = policy.custom_alternate_access_network_names
+    if policy.custom_fabric_network_names:
+        net_policy["customFabricNetworkNames"] = policy.custom_fabric_network_names
     return net_policy
+
+
+def build_seeds_finder_services(sfs) -> dict[str, Any]:
+    """Convert SeedsFinderServicesConfig to CR-compatible dict."""
+    result: dict[str, Any] = {}
+    if sfs.load_balancer:
+        lb: dict[str, Any] = {
+            "port": sfs.load_balancer.port,
+            "targetPort": sfs.load_balancer.target_port,
+        }
+        if sfs.load_balancer.annotations:
+            lb["annotations"] = sfs.load_balancer.annotations
+        if sfs.load_balancer.labels:
+            lb["labels"] = sfs.load_balancer.labels
+        if sfs.load_balancer.external_traffic_policy:
+            lb["externalTrafficPolicy"] = sfs.load_balancer.external_traffic_policy
+        if sfs.load_balancer.load_balancer_source_ranges:
+            lb["loadBalancerSourceRanges"] = sfs.load_balancer.load_balancer_source_ranges
+        result["loadBalancer"] = lb
+    return result
 
 
 def build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
@@ -270,6 +296,15 @@ def build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
                         }
                     }
                 }
+            if req.template_overrides.monitoring:
+                overrides["monitoring"] = {
+                    "enabled": req.template_overrides.monitoring.enabled,
+                    "port": req.template_overrides.monitoring.port,
+                }
+            if req.template_overrides.network_policy:
+                overrides["aerospikeNetworkPolicy"] = build_network_policy(req.template_overrides.network_policy)
+            if req.template_overrides.enable_dynamic_config is not None:
+                overrides["enableDynamicConfigUpdate"] = req.template_overrides.enable_dynamic_config
             if overrides:
                 cr["spec"]["overrides"] = overrides
 
@@ -311,6 +346,17 @@ def build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
     # K8s node block list
     if req.k8s_node_block_list:
         cr["spec"]["k8sNodeBlockList"] = req.k8s_node_block_list
+
+    # Seeds finder services (LoadBalancer for external seed discovery)
+    if req.seeds_finder_services:
+        cr["spec"]["seedsFinderServices"] = build_seeds_finder_services(req.seeds_finder_services)
+
+    # Auto-generate K8s NetworkPolicy
+    if req.network_policy_config:
+        cr["spec"]["networkPolicyConfig"] = {
+            "enabled": req.network_policy_config.enabled,
+            "type": req.network_policy_config.type,
+        }
 
     return cr
 
@@ -504,6 +550,8 @@ def has_update_fields(body: UpdateK8sClusterRequest) -> bool:
             body.network_policy,
             body.k8s_node_block_list,
             body.pod_scheduling,
+            body.seeds_finder_services,
+            body.network_policy_config,
         )
     )
 
@@ -551,6 +599,13 @@ def build_update_patch(body: UpdateK8sClusterRequest) -> dict[str, Any]:
         pod_spec = patch["spec"].get("podSpec", {})
         pod_spec.update(build_pod_scheduling(body.pod_scheduling))
         patch["spec"]["podSpec"] = pod_spec
+    if body.seeds_finder_services is not None:
+        patch["spec"]["seedsFinderServices"] = build_seeds_finder_services(body.seeds_finder_services)
+    if body.network_policy_config is not None:
+        patch["spec"]["networkPolicyConfig"] = {
+            "enabled": body.network_policy_config.enabled,
+            "type": body.network_policy_config.type,
+        }
     return patch
 
 

@@ -284,9 +284,11 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
         }
       };
 
-      // Fetch immediately, then poll at interval
-      poll();
+      // Set the interval first so that if the immediate poll() fails fast and
+      // triggers backoff (which replaces _k8sDetailIntervalId), it won't be
+      // overwritten by a stale base-rate interval on the next line.
       _k8sDetailIntervalId = setInterval(poll, K8S_DETAIL_POLL_BASE_MS);
+      poll();
     },
 
     stopDetailPolling: () => {

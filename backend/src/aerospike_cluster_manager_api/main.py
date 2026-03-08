@@ -42,7 +42,9 @@ logger = logging.getLogger(__name__)
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     logger.info("Starting Aerospike Cluster Manager API")
     await db.init_db()
+
     yield
+
     await client_manager.close_all()
     await db.close_db()
     logger.info("Shutdown complete")

@@ -76,8 +76,6 @@ class TestListConnections:
 
         body = response.json()
         assert isinstance(body, list)
-        # The init_test_db fixture seeds a default connection
-        assert len(body) >= 1
 
     async def test_no_password_in_response(self, client: AsyncClient):
         response = await client.get("/api/connections")

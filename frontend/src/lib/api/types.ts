@@ -580,6 +580,29 @@ export interface NetworkAccessConfig {
   accessType: NetworkAccessType;
   alternateAccessType?: NetworkAccessType;
   fabricType?: NetworkAccessType;
+  customAccessNetworkNames?: string[];
+  customAlternateAccessNetworkNames?: string[];
+  customFabricNetworkNames?: string[];
+}
+
+export interface LoadBalancerSpec {
+  annotations?: Record<string, string>;
+  labels?: Record<string, string>;
+  externalTrafficPolicy?: "Cluster" | "Local";
+  port: number;
+  targetPort: number;
+  loadBalancerSourceRanges?: string[];
+}
+
+export interface SeedsFinderServicesConfig {
+  loadBalancer?: LoadBalancerSpec;
+}
+
+export type NetworkPolicyType = "kubernetes" | "cilium";
+
+export interface NetworkPolicyAutoConfig {
+  enabled: boolean;
+  type: NetworkPolicyType;
 }
 
 export interface ResourceSpec {
@@ -647,6 +670,8 @@ export interface CreateK8sClusterRequest {
   networkPolicy?: NetworkAccessConfig;
   k8sNodeBlockList?: string[];
   podScheduling?: PodSchedulingConfig;
+  seedsFinderServices?: SeedsFinderServicesConfig;
+  networkPolicyConfig?: NetworkPolicyAutoConfig;
 }
 
 export interface UpdateK8sClusterRequest {
@@ -664,6 +689,8 @@ export interface UpdateK8sClusterRequest {
   networkPolicy?: NetworkAccessConfig;
   k8sNodeBlockList?: string[];
   podScheduling?: PodSchedulingConfig;
+  seedsFinderServices?: SeedsFinderServicesConfig;
+  networkPolicyConfig?: NetworkPolicyAutoConfig;
 }
 
 export interface ScaleK8sClusterRequest {
@@ -731,6 +758,9 @@ export interface TemplateOverrides {
   image?: string;
   size?: number;
   resources?: ResourceConfig;
+  monitoring?: MonitoringConfig;
+  networkPolicy?: NetworkAccessConfig;
+  enableDynamicConfig?: boolean;
 }
 
 export interface PodLogsResponse {
@@ -756,6 +786,9 @@ export interface AerospikeNetworkPolicySpec {
   accessType?: string;
   alternateAccessType?: string;
   fabricType?: string;
+  customAccessNetworkNames?: string[];
+  customAlternateAccessNetworkNames?: string[];
+  customFabricNetworkNames?: string[];
 }
 
 export interface AerospikeClusterSpec {
@@ -776,5 +809,7 @@ export interface AerospikeClusterSpec {
   podScheduling?: PodSchedulingConfig;
   acl?: ACLConfig;
   resources?: ResourceConfig;
+  seedsFinderServices?: SeedsFinderServicesConfig;
+  networkPolicyConfig?: NetworkPolicyAutoConfig;
   [key: string]: unknown;
 }
