@@ -2,20 +2,24 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { ArrowLeft, Copy, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { InlineAlert } from "@/components/common/inline-alert";
 import { PageHeader } from "@/components/common/page-header";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
+import { K8sTemplateEditDialog } from "@/components/k8s/k8s-template-edit-dialog";
 import { useK8sClusterStore } from "@/stores/k8s-cluster-store";
 import { toast } from "sonner";
 import { getErrorMessage } from "@/lib/utils";
+import type { UpdateK8sTemplateRequest } from "@/lib/api/types";
 
 export default function TemplateDetailPage() {
   const router = useRouter();
   const params = useParams<{ name: string }>();
-  const { selectedTemplate, loading, error, fetchTemplate, deleteTemplate } = useK8sClusterStore();
+  const { selectedTemplate, loading, error, fetchTemplate, updateTemplate, deleteTemplate } =
+    useK8sClusterStore();
+  const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -92,6 +96,10 @@ export default function TemplateDetailPage() {
               <Copy className="mr-2 h-4 w-4" />
               Copy Spec
             </Button>
+            <Button variant="outline" size="sm" onClick={() => setShowEdit(true)}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit
+            </Button>
             <Button
               variant="destructive"
               size="sm"
@@ -163,9 +171,9 @@ export default function TemplateDetailPage() {
           </div>
         )}
 
-        {/* Usage Card */}
+        {/* Referenced Clusters Card */}
         <div className="bg-card rounded-xl border p-5">
-          <h3 className="mb-3 text-sm font-semibold">Usage</h3>
+          <h3 className="mb-3 text-sm font-semibold">Referenced Clusters</h3>
           {usedBy.length > 0 ? (
             <ul className="space-y-1">
               {usedBy.map((cluster) => (
@@ -197,6 +205,16 @@ export default function TemplateDetailPage() {
           {JSON.stringify(spec, null, 2)}
         </pre>
       </div>
+
+      <K8sTemplateEditDialog
+        open={showEdit}
+        onOpenChange={setShowEdit}
+        template={selectedTemplate}
+        onSave={async (data: UpdateK8sTemplateRequest) => {
+          await updateTemplate(params.name, data);
+          toast.success("Template updated");
+        }}
+      />
 
       <ConfirmDialog
         open={showDelete}

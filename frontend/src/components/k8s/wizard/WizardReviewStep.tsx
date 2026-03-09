@@ -441,6 +441,70 @@ export function WizardReviewStep({
           </>
         )}
 
+        {form.podScheduling?.nodeSelector &&
+          Object.keys(form.podScheduling.nodeSelector).length > 0 && (
+            <>
+              <span className="text-muted-foreground">Node Selector</span>
+              <span className="font-medium">
+                {Object.entries(form.podScheduling.nodeSelector)
+                  .map(([k, v]) => `${k}=${v}`)
+                  .join(", ")}
+              </span>
+            </>
+          )}
+
+        {(form.podScheduling?.tolerations ?? []).length > 0 && (
+          <>
+            <span className="text-muted-foreground">Tolerations</span>
+            <span className="font-medium">
+              {form.podScheduling!.tolerations!.length} toleration
+              {form.podScheduling!.tolerations!.length !== 1 ? "s" : ""}
+            </span>
+          </>
+        )}
+
+        {form.podScheduling?.multiPodPerHost && (
+          <>
+            <span className="text-muted-foreground">Multi Pod Per Host</span>
+            <span className="font-medium">Enabled</span>
+          </>
+        )}
+
+        {form.podScheduling?.hostNetwork && (
+          <>
+            <span className="text-muted-foreground">Host Network</span>
+            <span className="font-medium">Enabled</span>
+          </>
+        )}
+
+        {form.podScheduling?.serviceAccountName && (
+          <>
+            <span className="text-muted-foreground">Service Account</span>
+            <span className="font-medium">{form.podScheduling.serviceAccountName}</span>
+          </>
+        )}
+
+        {form.podScheduling?.terminationGracePeriodSeconds != null && (
+          <>
+            <span className="text-muted-foreground">Termination Grace Period</span>
+            <span className="font-medium">{form.podScheduling.terminationGracePeriodSeconds}s</span>
+          </>
+        )}
+
+        {(form.podScheduling?.imagePullSecrets ?? []).length > 0 && (
+          <>
+            <span className="text-muted-foreground">Image Pull Secrets</span>
+            <span className="font-medium">{form.podScheduling!.imagePullSecrets!.join(", ")}</span>
+          </>
+        )}
+
+        {form.validationPolicy?.skipWorkDirValidate && (
+          <>
+            <span className="text-muted-foreground">Validation Policy</span>
+            <span className="font-medium">Skip WorkDir Validate</span>
+          </>
+        )}
+
         {(form.bandwidthConfig?.ingress || form.bandwidthConfig?.egress) && (
           <>
             <span className="text-muted-foreground">Bandwidth Limits</span>

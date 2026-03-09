@@ -23,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { ChevronDown, ChevronRight, Plus, X } from "lucide-react";
 import type {
   K8sClusterDetail,
@@ -32,6 +33,7 @@ import type {
   PodMetadataConfig,
   BandwidthConfig,
   MonitoringConfig,
+  TolerationConfig,
 } from "@/lib/api/types";
 
 interface K8sEditDialogProps {
@@ -67,6 +69,18 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
   const [podManagementPolicy, setPodManagementPolicy] = useState<string>("");
   const [dnsPolicy, setDnsPolicy] = useState<string>("");
   const [monitoringConfig, setMonitoringConfig] = useState<MonitoringConfig | null>(null);
+  // Pod Scheduling fields
+  const [nodeSelector, setNodeSelector] = useState<Record<string, string>>({});
+  const [tolerations, setTolerations] = useState<TolerationConfig[]>([]);
+  const [multiPodPerHost, setMultiPodPerHost] = useState(false);
+  const [hostNetwork, setHostNetwork] = useState(false);
+  const [serviceAccountName, setServiceAccountName] = useState("");
+  const [terminationGracePeriod, setTerminationGracePeriod] = useState<number | undefined>(
+    undefined,
+  );
+  const [imagePullSecrets, setImagePullSecrets] = useState<string[]>([]);
+  // Validation Policy
+  const [skipWorkDirValidate, setSkipWorkDirValidate] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
@@ -109,6 +123,37 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
   const initialPodManagementPolicy = (podSpec?.podManagementPolicy as string) || "";
   const initialDnsPolicy = (podSpec?.dnsPolicy as string) || "";
   const initialMonitoringConfig: MonitoringConfig | null = cluster.spec?.monitoring ?? null;
+  // Pod Scheduling initial values from spec
+  const specPodScheduling = cluster.spec?.podScheduling;
+  const specPodSpec = cluster.spec?.podSpec as Record<string, unknown> | undefined;
+  const initialNodeSelector: Record<string, string> =
+    specPodScheduling?.nodeSelector ??
+    (specPodSpec?.nodeSelector as Record<string, string> | undefined) ??
+    {};
+  const initialTolerations: TolerationConfig[] =
+    specPodScheduling?.tolerations ??
+    (specPodSpec?.tolerations as TolerationConfig[] | undefined) ??
+    [];
+  const initialMultiPodPerHost = Boolean(
+    specPodScheduling?.multiPodPerHost ?? (specPodSpec?.multiPodPerHost as boolean | undefined),
+  );
+  const initialHostNetwork = Boolean(
+    specPodScheduling?.hostNetwork ?? (specPodSpec?.hostNetwork as boolean | undefined),
+  );
+  const initialServiceAccountName =
+    specPodScheduling?.serviceAccountName ??
+    (specPodSpec?.serviceAccountName as string | undefined) ??
+    "";
+  const initialTerminationGracePeriod =
+    specPodScheduling?.terminationGracePeriodSeconds ??
+    (specPodSpec?.terminationGracePeriodSeconds as number | undefined) ??
+    undefined;
+  const initialImagePullSecrets: string[] =
+    specPodScheduling?.imagePullSecrets ??
+    (specPodSpec?.imagePullSecrets as string[] | undefined) ??
+    [];
+  // Validation Policy initial values
+  const initialSkipWorkDirValidate = Boolean(cluster.spec?.validationPolicy?.skipWorkDirValidate);
   const initialAerospikeConfig = useMemo(
     () => cluster.spec?.aerospikeConfig ?? {},
     [cluster.spec?.aerospikeConfig],
@@ -144,6 +189,14 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
       setPodManagementPolicy(initialPodManagementPolicy);
       setDnsPolicy(initialDnsPolicy);
       setMonitoringConfig(initialMonitoringConfig);
+      setNodeSelector({ ...initialNodeSelector });
+      setTolerations(initialTolerations.map((t) => ({ ...t })));
+      setMultiPodPerHost(initialMultiPodPerHost);
+      setHostNetwork(initialHostNetwork);
+      setServiceAccountName(initialServiceAccountName);
+      setTerminationGracePeriod(initialTerminationGracePeriod);
+      setImagePullSecrets([...initialImagePullSecrets]);
+      setSkipWorkDirValidate(initialSkipWorkDirValidate);
       setError(null);
       setConfigError(null);
     }
@@ -172,6 +225,14 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
     initialPodManagementPolicy,
     initialDnsPolicy,
     initialMonitoringConfig,
+    initialNodeSelector,
+    initialTolerations,
+    initialMultiPodPerHost,
+    initialHostNetwork,
+    initialServiceAccountName,
+    initialTerminationGracePeriod,
+    initialImagePullSecrets,
+    initialSkipWorkDirValidate,
   ]);
 
   // Validate JSON on every keystroke
@@ -211,7 +272,15 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
     podMetadataAnnotations !== initialPodMetadataAnnotations ||
     podManagementPolicy !== initialPodManagementPolicy ||
     dnsPolicy !== initialDnsPolicy ||
-    JSON.stringify(monitoringConfig) !== JSON.stringify(initialMonitoringConfig);
+    JSON.stringify(monitoringConfig) !== JSON.stringify(initialMonitoringConfig) ||
+    JSON.stringify(nodeSelector) !== JSON.stringify(initialNodeSelector) ||
+    JSON.stringify(tolerations) !== JSON.stringify(initialTolerations) ||
+    multiPodPerHost !== initialMultiPodPerHost ||
+    hostNetwork !== initialHostNetwork ||
+    serviceAccountName !== initialServiceAccountName ||
+    terminationGracePeriod !== initialTerminationGracePeriod ||
+    JSON.stringify(imagePullSecrets) !== JSON.stringify(initialImagePullSecrets) ||
+    skipWorkDirValidate !== initialSkipWorkDirValidate;
 
   const handleSave = async () => {
     setLoading(true);
@@ -294,11 +363,18 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
         data.bandwidthConfig = Object.keys(bw).length > 0 ? bw : undefined;
       }
 
-      // Pod scheduling new fields
+      // Pod scheduling fields (all combined into one podScheduling object)
       const podSchedulingChanged =
         readinessGateEnabled !== initialReadinessGateEnabled ||
         podManagementPolicy !== initialPodManagementPolicy ||
-        dnsPolicy !== initialDnsPolicy;
+        dnsPolicy !== initialDnsPolicy ||
+        JSON.stringify(nodeSelector) !== JSON.stringify(initialNodeSelector) ||
+        JSON.stringify(tolerations) !== JSON.stringify(initialTolerations) ||
+        multiPodPerHost !== initialMultiPodPerHost ||
+        hostNetwork !== initialHostNetwork ||
+        serviceAccountName !== initialServiceAccountName ||
+        terminationGracePeriod !== initialTerminationGracePeriod ||
+        JSON.stringify(imagePullSecrets) !== JSON.stringify(initialImagePullSecrets);
       if (podSchedulingChanged) {
         data.podScheduling = {
           ...data.podScheduling,
@@ -308,6 +384,13 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
               ? undefined
               : (podManagementPolicy as "OrderedReady" | "Parallel"),
           dnsPolicy: dnsPolicy || undefined,
+          nodeSelector: Object.keys(nodeSelector).length > 0 ? nodeSelector : undefined,
+          tolerations: tolerations.length > 0 ? tolerations : undefined,
+          multiPodPerHost: multiPodPerHost || undefined,
+          hostNetwork: hostNetwork || undefined,
+          serviceAccountName: serviceAccountName || undefined,
+          terminationGracePeriodSeconds: terminationGracePeriod,
+          imagePullSecrets: imagePullSecrets.length > 0 ? imagePullSecrets : undefined,
         };
       }
 
@@ -338,6 +421,11 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
         data.monitoring = monitoringConfig ?? undefined;
       }
 
+      // Validation Policy
+      if (skipWorkDirValidate !== initialSkipWorkDirValidate) {
+        data.validationPolicy = skipWorkDirValidate ? { skipWorkDirValidate: true } : undefined;
+      }
+
       await onSave(data);
       onOpenChange(false);
     } catch (err) {
@@ -349,7 +437,7 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] sm:max-w-[600px]">
+      <DialogContent className="max-h-[90vh] max-w-[95vw] overflow-y-auto sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Edit Cluster</DialogTitle>
           <DialogDescription>
@@ -795,6 +883,72 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
               </div>
             </div>
           </div>
+
+          {/* Pod Scheduling */}
+          <EditPodSchedulingSection
+            nodeSelector={nodeSelector}
+            onNodeSelectorChange={(v) => {
+              setNodeSelector(v);
+              setError(null);
+            }}
+            tolerations={tolerations}
+            onTolerationsChange={(v) => {
+              setTolerations(v);
+              setError(null);
+            }}
+            multiPodPerHost={multiPodPerHost}
+            onMultiPodPerHostChange={(v) => {
+              setMultiPodPerHost(v);
+              setError(null);
+            }}
+            hostNetwork={hostNetwork}
+            onHostNetworkChange={(v) => {
+              setHostNetwork(v);
+              setError(null);
+            }}
+            serviceAccountName={serviceAccountName}
+            onServiceAccountNameChange={(v) => {
+              setServiceAccountName(v);
+              setError(null);
+            }}
+            terminationGracePeriod={terminationGracePeriod}
+            onTerminationGracePeriodChange={(v) => {
+              setTerminationGracePeriod(v);
+              setError(null);
+            }}
+            imagePullSecrets={imagePullSecrets}
+            onImagePullSecretsChange={(v) => {
+              setImagePullSecrets(v);
+              setError(null);
+            }}
+            disabled={loading}
+          />
+
+          {/* Validation Policy */}
+          <EditCollapsible
+            title="Validation Policy"
+            summary={skipWorkDirValidate ? "Skip WorkDir Validate" : "Default"}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="edit-skip-workdir" className="cursor-pointer text-xs">
+                  Skip Work Dir Validate
+                </Label>
+                <p className="text-muted-foreground text-[10px]">
+                  Skip validation of the working directory on pod startup.
+                </p>
+              </div>
+              <Switch
+                id="edit-skip-workdir"
+                checked={skipWorkDirValidate}
+                onCheckedChange={(checked) => {
+                  setSkipWorkDirValidate(checked);
+                  setError(null);
+                }}
+                disabled={loading}
+              />
+            </div>
+          </EditCollapsible>
 
           {/* Aerospike Config */}
           <div className="grid gap-2">
@@ -1261,5 +1415,392 @@ function EditMonitoringSection({
         </div>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Pod Scheduling Section for Edit Dialog
+// ---------------------------------------------------------------------------
+
+function EditPodSchedulingSection({
+  nodeSelector,
+  onNodeSelectorChange,
+  tolerations,
+  onTolerationsChange,
+  multiPodPerHost,
+  onMultiPodPerHostChange,
+  hostNetwork,
+  onHostNetworkChange,
+  serviceAccountName,
+  onServiceAccountNameChange,
+  terminationGracePeriod,
+  onTerminationGracePeriodChange,
+  imagePullSecrets,
+  onImagePullSecretsChange,
+  disabled,
+}: {
+  nodeSelector: Record<string, string>;
+  onNodeSelectorChange: (v: Record<string, string>) => void;
+  tolerations: TolerationConfig[];
+  onTolerationsChange: (v: TolerationConfig[]) => void;
+  multiPodPerHost: boolean;
+  onMultiPodPerHostChange: (v: boolean) => void;
+  hostNetwork: boolean;
+  onHostNetworkChange: (v: boolean) => void;
+  serviceAccountName: string;
+  onServiceAccountNameChange: (v: string) => void;
+  terminationGracePeriod: number | undefined;
+  onTerminationGracePeriodChange: (v: number | undefined) => void;
+  imagePullSecrets: string[];
+  onImagePullSecretsChange: (v: string[]) => void;
+  disabled?: boolean;
+}) {
+  const [nsSelectorKey, setNsSelectorKey] = useState("");
+  const [nsSelectorValue, setNsSelectorValue] = useState("");
+  const [newSecret, setNewSecret] = useState("");
+
+  const addNodeSelector = () => {
+    const k = nsSelectorKey.trim();
+    const v = nsSelectorValue.trim();
+    if (!k || !v) return;
+    onNodeSelectorChange({ ...nodeSelector, [k]: v });
+    setNsSelectorKey("");
+    setNsSelectorValue("");
+  };
+
+  const removeNodeSelector = (key: string) => {
+    const next = { ...nodeSelector };
+    delete next[key];
+    onNodeSelectorChange(next);
+  };
+
+  const addToleration = () => {
+    onTolerationsChange([
+      ...tolerations,
+      { key: "", operator: "Equal", value: "", effect: "NoSchedule" },
+    ]);
+  };
+
+  const updateToleration = (index: number, updates: Partial<TolerationConfig>) => {
+    const next = [...tolerations];
+    next[index] = { ...next[index], ...updates };
+    onTolerationsChange(next);
+  };
+
+  const removeToleration = (index: number) => {
+    onTolerationsChange(tolerations.filter((_, i) => i !== index));
+  };
+
+  const addImagePullSecret = () => {
+    const name = newSecret.trim();
+    if (!name || imagePullSecrets.includes(name)) return;
+    onImagePullSecretsChange([...imagePullSecrets, name]);
+    setNewSecret("");
+  };
+
+  const removeImagePullSecret = (name: string) => {
+    onImagePullSecretsChange(imagePullSecrets.filter((s) => s !== name));
+  };
+
+  const selectorCount = Object.keys(nodeSelector).length;
+  const summary =
+    [
+      selectorCount > 0 ? `${selectorCount} selector(s)` : null,
+      tolerations.length > 0 ? `${tolerations.length} toleration(s)` : null,
+      multiPodPerHost ? "Multi-Pod" : null,
+      hostNetwork ? "Host Network" : null,
+      serviceAccountName ? "SA" : null,
+      imagePullSecrets.length > 0 ? `${imagePullSecrets.length} pull secret(s)` : null,
+      terminationGracePeriod != null ? `Grace: ${terminationGracePeriod}s` : null,
+    ]
+      .filter(Boolean)
+      .join(", ") || "Default";
+
+  return (
+    <EditCollapsible title="Pod Scheduling" summary={summary}>
+      <div className="space-y-4">
+        {/* Node Selector */}
+        <div className="grid gap-2">
+          <Label className="text-xs font-semibold">Node Selector</Label>
+          <p className="text-muted-foreground text-[10px]">
+            Constrain pods to nodes with matching labels.
+          </p>
+          {selectorCount > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {Object.entries(nodeSelector).map(([k, v]) => (
+                <span
+                  key={k}
+                  className="bg-accent/10 text-accent inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
+                >
+                  {k}={v}
+                  <button
+                    type="button"
+                    onClick={() => removeNodeSelector(k)}
+                    disabled={disabled}
+                    className="hover:bg-accent/20 ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full"
+                    title={`Remove ${k}`}
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <Input
+              value={nsSelectorKey}
+              onChange={(e) => setNsSelectorKey(e.target.value)}
+              placeholder="Key"
+              className="h-7 flex-1 text-xs"
+              disabled={disabled}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addNodeSelector();
+                }
+              }}
+            />
+            <Input
+              value={nsSelectorValue}
+              onChange={(e) => setNsSelectorValue(e.target.value)}
+              placeholder="Value"
+              className="h-7 flex-1 text-xs"
+              disabled={disabled}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addNodeSelector();
+                }
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 shrink-0 text-[10px]"
+              onClick={addNodeSelector}
+              disabled={disabled || !nsSelectorKey.trim() || !nsSelectorValue.trim()}
+            >
+              <Plus className="mr-0.5 h-3 w-3" />
+              Add
+            </Button>
+          </div>
+        </div>
+
+        {/* Tolerations */}
+        <div className="grid gap-2">
+          <Label className="text-xs font-semibold">Tolerations</Label>
+          <p className="text-muted-foreground text-[10px]">
+            Allow pods to be scheduled on nodes with matching taints.
+          </p>
+          {tolerations.map((tol, idx) => (
+            <div
+              key={idx}
+              className="grid grid-cols-[1fr_auto_1fr_auto_auto] items-end gap-2 rounded border p-2"
+            >
+              <div className="grid gap-1">
+                <Label className="text-[10px]">Key</Label>
+                <Input
+                  value={tol.key ?? ""}
+                  onChange={(e) => updateToleration(idx, { key: e.target.value || undefined })}
+                  placeholder="e.g. dedicated"
+                  className="h-7 text-xs"
+                  disabled={disabled}
+                />
+              </div>
+              <div className="grid gap-1">
+                <Label className="text-[10px]">Operator</Label>
+                <Select
+                  value={tol.operator ?? "Equal"}
+                  onValueChange={(v) =>
+                    updateToleration(idx, { operator: v as "Equal" | "Exists" })
+                  }
+                >
+                  <SelectTrigger className="h-7 w-20 text-[10px]" disabled={disabled}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Equal">Equal</SelectItem>
+                    <SelectItem value="Exists">Exists</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-1">
+                <Label className="text-[10px]">Value</Label>
+                <Input
+                  value={tol.value ?? ""}
+                  onChange={(e) => updateToleration(idx, { value: e.target.value || undefined })}
+                  placeholder={tol.operator === "Exists" ? "(ignored)" : "e.g. aerospike"}
+                  disabled={disabled || tol.operator === "Exists"}
+                  className="h-7 text-xs"
+                />
+              </div>
+              <div className="grid gap-1">
+                <Label className="text-[10px]">Effect</Label>
+                <Select
+                  value={tol.effect ?? ""}
+                  onValueChange={(v) =>
+                    updateToleration(idx, { effect: v as TolerationConfig["effect"] })
+                  }
+                >
+                  <SelectTrigger className="h-7 w-28 text-[10px]" disabled={disabled}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NoSchedule">NoSchedule</SelectItem>
+                    <SelectItem value="PreferNoSchedule">PreferNoSchedule</SelectItem>
+                    <SelectItem value="NoExecute">NoExecute</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeToleration(idx)}
+                disabled={disabled}
+                className="text-muted-foreground hover:text-destructive mb-1 self-end p-1"
+                title="Remove toleration"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addToleration}
+            disabled={disabled}
+            className="text-accent hover:text-accent/80 flex items-center gap-1 text-xs font-medium"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add Toleration
+          </button>
+        </div>
+
+        {/* Toggles: Multi Pod Per Host, Host Network */}
+        <div className="grid gap-3">
+          <Label className="text-xs font-semibold">Pod Placement</Label>
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="edit-multi-pod" className="cursor-pointer text-xs">
+                Multi Pod Per Host
+              </Label>
+              <p className="text-muted-foreground text-[10px]">
+                Allow multiple Aerospike pods on the same node.
+              </p>
+            </div>
+            <Switch
+              id="edit-multi-pod"
+              checked={multiPodPerHost}
+              onCheckedChange={onMultiPodPerHostChange}
+              disabled={disabled}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="edit-host-network" className="cursor-pointer text-xs">
+                Host Network
+              </Label>
+              <p className="text-muted-foreground text-[10px]">
+                Use the host&apos;s network namespace instead of pod networking.
+              </p>
+            </div>
+            <Switch
+              id="edit-host-network"
+              checked={hostNetwork}
+              onCheckedChange={onHostNetworkChange}
+              disabled={disabled}
+            />
+          </div>
+        </div>
+
+        {/* Service Account Name */}
+        <div className="grid gap-1">
+          <Label htmlFor="edit-service-account" className="text-xs font-semibold">
+            Service Account Name
+          </Label>
+          <Input
+            id="edit-service-account"
+            value={serviceAccountName}
+            onChange={(e) => onServiceAccountNameChange(e.target.value)}
+            placeholder="e.g. aerospike-sa"
+            className="h-7 text-xs"
+            disabled={disabled}
+          />
+        </div>
+
+        {/* Termination Grace Period */}
+        <div className="grid gap-1">
+          <Label htmlFor="edit-termination-grace" className="text-xs font-semibold">
+            Termination Grace Period (seconds)
+          </Label>
+          <Input
+            id="edit-termination-grace"
+            type="number"
+            min={0}
+            value={terminationGracePeriod ?? ""}
+            onChange={(e) => {
+              const val = e.target.value;
+              onTerminationGracePeriodChange(val ? parseInt(val, 10) : undefined);
+            }}
+            placeholder="e.g. 600 (default: 30)"
+            className="h-7 w-40 text-xs"
+            disabled={disabled}
+          />
+        </div>
+
+        {/* Image Pull Secrets */}
+        <div className="grid gap-2">
+          <Label className="text-xs font-semibold">Image Pull Secrets</Label>
+          <p className="text-muted-foreground text-[10px]">
+            Kubernetes secrets for pulling images from private registries.
+          </p>
+          {imagePullSecrets.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {imagePullSecrets.map((secret) => (
+                <span
+                  key={secret}
+                  className="bg-accent/10 text-accent inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
+                >
+                  {secret}
+                  <button
+                    type="button"
+                    onClick={() => removeImagePullSecret(secret)}
+                    disabled={disabled}
+                    className="hover:bg-accent/20 ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full"
+                    title={`Remove ${secret}`}
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <Input
+              value={newSecret}
+              onChange={(e) => setNewSecret(e.target.value)}
+              placeholder="e.g. my-registry-secret"
+              className="h-7 flex-1 text-xs"
+              disabled={disabled}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addImagePullSecret();
+                }
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 shrink-0 text-[10px]"
+              onClick={addImagePullSecret}
+              disabled={disabled || !newSecret.trim()}
+            >
+              <Plus className="mr-0.5 h-3 w-3" />
+              Add
+            </Button>
+          </div>
+        </div>
+      </div>
+    </EditCollapsible>
   );
 }

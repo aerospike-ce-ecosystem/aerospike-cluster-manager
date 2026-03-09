@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -15,7 +16,13 @@ import { WizardAclStep } from "./WizardAclStep";
 import { WizardRollingUpdateStep } from "./WizardRollingUpdateStep";
 import { WizardRackConfigStep } from "./WizardRackConfigStep";
 import type { WizardAdvancedStepProps } from "./types";
-import type { PodSchedulingConfig, BandwidthConfig, K8sNodeInfo } from "@/lib/api/types";
+import type {
+  PodSchedulingConfig,
+  BandwidthConfig,
+  ValidationPolicyConfig,
+  TolerationConfig,
+  K8sNodeInfo,
+} from "@/lib/api/types";
 
 function CollapsibleSection({
   title,
@@ -66,10 +73,67 @@ function WizardPodSettingsStep({
     });
   };
 
+  // Local state for node selector key-value input
+  const [nsSelectorKey, setNsSelectorKey] = useState("");
+  const [nsSelectorValue, setNsSelectorValue] = useState("");
+
+  // Local state for image pull secret input
+  const [newSecret, setNewSecret] = useState("");
+
+  const addNodeSelector = () => {
+    const k = nsSelectorKey.trim();
+    const v = nsSelectorValue.trim();
+    if (!k || !v) return;
+    const current = scheduling?.nodeSelector ?? {};
+    updateScheduling({ nodeSelector: { ...current, [k]: v } });
+    setNsSelectorKey("");
+    setNsSelectorValue("");
+  };
+
+  const removeNodeSelector = (key: string) => {
+    const current = { ...(scheduling?.nodeSelector ?? {}) };
+    delete current[key];
+    updateScheduling({
+      nodeSelector: Object.keys(current).length > 0 ? current : undefined,
+    });
+  };
+
+  const addToleration = () => {
+    const current = scheduling?.tolerations ?? [];
+    updateScheduling({
+      tolerations: [...current, { key: "", operator: "Equal", value: "", effect: "NoSchedule" }],
+    });
+  };
+
+  const updateToleration = (index: number, updates: Partial<TolerationConfig>) => {
+    const current = [...(scheduling?.tolerations ?? [])];
+    current[index] = { ...current[index], ...updates };
+    updateScheduling({ tolerations: current });
+  };
+
+  const removeToleration = (index: number) => {
+    const current = (scheduling?.tolerations ?? []).filter((_, i) => i !== index);
+    updateScheduling({ tolerations: current.length > 0 ? current : undefined });
+  };
+
+  const addImagePullSecret = () => {
+    const name = newSecret.trim();
+    if (!name) return;
+    const current = scheduling?.imagePullSecrets ?? [];
+    if (current.includes(name)) return;
+    updateScheduling({ imagePullSecrets: [...current, name] });
+    setNewSecret("");
+  };
+
+  const removeImagePullSecret = (name: string) => {
+    const current = (scheduling?.imagePullSecrets ?? []).filter((s) => s !== name);
+    updateScheduling({ imagePullSecrets: current.length > 0 ? current : undefined });
+  };
+
   return (
     <div className="space-y-4">
       <p className="text-muted-foreground text-sm">
-        Configure pod-level settings: metadata, readiness gate, management policy, and DNS.
+        Configure pod-level settings: metadata, scheduling, network, and lifecycle.
       </p>
 
       {/* Pod Metadata */}
@@ -203,6 +267,280 @@ function WizardPodSettingsStep({
           </Select>
         </div>
       </div>
+
+      {/* Node Selector */}
+      <div className="grid gap-2">
+        <Label className="text-sm font-semibold">Node Selector</Label>
+        <p className="text-muted-foreground text-[10px]">
+          Constrain pods to nodes with matching labels.
+        </p>
+        {Object.entries(scheduling?.nodeSelector ?? {}).length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {Object.entries(scheduling!.nodeSelector!).map(([k, v]) => (
+              <span
+                key={k}
+                className="bg-accent/10 text-accent inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
+              >
+                {k}={v}
+                <button
+                  type="button"
+                  onClick={() => removeNodeSelector(k)}
+                  className="hover:bg-accent/20 ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full"
+                  title={`Remove ${k}`}
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <Input
+            value={nsSelectorKey}
+            onChange={(e) => setNsSelectorKey(e.target.value)}
+            placeholder="Key"
+            className="flex-1"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addNodeSelector();
+              }
+            }}
+          />
+          <Input
+            value={nsSelectorValue}
+            onChange={(e) => setNsSelectorValue(e.target.value)}
+            placeholder="Value"
+            className="flex-1"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addNodeSelector();
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={addNodeSelector}
+            disabled={!nsSelectorKey.trim() || !nsSelectorValue.trim()}
+            className="bg-accent text-accent-foreground hover:bg-accent/80 rounded px-3 text-xs font-medium disabled:opacity-50"
+          >
+            Add
+          </button>
+        </div>
+      </div>
+
+      {/* Tolerations */}
+      <div className="grid gap-2">
+        <Label className="text-sm font-semibold">Tolerations</Label>
+        <p className="text-muted-foreground text-[10px]">
+          Allow pods to be scheduled on nodes with matching taints.
+        </p>
+        {(scheduling?.tolerations ?? []).map((tol, idx) => (
+          <div
+            key={idx}
+            className="grid grid-cols-[1fr_auto_1fr_auto_auto] items-end gap-2 rounded border p-2"
+          >
+            <div className="grid gap-1">
+              <Label className="text-[10px]">Key</Label>
+              <Input
+                value={tol.key ?? ""}
+                onChange={(e) => updateToleration(idx, { key: e.target.value || undefined })}
+                placeholder="e.g. dedicated"
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-[10px]">Operator</Label>
+              <Select
+                value={tol.operator ?? "Equal"}
+                onValueChange={(v) => updateToleration(idx, { operator: v as "Equal" | "Exists" })}
+              >
+                <SelectTrigger className="h-8 w-24 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Equal">Equal</SelectItem>
+                  <SelectItem value="Exists">Exists</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-[10px]">Value</Label>
+              <Input
+                value={tol.value ?? ""}
+                onChange={(e) => updateToleration(idx, { value: e.target.value || undefined })}
+                placeholder={tol.operator === "Exists" ? "(ignored)" : "e.g. aerospike"}
+                disabled={tol.operator === "Exists"}
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-[10px]">Effect</Label>
+              <Select
+                value={tol.effect ?? ""}
+                onValueChange={(v) =>
+                  updateToleration(idx, {
+                    effect: v as TolerationConfig["effect"],
+                  })
+                }
+              >
+                <SelectTrigger className="h-8 w-36 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NoSchedule">NoSchedule</SelectItem>
+                  <SelectItem value="PreferNoSchedule">PreferNoSchedule</SelectItem>
+                  <SelectItem value="NoExecute">NoExecute</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <button
+              type="button"
+              onClick={() => removeToleration(idx)}
+              className="text-muted-foreground hover:text-destructive mb-1 self-end p-1"
+              title="Remove toleration"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={addToleration}
+          className="text-accent hover:text-accent/80 flex items-center gap-1 text-xs font-medium"
+        >
+          <Plus className="h-3.5 w-3.5" /> Add Toleration
+        </button>
+      </div>
+
+      {/* Toggle switches: Multi Pod Per Host, Host Network */}
+      <div className="grid gap-3">
+        <Label className="text-sm font-semibold">Pod Placement</Label>
+        <div className="flex items-center justify-between">
+          <div>
+            <Label htmlFor="multi-pod-per-host" className="cursor-pointer text-xs">
+              Multi Pod Per Host
+            </Label>
+            <p className="text-muted-foreground text-[10px]">
+              Allow multiple Aerospike pods on the same Kubernetes node.
+            </p>
+          </div>
+          <Switch
+            id="multi-pod-per-host"
+            checked={scheduling?.multiPodPerHost ?? false}
+            onCheckedChange={(checked) =>
+              updateScheduling({ multiPodPerHost: checked || undefined })
+            }
+          />
+        </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <Label htmlFor="host-network" className="cursor-pointer text-xs">
+              Host Network
+            </Label>
+            <p className="text-muted-foreground text-[10px]">
+              Use the host&apos;s network namespace instead of pod networking.
+            </p>
+          </div>
+          <Switch
+            id="host-network"
+            checked={scheduling?.hostNetwork ?? false}
+            onCheckedChange={(checked) => updateScheduling({ hostNetwork: checked || undefined })}
+          />
+        </div>
+      </div>
+
+      {/* Service Account Name */}
+      <div className="grid gap-1.5">
+        <Label htmlFor="service-account-name" className="text-sm font-semibold">
+          Service Account Name
+        </Label>
+        <Input
+          id="service-account-name"
+          value={scheduling?.serviceAccountName ?? ""}
+          onChange={(e) => updateScheduling({ serviceAccountName: e.target.value || undefined })}
+          placeholder="e.g. aerospike-sa"
+        />
+        <p className="text-muted-foreground text-[10px]">
+          Kubernetes service account to use for Aerospike pods.
+        </p>
+      </div>
+
+      {/* Termination Grace Period */}
+      <div className="grid gap-1.5">
+        <Label htmlFor="termination-grace-period" className="text-sm font-semibold">
+          Termination Grace Period (seconds)
+        </Label>
+        <Input
+          id="termination-grace-period"
+          type="number"
+          min={0}
+          value={scheduling?.terminationGracePeriodSeconds ?? ""}
+          onChange={(e) => {
+            const val = e.target.value;
+            updateScheduling({
+              terminationGracePeriodSeconds: val ? parseInt(val, 10) : undefined,
+            });
+          }}
+          placeholder="e.g. 600"
+          className="w-40"
+        />
+        <p className="text-muted-foreground text-[10px]">
+          Time in seconds before a pod is forcefully terminated. Leave empty for Kubernetes default
+          (30s).
+        </p>
+      </div>
+
+      {/* Image Pull Secrets */}
+      <div className="grid gap-2">
+        <Label className="text-sm font-semibold">Image Pull Secrets</Label>
+        <p className="text-muted-foreground text-[10px]">
+          Kubernetes secrets for pulling container images from private registries.
+        </p>
+        {(scheduling?.imagePullSecrets ?? []).length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {scheduling!.imagePullSecrets!.map((secret) => (
+              <span
+                key={secret}
+                className="bg-accent/10 text-accent inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
+              >
+                {secret}
+                <button
+                  type="button"
+                  onClick={() => removeImagePullSecret(secret)}
+                  className="hover:bg-accent/20 ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full"
+                  title={`Remove ${secret}`}
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <Input
+            value={newSecret}
+            onChange={(e) => setNewSecret(e.target.value)}
+            placeholder="e.g. my-registry-secret"
+            className="flex-1"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addImagePullSecret();
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={addImagePullSecret}
+            disabled={!newSecret.trim()}
+            className="bg-accent text-accent-foreground hover:bg-accent/80 rounded px-3 text-xs font-medium disabled:opacity-50"
+          >
+            Add
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -330,6 +668,51 @@ function WizardNodeBlockListStep({
   );
 }
 
+function WizardValidationPolicyStep({
+  form,
+  updateForm,
+}: {
+  form: WizardAdvancedStepProps["form"];
+  updateForm: WizardAdvancedStepProps["updateForm"];
+}) {
+  const policy = form.validationPolicy;
+
+  const updatePolicy = (updates: Partial<ValidationPolicyConfig>) => {
+    const next = { ...policy, ...updates };
+    // Clear if all values are falsy
+    if (!next.skipWorkDirValidate) {
+      updateForm({ validationPolicy: undefined });
+    } else {
+      updateForm({ validationPolicy: next });
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-muted-foreground text-sm">
+        Configure validation behavior for the Aerospike cluster.
+      </p>
+
+      <div className="flex items-center justify-between">
+        <div>
+          <Label htmlFor="skip-workdir-validate" className="cursor-pointer text-xs">
+            Skip Work Dir Validate
+          </Label>
+          <p className="text-muted-foreground text-[10px]">
+            Skip validation of the working directory on pod startup. Useful when using custom
+            storage configurations.
+          </p>
+        </div>
+        <Switch
+          id="skip-workdir-validate"
+          checked={policy?.skipWorkDirValidate ?? false}
+          onCheckedChange={(checked) => updatePolicy({ skipWorkDirValidate: checked || undefined })}
+        />
+      </div>
+    </div>
+  );
+}
+
 function WizardBandwidthStep({
   form,
   updateForm,
@@ -415,9 +798,25 @@ export function WizardAdvancedStep({
       form.podScheduling?.readinessGateEnabled ? "Readiness Gate" : null,
       form.podScheduling?.podManagementPolicy ? form.podScheduling.podManagementPolicy : null,
       form.podScheduling?.metadata?.labels ? "Labels" : null,
+      form.podScheduling?.nodeSelector
+        ? `${Object.keys(form.podScheduling.nodeSelector).length} selector(s)`
+        : null,
+      form.podScheduling?.tolerations?.length
+        ? `${form.podScheduling.tolerations.length} toleration(s)`
+        : null,
+      form.podScheduling?.multiPodPerHost ? "Multi-Pod" : null,
+      form.podScheduling?.hostNetwork ? "Host Network" : null,
+      form.podScheduling?.serviceAccountName ? "SA" : null,
+      form.podScheduling?.imagePullSecrets?.length
+        ? `${form.podScheduling.imagePullSecrets.length} pull secret(s)`
+        : null,
     ]
       .filter(Boolean)
       .join(", ") || "Default";
+
+  const validationPolicySummary = form.validationPolicy?.skipWorkDirValidate
+    ? "Skip WorkDir Validate"
+    : "Default";
 
   const nodeBlockListSummary =
     (form.k8sNodeBlockList ?? []).length > 0
@@ -467,6 +866,10 @@ export function WizardAdvancedStep({
 
       <CollapsibleSection title="Bandwidth Limits" summary={bandwidthSummary}>
         <WizardBandwidthStep form={form} updateForm={updateForm} />
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Validation Policy" summary={validationPolicySummary}>
+        <WizardValidationPolicyStep form={form} updateForm={updateForm} />
       </CollapsibleSection>
     </div>
   );

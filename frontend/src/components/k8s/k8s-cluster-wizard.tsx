@@ -259,6 +259,30 @@ export function K8sClusterWizard() {
       } else {
         payload.rackConfig = undefined;
       }
+      // Clean up empty podScheduling
+      if (payload.podScheduling) {
+        const ps = payload.podScheduling;
+        const hasValues =
+          ps.readinessGateEnabled ||
+          ps.podManagementPolicy ||
+          ps.dnsPolicy ||
+          ps.metadata?.labels ||
+          ps.metadata?.annotations ||
+          ps.nodeSelector ||
+          ps.tolerations?.length ||
+          ps.multiPodPerHost ||
+          ps.hostNetwork ||
+          ps.serviceAccountName ||
+          ps.terminationGracePeriodSeconds != null ||
+          ps.imagePullSecrets?.length;
+        if (!hasValues) {
+          payload.podScheduling = undefined;
+        }
+      }
+      // Clean up empty validationPolicy
+      if (payload.validationPolicy && !payload.validationPolicy.skipWorkDirValidate) {
+        payload.validationPolicy = undefined;
+      }
       await createCluster(payload);
       toast.success(`Cluster "${form.name}" creation initiated`);
       router.push("/k8s/clusters");

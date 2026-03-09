@@ -214,6 +214,20 @@ class K8sClient:
         except Exception as e:
             raise self._wrap_api_exception(e) from e
 
+    def _patch_cluster_custom_object_sync(self, plural: str, name: str, body: dict[str, Any]) -> dict[str, Any]:
+        self._ensure_initialized()
+        try:
+            return self._custom_api.patch_cluster_custom_object(
+                group=GROUP,
+                version=VERSION,
+                plural=plural,
+                name=name,
+                body=body,
+                _request_timeout=_K8S_API_TIMEOUT,
+            )
+        except Exception as e:
+            raise self._wrap_api_exception(e) from e
+
     def _delete_cluster_custom_object_sync(self, plural: str, name: str) -> dict[str, Any]:
         self._ensure_initialized()
         try:
@@ -340,6 +354,10 @@ class K8sClient:
         logger.debug("_create_template_sync()")
         return self._create_cluster_custom_object_sync(TEMPLATE_PLURAL, body)
 
+    def _patch_template_sync(self, name: str, body: dict[str, Any]) -> dict[str, Any]:
+        logger.debug("_patch_template_sync(name=%s)", name)
+        return self._patch_cluster_custom_object_sync(TEMPLATE_PLURAL, name, body)
+
     def _delete_template_sync(self, name: str) -> dict[str, Any]:
         logger.debug("_delete_template_sync(name=%s)", name)
         return self._delete_cluster_custom_object_sync(TEMPLATE_PLURAL, name)
@@ -462,6 +480,9 @@ class K8sClient:
 
     async def create_template(self, body: dict[str, Any]) -> dict[str, Any]:
         return await asyncio.to_thread(self._create_template_sync, body)
+
+    async def patch_template(self, name: str, body: dict[str, Any]) -> dict[str, Any]:
+        return await asyncio.to_thread(self._patch_template_sync, name, body)
 
     async def delete_template(self, name: str) -> dict[str, Any]:
         return await asyncio.to_thread(self._delete_template_sync, name)

@@ -241,7 +241,22 @@ class PodSchedulingConfig(BaseModel):
     dns_policy: str | None = Field(
         default=None, alias="dnsPolicy", description="DNS policy for pods (e.g. ClusterFirst, Default)"
     )
+    image_pull_secrets: list[dict[str, str]] | None = Field(
+        default=None, alias="imagePullSecrets", description="Image pull secrets (e.g. [{name: 'my-secret'}])"
+    )
+    security_context: dict[str, Any] | None = Field(
+        default=None, alias="securityContext", description="Pod security context"
+    )
+    topology_spread_constraints: list[dict[str, Any]] | None = Field(
+        default=None,
+        alias="topologySpreadConstraints",
+        description="Topology spread constraints for pod distribution",
+    )
     metadata: PodMetadataConfig | None = Field(default=None, description="Extra labels and annotations for pods")
+    affinity: dict[str, Any] | None = Field(default=None, description="Pod affinity/anti-affinity rules")
+    priority_class_name: str | None = Field(
+        default=None, alias="priorityClassName", description="PriorityClass name for pod scheduling"
+    )
 
 
 class ServiceMonitorConfig(BaseModel):
@@ -450,6 +465,20 @@ class ValidationPolicyConfig(BaseModel):
     )
 
 
+class SidecarConfig(BaseModel):
+    """Sidecar or init container configuration."""
+
+    model_config = {"populate_by_name": True}
+
+    name: str
+    image: str
+    ports: list[dict[str, Any]] | None = None
+    env: list[dict[str, Any]] | None = None
+    volume_mounts: list[dict[str, Any]] | None = Field(default=None, alias="volumeMounts")
+    resources: dict[str, Any] | None = None
+    security_context: dict[str, Any] | None = Field(default=None, alias="securityContext")
+
+
 class ServiceMetadataConfig(BaseModel):
     """Custom metadata for headless/pod services."""
 
@@ -538,6 +567,10 @@ class CreateK8sClusterRequest(BaseModel):
     pod_metadata: PodMetadataConfig | None = Field(
         default=None, alias="podMetadata", description="Extra labels and annotations for pods"
     )
+    sidecars: list[SidecarConfig] | None = Field(default=None, description="Sidecar containers to add to the pod")
+    init_containers: list[SidecarConfig] | None = Field(
+        default=None, alias="initContainers", description="Init containers to add to the pod"
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -601,6 +634,10 @@ class UpdateK8sClusterRequest(BaseModel):
     pod_metadata: PodMetadataConfig | None = Field(
         default=None, alias="podMetadata", description="Extra labels and annotations for pods"
     )
+    sidecars: list[SidecarConfig] | None = Field(default=None, description="Sidecar containers to add to the pod")
+    init_containers: list[SidecarConfig] | None = Field(
+        default=None, alias="initContainers", description="Init containers to add to the pod"
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -623,9 +660,9 @@ class K8sPodStatus(BaseModel):
     rackId: int | None = None
     configHash: str | None = None
     podSpecHash: str | None = None
-    access_endpoints: list[str] | None = Field(default=None, alias="accessEndpoints", description="Network endpoints for direct client access")
-    readiness_gate_satisfied: bool | None = Field(default=None, alias="readinessGateSatisfied", description="Whether readiness gate is satisfied")
-    unstable_since: str | None = Field(default=None, alias="unstableSince", description="First time pod became NotReady (ISO timestamp)")
+    accessEndpoints: list[str] | None = None
+    readinessGateSatisfied: bool | None = None
+    unstableSince: str | None = None
 
 
 class K8sClusterSummary(BaseModel):
@@ -706,6 +743,7 @@ class K8sTemplateSummary(BaseModel):
     size: int | None = None
     age: str | None = None
     description: str | None = None
+    usedBy: list[str] = Field(default_factory=list)
 
 
 class K8sTemplateDetail(BaseModel):
@@ -724,12 +762,16 @@ class TemplateSchedulingConfig(BaseModel):
         default=None, alias="podAntiAffinityLevel"
     )
     pod_management_policy: Literal["OrderedReady", "Parallel"] | None = Field(default=None, alias="podManagementPolicy")
-    tolerations: list[dict[str, Any]] | None = Field(default=None, description="Pod tolerations for template scheduling")
+    tolerations: list[dict[str, Any]] | None = Field(
+        default=None, description="Pod tolerations for template scheduling"
+    )
     node_affinity: dict[str, Any] | None = Field(
         default=None, alias="nodeAffinity", description="Node affinity rules for template scheduling"
     )
     topology_spread_constraints: list[dict[str, Any]] | None = Field(
-        default=None, alias="topologySpreadConstraints", description="Topology spread constraints for template scheduling"
+        default=None,
+        alias="topologySpreadConstraints",
+        description="Topology spread constraints for template scheduling",
     )
 
 
@@ -759,6 +801,24 @@ class CreateK8sTemplateRequest(BaseModel):
     description: str | None = Field(
         default=None, max_length=500, description="Human-readable description of this template"
     )
+    network_policy: NetworkAccessConfig | None = Field(default=None, alias="networkPolicy")
+    aerospike_config: dict[str, Any] | None = Field(
+        default=None, alias="aerospikeConfig", description="Aerospike config defaults"
+    )
+
+
+class UpdateK8sTemplateRequest(BaseModel):
+    """Request to update an AerospikeClusterTemplate (partial patch)."""
+
+    model_config = {"populate_by_name": True}
+
+    description: str | None = Field(default=None, max_length=500, description="Human-readable description")
+    image: str | None = Field(default=None, pattern=r"^[a-z0-9]([a-z0-9._/-]*[a-z0-9])?:[a-zA-Z0-9._-]+$")
+    size: int | None = Field(default=None, ge=1, le=8)
+    resources: ResourceConfig | None = None
+    monitoring: MonitoringConfig | None = None
+    scheduling: TemplateSchedulingConfig | None = None
+    storage: TemplateStorageConfig | None = None
     network_policy: NetworkAccessConfig | None = Field(default=None, alias="networkPolicy")
     aerospike_config: dict[str, Any] | None = Field(
         default=None, alias="aerospikeConfig", description="Aerospike config defaults"

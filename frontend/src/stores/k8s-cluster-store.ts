@@ -7,6 +7,7 @@ import type {
   CreateK8sClusterRequest,
   CreateK8sTemplateRequest,
   UpdateK8sClusterRequest,
+  UpdateK8sTemplateRequest,
   K8sClusterEvent,
   ClusterHealthSummary,
 } from "@/lib/api/types";
@@ -39,6 +40,7 @@ interface K8sClusterState {
   fetchTemplates: () => Promise<void>;
   fetchTemplate: (name: string) => Promise<void>;
   createTemplate: (data: CreateK8sTemplateRequest) => Promise<K8sTemplateSummary>;
+  updateTemplate: (name: string, data: UpdateK8sTemplateRequest) => Promise<void>;
   deleteTemplate: (name: string) => Promise<void>;
   triggerOperation: (
     namespace: string,
@@ -175,6 +177,18 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
         { rethrow: true },
       );
       return result as K8sTemplateSummary;
+    },
+
+    updateTemplate: async (name: string, data: UpdateK8sTemplateRequest) => {
+      await withLoading(
+        set,
+        async () => {
+          await api.updateK8sTemplate(name, data);
+          await get().fetchTemplate(name);
+          await get().fetchTemplates();
+        },
+        { rethrow: true },
+      );
     },
 
     deleteTemplate: async (name: string) => {

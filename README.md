@@ -97,8 +97,9 @@ npm run dev                        # http://localhost:3000
   - Rolling update strategy (batch size, max unavailable, PDB control)
   - Operation status tracking (WarmRestart/PodRestart progress, completed/failed pods)
   - Pod selection for targeted restart operations (checkbox-based)
-  - Cluster edit dialog (image, size, dynamic config, aerospike config)
+  - Cluster edit dialog (image, size, dynamic config, aerospike config, nodeSelector, tolerations, hostNetwork, imagePullSecrets, serviceAccountName, terminationGracePeriod, validationPolicy, sidecars, initContainers, securityContext, topologySpreadConstraints)
   - Cluster-scoped template CRUD: create, browse, view details, and delete AerospikeClusterTemplates
+  - Template "Referenced By" display showing which clusters use each template
   - Template snapshot viewer with sync status
   - Dynamic config status per pod (Applied/Failed/Pending)
   - Enhanced pod status display: access endpoints, readiness gate satisfaction, and instability detection (unstableSince timestamp)
@@ -126,6 +127,9 @@ npm run dev                        # http://localhost:3000
   - Pod management policy and rack ID override toggle
   - Bandwidth throttling and validation policy configuration
   - Service metadata for headless and pod services
+  - Extended wizard fields: nodeSelector, tolerations, hostNetwork, multiPodPerHost, imagePullSecrets, serviceAccountName, terminationGracePeriod, validationPolicy
+  - Extended backend API fields: sidecars, initContainers, securityContext, topologySpreadConstraints
+  - Enhanced pod table: readiness gate status, access endpoints, stability indicators (unstableSince)
   - Accessibility: aria-labels, keyboard navigation, screen-reader support across all K8s components
 - **Light/Dark Mode** — System theme integration
 
@@ -144,7 +148,7 @@ Create, scale, update, and delete Aerospike clusters through a guided 9-step wiz
 5. **Security (ACL)** — Enable access control, define roles (with privileges and CIDR allowlists), configure users with K8s Secret-backed credentials
 6. **Rolling Update** — Configure rolling update strategy: batch size, max unavailable (absolute or percentage), PodDisruptionBudget control
 7. **Rack Config** — Multi-rack deployment with zone affinity, per-rack overrides (aerospikeConfig, storage, podSpec), batch scaling controls (maxIgnorablePods, rollingUpdateBatchSize, scaleDownBatchSize)
-8. **Advanced** — Pod management policy, DNS policy, readiness gate, pod metadata (labels/annotations), bandwidth throttling (CNI ingress/egress limits), node block list (select K8s nodes to exclude from scheduling), validation policy, service metadata, rack ID override
+8. **Advanced** — Pod management policy, DNS policy, readiness gate, pod metadata (labels/annotations), bandwidth throttling (CNI ingress/egress limits), node block list (select K8s nodes to exclude from scheduling), validation policy, service metadata, rack ID override, nodeSelector, tolerations, hostNetwork, multiPodPerHost, imagePullSecrets, serviceAccountName, terminationGracePeriod
 9. **Review** — Summary of all settings before creation
 
 ### Cluster Phases
@@ -176,7 +180,7 @@ Full lifecycle management of `AerospikeClusterTemplate` resources:
 
 - **Browse** — List all templates cluster-wide with image, size, and age
 - **Create** — Define new templates with defaults for image, size, resources, scheduling (anti-affinity, pod management policy, tolerations, node affinity, topology spread constraints), storage (class, volume mode, size), monitoring, and network access
-- **View Details** — Inspect template spec, resource defaults, and see which clusters reference the template
+- **View Details** — Inspect template spec, resource defaults, and see which clusters reference the template via the "Referenced By" display
 - **Delete** — Remove unused templates (protected against deletion while referenced by clusters)
 - **Reference** — Select templates during cluster creation via the wizard
 - **Scheduling** — Template scheduling supports tolerations, node affinity rules, and topology spread constraints in addition to pod anti-affinity and pod management policy
@@ -186,7 +190,7 @@ Full lifecycle management of `AerospikeClusterTemplate` resources:
 From the cluster detail page, you can:
 
 - **Scale** — Change cluster size (1-8 nodes) via a scale dialog
-- **Edit** — Modify running cluster settings (image, size, dynamic config, aerospike config, network policy, NetworkPolicy auto-generation, ACL, monitoring config, bandwidth config, node block list, validation policy, service metadata, rack ID override, pod metadata) with diff-based patching
+- **Edit** — Modify running cluster settings (image, size, dynamic config, aerospike config, network policy, NetworkPolicy auto-generation, ACL, monitoring config, bandwidth config, node block list, validation policy, service metadata, rack ID override, pod metadata, nodeSelector, tolerations, hostNetwork, imagePullSecrets, serviceAccountName, terminationGracePeriod, sidecars, initContainers, securityContext, topologySpreadConstraints) with diff-based patching
 - **HPA** — Create, view, and delete HorizontalPodAutoscaler resources for automatic cluster scaling based on CPU/memory utilization
 - **Warm Restart** — Trigger a warm restart operation (all pods or selected pods via checkboxes)
 - **Pod Restart** — Trigger a full pod restart operation (all pods or selected pods via checkboxes)
@@ -262,6 +266,28 @@ When creating a cluster, the "Auto-connect" option (enabled by default) automati
 | `GET` | `/api/k8s/nodes` | List K8s nodes with zone/region info (for rack config) |
 
 All K8s endpoints are gated by the `K8S_MANAGEMENT_ENABLED` configuration flag. When disabled, a 404 is returned so the frontend can hide K8s features gracefully.
+
+### Extended Pod Status Fields
+
+The pod status response now includes additional fields for richer cluster monitoring:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `accessEndpoints` | `string[]` | Network endpoints for direct client access to the pod |
+| `readinessGateSatisfied` | `bool` | Whether the `acko.io/aerospike-ready` readiness gate is satisfied |
+| `unstableSince` | `string` | ISO timestamp of when the pod first became NotReady (reset when Ready) |
+
+### Extended Backend API Fields
+
+The create/update cluster requests support additional pod-level fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `imagePullSecrets` | `string[]` | Private registry image pull secret names |
+| `securityContext` | `object` | Pod-level security context |
+| `topologySpreadConstraints` | `object[]` | Topology spread constraints for pod scheduling |
+| `sidecars` | `SidecarConfig[]` | Sidecar containers to add to the pod |
+| `initContainers` | `SidecarConfig[]` | Init containers to add to the pod |
 
 ## Project Structure
 
