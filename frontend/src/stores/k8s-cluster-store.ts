@@ -295,7 +295,7 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
         clearInterval(_k8sDetailIntervalId);
         _k8sDetailIntervalId = null;
       }
-      set({ consecutiveErrors: 0 });
+      set({ consecutiveErrors: 0, detailEvents: [], detailHealth: null });
     },
   };
 });
