@@ -138,9 +138,9 @@ export default function K8sTemplatesPage() {
               <div className="mt-2">
                 <span className="text-muted-foreground text-[10px]">Referenced By: </span>
                 {tmpl.usedBy && tmpl.usedBy.length > 0 ? (
-                  <span className="inline-flex flex-wrap gap-1 mt-0.5">
+                  <span className="mt-0.5 inline-flex flex-wrap gap-1">
                     {tmpl.usedBy.map((ref) => (
-                      <Badge key={ref} variant="secondary" className="text-[10px] px-1.5 py-0">
+                      <Badge key={ref} variant="secondary" className="px-1.5 py-0 text-[10px]">
                         {ref}
                       </Badge>
                     ))}

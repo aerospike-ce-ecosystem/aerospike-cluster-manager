@@ -8,12 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { STATUS_COLORS } from "@/lib/status-colors";
 import { FileText, Database, CheckCircle2, XCircle, AlertTriangle, Network } from "lucide-react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { K8sPodLogsDialog } from "@/components/k8s/k8s-pod-logs-dialog";
 import { DataTable } from "@/components/common/data-table";
 import { EmptyState } from "@/components/common/empty-state";
@@ -234,11 +229,11 @@ export function K8sPodTable({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="inline-flex items-center gap-1 font-mono text-xs cursor-default">
+                  <span className="inline-flex cursor-default items-center gap-1 font-mono text-xs">
                     <Network className="h-3 w-3 shrink-0" />
                     {endpoints[0]}
                     {endpoints.length > 1 && (
-                      <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                      <Badge variant="secondary" className="px-1 py-0 text-[10px]">
                         +{endpoints.length - 1}
                       </Badge>
                     )}
@@ -270,7 +265,7 @@ export function K8sPodTable({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="inline-flex items-center gap-1 text-amber-500 cursor-default">
+                  <span className="inline-flex cursor-default items-center gap-1 text-amber-500">
                     <AlertTriangle className="h-3.5 w-3.5" />
                     <span className="text-[11px]">Unstable</span>
                   </span>

@@ -573,9 +573,7 @@ class CreateK8sClusterRequest(BaseModel):
     pod_metadata: PodMetadataConfig | None = Field(
         default=None, alias="podMetadata", description="Extra labels and annotations for pods"
     )
-    sidecars: list[SidecarConfig] | None = Field(
-        default=None, description="Sidecar containers to add to the pod"
-    )
+    sidecars: list[SidecarConfig] | None = Field(default=None, description="Sidecar containers to add to the pod")
     init_containers: list[SidecarConfig] | None = Field(
         default=None, alias="initContainers", description="Init containers to add to the pod"
     )
@@ -642,9 +640,7 @@ class UpdateK8sClusterRequest(BaseModel):
     pod_metadata: PodMetadataConfig | None = Field(
         default=None, alias="podMetadata", description="Extra labels and annotations for pods"
     )
-    sidecars: list[SidecarConfig] | None = Field(
-        default=None, description="Sidecar containers to add to the pod"
-    )
+    sidecars: list[SidecarConfig] | None = Field(default=None, description="Sidecar containers to add to the pod")
     init_containers: list[SidecarConfig] | None = Field(
         default=None, alias="initContainers", description="Init containers to add to the pod"
     )

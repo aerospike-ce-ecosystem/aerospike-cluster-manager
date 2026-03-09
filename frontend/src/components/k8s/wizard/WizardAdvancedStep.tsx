@@ -337,7 +337,10 @@ function WizardPodSettingsStep({
           Allow pods to be scheduled on nodes with matching taints.
         </p>
         {(scheduling?.tolerations ?? []).map((tol, idx) => (
-          <div key={idx} className="grid grid-cols-[1fr_auto_1fr_auto_auto] gap-2 items-end rounded border p-2">
+          <div
+            key={idx}
+            className="grid grid-cols-[1fr_auto_1fr_auto_auto] items-end gap-2 rounded border p-2"
+          >
             <div className="grid gap-1">
               <Label className="text-[10px]">Key</Label>
               <Input
@@ -443,9 +446,7 @@ function WizardPodSettingsStep({
           <Switch
             id="host-network"
             checked={scheduling?.hostNetwork ?? false}
-            onCheckedChange={(checked) =>
-              updateScheduling({ hostNetwork: checked || undefined })
-            }
+            onCheckedChange={(checked) => updateScheduling({ hostNetwork: checked || undefined })}
           />
         </div>
       </div>
@@ -458,9 +459,7 @@ function WizardPodSettingsStep({
         <Input
           id="service-account-name"
           value={scheduling?.serviceAccountName ?? ""}
-          onChange={(e) =>
-            updateScheduling({ serviceAccountName: e.target.value || undefined })
-          }
+          onChange={(e) => updateScheduling({ serviceAccountName: e.target.value || undefined })}
           placeholder="e.g. aerospike-sa"
         />
         <p className="text-muted-foreground text-[10px]">
@@ -700,16 +699,14 @@ function WizardValidationPolicyStep({
             Skip Work Dir Validate
           </Label>
           <p className="text-muted-foreground text-[10px]">
-            Skip validation of the working directory on pod startup. Useful when using custom storage
-            configurations.
+            Skip validation of the working directory on pod startup. Useful when using custom
+            storage configurations.
           </p>
         </div>
         <Switch
           id="skip-workdir-validate"
           checked={policy?.skipWorkDirValidate ?? false}
-          onCheckedChange={(checked) =>
-            updatePolicy({ skipWorkDirValidate: checked || undefined })
-          }
+          onCheckedChange={(checked) => updatePolicy({ skipWorkDirValidate: checked || undefined })}
         />
       </div>
     </div>

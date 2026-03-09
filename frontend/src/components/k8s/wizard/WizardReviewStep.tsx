@@ -487,18 +487,14 @@ export function WizardReviewStep({
         {form.podScheduling?.terminationGracePeriodSeconds != null && (
           <>
             <span className="text-muted-foreground">Termination Grace Period</span>
-            <span className="font-medium">
-              {form.podScheduling.terminationGracePeriodSeconds}s
-            </span>
+            <span className="font-medium">{form.podScheduling.terminationGracePeriodSeconds}s</span>
           </>
         )}
 
         {(form.podScheduling?.imagePullSecrets ?? []).length > 0 && (
           <>
             <span className="text-muted-foreground">Image Pull Secrets</span>
-            <span className="font-medium">
-              {form.podScheduling!.imagePullSecrets!.join(", ")}
-            </span>
+            <span className="font-medium">{form.podScheduling!.imagePullSecrets!.join(", ")}</span>
           </>
         )}
 

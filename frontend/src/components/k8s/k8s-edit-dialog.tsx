@@ -75,7 +75,9 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
   const [multiPodPerHost, setMultiPodPerHost] = useState(false);
   const [hostNetwork, setHostNetwork] = useState(false);
   const [serviceAccountName, setServiceAccountName] = useState("");
-  const [terminationGracePeriod, setTerminationGracePeriod] = useState<number | undefined>(undefined);
+  const [terminationGracePeriod, setTerminationGracePeriod] = useState<number | undefined>(
+    undefined,
+  );
   const [imagePullSecrets, setImagePullSecrets] = useState<string[]>([]);
   // Validation Policy
   const [skipWorkDirValidate, setSkipWorkDirValidate] = useState(false);
@@ -421,9 +423,7 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
 
       // Validation Policy
       if (skipWorkDirValidate !== initialSkipWorkDirValidate) {
-        data.validationPolicy = skipWorkDirValidate
-          ? { skipWorkDirValidate: true }
-          : undefined;
+        data.validationPolicy = skipWorkDirValidate ? { skipWorkDirValidate: true } : undefined;
       }
 
       await onSave(data);
@@ -887,19 +887,40 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
           {/* Pod Scheduling */}
           <EditPodSchedulingSection
             nodeSelector={nodeSelector}
-            onNodeSelectorChange={(v) => { setNodeSelector(v); setError(null); }}
+            onNodeSelectorChange={(v) => {
+              setNodeSelector(v);
+              setError(null);
+            }}
             tolerations={tolerations}
-            onTolerationsChange={(v) => { setTolerations(v); setError(null); }}
+            onTolerationsChange={(v) => {
+              setTolerations(v);
+              setError(null);
+            }}
             multiPodPerHost={multiPodPerHost}
-            onMultiPodPerHostChange={(v) => { setMultiPodPerHost(v); setError(null); }}
+            onMultiPodPerHostChange={(v) => {
+              setMultiPodPerHost(v);
+              setError(null);
+            }}
             hostNetwork={hostNetwork}
-            onHostNetworkChange={(v) => { setHostNetwork(v); setError(null); }}
+            onHostNetworkChange={(v) => {
+              setHostNetwork(v);
+              setError(null);
+            }}
             serviceAccountName={serviceAccountName}
-            onServiceAccountNameChange={(v) => { setServiceAccountName(v); setError(null); }}
+            onServiceAccountNameChange={(v) => {
+              setServiceAccountName(v);
+              setError(null);
+            }}
             terminationGracePeriod={terminationGracePeriod}
-            onTerminationGracePeriodChange={(v) => { setTerminationGracePeriod(v); setError(null); }}
+            onTerminationGracePeriodChange={(v) => {
+              setTerminationGracePeriod(v);
+              setError(null);
+            }}
             imagePullSecrets={imagePullSecrets}
-            onImagePullSecretsChange={(v) => { setImagePullSecrets(v); setError(null); }}
+            onImagePullSecretsChange={(v) => {
+              setImagePullSecrets(v);
+              setError(null);
+            }}
             disabled={loading}
           />
 
@@ -1482,17 +1503,18 @@ function EditPodSchedulingSection({
   };
 
   const selectorCount = Object.keys(nodeSelector).length;
-  const summary = [
-    selectorCount > 0 ? `${selectorCount} selector(s)` : null,
-    tolerations.length > 0 ? `${tolerations.length} toleration(s)` : null,
-    multiPodPerHost ? "Multi-Pod" : null,
-    hostNetwork ? "Host Network" : null,
-    serviceAccountName ? "SA" : null,
-    imagePullSecrets.length > 0 ? `${imagePullSecrets.length} pull secret(s)` : null,
-    terminationGracePeriod != null ? `Grace: ${terminationGracePeriod}s` : null,
-  ]
-    .filter(Boolean)
-    .join(", ") || "Default";
+  const summary =
+    [
+      selectorCount > 0 ? `${selectorCount} selector(s)` : null,
+      tolerations.length > 0 ? `${tolerations.length} toleration(s)` : null,
+      multiPodPerHost ? "Multi-Pod" : null,
+      hostNetwork ? "Host Network" : null,
+      serviceAccountName ? "SA" : null,
+      imagePullSecrets.length > 0 ? `${imagePullSecrets.length} pull secret(s)` : null,
+      terminationGracePeriod != null ? `Grace: ${terminationGracePeriod}s` : null,
+    ]
+      .filter(Boolean)
+      .join(", ") || "Default";
 
   return (
     <EditCollapsible title="Pod Scheduling" summary={summary}>
@@ -1532,7 +1554,10 @@ function EditPodSchedulingSection({
               className="h-7 flex-1 text-xs"
               disabled={disabled}
               onKeyDown={(e) => {
-                if (e.key === "Enter") { e.preventDefault(); addNodeSelector(); }
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addNodeSelector();
+                }
               }}
             />
             <Input
@@ -1542,7 +1567,10 @@ function EditPodSchedulingSection({
               className="h-7 flex-1 text-xs"
               disabled={disabled}
               onKeyDown={(e) => {
-                if (e.key === "Enter") { e.preventDefault(); addNodeSelector(); }
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addNodeSelector();
+                }
               }}
             />
             <Button
@@ -1566,7 +1594,10 @@ function EditPodSchedulingSection({
             Allow pods to be scheduled on nodes with matching taints.
           </p>
           {tolerations.map((tol, idx) => (
-            <div key={idx} className="grid grid-cols-[1fr_auto_1fr_auto_auto] items-end gap-2 rounded border p-2">
+            <div
+              key={idx}
+              className="grid grid-cols-[1fr_auto_1fr_auto_auto] items-end gap-2 rounded border p-2"
+            >
               <div className="grid gap-1">
                 <Label className="text-[10px]">Key</Label>
                 <Input
@@ -1581,7 +1612,9 @@ function EditPodSchedulingSection({
                 <Label className="text-[10px]">Operator</Label>
                 <Select
                   value={tol.operator ?? "Equal"}
-                  onValueChange={(v) => updateToleration(idx, { operator: v as "Equal" | "Exists" })}
+                  onValueChange={(v) =>
+                    updateToleration(idx, { operator: v as "Equal" | "Exists" })
+                  }
                 >
                   <SelectTrigger className="h-7 w-20 text-[10px]" disabled={disabled}>
                     <SelectValue />
@@ -1748,7 +1781,10 @@ function EditPodSchedulingSection({
               className="h-7 flex-1 text-xs"
               disabled={disabled}
               onKeyDown={(e) => {
-                if (e.key === "Enter") { e.preventDefault(); addImagePullSecret(); }
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addImagePullSecret();
+                }
               }}
             />
             <Button
