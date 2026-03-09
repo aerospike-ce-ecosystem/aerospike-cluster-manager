@@ -102,6 +102,7 @@ npm run dev                        # http://localhost:3000
   - Template "Referenced By" display showing which clusters use each template
   - Template snapshot viewer with sync status
   - Dynamic config status per pod (Applied/Failed/Pending)
+  - Enhanced pod status display: access endpoints, readiness gate satisfaction, and instability detection (unstableSince timestamp)
   - Last restart reason and timestamp per pod
   - Reconciliation error monitoring
   - K8s events timeline with category filtering (Lifecycle, Rolling Restart, Configuration, ACL, Scaling, Rack, Network, Monitoring, Template, Circuit Breaker, Other)
@@ -115,7 +116,7 @@ npm run dev                        # http://localhost:3000
   - K8s node block list UI for selecting nodes to exclude from scheduling (wizard + edit dialog)
   - CNI bandwidth annotations for ingress/egress limits (wizard + edit dialog)
   - HorizontalPodAutoscaler (HPA) management: create, view, and delete HPAs targeting AerospikeCluster resources
-  - Enhanced monitoring configuration: exporter image, metric labels, exporter resources (CPU/memory), ServiceMonitor config (enabled/interval/labels), PrometheusRule config (enabled/labels)
+  - Enhanced monitoring configuration: exporter image, metric labels, exporter resources (CPU/memory), exporter environment variables, ServiceMonitor config (enabled/interval/labels), PrometheusRule config (enabled/labels)
   - Seeds Finder Services advanced config: LoadBalancer annotations, labels, and source ranges
   - Cluster health dashboard with rack distribution and migration status
   - Pod logs viewer with tail lines, copy, and download
@@ -142,7 +143,7 @@ Create, scale, update, and delete Aerospike clusters through a guided 9-step wiz
 
 1. **Basic** — Cluster name, Kubernetes namespace, size (1-8 nodes), Aerospike image selection
 2. **Namespace & Storage** — Aerospike namespace configuration with in-memory or persistent (PVC) storage, replication factor, storage class selection, volume init/wipe methods, cascade delete
-3. **Monitoring & Options** — Enable Prometheus metrics exporter (custom image, metric labels, exporter resources, ServiceMonitor, PrometheusRule), select an AerospikeClusterTemplate, enable dynamic configuration updates, configure network access type (Pod IP, Host Internal/External, Configured IP with custom network names), auto-generate Kubernetes NetworkPolicy (standard or Cilium), configure Seeds Finder LoadBalancer for external seed discovery (annotations, labels, source ranges)
+3. **Monitoring & Options** — Enable Prometheus metrics exporter (custom image, metric labels, exporter resources, exporter environment variables, ServiceMonitor, PrometheusRule), select an AerospikeClusterTemplate, enable dynamic configuration updates, configure network access type (Pod IP, Host Internal/External, Configured IP with custom network names), auto-generate Kubernetes NetworkPolicy (standard or Cilium), configure Seeds Finder LoadBalancer for external seed discovery (annotations, labels, source ranges)
 4. **Resources** — CPU/memory requests and limits with validation, auto-connect toggle
 5. **Security (ACL)** — Enable access control, define roles (with privileges and CIDR allowlists), configure users with K8s Secret-backed credentials
 6. **Rolling Update** — Configure rolling update strategy: batch size, max unavailable (absolute or percentage), PodDisruptionBudget control
@@ -178,10 +179,11 @@ The cluster detail page displays real-time operator conditions (Available, Ready
 Full lifecycle management of `AerospikeClusterTemplate` resources:
 
 - **Browse** — List all templates cluster-wide with image, size, and age
-- **Create** — Define new templates with defaults for image, size, resources, scheduling (anti-affinity, pod management policy), storage (class, volume mode, size), monitoring, and network access
+- **Create** — Define new templates with defaults for image, size, resources, scheduling (anti-affinity, pod management policy, tolerations, node affinity, topology spread constraints), storage (class, volume mode, size), monitoring, and network access
 - **View Details** — Inspect template spec, resource defaults, and see which clusters reference the template via the "Referenced By" display
 - **Delete** — Remove unused templates (protected against deletion while referenced by clusters)
 - **Reference** — Select templates during cluster creation via the wizard
+- **Scheduling** — Template scheduling supports tolerations, node affinity rules, and topology spread constraints in addition to pod anti-affinity and pod management policy
 
 ### Operations
 
@@ -194,6 +196,16 @@ From the cluster detail page, you can:
 - **Pod Restart** — Trigger a full pod restart operation (all pods or selected pods via checkboxes)
 - **Pause / Resume** — Pause reconciliation for maintenance windows, then resume when ready
 - **Delete** — Delete a cluster with a confirmation dialog (auto-cleans associated connection profiles)
+
+### Pod Status Details
+
+The cluster detail page displays per-pod status including:
+
+- **Access Endpoints** — Network endpoints for direct client access to each pod
+- **Readiness Gate Satisfied** — Whether the operator's custom readiness gate condition is met
+- **Unstable Since** — ISO timestamp of when a pod first became NotReady, aiding instability diagnosis
+- **Config Hash / Pod Spec Hash** — For identifying configuration drift across pods
+- **Rack ID** — Rack assignment for topology-aware deployments
 
 ### Dynamic Config
 

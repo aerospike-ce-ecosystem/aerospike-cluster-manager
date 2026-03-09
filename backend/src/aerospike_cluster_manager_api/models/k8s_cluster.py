@@ -241,28 +241,19 @@ class PodSchedulingConfig(BaseModel):
     dns_policy: str | None = Field(
         default=None, alias="dnsPolicy", description="DNS policy for pods (e.g. ClusterFirst, Default)"
     )
-    image_pull_secrets: list[str] | None = Field(
-        default=None, alias="imagePullSecrets", description="Private registry image pull secrets"
+    image_pull_secrets: list[dict[str, str]] | None = Field(
+        default=None, alias="imagePullSecrets", description="Image pull secrets (e.g. [{name: 'my-secret'}])"
     )
     security_context: dict[str, Any] | None = Field(
-        default=None, alias="securityContext", description="Pod-level security context"
+        default=None, alias="securityContext", description="Pod security context"
     )
-    topology_spread_constraints: list[dict[str, Any]] | None = Field(
-        default=None, alias="topologySpreadConstraints", description="Topology spread constraints for pod scheduling"
-    )
-    metadata: PodMetadataConfig | None = Field(default=None, description="Extra labels and annotations for pods")
     topology_spread_constraints: list[dict[str, Any]] | None = Field(
         default=None,
         alias="topologySpreadConstraints",
         description="Topology spread constraints for pod distribution",
     )
+    metadata: PodMetadataConfig | None = Field(default=None, description="Extra labels and annotations for pods")
     affinity: dict[str, Any] | None = Field(default=None, description="Pod affinity/anti-affinity rules")
-    security_context: dict[str, Any] | None = Field(
-        default=None, alias="securityContext", description="Pod security context"
-    )
-    image_pull_secrets: list[dict[str, str]] | None = Field(
-        default=None, alias="imagePullSecrets", description="Image pull secrets (e.g. [{name: 'my-secret'}])"
-    )
     priority_class_name: str | None = Field(
         default=None, alias="priorityClassName", description="PriorityClass name for pod scheduling"
     )
@@ -304,6 +295,9 @@ class MonitoringConfig(BaseModel):
     )
     prometheus_rule: PrometheusRuleConfig | None = Field(
         default=None, alias="prometheusRule", description="PrometheusRule configuration"
+    )
+    exporter_env: list[dict[str, str]] | None = Field(
+        default=None, alias="exporterEnv", description="Additional env vars for the Prometheus exporter container"
     )
 
 
@@ -768,6 +762,17 @@ class TemplateSchedulingConfig(BaseModel):
         default=None, alias="podAntiAffinityLevel"
     )
     pod_management_policy: Literal["OrderedReady", "Parallel"] | None = Field(default=None, alias="podManagementPolicy")
+    tolerations: list[dict[str, Any]] | None = Field(
+        default=None, description="Pod tolerations for template scheduling"
+    )
+    node_affinity: dict[str, Any] | None = Field(
+        default=None, alias="nodeAffinity", description="Node affinity rules for template scheduling"
+    )
+    topology_spread_constraints: list[dict[str, Any]] | None = Field(
+        default=None,
+        alias="topologySpreadConstraints",
+        description="Topology spread constraints for template scheduling",
+    )
 
 
 class TemplateStorageConfig(BaseModel):

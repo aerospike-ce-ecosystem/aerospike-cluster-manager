@@ -719,6 +719,7 @@ export interface MonitoringConfig {
   prometheusRule?: PrometheusRuleConfig;
   resources?: ResourceConfig;
   metricLabels?: Record<string, string>;
+  exporterEnv?: Record<string, string>[];
 }
 
 export interface BandwidthConfig {
@@ -819,6 +820,9 @@ export interface K8sTemplateDetail {
 export interface TemplateSchedulingConfig {
   podAntiAffinityLevel?: "none" | "preferred" | "required";
   podManagementPolicy?: "OrderedReady" | "Parallel";
+  tolerations?: Record<string, unknown>[];
+  nodeAffinity?: Record<string, unknown>;
+  topologySpreadConstraints?: Record<string, unknown>[];
 }
 
 export interface TemplateStorageConfig {
