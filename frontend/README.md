@@ -48,7 +48,8 @@ src/
 │   ├── layout/     # App shell (header, sidebar, tab-bar)
 │   ├── browser/    # Record browser components
 │   ├── connection/ # Connection management
-│   └── admin/      # User/role management
+│   ├── admin/      # User/role management
+│   └── k8s/        # K8s cluster management (wizard, pod table, dialogs, events, config drift)
 ├── stores/         # Zustand state management
 ├── hooks/          # Custom React hooks
 └── lib/

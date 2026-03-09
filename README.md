@@ -255,6 +255,28 @@ When creating a cluster, the "Auto-connect" option (enabled by default) automati
 
 All K8s endpoints are gated by the `K8S_MANAGEMENT_ENABLED` configuration flag. When disabled, a 404 is returned so the frontend can hide K8s features gracefully.
 
+### Extended Pod Status Fields
+
+The pod status response now includes additional fields for richer cluster monitoring:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `accessEndpoints` | `string[]` | Network endpoints for direct client access to the pod |
+| `readinessGateSatisfied` | `bool` | Whether the `acko.io/aerospike-ready` readiness gate is satisfied |
+| `unstableSince` | `string` | ISO timestamp of when the pod first became NotReady (reset when Ready) |
+
+### Extended Backend API Fields
+
+The create/update cluster requests support additional pod-level fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `imagePullSecrets` | `string[]` | Private registry image pull secret names |
+| `securityContext` | `object` | Pod-level security context |
+| `topologySpreadConstraints` | `object[]` | Topology spread constraints for pod scheduling |
+| `sidecars` | `SidecarConfig[]` | Sidecar containers to add to the pod |
+| `initContainers` | `SidecarConfig[]` | Init containers to add to the pod |
+
 ## Project Structure
 
 ```

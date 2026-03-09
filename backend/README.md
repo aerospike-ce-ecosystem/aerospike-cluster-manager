@@ -47,6 +47,8 @@ export AEROSPIKE_PORT=14790
 | `/api/k8s/secrets` | K8s secret listing (ACL picker) |
 | `/api/k8s/nodes` | K8s node listing (rack config) |
 
+The cluster create/update endpoints support extended pod settings including `sidecars`, `initContainers`, `securityContext`, `topologySpreadConstraints`, `imagePullSecrets`, and more. Pod status responses include `accessEndpoints`, `readinessGateSatisfied`, and `unstableSince` fields.
+
 Interactive API docs available at `http://localhost:8000/docs` (Swagger UI).
 
 > K8s endpoints require `K8S_MANAGEMENT_ENABLED=true`. See the [main README](../README.md#k8s-api-endpoints) for the full endpoint reference.
