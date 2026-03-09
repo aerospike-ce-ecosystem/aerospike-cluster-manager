@@ -86,15 +86,17 @@ describe("record route state helpers", () => {
         setName: "demo",
         returnTo: "/browser/conn-1/test/demo?page=2",
       }),
-    ).toBe("/browser/conn-1/test/demo/record/new?returnTo=%2Fbrowser%2Fconn-1%2Ftest%2Fdemo%3Fpage%3D2");
+    ).toBe(
+      "/browser/conn-1/test/demo/record/new?returnTo=%2Fbrowser%2Fconn-1%2Ftest%2Fdemo%3Fpage%3D2",
+    );
 
     expect(buildDefaultReturnTo("conn-1", "test", "demo")).toBe("/browser/conn-1/test/demo");
   });
 
   it("builds the current list returnTo and rejects external targets", () => {
-    expect(buildCurrentListReturnTo("/browser/conn-1/test/demo", new URLSearchParams("page=2"))).toBe(
-      "/browser/conn-1/test/demo?page=2",
-    );
+    expect(
+      buildCurrentListReturnTo("/browser/conn-1/test/demo", new URLSearchParams("page=2")),
+    ).toBe("/browser/conn-1/test/demo?page=2");
     expect(resolveReturnTo("https://evil.example.com", "/browser/conn-1/test/demo")).toBe(
       "/browser/conn-1/test/demo",
     );

@@ -68,7 +68,9 @@ describe("RecordDetailPage", () => {
 
     render(<RecordDetailPage connId="conn-1" namespace="test" setName="demo" pk="record-1" />);
 
-    await waitFor(() => expect(getRecord).toHaveBeenCalledWith("conn-1", "test", "demo", "record-1"));
+    await waitFor(() =>
+      expect(getRecord).toHaveBeenCalledWith("conn-1", "test", "demo", "record-1"),
+    );
     expect(await screen.findByRole("heading", { name: "Record Detail" })).toBeInTheDocument();
     expect(screen.getAllByText("record-1").length).toBeGreaterThan(0);
     expect(screen.getByText("Bins")).toBeInTheDocument();

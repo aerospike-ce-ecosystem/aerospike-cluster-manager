@@ -260,7 +260,7 @@ export default function IndexesPage({ params }: { params: Promise<{ connId: stri
 
       {/* Create Index Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent className="max-w-[95vw] sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>Create Secondary Index</DialogTitle>
             <DialogDescription>Create a new secondary index on a bin.</DialogDescription>

@@ -28,7 +28,7 @@ export default function K8sTemplatesPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await deleteTemplate(deleteTarget.namespace, deleteTarget.name);
+      await deleteTemplate(deleteTarget.name);
       toast.success(`Template "${deleteTarget.name}" deleted`);
       setDeleteTarget(null);
     } catch (err) {
@@ -91,9 +91,9 @@ export default function K8sTemplatesPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {templates.map((tmpl) => (
             <div
-              key={`${tmpl.namespace}/${tmpl.name}`}
+              key={tmpl.name}
               className="bg-card hover:border-accent/50 group cursor-pointer rounded-xl border p-5 shadow-sm transition-all"
-              onClick={() => router.push(`/k8s/templates/${tmpl.namespace}/${tmpl.name}`)}
+              onClick={() => router.push(`/k8s/templates/${tmpl.name}`)}
             >
               <div className="flex items-start justify-between">
                 <div className="min-w-0 flex-1">
@@ -101,7 +101,6 @@ export default function K8sTemplatesPage() {
                     <FileCode className="text-accent h-4 w-4 shrink-0" />
                     <h3 className="truncate text-sm font-semibold">{tmpl.name}</h3>
                   </div>
-                  <p className="text-muted-foreground mt-1 text-xs">{tmpl.namespace}</p>
                 </div>
                 <Button
                   variant="ghost"

@@ -23,10 +23,13 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/common/page-header";
 import { InlineAlert } from "@/components/common/inline-alert";
 import { K8sClusterStatusBadge } from "@/components/k8s/k8s-cluster-status-badge";
+import { K8sConfigDriftCard } from "@/components/k8s/k8s-config-drift-card";
 import { K8sPodTable } from "@/components/k8s/k8s-pod-table";
 import { K8sScaleDialog } from "@/components/k8s/k8s-scale-dialog";
 import { K8sDeleteDialog } from "@/components/k8s/k8s-delete-dialog";
+import { K8sEventTimeline } from "@/components/k8s/k8s-event-timeline";
 import { K8sEditDialog } from "@/components/k8s/k8s-edit-dialog";
+import { K8sReconciliationHealth } from "@/components/k8s/k8s-reconciliation-health";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { useK8sClusterStore } from "@/stores/k8s-cluster-store";
 import { toast } from "sonner";
@@ -269,11 +272,18 @@ export default function K8sClusterDetailPage() {
       />
 
       <InlineAlert message={error} />
-      {selectedCluster.failedReconcileCount > 0 && (
-        <InlineAlert
-          message={`Reconcile errors: ${selectedCluster.failedReconcileCount} failures. ${selectedCluster.lastReconcileError || ""}`}
-        />
-      )}
+      <K8sReconciliationHealth
+        namespace={namespace}
+        name={name}
+        onResetCircuitBreaker={async () => {
+          try {
+            await updateCluster(namespace, name, {});
+            toast.success("Circuit breaker reset triggered");
+          } catch (err) {
+            toast.error(getErrorMessage(err));
+          }
+        }}
+      />
 
       {/* Overview */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -339,6 +349,9 @@ export default function K8sClusterDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Config Drift */}
+      <K8sConfigDriftCard namespace={namespace} name={name} />
 
       {/* Cluster Health */}
       {health && (
@@ -637,46 +650,7 @@ export default function K8sClusterDetailPage() {
       </Card>
 
       {/* Events */}
-      {events.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="h-4 w-4" />
-              Events
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {events.map((event, i) => (
-                <div key={i} className="flex items-start gap-3 rounded-lg border p-3 text-sm">
-                  <span
-                    className={cn(
-                      "mt-0.5 h-2 w-2 shrink-0 rounded-full",
-                      event.type === "Warning" ? "bg-warning" : "bg-info",
-                    )}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{event.reason}</span>
-                      {event.count && event.count > 1 && (
-                        <span className="text-muted-foreground text-xs">x{event.count}</span>
-                      )}
-                    </div>
-                    {event.message && (
-                      <p className="text-muted-foreground mt-0.5 text-xs">{event.message}</p>
-                    )}
-                  </div>
-                  {event.lastTimestamp && (
-                    <span className="text-muted-foreground shrink-0 text-xs">
-                      {formatRelativeTime(event.lastTimestamp)}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {events.length > 0 && <K8sEventTimeline events={events} />}
 
       {/* Spec (collapsible JSON) */}
       <Card>

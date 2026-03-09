@@ -98,12 +98,14 @@ npm run dev                        # http://localhost:3000
   - Operation status tracking (WarmRestart/PodRestart progress, completed/failed pods)
   - Pod selection for targeted restart operations (checkbox-based)
   - Cluster edit dialog (image, size, dynamic config, aerospike config)
-  - Template CRUD: create, browse, view details, and delete AerospikeClusterTemplates
+  - Cluster-scoped template CRUD: create, browse, view details, and delete AerospikeClusterTemplates
   - Template snapshot viewer with sync status
   - Dynamic config status per pod (Applied/Failed/Pending)
   - Last restart reason and timestamp per pod
   - Reconciliation error monitoring
-  - K8s events timeline with auto-refresh
+  - K8s events timeline with category filtering (Lifecycle, Rolling Restart, Configuration, ACL, Scaling, Rack, Network, Monitoring, Template, Circuit Breaker, Other)
+  - Configuration drift detection (spec vs appliedSpec comparison, per-pod config hash groups)
+  - Circuit breaker / reconciliation health dashboard (threshold progress, backoff timer, manual reset)
   - K8s secrets picker for ACL credential management
   - Storage volume policies (init method, wipe method, cascade delete)
   - Network access type configuration (Pod IP, Host Internal/External, Configured IP) with custom network names for configuredIP
@@ -113,6 +115,13 @@ npm run dev                        # http://localhost:3000
   - Cluster health dashboard with rack distribution and migration status
   - Pod logs viewer with tail lines, copy, and download
   - Export cluster CR as clean YAML
+  - Rack-level overrides (per-rack aerospikeConfig, storage, podSpec)
+  - Pod metadata (labels/annotations), readiness gate, DNS policy configuration
+  - Batch scaling controls (maxIgnorablePods, rollingUpdateBatchSize, scaleDownBatchSize)
+  - Pod management policy and rack ID override toggle
+  - Bandwidth throttling and validation policy configuration
+  - Service metadata for headless and pod services
+  - Accessibility: aria-labels, keyboard navigation, screen-reader support across all K8s components
 - **Light/Dark Mode** — System theme integration
 
 ## K8s Cluster Management
@@ -121,7 +130,7 @@ When running inside a Kubernetes cluster (or with `K8S_MANAGEMENT_ENABLED=true`)
 
 ### Cluster Lifecycle
 
-Create, scale, update, and delete Aerospike clusters through a guided 8-step wizard:
+Create, scale, update, and delete Aerospike clusters through a guided 9-step wizard:
 
 1. **Basic** — Cluster name, Kubernetes namespace, size (1-8 nodes), Aerospike image selection
 2. **Namespace & Storage** — Aerospike namespace configuration with in-memory or persistent (PVC) storage, replication factor, storage class selection, volume init/wipe methods, cascade delete
@@ -129,8 +138,9 @@ Create, scale, update, and delete Aerospike clusters through a guided 8-step wiz
 4. **Resources** — CPU/memory requests and limits with validation, auto-connect toggle
 5. **Security (ACL)** — Enable access control, define roles (with privileges and CIDR allowlists), configure users with K8s Secret-backed credentials
 6. **Rolling Update** — Configure rolling update strategy: batch size, max unavailable (absolute or percentage), PodDisruptionBudget control
-7. **Rack Config** — Multi-rack deployment with zone affinity from live K8s node data, max pods per node, distribution preview
-8. **Review** — Summary of all settings before creation
+7. **Rack Config** — Multi-rack deployment with zone affinity, per-rack overrides (aerospikeConfig, storage, podSpec), batch scaling controls (maxIgnorablePods, rollingUpdateBatchSize, scaleDownBatchSize)
+8. **Advanced** — Pod management policy, DNS policy, readiness gate, pod metadata (labels/annotations), bandwidth throttling, validation policy, service metadata, rack ID override
+9. **Review** — Summary of all settings before creation
 
 ### Cluster Phases
 
@@ -155,9 +165,11 @@ The cluster detail page displays real-time operator conditions (Available, Ready
 
 ### Template Management
 
+> **Breaking Change:** Templates are now **cluster-scoped** resources (not namespaced). Template API endpoints no longer include `{namespace}` in the path. See the [K8s API Endpoints](#k8s-api-endpoints) table for updated routes.
+
 Full lifecycle management of `AerospikeClusterTemplate` resources:
 
-- **Browse** — List available templates across namespaces with image, size, and age
+- **Browse** — List all templates cluster-wide with image, size, and age
 - **Create** — Define new templates with defaults for image, size, resources, scheduling (anti-affinity, pod management policy), storage (class, volume mode, size), monitoring, and network access
 - **View Details** — Inspect template spec, resource defaults, and see which clusters reference the template
 - **Delete** — Remove unused templates (protected against deletion while referenced by clusters)
@@ -168,7 +180,7 @@ Full lifecycle management of `AerospikeClusterTemplate` resources:
 From the cluster detail page, you can:
 
 - **Scale** — Change cluster size (1-8 nodes) via a scale dialog
-- **Edit** — Modify running cluster settings (image, size, dynamic config, aerospike config, network policy, NetworkPolicy auto-generation) with diff-based patching
+- **Edit** — Modify running cluster settings (image, size, dynamic config, aerospike config, network policy, NetworkPolicy auto-generation, ACL, bandwidth config, validation policy, service metadata, rack ID override, pod metadata) with diff-based patching
 - **Warm Restart** — Trigger a warm restart operation (all pods or selected pods via checkboxes)
 - **Pod Restart** — Trigger a full pod restart operation (all pods or selected pods via checkboxes)
 - **Pause / Resume** — Pause reconciliation for maintenance windows, then resume when ready
@@ -184,7 +196,15 @@ When a cluster references an AerospikeClusterTemplate, the detail page shows a T
 
 ### Events Timeline
 
-View Kubernetes events associated with cluster resources, including event type, reason, message, occurrence count, and timestamps. Events auto-refresh during transitional phases.
+View Kubernetes events associated with cluster resources, including event type, reason, message, occurrence count, and timestamps. Events auto-refresh during transitional phases. Events are categorized into 11 categories (Lifecycle, Rolling Restart, Configuration, ACL Security, Scaling, Rack Management, Network, Monitoring, Template, Circuit Breaker, Other) with clickable filter chips to narrow the view.
+
+### Configuration Drift Detection
+
+The cluster detail page includes a Config Status card that detects drift between the desired spec and the currently applied spec. Per-pod config hash groups show which pods are running identical configurations and which have diverged, making it easy to identify partial rollout states.
+
+### Reconciliation Health Dashboard
+
+A circuit breaker health dashboard shows the operator's reconciliation state, including a visual progress bar toward the circuit breaker threshold, the current backoff timer, and detailed error information. A manual reset button allows operators to clear the circuit breaker and force a fresh reconciliation attempt.
 
 ### Auto-refresh
 
@@ -204,16 +224,18 @@ When creating a cluster, the "Auto-connect" option (enabled by default) automati
 | `PATCH` | `/api/k8s/clusters/{namespace}/{name}` | Update cluster (size, image, resources, monitoring, paused, dynamic config, aerospike config) |
 | `DELETE` | `/api/k8s/clusters/{namespace}/{name}` | Delete a cluster |
 | `POST` | `/api/k8s/clusters/{namespace}/{name}/scale` | Scale cluster to a specific size |
-| `GET` | `/api/k8s/clusters/{namespace}/{name}/events` | Get Kubernetes events for the cluster |
+| `GET` | `/api/k8s/clusters/{namespace}/{name}/events` | Get Kubernetes events (supports `?category=` filter) |
 | `POST` | `/api/k8s/clusters/{namespace}/{name}/operations` | Trigger operations (WarmRestart, PodRestart) |
 | `GET` | `/api/k8s/clusters/{namespace}/{name}/health` | Get cluster health summary (pods, migration, conditions) |
+| `GET` | `/api/k8s/clusters/{namespace}/{name}/config-drift` | Detect configuration drift (spec vs applied spec, pod hash groups) |
+| `GET` | `/api/k8s/clusters/{namespace}/{name}/reconciliation-status` | Get reconciliation health (circuit breaker state, backoff timer) |
 | `GET` | `/api/k8s/clusters/{namespace}/{name}/pods/{pod}/logs` | Get container logs for a pod |
 | `GET` | `/api/k8s/clusters/{namespace}/{name}/yaml` | Export cluster CR as clean YAML |
 | `POST` | `/api/k8s/clusters/{namespace}/{name}/resync-template` | Trigger template resync via annotation |
-| `GET` | `/api/k8s/templates` | List AerospikeClusterTemplate resources |
+| `GET` | `/api/k8s/templates` | List all AerospikeClusterTemplate resources (cluster-scoped) |
 | `POST` | `/api/k8s/templates` | Create a new AerospikeClusterTemplate |
-| `GET` | `/api/k8s/templates/{namespace}/{name}` | Get template detail (spec, status, usedBy) |
-| `DELETE` | `/api/k8s/templates/{namespace}/{name}` | Delete a template (fails if referenced by clusters) |
+| `GET` | `/api/k8s/templates/{name}` | Get template detail (spec, status, usedBy) |
+| `DELETE` | `/api/k8s/templates/{name}` | Delete a template (fails if referenced by clusters) |
 | `GET` | `/api/k8s/namespaces` | List available Kubernetes namespaces |
 | `GET` | `/api/k8s/storageclasses` | List available Kubernetes storage classes |
 | `GET` | `/api/k8s/secrets` | List K8s Secrets (for ACL picker) |
@@ -239,7 +261,7 @@ aerospike-cluster-manager/
 │   │   ├── app/            # Pages & routing
 │   │   │   └── k8s/        # K8s cluster & template management pages
 │   │   ├── components/     # UI components
-│   │   │   └── k8s/        # K8s-specific components (wizard, cards, dialogs)
+│   │   │   └── k8s/        # K8s-specific components (wizard, cards, dialogs, event timeline, config drift, reconciliation health)
 │   │   ├── stores/         # Zustand state (incl. k8s-cluster-store.ts)
 │   │   ├── hooks/          # Custom hooks
 │   │   └── lib/            # API client, utils, types, validations

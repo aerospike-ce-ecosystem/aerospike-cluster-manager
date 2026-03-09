@@ -75,7 +75,10 @@ function sanitizeConditions(value: unknown): FilterCondition[] {
     return [
       {
         ...candidate,
-        id: typeof candidate.id === "string" && candidate.id.length > 0 ? candidate.id : `restored-${index}`,
+        id:
+          typeof candidate.id === "string" && candidate.id.length > 0
+            ? candidate.id
+            : `restored-${index}`,
         bin: candidate.bin,
         operator: candidate.operator,
         binType: candidate.binType,
@@ -196,7 +199,10 @@ export function buildDefaultReturnTo(connId: string, namespace: string, setName:
   return buildSetPath(connId, namespace, setName);
 }
 
-export function buildCurrentListReturnTo(pathname: string, searchParams: Pick<URLSearchParams, "toString">) {
+export function buildCurrentListReturnTo(
+  pathname: string,
+  searchParams: Pick<URLSearchParams, "toString">,
+) {
   const query = searchParams.toString();
   return query ? `${pathname}?${query}` : pathname;
 }

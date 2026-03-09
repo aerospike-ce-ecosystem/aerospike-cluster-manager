@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState, useMemo, useCallback } from "react";
+import { use, useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Plus,
@@ -36,6 +36,7 @@ import { useBrowserStore } from "@/stores/browser-store";
 import { useFilterStore } from "@/stores/filter-store";
 import { useConnectionStore } from "@/stores/connection-store";
 import { usePagination } from "@/hooks/use-pagination";
+import { useAsyncData } from "@/hooks/use-async-data";
 import type {
   AerospikeRecord,
   BinValue,
@@ -124,13 +125,11 @@ export default function BrowserPage({
   );
 
   // Fetch secondary indexes for this connection
-  const [indexes, setIndexes] = useState<SecondaryIndex[]>([]);
-  useEffect(() => {
-    api
-      .getIndexes(connId)
-      .then(setIndexes)
-      .catch(() => setIndexes([]));
-  }, [connId]);
+  const { data: indexesData } = useAsyncData<SecondaryIndex[]>(
+    () => api.getIndexes(connId),
+    [connId],
+  );
+  const indexes = useMemo<SecondaryIndex[]>(() => indexesData ?? [], [indexesData]);
 
   // Reset filter store when leaving
   useEffect(() => {
@@ -238,24 +237,32 @@ export default function BrowserPage({
       const href = query ? `${pathname}?${query}` : pathname;
       router.replace(href, { scroll: false });
     },
+    // filterStore is only referenced in the TypeScript type annotation (typeof), not at runtime
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [pathname, router],
   );
 
   // Execute filtered query
-  const refreshCurrentView = useCallback(
-    async () => {
-      await fetchFilteredRecords(
-        connId,
-        decodedNs,
-        decodedSet,
-        activeFilters,
-        routeState.page,
-        routeState.pageSize,
-        routeState.primaryKey || undefined,
-      );
-    },
-    [activeFilters, connId, decodedNs, decodedSet, fetchFilteredRecords, routeState.page, routeState.pageSize, routeState.primaryKey],
-  );
+  const refreshCurrentView = useCallback(async () => {
+    await fetchFilteredRecords(
+      connId,
+      decodedNs,
+      decodedSet,
+      activeFilters,
+      routeState.page,
+      routeState.pageSize,
+      routeState.primaryKey || undefined,
+    );
+  }, [
+    activeFilters,
+    connId,
+    decodedNs,
+    decodedSet,
+    fetchFilteredRecords,
+    routeState.page,
+    routeState.pageSize,
+    routeState.primaryKey,
+  ]);
 
   const handleFilterExecute = useCallback(() => {
     setSelectedPKs(new Set());
@@ -271,7 +278,13 @@ export default function BrowserPage({
             }
           : undefined,
     });
-  }, [filterStore.conditions, filterStore.logic, filterStore.primaryKey, replaceRouteState, routeState.pageSize]);
+  }, [
+    filterStore.conditions,
+    filterStore.logic,
+    filterStore.primaryKey,
+    replaceRouteState,
+    routeState.pageSize,
+  ]);
 
   // PK lookup
   const handlePKLookup = useCallback(
@@ -405,6 +418,11 @@ export default function BrowserPage({
     [replaceRouteState, routeState.filters, routeState.primaryKey],
   );
 
+  // Ref so checkbox column header/cell can read the latest selectedPKs
+  // without being in tableColumns useMemo deps (avoids full column rebuild on every toggle)
+  const selectedPKsRef = useRef(selectedPKs);
+  selectedPKsRef.current = selectedPKs;
+
   const togglePK = useCallback((pk: string) => {
     setSelectedPKs((prev) => {
       const next = new Set(prev);
@@ -521,41 +539,49 @@ asyncio.run(main())`;
       {
         id: "select",
         size: 40,
-        header: () => (
-          <button
-            onClick={toggleAllPKs}
-            className={cn(
-              "inline-flex h-4 w-4 items-center justify-center rounded border transition-colors",
-              selectedPKs.size === displayRecords.length && displayRecords.length > 0
-                ? "border-accent bg-accent text-accent-foreground"
-                : selectedPKs.size > 0
-                  ? "border-accent/60 bg-accent/20"
+        header: () => {
+          // Read from ref so this function doesn't need selectedPKs in useMemo deps
+          const pks = selectedPKsRef.current;
+          return (
+            <button
+              onClick={toggleAllPKs}
+              className={cn(
+                "inline-flex h-4 w-4 items-center justify-center rounded border transition-colors",
+                pks.size === displayRecords.length && displayRecords.length > 0
+                  ? "border-accent bg-accent text-accent-foreground"
+                  : pks.size > 0
+                    ? "border-accent/60 bg-accent/20"
+                    : "border-muted-foreground/30 hover:border-muted-foreground/50",
+              )}
+            >
+              {pks.size === displayRecords.length && displayRecords.length > 0 ? (
+                <Check className="h-3 w-3" />
+              ) : pks.size > 0 ? (
+                <Minus className="h-3 w-3" />
+              ) : null}
+            </button>
+          );
+        },
+        cell: ({ row }) => {
+          const pks = selectedPKsRef.current;
+          const pk = String(row.original.key.pk);
+          return (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                togglePK(pk);
+              }}
+              className={cn(
+                "inline-flex h-4 w-4 items-center justify-center rounded border transition-colors",
+                pks.has(pk)
+                  ? "border-accent bg-accent text-accent-foreground"
                   : "border-muted-foreground/30 hover:border-muted-foreground/50",
-            )}
-          >
-            {selectedPKs.size === displayRecords.length && displayRecords.length > 0 ? (
-              <Check className="h-3 w-3" />
-            ) : selectedPKs.size > 0 ? (
-              <Minus className="h-3 w-3" />
-            ) : null}
-          </button>
-        ),
-        cell: ({ row }) => (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              togglePK(String(row.original.key.pk));
-            }}
-            className={cn(
-              "inline-flex h-4 w-4 items-center justify-center rounded border transition-colors",
-              selectedPKs.has(String(row.original.key.pk))
-                ? "border-accent bg-accent text-accent-foreground"
-                : "border-muted-foreground/30 hover:border-muted-foreground/50",
-            )}
-          >
-            {selectedPKs.has(String(row.original.key.pk)) && <Check className="h-3 w-3" />}
-          </button>
-        ),
+              )}
+            >
+              {pks.has(pk) && <Check className="h-3 w-3" />}
+            </button>
+          );
+        },
         meta: {
           headerClassName: "px-2 text-center",
           cellClassName: "px-2 text-center",
@@ -756,10 +782,10 @@ asyncio.run(main())`;
         },
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // selectedPKs intentionally omitted — read via selectedPKsRef to avoid
+    // rebuilding all column definitions on every checkbox toggle.
     [
       binColumns,
-      selectedPKs,
       displayRecords.length,
       openDuplicateEditor,
       openRecordDetail,
@@ -817,7 +843,9 @@ asyncio.run(main())`;
                   </span>
                   <span className="text-muted-foreground" title={`TTL: ${record.meta.ttl}s`}>
                     Expiry:{" "}
-                    <span className="text-foreground font-mono">{formatTTLAsExpiry(record.meta.ttl)}</span>
+                    <span className="text-foreground font-mono">
+                      {formatTTLAsExpiry(record.meta.ttl)}
+                    </span>
                   </span>
                 </div>
               </div>
@@ -856,8 +884,12 @@ asyncio.run(main())`;
             <div className="border-border/30 mt-2 space-y-1 border-t pt-2">
               {binColumns.slice(0, 3).map((col) => (
                 <div key={col} className="flex items-start gap-2 text-xs">
-                  <span className="text-muted-foreground/60 w-20 shrink-0 truncate font-mono">{col}</span>
-                  <span className="min-w-0 flex-1 truncate">{renderCellValue(record.bins[col])}</span>
+                  <span className="text-muted-foreground/60 w-20 shrink-0 truncate font-mono">
+                    {col}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">
+                    {renderCellValue(record.bins[col])}
+                  </span>
                 </div>
               ))}
               {binColumns.length > 3 && (
@@ -956,7 +988,7 @@ asyncio.run(main())`;
 
       {/* ── Export bar (when filters active) ─────────── */}
       {filterStore.conditions.length > 0 && records.length > 0 && (
-        <div className="bg-card/60 animate-fade-in shrink-0 flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 sm:px-6">
+        <div className="bg-card/60 animate-fade-in flex shrink-0 flex-wrap items-center justify-between gap-2 border-b px-3 py-2 sm:px-6">
           <span className="text-muted-foreground text-xs">
             Export {formatNumber(records.length)} visible record{records.length === 1 ? "" : "s"}
           </span>
@@ -1006,7 +1038,9 @@ asyncio.run(main())`;
               ) : (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                   <Database className="text-muted-foreground/30 mb-4 h-16 w-16" />
-                  <h3 className="text-base-content/70 mb-2 text-lg font-semibold">No Records Found</h3>
+                  <h3 className="text-base-content/70 mb-2 text-lg font-semibold">
+                    No Records Found
+                  </h3>
                   <p className="text-base-content/50 mb-6 max-w-md text-sm">
                     This set appears to be empty. Create a new record to get started.
                   </p>

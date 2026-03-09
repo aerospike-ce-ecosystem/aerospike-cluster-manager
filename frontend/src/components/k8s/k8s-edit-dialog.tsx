@@ -28,6 +28,7 @@ import type {
   UpdateK8sClusterRequest,
   NetworkAccessType,
   NetworkPolicyAutoConfig,
+  PodMetadataConfig,
 } from "@/lib/api/types";
 
 interface K8sEditDialogProps {
@@ -55,6 +56,11 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
     null,
   );
   const [nodeBlockList, setNodeBlockList] = useState("");
+  const [readinessGateEnabled, setReadinessGateEnabled] = useState(false);
+  const [podMetadataLabels, setPodMetadataLabels] = useState("");
+  const [podMetadataAnnotations, setPodMetadataAnnotations] = useState("");
+  const [podManagementPolicy, setPodManagementPolicy] = useState<string>("");
+  const [dnsPolicy, setDnsPolicy] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
@@ -79,6 +85,21 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
   const initialCustomFabricNames = (networkPolicy?.customFabricNetworkNames ?? []).join(", ");
   const initialNetworkPolicyConfig = cluster.spec?.networkPolicyConfig ?? null;
   const initialNodeBlockList = (cluster.spec?.k8sNodeBlockList ?? []).join(", ");
+  const podSpec = cluster.spec?.podSpec as Record<string, unknown> | undefined;
+  const initialReadinessGateEnabled = Boolean(podSpec?.readinessGateEnabled);
+  const podMeta = podSpec?.metadata as PodMetadataConfig | undefined;
+  const initialPodMetadataLabels = podMeta?.labels
+    ? Object.entries(podMeta.labels)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(", ")
+    : "";
+  const initialPodMetadataAnnotations = podMeta?.annotations
+    ? Object.entries(podMeta.annotations)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(", ")
+    : "";
+  const initialPodManagementPolicy = (podSpec?.podManagementPolicy as string) || "";
+  const initialDnsPolicy = (podSpec?.dnsPolicy as string) || "";
   const initialAerospikeConfig = useMemo(
     () => cluster.spec?.aerospikeConfig ?? {},
     [cluster.spec?.aerospikeConfig],
@@ -106,6 +127,11 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
       setCustomFabricNames(initialCustomFabricNames);
       setNetworkPolicyConfig(initialNetworkPolicyConfig);
       setNodeBlockList(initialNodeBlockList);
+      setReadinessGateEnabled(initialReadinessGateEnabled);
+      setPodMetadataLabels(initialPodMetadataLabels);
+      setPodMetadataAnnotations(initialPodMetadataAnnotations);
+      setPodManagementPolicy(initialPodManagementPolicy);
+      setDnsPolicy(initialDnsPolicy);
       setError(null);
       setConfigError(null);
     }
@@ -126,6 +152,11 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
     initialCustomFabricNames,
     initialNetworkPolicyConfig,
     initialNodeBlockList,
+    initialReadinessGateEnabled,
+    initialPodMetadataLabels,
+    initialPodMetadataAnnotations,
+    initialPodManagementPolicy,
+    initialDnsPolicy,
   ]);
 
   // Validate JSON on every keystroke
@@ -157,7 +188,12 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
     customAltAccessNames !== initialCustomAltAccessNames ||
     customFabricNames !== initialCustomFabricNames ||
     JSON.stringify(networkPolicyConfig) !== JSON.stringify(initialNetworkPolicyConfig) ||
-    nodeBlockList !== initialNodeBlockList;
+    nodeBlockList !== initialNodeBlockList ||
+    readinessGateEnabled !== initialReadinessGateEnabled ||
+    podMetadataLabels !== initialPodMetadataLabels ||
+    podMetadataAnnotations !== initialPodMetadataAnnotations ||
+    podManagementPolicy !== initialPodManagementPolicy ||
+    dnsPolicy !== initialDnsPolicy;
 
   const handleSave = async () => {
     setLoading(true);
@@ -230,6 +266,45 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
         data.k8sNodeBlockList = nodes;
       }
 
+      // Pod scheduling new fields
+      const podSchedulingChanged =
+        readinessGateEnabled !== initialReadinessGateEnabled ||
+        podManagementPolicy !== initialPodManagementPolicy ||
+        dnsPolicy !== initialDnsPolicy;
+      if (podSchedulingChanged) {
+        data.podScheduling = {
+          ...data.podScheduling,
+          readinessGateEnabled: readinessGateEnabled || undefined,
+          podManagementPolicy:
+            podManagementPolicy === ""
+              ? undefined
+              : (podManagementPolicy as "OrderedReady" | "Parallel"),
+          dnsPolicy: dnsPolicy || undefined,
+        };
+      }
+
+      // Pod metadata
+      const podMetaChanged =
+        podMetadataLabels !== initialPodMetadataLabels ||
+        podMetadataAnnotations !== initialPodMetadataAnnotations;
+      if (podMetaChanged) {
+        const parseKvPairs = (s: string) => {
+          const result: Record<string, string> = {};
+          for (const entry of s
+            .split(",")
+            .map((x) => x.trim())
+            .filter(Boolean)) {
+            const eqIdx = entry.indexOf("=");
+            if (eqIdx > 0) result[entry.slice(0, eqIdx).trim()] = entry.slice(eqIdx + 1).trim();
+          }
+          return Object.keys(result).length > 0 ? result : undefined;
+        };
+        data.podMetadata = {
+          labels: parseKvPairs(podMetadataLabels),
+          annotations: parseKvPairs(podMetadataAnnotations),
+        };
+      }
+
       await onSave(data);
       onOpenChange(false);
     } catch (err) {
@@ -241,7 +316,7 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="max-w-[95vw] sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Edit Cluster</DialogTitle>
           <DialogDescription>
@@ -544,6 +619,97 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
             <p className="text-muted-foreground text-[10px]">
               Comma-separated K8s node names to exclude from scheduling
             </p>
+          </div>
+
+          {/* Pod Settings */}
+          <div className="grid gap-3">
+            <Label className="text-sm font-semibold">Pod Settings</Label>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="edit-readiness-gate"
+                checked={readinessGateEnabled}
+                onCheckedChange={(checked) => {
+                  setReadinessGateEnabled(checked === true);
+                  setError(null);
+                }}
+                disabled={loading}
+              />
+              <Label htmlFor="edit-readiness-gate" className="cursor-pointer text-xs">
+                Enable Readiness Gate (acko.io/aerospike-ready)
+              </Label>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1">
+                <Label htmlFor="edit-pod-mgmt-policy" className="text-xs">
+                  Pod Management Policy
+                </Label>
+                <Select
+                  value={podManagementPolicy || "default"}
+                  onValueChange={(v) => {
+                    setPodManagementPolicy(v === "default" ? "" : v);
+                    setError(null);
+                  }}
+                >
+                  <SelectTrigger id="edit-pod-mgmt-policy" disabled={loading}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Default (OrderedReady)</SelectItem>
+                    <SelectItem value="OrderedReady">OrderedReady</SelectItem>
+                    <SelectItem value="Parallel">Parallel</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-1">
+                <Label htmlFor="edit-dns-policy" className="text-xs">
+                  DNS Policy
+                </Label>
+                <Select
+                  value={dnsPolicy || "default"}
+                  onValueChange={(v) => {
+                    setDnsPolicy(v === "default" ? "" : v);
+                    setError(null);
+                  }}
+                >
+                  <SelectTrigger id="edit-dns-policy" disabled={loading}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Default (ClusterFirst)</SelectItem>
+                    <SelectItem value="ClusterFirst">ClusterFirst</SelectItem>
+                    <SelectItem value="ClusterFirstWithHostNet">ClusterFirstWithHostNet</SelectItem>
+                    <SelectItem value="Default">Default</SelectItem>
+                    <SelectItem value="None">None</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1">
+                <Label className="text-xs">Pod Labels (key=value, ...)</Label>
+                <Input
+                  value={podMetadataLabels}
+                  onChange={(e) => {
+                    setPodMetadataLabels(e.target.value);
+                    setError(null);
+                  }}
+                  placeholder="e.g. app=aerospike, team=data"
+                  disabled={loading}
+                />
+              </div>
+              <div className="grid gap-1">
+                <Label className="text-xs">Pod Annotations (key=value, ...)</Label>
+                <Input
+                  value={podMetadataAnnotations}
+                  onChange={(e) => {
+                    setPodMetadataAnnotations(e.target.value);
+                    setError(null);
+                  }}
+                  placeholder="e.g. prometheus.io/scrape=true"
+                  disabled={loading}
+                />
+              </div>
+            </div>
           </div>
 
           {/* Aerospike Config */}

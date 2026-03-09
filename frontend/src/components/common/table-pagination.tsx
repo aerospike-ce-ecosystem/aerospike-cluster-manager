@@ -71,6 +71,7 @@ export function TablePagination({
             className="border-border/40 text-muted-foreground h-6 w-[62px] bg-transparent px-2 font-mono text-[11px] [&>svg]:h-3 [&>svg]:w-3"
             data-compact
             disabled={loading}
+            aria-label="Rows per page"
           >
             <SelectValue />
           </SelectTrigger>
@@ -94,6 +95,7 @@ export function TablePagination({
           className="page-num-btn hidden sm:inline-flex"
           disabled={!hasPrev || loading}
           onClick={() => onPageChange(1)}
+          aria-label="Go to first page"
         >
           <ChevronsLeft className="h-3 w-3" />
         </button>
@@ -101,6 +103,7 @@ export function TablePagination({
           className="page-num-btn"
           disabled={!hasPrev || loading}
           onClick={() => onPageChange(page - 1)}
+          aria-label="Go to previous page"
         >
           <ChevronLeft className="h-3 w-3" />
         </button>
@@ -115,6 +118,7 @@ export function TablePagination({
               <span
                 key={`dots-${i}`}
                 className="text-muted-foreground/30 px-1 font-mono text-[11px] select-none"
+                aria-hidden="true"
               >
                 ···
               </span>
@@ -124,6 +128,8 @@ export function TablePagination({
                 className={cn("page-num-btn", p === page && "current")}
                 onClick={() => onPageChange(p as number)}
                 disabled={loading}
+                aria-label={`Go to page ${p}`}
+                aria-current={p === page ? "page" : undefined}
               >
                 {p}
               </button>
@@ -135,6 +141,7 @@ export function TablePagination({
           className="page-num-btn"
           disabled={!hasNext || loading}
           onClick={() => onPageChange(page + 1)}
+          aria-label="Go to next page"
         >
           <ChevronRight className="h-3 w-3" />
         </button>
@@ -142,6 +149,7 @@ export function TablePagination({
           className="page-num-btn hidden sm:inline-flex"
           disabled={!hasNext || loading}
           onClick={() => onPageChange(totalPages)}
+          aria-label="Go to last page"
         >
           <ChevronsRight className="h-3 w-3" />
         </button>

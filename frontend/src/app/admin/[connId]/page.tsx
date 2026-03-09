@@ -437,7 +437,7 @@ export default function AdminPage({ params }: { params: Promise<{ connId: string
 
       {/* Create User Dialog */}
       <Dialog open={createUserOpen} onOpenChange={setCreateUserOpen}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent className="max-w-[95vw] sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>Create User</DialogTitle>
             <DialogDescription>Create a new Aerospike user with roles.</DialogDescription>
@@ -512,7 +512,7 @@ export default function AdminPage({ params }: { params: Promise<{ connId: string
 
       {/* Change Password Dialog */}
       <Dialog open={changePassOpen} onOpenChange={setChangePassOpen}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="max-w-[95vw] sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle>Change Password</DialogTitle>
             <DialogDescription>
@@ -558,7 +558,7 @@ export default function AdminPage({ params }: { params: Promise<{ connId: string
 
       {/* Create Role Dialog */}
       <Dialog open={createRoleOpen} onOpenChange={setCreateRoleOpen}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent className="max-w-[95vw] sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>Create Role</DialogTitle>
             <DialogDescription>Define a new role with privileges.</DialogDescription>

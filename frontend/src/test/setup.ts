@@ -58,7 +58,8 @@ Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: vi.fn().mockImplementation((query: string) => {
     let matches = evaluateMediaQuery(query);
-    const listeners = matchMediaListeners.get(query) ?? new Set<(event: MediaQueryListEvent) => void>();
+    const listeners =
+      matchMediaListeners.get(query) ?? new Set<(event: MediaQueryListEvent) => void>();
     matchMediaListeners.set(query, listeners);
 
     return {
@@ -87,8 +88,16 @@ Object.defineProperty(window, "matchMedia", {
 
 Object.defineProperty(window, "resizeTo", {
   value: (width: number, height: number) => {
-    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: width });
-    Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: height });
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      writable: true,
+      value: width,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      writable: true,
+      value: height,
+    });
 
     matchMediaListeners.forEach((listeners, query) => {
       const event = {

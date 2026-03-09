@@ -43,7 +43,12 @@ export function RecordDetailSections({ record }: { record: AerospikeRecord }) {
           ).map(([label, val]) => (
             <div key={label} className="flex items-baseline gap-3">
               <span className="text-muted-foreground/50 w-20 shrink-0 text-[11px]">{label}</span>
-              <span className={cn(label === "pk" && "text-accent", label === "digest" && "text-xs break-all")}>
+              <span
+                className={cn(
+                  label === "pk" && "text-accent",
+                  label === "digest" && "text-xs break-all",
+                )}
+              >
                 {val}
               </span>
             </div>
@@ -74,7 +79,9 @@ export function RecordDetailSections({ record }: { record: AerospikeRecord }) {
           {record.meta.lastUpdateMs && (
             <div className="flex items-baseline gap-3">
               <span className="text-muted-foreground/50 w-20 shrink-0 text-[11px]">updated</span>
-              <span className="text-[12px]">{new Date(record.meta.lastUpdateMs).toISOString()}</span>
+              <span className="text-[12px]">
+                {new Date(record.meta.lastUpdateMs).toISOString()}
+              </span>
             </div>
           )}
         </div>
@@ -113,7 +120,9 @@ export function RecordViewDialog({ record, onClose }: RecordViewDialogProps) {
               {record?.key.pk}
             </span>
           </div>
-          <DialogDescription className="sr-only">Record details for {record?.key.pk}</DialogDescription>
+          <DialogDescription className="sr-only">
+            Record details for {record?.key.pk}
+          </DialogDescription>
         </DialogHeader>
         {record && <RecordDetailContent record={record} />}
       </DialogContent>
@@ -124,7 +133,10 @@ export function RecordViewDialog({ record, onClose }: RecordViewDialogProps) {
 export function RecordViewSheet({ record, onClose }: RecordViewDialogProps) {
   return (
     <Sheet open={!!record} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent className="max-h-[85vh] gap-0 overflow-hidden p-0" data-testid="record-view-sheet">
+      <SheetContent
+        className="max-h-[85vh] gap-0 overflow-hidden p-0"
+        data-testid="record-view-sheet"
+      >
         <SheetHeader className="border-border/40 space-y-0 border-b px-5 pt-1 pb-3">
           <div className="flex items-center justify-between pr-10">
             <SheetTitle className="font-mono text-sm font-medium">Record Detail</SheetTitle>
@@ -132,7 +144,9 @@ export function RecordViewSheet({ record, onClose }: RecordViewDialogProps) {
               {record?.key.pk}
             </span>
           </div>
-          <SheetDescription className="sr-only">Record details for {record?.key.pk}</SheetDescription>
+          <SheetDescription className="sr-only">
+            Record details for {record?.key.pk}
+          </SheetDescription>
         </SheetHeader>
         {record && <RecordDetailContent record={record} />}
       </SheetContent>

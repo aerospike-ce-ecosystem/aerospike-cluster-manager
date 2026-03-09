@@ -13,11 +13,10 @@ import type {
 import { api } from "@/lib/api/client";
 import { withLoading } from "@/lib/store-utils";
 import { getErrorMessage } from "@/lib/utils";
+import { K8S_DETAIL_POLL_INTERVAL_MS, K8S_DETAIL_POLL_MAX_BACKOFF_MS } from "@/lib/constants";
 
 // Module-level variables for detail polling
 let _k8sDetailIntervalId: ReturnType<typeof setInterval> | null = null;
-const K8S_DETAIL_POLL_BASE_MS = 5000;
-const K8S_DETAIL_MAX_BACKOFF_MS = 60_000;
 
 interface K8sClusterState {
   clusters: K8sClusterSummary[];
@@ -37,10 +36,10 @@ interface K8sClusterState {
   createCluster: (data: CreateK8sClusterRequest) => Promise<K8sClusterSummary>;
   deleteCluster: (namespace: string, name: string) => Promise<void>;
   scaleCluster: (namespace: string, name: string, size: number) => Promise<void>;
-  fetchTemplates: (namespace?: string) => Promise<void>;
-  fetchTemplate: (namespace: string, name: string) => Promise<void>;
+  fetchTemplates: () => Promise<void>;
+  fetchTemplate: (name: string) => Promise<void>;
   createTemplate: (data: CreateK8sTemplateRequest) => Promise<K8sTemplateSummary>;
-  deleteTemplate: (namespace: string, name: string) => Promise<void>;
+  deleteTemplate: (name: string) => Promise<void>;
   triggerOperation: (
     namespace: string,
     name: string,
@@ -149,18 +148,18 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
       );
     },
 
-    fetchTemplates: async (namespace?: string) => {
+    fetchTemplates: async () => {
       try {
-        const templates = await api.getK8sTemplates(namespace);
+        const templates = await api.getK8sTemplates();
         set({ templates });
       } catch {
         // Don't set global error — template fetch failures should not block cluster pages
       }
     },
 
-    fetchTemplate: async (namespace: string, name: string) => {
+    fetchTemplate: async (name: string) => {
       await withLoading(set, async () => {
-        const template = await api.getK8sTemplate(namespace, name);
+        const template = await api.getK8sTemplate(name);
         set({ selectedTemplate: template });
       });
     },
@@ -178,11 +177,11 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
       return result as K8sTemplateSummary;
     },
 
-    deleteTemplate: async (namespace: string, name: string) => {
+    deleteTemplate: async (name: string) => {
       await withLoading(
         set,
         async () => {
-          await api.deleteK8sTemplate(namespace, name);
+          await api.deleteK8sTemplate(name);
           set({ selectedTemplate: null });
           await get().fetchTemplates();
         },
@@ -267,7 +266,7 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
           // Reset interval back to base when recovering from errors
           if (hadErrors && _k8sDetailIntervalId) {
             clearInterval(_k8sDetailIntervalId);
-            _k8sDetailIntervalId = setInterval(poll, K8S_DETAIL_POLL_BASE_MS);
+            _k8sDetailIntervalId = setInterval(poll, K8S_DETAIL_POLL_INTERVAL_MS);
           }
         } catch (error) {
           const consecutiveErrors = get().consecutiveErrors + 1;
@@ -276,8 +275,8 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
           if (_k8sDetailIntervalId) {
             clearInterval(_k8sDetailIntervalId);
             const backoff = Math.min(
-              K8S_DETAIL_POLL_BASE_MS * Math.pow(2, consecutiveErrors),
-              K8S_DETAIL_MAX_BACKOFF_MS,
+              K8S_DETAIL_POLL_INTERVAL_MS * Math.pow(2, consecutiveErrors),
+              K8S_DETAIL_POLL_MAX_BACKOFF_MS,
             );
             _k8sDetailIntervalId = setInterval(poll, backoff);
           }
@@ -287,7 +286,7 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
       // Set the interval first so that if the immediate poll() fails fast and
       // triggers backoff (which replaces _k8sDetailIntervalId), it won't be
       // overwritten by a stale base-rate interval on the next line.
-      _k8sDetailIntervalId = setInterval(poll, K8S_DETAIL_POLL_BASE_MS);
+      _k8sDetailIntervalId = setInterval(poll, K8S_DETAIL_POLL_INTERVAL_MS);
       poll();
     },
 

@@ -12,12 +12,11 @@ export interface WizardStepProps {
 }
 
 export interface WizardCreationModeStepProps extends WizardStepProps {
-  k8sNamespaces: string[];
   templates: K8sTemplateSummary[];
   creationMode: "scratch" | "template";
   setCreationMode: (mode: "scratch" | "template") => void;
   selectedTemplateName: string | null;
-  onTemplateSelect: (ns: string, name: string) => void;
+  onTemplateSelect: (name: string) => void;
   templateDetail: K8sTemplateDetail | null;
   templateLoading: boolean;
 }

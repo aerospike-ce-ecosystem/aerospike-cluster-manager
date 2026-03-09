@@ -425,7 +425,7 @@ export default function BrowserSetListPage({ params }: { params: Promise<{ connI
 
       {/* Configure Namespace Dialog */}
       <Dialog open={configNsOpen} onOpenChange={setConfigNsOpen}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent className="max-w-[95vw] sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>Configure Namespace</DialogTitle>
             <DialogDescription>
@@ -474,7 +474,7 @@ export default function BrowserSetListPage({ params }: { params: Promise<{ connI
 
       {/* Create Set Dialog */}
       <Dialog open={createSetOpen} onOpenChange={setCreateSetOpen}>
-        <DialogContent className="sm:max-w-[420px]">
+        <DialogContent className="max-w-[95vw] sm:max-w-[420px]">
           <DialogHeader>
             <DialogTitle>Create Set</DialogTitle>
             <DialogDescription>

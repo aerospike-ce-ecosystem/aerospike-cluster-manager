@@ -77,7 +77,9 @@ test.describe("04 - Records CRUD", () => {
     await lookupRecordByPK(page, "e2e-view-record");
 
     // Find the record row and click the View button (Eye icon)
-    const row = page.locator("[data-testid^='records-table-row-']", { hasText: "e2e-view-record" }).first();
+    const row = page
+      .locator("[data-testid^='records-table-row-']", { hasText: "e2e-view-record" })
+      .first();
     await expect(row).toBeVisible({ timeout: 10_000 });
     await row.hover();
     // Action buttons: View(Eye), Edit(Pencil), Duplicate(Copy), Delete(Trash)
@@ -105,7 +107,9 @@ test.describe("04 - Records CRUD", () => {
     await recordsPage.goto(connId, TEST_NAMESPACE, TEST_SET);
     await lookupRecordByPK(page, "e2e-edit-record");
 
-    const row = page.locator("[data-testid^='records-table-row-']", { hasText: "e2e-edit-record" }).first();
+    const row = page
+      .locator("[data-testid^='records-table-row-']", { hasText: "e2e-edit-record" })
+      .first();
     await expect(row).toBeVisible({ timeout: 10_000 });
     await row.hover();
     // Click edit button (second action button with svg)
@@ -137,7 +141,9 @@ test.describe("04 - Records CRUD", () => {
     await recordsPage.goto(connId, TEST_NAMESPACE, TEST_SET);
     await lookupRecordByPK(page, "e2e-dup-source");
 
-    const row = page.locator("[data-testid^='records-table-row-']", { hasText: "e2e-dup-source" }).first();
+    const row = page
+      .locator("[data-testid^='records-table-row-']", { hasText: "e2e-dup-source" })
+      .first();
     await expect(row).toBeVisible({ timeout: 10_000 });
     await row.hover();
     // Click duplicate button (third action button with svg)
@@ -189,7 +195,9 @@ test.describe("04 - Records CRUD", () => {
     await recordsPage.goto(connId, TEST_NAMESPACE, TEST_SET);
     await lookupRecordByPK(page, "e2e-delete-me");
 
-    const row = page.locator("[data-testid^='records-table-row-']", { hasText: "e2e-delete-me" }).first();
+    const row = page
+      .locator("[data-testid^='records-table-row-']", { hasText: "e2e-delete-me" })
+      .first();
     await expect(row).toBeVisible({ timeout: 10_000 });
     await row.hover();
     // Click delete button (last action button)
@@ -257,13 +265,17 @@ test.describe("04 - Records CRUD", () => {
     await recordsPage.goto(connId, TEST_NAMESPACE, TEST_SET);
     await lookupRecordByPK(page, "e2e-mobile-card");
 
-    const card = page.locator("[data-testid^='records-table-row-']", { hasText: "e2e-mobile-card" }).first();
+    const card = page
+      .locator("[data-testid^='records-table-row-']", { hasText: "e2e-mobile-card" })
+      .first();
     await expect(card).toBeVisible({ timeout: 10_000 });
     await expect(page.locator("table")).toHaveCount(0);
 
     await card.click();
     await expect(page).toHaveURL(/\/record\?pk=e2e-mobile-card/);
-    await expect(page.getByRole("heading", { name: "Record Detail" })).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole("heading", { name: "Record Detail" })).toBeVisible({
+      timeout: 5_000,
+    });
     await page.getByRole("button", { name: "Back" }).click();
     await expect(page).toHaveURL(new RegExp(`/browser/${connId}/${TEST_NAMESPACE}/${TEST_SET}`));
 
@@ -292,7 +304,9 @@ test.describe("04 - Records CRUD", () => {
     await expect(page.getByTestId("records-table-head").getByText("Gen")).toHaveCount(0);
     await expect(page.getByTestId("records-table-head").getByText("Expiry")).toHaveCount(0);
 
-    const row = page.locator("[data-testid^='records-table-row-']", { hasText: "e2e-tablet-table" }).first();
+    const row = page
+      .locator("[data-testid^='records-table-row-']", { hasText: "e2e-tablet-table" })
+      .first();
     await expect(row).toBeVisible({ timeout: 10_000 });
     await row.hover();
     await expect(row.getByRole("button", { name: /View e2e-tablet-table/i })).toBeVisible();

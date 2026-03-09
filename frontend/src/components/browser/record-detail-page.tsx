@@ -18,10 +18,7 @@ import {
 } from "@/components/browser/record-editor-dialog";
 import type { AerospikeRecord, BinValue, RecordWriteRequest } from "@/lib/api/types";
 import { api } from "@/lib/api/client";
-import {
-  buildDefaultReturnTo,
-  resolveReturnTo,
-} from "@/lib/record-route-state";
+import { buildDefaultReturnTo, resolveReturnTo } from "@/lib/record-route-state";
 import { getErrorMessage } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -77,7 +74,9 @@ export function RecordDetailPage({
   const [record, setRecord] = useState<AerospikeRecord | null>(null);
   const [loading, setLoading] = useState(!createMode);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<PageMode>(createMode || initialIntent === "edit" ? "edit" : "view");
+  const [mode, setMode] = useState<PageMode>(
+    createMode || initialIntent === "edit" ? "edit" : "view",
+  );
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -152,10 +151,22 @@ export function RecordDetailPage({
     return () => {
       cancelled = true;
     };
-  }, [connId, createMode, initialIntent, namespace, pk, resetEditorForCreate, resetEditorFromRecord, setName]);
+  }, [
+    connId,
+    createMode,
+    initialIntent,
+    namespace,
+    pk,
+    resetEditorForCreate,
+    resetEditorFromRecord,
+    setName,
+  ]);
 
   const isDirty = useMemo(() => {
-    return JSON.stringify(buildEditorSnapshot(editorPK, editorTTL, editorBins)) !== JSON.stringify(initialSnapshot);
+    return (
+      JSON.stringify(buildEditorSnapshot(editorPK, editorTTL, editorBins)) !==
+      JSON.stringify(initialSnapshot)
+    );
   }, [editorBins, editorPK, editorTTL, initialSnapshot]);
 
   const addBin = useCallback(() => {
@@ -301,7 +312,13 @@ export function RecordDetailPage({
 
             {mode === "edit" && (
               <Button size="sm" onClick={handleSave} disabled={saving}>
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : createMode ? <Plus className="mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
+                {saving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : createMode ? (
+                  <Plus className="mr-2 h-4 w-4" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
                 {createMode ? "Create" : "Save"}
               </Button>
             )}

@@ -95,7 +95,7 @@ export function K8sClusterWizard() {
     ],
     resources: DEFAULT_RESOURCES,
     monitoring: undefined as MonitoringConfig | undefined,
-    templateRef: undefined as { name: string; namespace?: string } | undefined,
+    templateRef: undefined as { name: string } | undefined,
     enableDynamicConfig: false,
     autoConnect: true,
     acl: undefined as ACLConfig | undefined,
@@ -163,13 +163,13 @@ export function K8sClusterWizard() {
     setForm((prev) => ({ ...prev, ...updates }));
   };
 
-  const handleTemplateSelect = async (ns: string, name: string) => {
+  const handleTemplateSelect = async (name: string) => {
     setSelectedTemplateName(name);
     setTemplateLoading(true);
     try {
-      const detail = await api.getK8sTemplate(ns, name);
+      const detail = await api.getK8sTemplate(name);
       setTemplateDetail(detail);
-      const updates = buildFormUpdatesFromTemplate(detail.spec, name, ns);
+      const updates = buildFormUpdatesFromTemplate(detail.spec, name);
       updateForm(updates);
     } catch (err) {
       toast.error(`Failed to load template: ${getErrorMessage(err)}`);
@@ -253,7 +253,7 @@ export function K8sClusterWizard() {
             id: r.id,
             ...(r.zone ? { zone: r.zone } : {}),
             ...(r.region ? { region: r.region } : {}),
-            ...(r.maxPodsPerNode != null ? { maxPodsPerNode: r.maxPodsPerNode } : {}),
+            ...(r.rackLabel ? { rackLabel: r.rackLabel } : {}),
           })),
         } as typeof payload.rackConfig;
       } else {
@@ -345,7 +345,6 @@ export function K8sClusterWizard() {
             <WizardCreationModeStep
               form={form}
               updateForm={updateForm}
-              k8sNamespaces={k8sNamespaces}
               templates={templates}
               creationMode={creationMode}
               setCreationMode={setCreationMode}

@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -10,9 +13,37 @@ import {
 } from "@/components/ui/select";
 import type { WizardRackConfigStepProps } from "./types";
 
+function RackOverridesSection({ title, children }: { title: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="bg-muted/30 mt-2 rounded border">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center gap-1 px-3 py-1.5 text-left text-xs font-medium"
+      >
+        {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+        {title}
+      </button>
+      {open && <div className="space-y-2 px-3 pb-3">{children}</div>}
+    </div>
+  );
+}
+
 export function WizardRackConfigStep({ form, updateForm, nodes }: WizardRackConfigStepProps) {
   const racks = form.rackConfig?.racks ?? [];
+  const rackConfig = form.rackConfig;
   const uniqueZones = [...new Set(nodes.map((n) => n.zone).filter(Boolean))];
+
+  const updateRackConfig = (updates: Partial<typeof rackConfig>) => {
+    updateForm({
+      rackConfig: {
+        ...rackConfig,
+        racks: rackConfig?.racks ?? [],
+        ...updates,
+      },
+    });
+  };
 
   return (
     <div className="space-y-4">
@@ -42,6 +73,46 @@ export function WizardRackConfigStep({ form, updateForm, nodes }: WizardRackConf
         </div>
       ) : (
         <div className="space-y-3">
+          {/* Rack-level global settings */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="grid gap-1">
+              <Label className="text-xs">Max Ignorable Pods</Label>
+              <Input
+                value={rackConfig?.maxIgnorablePods ?? ""}
+                onChange={(e) =>
+                  updateRackConfig({ maxIgnorablePods: e.target.value || undefined })
+                }
+                placeholder="e.g. 1 or 25%"
+              />
+              <p className="text-muted-foreground text-[10px]">
+                Tolerate stuck pods during reconciliation
+              </p>
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-xs">Rolling Update Batch Size</Label>
+              <Input
+                value={rackConfig?.rollingUpdateBatchSize ?? ""}
+                onChange={(e) =>
+                  updateRackConfig({ rollingUpdateBatchSize: e.target.value || undefined })
+                }
+                placeholder="e.g. 1 or 25%"
+              />
+              <p className="text-muted-foreground text-[10px]">
+                Per-rack rolling update batch size
+              </p>
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-xs">Scale Down Batch Size</Label>
+              <Input
+                value={rackConfig?.scaleDownBatchSize ?? ""}
+                onChange={(e) =>
+                  updateRackConfig({ scaleDownBatchSize: e.target.value || undefined })
+                }
+                placeholder="e.g. 1 or 25%"
+              />
+            </div>
+          </div>
+
           {racks.map((rack, idx) => (
             <div key={idx} className="space-y-3 rounded-lg border p-4">
               <div className="flex items-center justify-between">
@@ -52,7 +123,7 @@ export function WizardRackConfigStep({ form, updateForm, nodes }: WizardRackConf
                   className="text-destructive h-7 px-2"
                   onClick={() => {
                     const newRacks = racks.filter((_, i) => i !== idx);
-                    updateForm({ rackConfig: { racks: newRacks } });
+                    updateRackConfig({ racks: newRacks });
                   }}
                 >
                   Remove
@@ -67,7 +138,7 @@ export function WizardRackConfigStep({ form, updateForm, nodes }: WizardRackConf
                       onValueChange={(v) => {
                         const newRacks = [...racks];
                         newRacks[idx] = { ...rack, zone: v };
-                        updateForm({ rackConfig: { racks: newRacks } });
+                        updateRackConfig({ racks: newRacks });
                       }}
                     >
                       <SelectTrigger>
@@ -87,31 +158,91 @@ export function WizardRackConfigStep({ form, updateForm, nodes }: WizardRackConf
                       onChange={(e) => {
                         const newRacks = [...racks];
                         newRacks[idx] = { ...rack, zone: e.target.value };
-                        updateForm({ rackConfig: { racks: newRacks } });
+                        updateRackConfig({ racks: newRacks });
                       }}
                       placeholder="e.g. us-east-1a"
                     />
                   )}
                 </div>
                 <div className="grid gap-1">
-                  <Label className="text-xs">Max Pods Per Node</Label>
+                  <Label className="text-xs">Rack Label</Label>
                   <Input
-                    type="number"
-                    min={1}
-                    value={rack.maxPodsPerNode ?? ""}
+                    value={rack.rackLabel ?? ""}
                     onChange={(e) => {
-                      const val = parseInt(e.target.value);
                       const newRacks = [...racks];
                       newRacks[idx] = {
                         ...rack,
-                        maxPodsPerNode: isNaN(val) ? undefined : Math.max(1, val),
+                        rackLabel: e.target.value || undefined,
                       };
-                      updateForm({ rackConfig: { racks: newRacks } });
+                      updateRackConfig({ racks: newRacks });
                     }}
-                    placeholder="No limit"
+                    placeholder="Optional label"
                   />
                 </div>
               </div>
+
+              {/* Rack-level overrides */}
+              <RackOverridesSection title="Rack Overrides (config, storage, scheduling)">
+                <div className="grid gap-2">
+                  <Label className="text-xs">Aerospike Config Override (JSON)</Label>
+                  <Textarea
+                    value={
+                      rack.aerospikeConfig ? JSON.stringify(rack.aerospikeConfig, null, 2) : ""
+                    }
+                    onChange={(e) => {
+                      const newRacks = [...racks];
+                      let parsed: Record<string, unknown> | undefined;
+                      try {
+                        parsed = e.target.value ? JSON.parse(e.target.value) : undefined;
+                      } catch {
+                        // Keep raw text; will be invalid but user is still typing
+                        return;
+                      }
+                      newRacks[idx] = { ...rack, aerospikeConfig: parsed };
+                      updateRackConfig({ racks: newRacks });
+                    }}
+                    rows={3}
+                    className="font-mono text-xs"
+                    placeholder='{"namespaces": [...]}'
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-1">
+                    <Label className="text-xs">Node Selector (key=value, ...)</Label>
+                    <Input
+                      value={
+                        rack.podSpec?.nodeSelector
+                          ? Object.entries(rack.podSpec.nodeSelector)
+                              .map(([k, v]) => `${k}=${v}`)
+                              .join(", ")
+                          : ""
+                      }
+                      onChange={(e) => {
+                        const newRacks = [...racks];
+                        const entries = e.target.value
+                          .split(",")
+                          .map((s) => s.trim())
+                          .filter(Boolean);
+                        const nodeSelector: Record<string, string> = {};
+                        for (const entry of entries) {
+                          const [k, v] = entry.split("=").map((s) => s.trim());
+                          if (k && v) nodeSelector[k] = v;
+                        }
+                        newRacks[idx] = {
+                          ...rack,
+                          podSpec: {
+                            ...rack.podSpec,
+                            nodeSelector:
+                              Object.keys(nodeSelector).length > 0 ? nodeSelector : undefined,
+                          },
+                        };
+                        updateRackConfig({ racks: newRacks });
+                      }}
+                      placeholder="e.g. disktype=ssd, tier=high"
+                    />
+                  </div>
+                </div>
+              </RackOverridesSection>
             </div>
           ))}
           <Button
@@ -119,10 +250,8 @@ export function WizardRackConfigStep({ form, updateForm, nodes }: WizardRackConf
             size="sm"
             onClick={() => {
               const maxId = Math.max(0, ...racks.map((r) => r.id));
-              updateForm({
-                rackConfig: {
-                  racks: [...racks, { id: maxId + 1, zone: "", region: "" }],
-                },
+              updateRackConfig({
+                racks: [...racks, { id: maxId + 1, zone: "", region: "" }],
               });
             }}
           >

@@ -103,7 +103,7 @@ export function CreateSampleDataDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="max-w-[95vw] sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle>Create Sample Data</DialogTitle>
           <DialogDescription>

@@ -85,7 +85,9 @@ test.describe("06 - Secondary Indexes", () => {
     await indexesPage.goto(connId);
     await page.waitForTimeout(2_000);
 
-    const card = page.locator("[data-testid^='indexes-table-row-']", { hasText: TEST_INDEX_NAME }).first();
+    const card = page
+      .locator("[data-testid^='indexes-table-row-']", { hasText: TEST_INDEX_NAME })
+      .first();
     if ((await card.count()) > 0) {
       await expect(card).toBeVisible({ timeout: 10_000 });
       await expect(page.locator("table")).toHaveCount(0);

@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+import { CheckboxGroup } from "@/components/common/checkbox-group";
 import type { AerospikeRole } from "@/lib/api/types";
 
 const AVAILABLE_PRIVILEGES = [
@@ -52,9 +52,14 @@ export function CreateUserDialog({
   creating,
   onSubmit,
 }: CreateUserDialogProps) {
+  const roleItems =
+    roles.length > 0
+      ? roles.map((r) => ({ id: r.name, label: r.name }))
+      : AVAILABLE_PRIVILEGES.map((p) => ({ id: p, label: p }));
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="max-w-[95vw] sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle>Create User</DialogTitle>
           <DialogDescription>Create a new Aerospike user with roles.</DialogDescription>
@@ -81,33 +86,12 @@ export function CreateUserDialog({
           </div>
           <div className="grid gap-2">
             <Label>Roles</Label>
-            <div className="max-h-[200px] space-y-2 overflow-auto rounded-md border p-3">
-              {roles.length > 0
-                ? roles.map((role) => (
-                    <div key={role.name} className="flex items-center gap-2">
-                      <Checkbox
-                        id={`urole-${role.name}`}
-                        checked={selectedRoles.includes(role.name)}
-                        onCheckedChange={() => onToggleRole(role.name)}
-                      />
-                      <label htmlFor={`urole-${role.name}`} className="cursor-pointer text-sm">
-                        {role.name}
-                      </label>
-                    </div>
-                  ))
-                : AVAILABLE_PRIVILEGES.map((priv) => (
-                    <div key={priv} className="flex items-center gap-2">
-                      <Checkbox
-                        id={`upriv-${priv}`}
-                        checked={selectedRoles.includes(priv)}
-                        onCheckedChange={() => onToggleRole(priv)}
-                      />
-                      <label htmlFor={`upriv-${priv}`} className="cursor-pointer text-sm">
-                        {priv}
-                      </label>
-                    </div>
-                  ))}
-            </div>
+            <CheckboxGroup
+              items={roleItems}
+              selected={selectedRoles}
+              onToggle={onToggleRole}
+              idPrefix="urole"
+            />
           </div>
         </div>
         <DialogFooter>

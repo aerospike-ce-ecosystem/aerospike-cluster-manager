@@ -44,7 +44,10 @@ interface SlotProps extends React.HTMLAttributes<HTMLElement> {
 const Slot = React.forwardRef<HTMLElement, SlotProps>(({ children, className, ...props }, ref) => {
   if (!React.isValidElement(children)) return null;
 
-  const child = children as React.ReactElement<{ className?: string; ref?: React.Ref<HTMLElement> }>;
+  const child = children as React.ReactElement<{
+    className?: string;
+    ref?: React.Ref<HTMLElement>;
+  }>;
 
   return React.cloneElement(child, {
     ...props,
@@ -66,7 +69,10 @@ const buttonVariants = ({
 } = {}) => cn("btn", variantClasses[variant] || "", sizeClasses[size] || "", className);
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = "default", size = "default", asChild = false, children, ...props }, ref) => {
+  (
+    { className, variant = "default", size = "default", asChild = false, children, ...props },
+    ref,
+  ) => {
     const classes = cn(
       "btn",
       variantClasses[variant],
@@ -85,12 +91,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     }
 
     return (
-      <button
-        className={classes}
-        ref={ref}
-        type={props.type ?? "button"}
-        {...props}
-      >
+      <button className={classes} ref={ref} type={props.type ?? "button"} {...props}>
         {children}
       </button>
     );

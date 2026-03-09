@@ -42,7 +42,10 @@ const baseColumns: ColumnDef<TestData>[] = [
 ];
 
 function resizeViewport(width: number, height = 900) {
-  (window as Window & { resizeTo: (width: number, height: number) => void }).resizeTo(width, height);
+  (window as Window & { resizeTo: (width: number, height: number) => void }).resizeTo(
+    width,
+    height,
+  );
 }
 
 describe("DataTable", () => {
@@ -82,7 +85,9 @@ describe("DataTable", () => {
         <button>Custom Action</button>
       </div>
     );
-    render(<DataTable data={[]} columns={baseColumns} loading={false} emptyState={customEmptyState} />);
+    render(
+      <DataTable data={[]} columns={baseColumns} loading={false} emptyState={customEmptyState} />,
+    );
     expect(screen.getByTestId("custom-empty")).toBeInTheDocument();
   });
 
@@ -128,7 +133,9 @@ describe("DataTable", () => {
         data={mockData}
         columns={baseColumns}
         mobileLayout="cards"
-        mobileCardRenderer={(row) => <div data-testid={`custom-card-${row.id}`}>{row.original.name}</div>}
+        mobileCardRenderer={(row) => (
+          <div data-testid={`custom-card-${row.id}`}>{row.original.name}</div>
+        )}
       />,
     );
 

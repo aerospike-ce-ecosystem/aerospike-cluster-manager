@@ -18,6 +18,7 @@ import { useConnectionStore } from "@/stores/connection-store";
 import { useK8sClusterStore } from "@/stores/k8s-cluster-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
+import { SIDEBAR_HEALTH_POLL_INTERVAL_MS } from "@/lib/constants";
 import type { ConnectionProfile } from "@/lib/api/types";
 
 interface ConnectionItemProps {
@@ -82,7 +83,11 @@ const ConnectionItem = React.memo(function ConnectionItem({
                 ? "bg-success"
                 : "bg-destructive",
           )}
-        />
+        >
+          <span className="sr-only">
+            {isChecking && !status ? "Checking" : status?.connected ? "Connected" : "Disconnected"}
+          </span>
+        </span>
       </button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -127,7 +132,7 @@ function SidebarContent({ isMobileOrTablet }: { isMobileOrTablet: boolean }) {
 
     const interval = setInterval(() => {
       fetchAllHealth();
-    }, 30_000);
+    }, SIDEBAR_HEALTH_POLL_INTERVAL_MS);
 
     return () => clearInterval(interval);
   }, [fetchConnections, fetchAllHealth]);

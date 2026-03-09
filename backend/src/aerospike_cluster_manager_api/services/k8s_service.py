@@ -67,10 +67,37 @@ def build_rack_list(racks: list[RackConfig]) -> list[dict[str, Any]]:
             r["zone"] = rack.zone
         if rack.region:
             r["region"] = rack.region
-        if rack.max_pods_per_node is not None:
-            r["maxPodsPerNode"] = rack.max_pods_per_node
+        if rack.rack_label:
+            r["rackLabel"] = rack.rack_label
         if rack.node_name:
             r["nodeName"] = rack.node_name
+        if rack.aerospike_config:
+            r["aerospikeConfig"] = rack.aerospike_config
+        if rack.storage and rack.storage.volumes:
+            r["storage"] = {"volumes": rack.storage.volumes}
+        if rack.pod_spec:
+            pod_spec: dict[str, Any] = {}
+            if rack.pod_spec.affinity:
+                pod_spec["affinity"] = rack.pod_spec.affinity
+            if rack.pod_spec.tolerations:
+                tols = []
+                for t in rack.pod_spec.tolerations:
+                    tol: dict[str, Any] = {}
+                    if t.key is not None:
+                        tol["key"] = t.key
+                    tol["operator"] = t.operator
+                    if t.value is not None:
+                        tol["value"] = t.value
+                    if t.effect is not None:
+                        tol["effect"] = t.effect
+                    if t.toleration_seconds is not None:
+                        tol["tolerationSeconds"] = t.toleration_seconds
+                    tols.append(tol)
+                pod_spec["tolerations"] = tols
+            if rack.pod_spec.node_selector:
+                pod_spec["nodeSelector"] = rack.pod_spec.node_selector
+            if pod_spec:
+                r["podSpec"] = pod_spec
         result.append(r)
     return result
 
@@ -103,6 +130,20 @@ def build_pod_scheduling(sched: Any) -> dict[str, Any]:
         result["serviceAccountName"] = sched.service_account_name
     if sched.termination_grace_period is not None:
         result["terminationGracePeriodSeconds"] = sched.termination_grace_period
+    if sched.readiness_gate_enabled is not None:
+        result["readinessGateEnabled"] = sched.readiness_gate_enabled
+    if sched.pod_management_policy:
+        result["podManagementPolicy"] = sched.pod_management_policy
+    if sched.dns_policy:
+        result["dnsPolicy"] = sched.dns_policy
+    if sched.metadata:
+        meta: dict[str, Any] = {}
+        if sched.metadata.labels:
+            meta["labels"] = sched.metadata.labels
+        if sched.metadata.annotations:
+            meta["annotations"] = sched.metadata.annotations
+        if meta:
+            result["metadata"] = meta
     return result
 
 
@@ -114,6 +155,16 @@ def build_monitoring(mon: Any) -> dict[str, Any]:
     }
     if mon.exporter_image:
         result["exporterImage"] = mon.exporter_image
+    if mon.resources:
+        resources: dict[str, Any] = {}
+        if mon.resources.requests:
+            resources["requests"] = {"cpu": mon.resources.requests.cpu, "memory": mon.resources.requests.memory}
+        if mon.resources.limits:
+            resources["limits"] = {"cpu": mon.resources.limits.cpu, "memory": mon.resources.limits.memory}
+        if resources:
+            result["resources"] = resources
+    if mon.metric_labels:
+        result["metricLabels"] = mon.metric_labels
     if mon.service_monitor:
         sm: dict[str, Any] = {"enabled": mon.service_monitor.enabled}
         if mon.service_monitor.interval:
@@ -271,10 +322,7 @@ def build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
 
     # Template reference and overrides
     if req.template_ref:
-        ref: dict[str, str] = {"name": req.template_ref.name}
-        if req.template_ref.namespace:
-            ref["namespace"] = req.template_ref.namespace
-        cr["spec"]["templateRef"] = ref
+        cr["spec"]["templateRef"] = {"name": req.template_ref.name}
         if req.template_overrides:
             overrides: dict[str, Any] = {}
             if req.template_overrides.image:
@@ -337,7 +385,16 @@ def build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
 
     # Rack config
     if req.rack_config and req.rack_config.racks:
-        cr["spec"]["rackConfig"] = {"racks": build_rack_list(req.rack_config.racks)}
+        rack_config: dict[str, Any] = {"racks": build_rack_list(req.rack_config.racks)}
+        if req.rack_config.namespaces:
+            rack_config["namespaces"] = req.rack_config.namespaces
+        if req.rack_config.scale_down_batch_size:
+            rack_config["scaleDownBatchSize"] = req.rack_config.scale_down_batch_size
+        if req.rack_config.max_ignorable_pods:
+            rack_config["maxIgnorablePods"] = req.rack_config.max_ignorable_pods
+        if req.rack_config.rolling_update_batch_size:
+            rack_config["rollingUpdateBatchSize"] = req.rack_config.rolling_update_batch_size
+        cr["spec"]["rackConfig"] = rack_config
 
     # Network access policy
     if req.network_policy:
@@ -357,6 +414,58 @@ def build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
             "enabled": req.network_policy_config.enabled,
             "type": req.network_policy_config.type,
         }
+
+    # Bandwidth shaping
+    if req.bandwidth_config:
+        bw: dict[str, str] = {}
+        if req.bandwidth_config.ingress:
+            bw["ingress"] = req.bandwidth_config.ingress
+        if req.bandwidth_config.egress:
+            bw["egress"] = req.bandwidth_config.egress
+        if bw:
+            cr["spec"]["bandwidthConfig"] = bw
+
+    # Validation policy
+    if req.validation_policy:
+        cr["spec"]["validationPolicy"] = {
+            "skipWorkDirValidate": req.validation_policy.skip_work_dir_validate,
+        }
+
+    # Headless service metadata
+    if req.headless_service:
+        svc_meta: dict[str, Any] = {}
+        if req.headless_service.annotations:
+            svc_meta["metadata"] = {"annotations": req.headless_service.annotations}
+        if req.headless_service.labels:
+            svc_meta.setdefault("metadata", {})["labels"] = req.headless_service.labels
+        if svc_meta:
+            cr["spec"]["headlessService"] = svc_meta
+
+    # Pod service metadata
+    if req.pod_service:
+        pod_svc_meta: dict[str, Any] = {}
+        if req.pod_service.annotations:
+            pod_svc_meta["metadata"] = {"annotations": req.pod_service.annotations}
+        if req.pod_service.labels:
+            pod_svc_meta.setdefault("metadata", {})["labels"] = req.pod_service.labels
+        if pod_svc_meta:
+            cr["spec"]["podService"] = pod_svc_meta
+
+    # Enable rack ID override
+    if req.enable_rack_id_override is not None:
+        cr["spec"]["enableRackIDOverride"] = req.enable_rack_id_override
+
+    # Pod metadata (extra labels/annotations on pods)
+    if req.pod_metadata:
+        pod_spec = cr["spec"].get("podSpec", {})
+        meta: dict[str, Any] = {}
+        if req.pod_metadata.labels:
+            meta["labels"] = req.pod_metadata.labels
+        if req.pod_metadata.annotations:
+            meta["annotations"] = req.pod_metadata.annotations
+        if meta:
+            pod_spec["metadata"] = meta
+            cr["spec"]["podSpec"] = pod_spec
 
     return cr
 
@@ -381,7 +490,6 @@ def build_template_cr(req: CreateK8sTemplateRequest) -> dict[str, Any]:
         "kind": "AerospikeClusterTemplate",
         "metadata": {
             "name": req.name,
-            "namespace": req.namespace,
         },
         "spec": {},
     }
@@ -552,6 +660,13 @@ def has_update_fields(body: UpdateK8sClusterRequest) -> bool:
             body.pod_scheduling,
             body.seeds_finder_services,
             body.network_policy_config,
+            body.acl,
+            body.bandwidth_config,
+            body.validation_policy,
+            body.headless_service,
+            body.pod_service,
+            body.enable_rack_id_override,
+            body.pod_metadata,
         )
     )
 
@@ -588,7 +703,16 @@ def build_update_patch(body: UpdateK8sClusterRequest) -> dict[str, Any]:
         patch["spec"]["disablePDB"] = body.disable_pdb
     if body.rack_config is not None:
         if body.rack_config.racks:
-            patch["spec"]["rackConfig"] = {"racks": build_rack_list(body.rack_config.racks)}
+            rc: dict[str, Any] = {"racks": build_rack_list(body.rack_config.racks)}
+            if body.rack_config.namespaces:
+                rc["namespaces"] = body.rack_config.namespaces
+            if body.rack_config.scale_down_batch_size:
+                rc["scaleDownBatchSize"] = body.rack_config.scale_down_batch_size
+            if body.rack_config.max_ignorable_pods:
+                rc["maxIgnorablePods"] = body.rack_config.max_ignorable_pods
+            if body.rack_config.rolling_update_batch_size:
+                rc["rollingUpdateBatchSize"] = body.rack_config.rolling_update_batch_size
+            patch["spec"]["rackConfig"] = rc
         else:
             patch["spec"]["rackConfig"] = {"racks": []}
     if body.network_policy is not None:
@@ -606,6 +730,57 @@ def build_update_patch(body: UpdateK8sClusterRequest) -> dict[str, Any]:
             "enabled": body.network_policy_config.enabled,
             "type": body.network_policy_config.type,
         }
+    if body.acl is not None:
+        if body.acl.enabled:
+            patch["spec"]["aerospikeAccessControl"] = {
+                "roles": [
+                    {"name": r.name, "privileges": r.privileges, **({"whitelist": r.whitelist} if r.whitelist else {})}
+                    for r in (body.acl.roles or [])
+                ],
+                "users": [
+                    {"name": u.name, "secretName": u.secret_name, "roles": u.roles} for u in (body.acl.users or [])
+                ],
+                "adminPolicy": {"timeout": body.acl.admin_policy_timeout},
+            }
+            patch["spec"].setdefault("aerospikeConfig", {})["security"] = {}
+        else:
+            patch["spec"]["aerospikeAccessControl"] = None
+    if body.bandwidth_config is not None:
+        bw: dict[str, str] = {}
+        if body.bandwidth_config.ingress:
+            bw["ingress"] = body.bandwidth_config.ingress
+        if body.bandwidth_config.egress:
+            bw["egress"] = body.bandwidth_config.egress
+        patch["spec"]["bandwidthConfig"] = bw if bw else None
+    if body.validation_policy is not None:
+        patch["spec"]["validationPolicy"] = {
+            "skipWorkDirValidate": body.validation_policy.skip_work_dir_validate,
+        }
+    if body.headless_service is not None:
+        svc_meta: dict[str, Any] = {"metadata": {}}
+        if body.headless_service.annotations:
+            svc_meta["metadata"]["annotations"] = body.headless_service.annotations
+        if body.headless_service.labels:
+            svc_meta["metadata"]["labels"] = body.headless_service.labels
+        patch["spec"]["headlessService"] = svc_meta
+    if body.pod_service is not None:
+        pod_svc: dict[str, Any] = {"metadata": {}}
+        if body.pod_service.annotations:
+            pod_svc["metadata"]["annotations"] = body.pod_service.annotations
+        if body.pod_service.labels:
+            pod_svc["metadata"]["labels"] = body.pod_service.labels
+        patch["spec"]["podService"] = pod_svc
+    if body.enable_rack_id_override is not None:
+        patch["spec"]["enableRackIDOverride"] = body.enable_rack_id_override
+    if body.pod_metadata is not None:
+        pod_spec = patch["spec"].get("podSpec", {})
+        pod_meta: dict[str, Any] = {}
+        if body.pod_metadata.labels:
+            pod_meta["labels"] = body.pod_metadata.labels
+        if body.pod_metadata.annotations:
+            pod_meta["annotations"] = body.pod_metadata.annotations
+        pod_spec["metadata"] = pod_meta if pod_meta else None
+        patch["spec"]["podSpec"] = pod_spec
     return patch
 
 
@@ -615,12 +790,160 @@ def extract_template_summary(item: dict[str, Any]) -> K8sTemplateSummary:
     spec = item.get("spec", {})
     return K8sTemplateSummary(
         name=metadata.get("name", ""),
-        namespace=metadata.get("namespace", ""),
         image=spec.get("image"),
         size=spec.get("size"),
         age=calculate_age(metadata.get("creationTimestamp")),
         description=spec.get("description"),
     )
+
+
+_EVENT_CATEGORY_MAP: dict[str, str] = {
+    # Rolling Restart
+    "RollingRestartStarted": "Rolling Restart",
+    "RollingRestartCompleted": "Rolling Restart",
+    "RestartFailed": "Rolling Restart",
+    "PodRestarted": "Rolling Restart",
+    # Quiesce
+    "QuiesceStarted": "Rolling Restart",
+    "QuiesceCompleted": "Rolling Restart",
+    "QuiesceFailed": "Rolling Restart",
+    # Config
+    "ConfigMapCreated": "Configuration",
+    "ConfigMapUpdated": "Configuration",
+    "DynamicConfigApplied": "Configuration",
+    "DynamicConfigStatusFailed": "Configuration",
+    "DynamicConfigRollback": "Configuration",
+    # StatefulSet / Rack
+    "StatefulSetCreated": "Rack Management",
+    "StatefulSetUpdated": "Rack Management",
+    "RackScaled": "Scaling",
+    "RackRemoved": "Rack Management",
+    # ACL
+    "ACLSyncStarted": "ACL Security",
+    "ACLSyncCompleted": "ACL Security",
+    "ACLSyncFailed": "ACL Security",
+    # PDB
+    "PDBCreated": "Network",
+    "PDBUpdated": "Network",
+    # Service
+    "ServiceCreated": "Network",
+    "ServiceUpdated": "Network",
+    # Lifecycle
+    "ClusterCreated": "Lifecycle",
+    "ClusterDeletionStarted": "Lifecycle",
+    "FinalizerRemoved": "Lifecycle",
+    "ReconcileError": "Lifecycle",
+    # Template
+    "TemplateApplied": "Template",
+    "TemplateOutOfSync": "Template",
+    # Readiness
+    "ReadinessGateUpdated": "Lifecycle",
+    # PVC
+    "PVCCleanupCompleted": "Scaling",
+    "PVCCleanupFailed": "Scaling",
+    # Circuit Breaker
+    "CircuitBreakerActive": "Circuit Breaker",
+    "CircuitBreakerReset": "Circuit Breaker",
+    # Misc
+    "WarmRestartTriggered": "Rolling Restart",
+    "PodRestartTriggered": "Rolling Restart",
+    "NetworkPolicyCreated": "Network",
+    "NetworkPolicyUpdated": "Network",
+    "MonitoringConfigured": "Monitoring",
+}
+
+
+def categorize_event(reason: str | None) -> str:
+    if not reason:
+        return "Other"
+    return _EVENT_CATEGORY_MAP.get(reason, "Other")
+
+
+def compute_config_drift(cr: dict) -> dict:
+    """Compare spec vs status.appliedSpec and group pods by config hash."""
+    spec = cr.get("spec", {})
+    status = cr.get("status", {})
+    applied_spec = status.get("appliedSpec", {})
+
+    # Find changed fields between spec and appliedSpec
+    changed_fields = []
+    if applied_spec:
+        for key in set(list(spec.keys()) + list(applied_spec.keys())):
+            if key in ("aerospikeConfig",):
+                # Deep compare for aerospikeConfig
+                spec_val = spec.get(key, {})
+                applied_val = applied_spec.get(key, {})
+                if spec_val != applied_val:
+                    changed_fields.append(key)
+            else:
+                if spec.get(key) != applied_spec.get(key):
+                    changed_fields.append(key)
+
+    has_drift = len(changed_fields) > 0
+
+    # Group pods by configHash + podSpecHash
+    pods_status = status.get("pods", {})
+    hash_groups: dict[str, dict] = {}
+    desired_config_hash = None
+
+    for pod_name, pod_status in pods_status.items():
+        if isinstance(pod_status, dict):
+            config_hash = pod_status.get("configHash", "")
+            pod_spec_hash = pod_status.get("podSpecHash", "")
+            key = f"{config_hash}|{pod_spec_hash}"
+
+            if key not in hash_groups:
+                hash_groups[key] = {
+                    "configHash": config_hash,
+                    "podSpecHash": pod_spec_hash,
+                    "pods": [],
+                    "isCurrent": False,
+                }
+            hash_groups[key]["pods"].append(pod_name)
+
+    # The most common hash group is likely "current"
+    if hash_groups:
+        max_group_key = max(hash_groups, key=lambda k: len(hash_groups[k]["pods"]))
+        hash_groups[max_group_key]["isCurrent"] = True
+        desired_config_hash = hash_groups[max_group_key].get("configHash")
+
+    # Check if pods have mismatched hashes (pod-level drift)
+    if len(hash_groups) > 1:
+        has_drift = True
+
+    return {
+        "hasDrift": has_drift,
+        "changedFields": changed_fields,
+        "podHashGroups": list(hash_groups.values()),
+        "desiredConfigHash": desired_config_hash,
+    }
+
+
+def extract_reconciliation_status(cr: dict) -> dict:
+    """Extract reconciliation health info including circuit breaker state."""
+    status = cr.get("status", {})
+    phase = status.get("phase", "Unknown")
+    failed_count = status.get("failedReconcileCount", 0)
+    last_error = status.get("lastReconcileError")
+    last_time = status.get("lastReconcileTime")
+
+    threshold = 10
+    circuit_breaker_active = failed_count >= threshold
+
+    # Estimate backoff: min(30s * 2^count, 300s)
+    backoff_seconds = None
+    if circuit_breaker_active:
+        backoff_seconds = min(30 * (2**failed_count), 300)
+
+    return {
+        "circuitBreakerActive": circuit_breaker_active,
+        "failedReconcileCount": failed_count,
+        "circuitBreakerThreshold": threshold,
+        "lastReconcileError": last_error,
+        "lastReconcileTime": last_time,
+        "estimatedBackoffSeconds": backoff_seconds,
+        "phase": phase,
+    }
 
 
 def clean_cr_for_export(item: dict[str, Any]) -> dict[str, Any]:

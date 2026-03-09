@@ -32,6 +32,7 @@ async def client():
     app.state.limiter.enabled = True
     app.router.lifespan_context = original_lifespan
 
+
 class TestGetRecordDetail:
     async def test_returns_single_record(self, client: AsyncClient):
         mock_client = AsyncMock()
@@ -43,12 +44,15 @@ class TestGetRecordDetail:
             )
         )
 
-        with patch(
-            "aerospike_cluster_manager_api.dependencies.db.get_connection",
-            AsyncMock(return_value={"id": "conn-test"}),
-        ), patch(
-            "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
-            AsyncMock(return_value=mock_client),
+        with (
+            patch(
+                "aerospike_cluster_manager_api.dependencies.db.get_connection",
+                AsyncMock(return_value={"id": "conn-test"}),
+            ),
+            patch(
+                "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+                AsyncMock(return_value=mock_client),
+            ),
         ):
             response = await client.get(
                 "/api/records/conn-test/detail",
@@ -81,12 +85,15 @@ class TestGetRecordDetail:
         mock_client = AsyncMock()
         mock_client.get = AsyncMock(side_effect=RecordNotFound("not found"))
 
-        with patch(
-            "aerospike_cluster_manager_api.dependencies.db.get_connection",
-            AsyncMock(return_value={"id": "conn-test"}),
-        ), patch(
-            "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
-            AsyncMock(return_value=mock_client),
+        with (
+            patch(
+                "aerospike_cluster_manager_api.dependencies.db.get_connection",
+                AsyncMock(return_value={"id": "conn-test"}),
+            ),
+            patch(
+                "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+                AsyncMock(return_value=mock_client),
+            ),
         ):
             response = await client.get(
                 "/api/records/conn-test/detail",

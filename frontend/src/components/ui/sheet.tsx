@@ -94,12 +94,15 @@ export const SheetContent = React.forwardRef<HTMLDivElement, SheetContentProps>(
         className={cn(
           "sheet-content bg-card text-card-foreground relative w-full max-w-none border-t shadow-2xl",
           side === "bottom" &&
-            "animate-sheet-up rounded-t-3xl px-0 pb-0 pt-5 sm:mx-auto sm:mb-6 sm:max-w-[640px] sm:rounded-3xl sm:border",
+            "animate-sheet-up rounded-t-3xl px-0 pt-5 pb-0 sm:mx-auto sm:mb-6 sm:max-w-[640px] sm:rounded-3xl sm:border",
           className,
         )}
         {...props}
       >
-        <div className="bg-muted mx-auto mb-3 h-1.5 w-12 rounded-full sm:hidden" aria-hidden="true" />
+        <div
+          className="bg-muted mx-auto mb-3 h-1.5 w-12 rounded-full sm:hidden"
+          aria-hidden="true"
+        />
         {children}
         <button
           onClick={onClose}
@@ -124,15 +127,16 @@ export function SheetFooter({ className, ...props }: React.HTMLAttributes<HTMLDi
   return <div className={cn("flex flex-col gap-2 px-5 py-4", className)} {...props} />;
 }
 
-export const SheetTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTMLHeadingElement>>(
-  ({ className, ...props }, ref) => (
-    <h3
-      ref={ref}
-      className={cn("text-lg leading-none font-semibold tracking-tight", className)}
-      {...props}
-    />
-  ),
-);
+export const SheetTitle = React.forwardRef<
+  HTMLHeadingElement,
+  React.HTMLAttributes<HTMLHeadingElement>
+>(({ className, ...props }, ref) => (
+  <h3
+    ref={ref}
+    className={cn("text-lg leading-none font-semibold tracking-tight", className)}
+    {...props}
+  />
+));
 SheetTitle.displayName = "SheetTitle";
 
 export const SheetDescription = React.forwardRef<
