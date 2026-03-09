@@ -836,6 +836,18 @@ export interface CreateK8sTemplateRequest {
   aerospikeConfig?: Record<string, unknown>;
 }
 
+export interface UpdateK8sTemplateRequest {
+  description?: string;
+  image?: string;
+  size?: number;
+  resources?: ResourceConfig;
+  monitoring?: MonitoringConfig;
+  scheduling?: TemplateSchedulingConfig;
+  storage?: TemplateStorageConfig;
+  networkPolicy?: NetworkAccessConfig;
+  aerospikeConfig?: Record<string, unknown>;
+}
+
 export interface TemplateSnapshot {
   synced?: boolean;
   templateName?: string;

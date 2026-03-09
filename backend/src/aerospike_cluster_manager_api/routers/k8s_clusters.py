@@ -33,10 +33,12 @@ from aerospike_cluster_manager_api.models.k8s_cluster import (
     OperationRequest,
     ScaleK8sClusterRequest,
     UpdateK8sClusterRequest,
+    UpdateK8sTemplateRequest,
 )
 from aerospike_cluster_manager_api.services.k8s_service import (
     build_cr,
     build_template_cr,
+    build_template_update_patch,
     build_update_patch,
     calculate_age,
     categorize_event,
@@ -451,6 +453,20 @@ async def create_k8s_template(body: CreateK8sTemplateRequest) -> K8sTemplateSumm
     _require_k8s()
     cr = build_template_cr(body)
     result = await k8s_client.create_template(cr)
+    return extract_template_summary(result)
+
+
+@router.patch("/templates/{name}", summary="Update K8s AerospikeClusterTemplate")
+@_k8s_endpoint("update Kubernetes template")
+async def update_k8s_template(
+    body: UpdateK8sTemplateRequest,
+    name: str = _K8S_NAME,
+) -> K8sTemplateSummary:
+    _require_k8s()
+    patch = build_template_update_patch(body)
+    if not patch.get("spec"):
+        raise HTTPException(status_code=400, detail="No fields to update")
+    result = await k8s_client.patch_template(name, patch)
     return extract_template_summary(result)
 
 

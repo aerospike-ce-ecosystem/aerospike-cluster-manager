@@ -26,6 +26,7 @@ from aerospike_cluster_manager_api.models.k8s_cluster import (
     RackConfig,
     RackDistribution,
     UpdateK8sClusterRequest,
+    UpdateK8sTemplateRequest,
 )
 
 
@@ -148,6 +149,16 @@ def build_pod_scheduling(sched: Any) -> dict[str, Any]:
             meta["annotations"] = sched.metadata.annotations
         if meta:
             result["metadata"] = meta
+    if sched.topology_spread_constraints:
+        result["topologySpreadConstraints"] = sched.topology_spread_constraints
+    if sched.affinity:
+        result["affinity"] = sched.affinity
+    if sched.security_context:
+        result["securityContext"] = sched.security_context
+    if sched.image_pull_secrets:
+        result["imagePullSecrets"] = sched.image_pull_secrets
+    if sched.priority_class_name:
+        result["priorityClassName"] = sched.priority_class_name
     return result
 
 
@@ -537,6 +548,49 @@ def build_template_cr(req: CreateK8sTemplateRequest) -> dict[str, Any]:
         cr["spec"]["aerospikeConfig"] = {"namespaceDefaults": req.aerospike_config}
 
     return cr
+
+
+def build_template_update_patch(body: UpdateK8sTemplateRequest) -> dict[str, Any]:
+    """Build a JSON-merge patch dict from UpdateK8sTemplateRequest fields."""
+    patch: dict[str, Any] = {"spec": {}}
+    if body.description is not None:
+        patch["spec"]["description"] = body.description
+    if body.image is not None:
+        patch["spec"]["image"] = body.image
+    if body.size is not None:
+        patch["spec"]["size"] = body.size
+    if body.resources is not None:
+        patch["spec"]["resources"] = {
+            "requests": {"cpu": body.resources.requests.cpu, "memory": body.resources.requests.memory},
+            "limits": {"cpu": body.resources.limits.cpu, "memory": body.resources.limits.memory},
+        }
+    if body.monitoring is not None:
+        patch["spec"]["monitoring"] = {"enabled": body.monitoring.enabled, "port": body.monitoring.port}
+    if body.scheduling is not None:
+        scheduling: dict[str, Any] = {}
+        if body.scheduling.pod_anti_affinity_level:
+            scheduling["podAntiAffinityLevel"] = body.scheduling.pod_anti_affinity_level
+        if body.scheduling.pod_management_policy:
+            scheduling["podManagementPolicy"] = body.scheduling.pod_management_policy
+        if scheduling:
+            patch["spec"]["scheduling"] = scheduling
+    if body.storage is not None:
+        storage: dict[str, Any] = {}
+        if body.storage.storage_class_name:
+            storage["storageClassName"] = body.storage.storage_class_name
+        if body.storage.volume_mode:
+            storage["volumeMode"] = body.storage.volume_mode
+        if body.storage.access_modes:
+            storage["accessModes"] = body.storage.access_modes
+        if body.storage.size:
+            storage["resources"] = {"requests": {"storage": body.storage.size}}
+        if storage:
+            patch["spec"]["storage"] = storage
+    if body.network_policy is not None:
+        patch["spec"]["aerospikeNetworkPolicy"] = build_network_policy(body.network_policy)
+    if body.aerospike_config is not None:
+        patch["spec"]["aerospikeConfig"] = {"namespaceDefaults": body.aerospike_config}
+    return patch
 
 
 def extract_detail(item: dict[str, Any], pods_raw: list[dict[str, Any]]) -> K8sClusterDetail:

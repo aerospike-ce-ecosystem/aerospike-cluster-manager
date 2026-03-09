@@ -242,6 +242,21 @@ class PodSchedulingConfig(BaseModel):
         default=None, alias="dnsPolicy", description="DNS policy for pods (e.g. ClusterFirst, Default)"
     )
     metadata: PodMetadataConfig | None = Field(default=None, description="Extra labels and annotations for pods")
+    topology_spread_constraints: list[dict[str, Any]] | None = Field(
+        default=None,
+        alias="topologySpreadConstraints",
+        description="Topology spread constraints for pod distribution",
+    )
+    affinity: dict[str, Any] | None = Field(default=None, description="Pod affinity/anti-affinity rules")
+    security_context: dict[str, Any] | None = Field(
+        default=None, alias="securityContext", description="Pod security context"
+    )
+    image_pull_secrets: list[dict[str, str]] | None = Field(
+        default=None, alias="imagePullSecrets", description="Image pull secrets (e.g. [{name: 'my-secret'}])"
+    )
+    priority_class_name: str | None = Field(
+        default=None, alias="priorityClassName", description="PriorityClass name for pod scheduling"
+    )
 
 
 class ServiceMonitorConfig(BaseModel):
@@ -746,6 +761,24 @@ class CreateK8sTemplateRequest(BaseModel):
     description: str | None = Field(
         default=None, max_length=500, description="Human-readable description of this template"
     )
+    network_policy: NetworkAccessConfig | None = Field(default=None, alias="networkPolicy")
+    aerospike_config: dict[str, Any] | None = Field(
+        default=None, alias="aerospikeConfig", description="Aerospike config defaults"
+    )
+
+
+class UpdateK8sTemplateRequest(BaseModel):
+    """Request to update an AerospikeClusterTemplate (partial patch)."""
+
+    model_config = {"populate_by_name": True}
+
+    description: str | None = Field(default=None, max_length=500, description="Human-readable description")
+    image: str | None = Field(default=None, pattern=r"^[a-z0-9]([a-z0-9._/-]*[a-z0-9])?:[a-zA-Z0-9._-]+$")
+    size: int | None = Field(default=None, ge=1, le=8)
+    resources: ResourceConfig | None = None
+    monitoring: MonitoringConfig | None = None
+    scheduling: TemplateSchedulingConfig | None = None
+    storage: TemplateStorageConfig | None = None
     network_policy: NetworkAccessConfig | None = Field(default=None, alias="networkPolicy")
     aerospike_config: dict[str, Any] | None = Field(
         default=None, alias="aerospikeConfig", description="Aerospike config defaults"

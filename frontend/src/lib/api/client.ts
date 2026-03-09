@@ -433,6 +433,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  updateK8sTemplate: (name: string, data: import("./types").UpdateK8sTemplateRequest) =>
+    request<import("./types").K8sTemplateSummary>(`/api/k8s/templates/${encodePathSegment(name)}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
   deleteK8sTemplate: (name: string) =>
     request<{ message: string }>(`/api/k8s/templates/${encodePathSegment(name)}`, {
       method: "DELETE",
