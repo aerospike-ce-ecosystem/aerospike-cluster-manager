@@ -270,6 +270,10 @@ export const api = {
     request<import("./types").RecordListResponse>(
       withQuery(`/api/records/${encodePathSegment(connId)}`, { ns, set, page, pageSize }),
     ),
+  getRecord: (connId: string, ns: string, set: string, pk: string) =>
+    request<import("./types").AerospikeRecord>(
+      withQuery(`/api/records/${encodePathSegment(connId)}/detail`, { ns, set, pk }),
+    ),
   putRecord: (connId: string, data: import("./types").RecordWriteRequest) =>
     request<import("./types").AerospikeRecord>(`/api/records/${encodePathSegment(connId)}`, {
       method: "POST",
@@ -420,25 +424,19 @@ export const api = {
   getK8sSecrets: (namespace: string) =>
     request<string[]>(withQuery("/api/k8s/secrets", { namespace })),
 
-  // K8s Templates
-  getK8sTemplates: (namespace?: string) =>
-    request<import("./types").K8sTemplateSummary[]>(withQuery("/api/k8s/templates", { namespace })),
-  getK8sTemplate: (namespace: string, name: string) =>
-    request<import("./types").K8sTemplateDetail>(
-      `/api/k8s/templates/${encodePathSegment(namespace)}/${encodePathSegment(name)}`,
-    ),
+  // K8s Templates (cluster-scoped — no namespace)
+  getK8sTemplates: () => request<import("./types").K8sTemplateSummary[]>("/api/k8s/templates"),
+  getK8sTemplate: (name: string) =>
+    request<import("./types").K8sTemplateDetail>(`/api/k8s/templates/${encodePathSegment(name)}`),
   createK8sTemplate: (data: import("./types").CreateK8sTemplateRequest) =>
     request<import("./types").K8sTemplateSummary>("/api/k8s/templates", {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  deleteK8sTemplate: (namespace: string, name: string) =>
-    request<{ message: string }>(
-      `/api/k8s/templates/${encodePathSegment(namespace)}/${encodePathSegment(name)}`,
-      {
-        method: "DELETE",
-      },
-    ),
+  deleteK8sTemplate: (name: string) =>
+    request<{ message: string }>(`/api/k8s/templates/${encodePathSegment(name)}`, {
+      method: "DELETE",
+    }),
 
   // K8s Template Resync
   resyncK8sClusterTemplate: (namespace: string, name: string) =>
@@ -448,11 +446,11 @@ export const api = {
     ),
 
   // K8s Cluster Events
-  getK8sClusterEvents: (namespace: string, name: string, limit = 50) =>
+  getK8sClusterEvents: (namespace: string, name: string, limit = 50, category?: string) =>
     request<import("./types").K8sClusterEvent[]>(
       withQuery(
         `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/events`,
-        { limit },
+        { limit, category },
       ),
     ),
 
@@ -460,6 +458,18 @@ export const api = {
   getK8sClusterHealth: (namespace: string, name: string) =>
     request<import("./types").ClusterHealthSummary>(
       `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/health`,
+    ),
+
+  // K8s Config Drift
+  getK8sClusterConfigDrift: (namespace: string, name: string) =>
+    request<import("./types").ConfigDriftResponse>(
+      `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/config-drift`,
+    ),
+
+  // K8s Reconciliation Status
+  getK8sReconciliationStatus: (namespace: string, name: string) =>
+    request<import("./types").ReconciliationStatus>(
+      `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/reconciliation-status`,
     ),
 
   // K8s Pod Logs
@@ -488,6 +498,25 @@ export const api = {
 
   // K8s Nodes
   getK8sNodes: () => request<import("./types").K8sNodeInfo[]>("/api/k8s/nodes"),
+
+  // K8s Cluster HPA
+  getK8sClusterHPA: (namespace: string, name: string) =>
+    request<import("./types").HPAResponse>(
+      `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/hpa`,
+    ),
+  createK8sClusterHPA: (namespace: string, name: string, data: import("./types").HPAConfig) =>
+    request<import("./types").HPAResponse>(
+      `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/hpa`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+    ),
+  deleteK8sClusterHPA: (namespace: string, name: string) =>
+    request<{ message: string }>(
+      `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/hpa`,
+      { method: "DELETE" },
+    ),
 
   // K8s Cluster Operations
   triggerK8sClusterOperation: (

@@ -61,7 +61,7 @@ export function ConnectionFormDialog({
 }: ConnectionFormDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="max-w-[95vw] sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle>{editingId ? "Edit Cluster" : "New Cluster"}</DialogTitle>
           <DialogDescription>

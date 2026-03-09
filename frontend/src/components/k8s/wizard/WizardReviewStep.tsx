@@ -363,12 +363,7 @@ export function WizardReviewStep({
           <>
             <span className="text-muted-foreground">Template</span>
             <span className="font-medium">
-              Created from{" "}
-              <span className="text-accent">
-                {form.templateRef.namespace
-                  ? `${form.templateRef.namespace}/${form.templateRef.name}`
-                  : form.templateRef.name}
-              </span>
+              Created from <span className="text-accent">{form.templateRef.name}</span>
             </span>
           </>
         )}
@@ -422,7 +417,7 @@ export function WizardReviewStep({
                 <span key={rack.id} className="block font-mono text-xs">
                   Rack #{rack.id}
                   {rack.zone ? ` (zone: ${rack.zone})` : ""}
-                  {rack.maxPodsPerNode ? ` max: ${rack.maxPodsPerNode}/node` : ""}
+                  {rack.rackLabel ? ` label: ${rack.rackLabel}` : ""}
                 </span>
               ))}
             </div>
@@ -435,6 +430,27 @@ export function WizardReviewStep({
             <span className="font-medium">
               {form.networkPolicy.accessType}
               {form.networkPolicy.fabricType ? `, fabric: ${form.networkPolicy.fabricType}` : ""}
+            </span>
+          </>
+        )}
+
+        {(form.k8sNodeBlockList ?? []).length > 0 && (
+          <>
+            <span className="text-muted-foreground">Node Block List</span>
+            <span className="font-medium">{form.k8sNodeBlockList!.join(", ")}</span>
+          </>
+        )}
+
+        {(form.bandwidthConfig?.ingress || form.bandwidthConfig?.egress) && (
+          <>
+            <span className="text-muted-foreground">Bandwidth Limits</span>
+            <span className="font-medium">
+              {[
+                form.bandwidthConfig?.ingress ? `Ingress: ${form.bandwidthConfig.ingress}` : null,
+                form.bandwidthConfig?.egress ? `Egress: ${form.bandwidthConfig.egress}` : null,
+              ]
+                .filter(Boolean)
+                .join(", ")}
             </span>
           </>
         )}

@@ -7,6 +7,8 @@ on connection profiles.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+
+
 import asyncpg
 import pytest
 

@@ -99,6 +99,23 @@ describe("api client", () => {
       );
     });
 
+    it("encodes record detail query parameters with special characters", async () => {
+      mockFetch.mockResolvedValueOnce(
+        createResponse(200, {
+          key: { namespace: "ns test", set: "set/a&b", pk: "pk 1" },
+          meta: { generation: 1, ttl: 0 },
+          bins: {},
+        }),
+      );
+
+      await api.getRecord("conn/1", "ns test", "set/a&b", "pk 1");
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/records/conn%2F1/detail?ns=ns+test&set=set%2Fa%26b&pk=pk+1",
+        expect.any(Object),
+      );
+    });
+
     it("omits optional pod logs container query parameter when undefined", async () => {
       mockFetch.mockResolvedValueOnce(createResponse(200, { lines: [] }));
 

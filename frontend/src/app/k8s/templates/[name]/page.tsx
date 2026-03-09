@@ -14,21 +14,21 @@ import { getErrorMessage } from "@/lib/utils";
 
 export default function TemplateDetailPage() {
   const router = useRouter();
-  const params = useParams<{ namespace: string; name: string }>();
+  const params = useParams<{ name: string }>();
   const { selectedTemplate, loading, error, fetchTemplate, deleteTemplate } = useK8sClusterStore();
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    if (params.namespace && params.name) {
-      fetchTemplate(params.namespace, params.name);
+    if (params.name) {
+      fetchTemplate(params.name);
     }
-  }, [params.namespace, params.name, fetchTemplate]);
+  }, [params.name, fetchTemplate]);
 
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      await deleteTemplate(params.namespace, params.name);
+      await deleteTemplate(params.name);
       toast.success(`Template "${params.name}" deleted`);
       router.push("/k8s/templates");
     } catch (err) {
@@ -81,7 +81,7 @@ export default function TemplateDetailPage() {
     <div className="animate-fade-in space-y-6 p-6 lg:p-8">
       <PageHeader
         title={selectedTemplate.name}
-        description={`Namespace: ${selectedTemplate.namespace} · Created ${selectedTemplate.age || "unknown"} ago`}
+        description={`Cluster-scoped · Created ${selectedTemplate.age || "unknown"} ago`}
         actions={
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => router.push("/k8s/templates")}>
@@ -173,10 +173,10 @@ export default function TemplateDetailPage() {
                   <button
                     className="text-accent hover:underline"
                     onClick={() => {
-                      const parts = cluster.includes("/")
-                        ? cluster.split("/")
-                        : [selectedTemplate.namespace, cluster];
-                      router.push(`/k8s/clusters/${parts[0]}/${parts[1]}`);
+                      const parts = cluster.split("/");
+                      if (parts.length === 2) {
+                        router.push(`/k8s/clusters/${parts[0]}/${parts[1]}`);
+                      }
                     }}
                   >
                     {cluster}

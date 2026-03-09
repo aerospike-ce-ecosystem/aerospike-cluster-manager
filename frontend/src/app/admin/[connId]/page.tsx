@@ -201,6 +201,7 @@ export default function AdminPage({ params }: { params: Promise<{ connId: string
         accessorKey: "username",
         header: "Username",
         cell: ({ getValue }) => <span className="font-medium">{getValue() as string}</span>,
+        meta: { mobileSlot: "title", mobileLabel: "User" },
       },
       {
         accessorKey: "roles",
@@ -220,6 +221,7 @@ export default function AdminPage({ params }: { params: Promise<{ connId: string
             </div>
           );
         },
+        meta: { mobileSlot: "content" },
       },
       {
         id: "actions",
@@ -251,6 +253,7 @@ export default function AdminPage({ params }: { params: Promise<{ connId: string
             </Button>
           </div>
         ),
+        meta: { mobileSlot: "actions" },
       },
     ],
     [],
@@ -262,6 +265,7 @@ export default function AdminPage({ params }: { params: Promise<{ connId: string
         accessorKey: "name",
         header: "Role Name",
         cell: ({ getValue }) => <span className="font-medium">{getValue() as string}</span>,
+        meta: { mobileSlot: "title", mobileLabel: "Role" },
       },
       {
         accessorKey: "privileges",
@@ -280,6 +284,7 @@ export default function AdminPage({ params }: { params: Promise<{ connId: string
             </div>
           );
         },
+        meta: { mobileSlot: "content" },
       },
       {
         accessorKey: "whitelist",
@@ -292,7 +297,7 @@ export default function AdminPage({ params }: { params: Promise<{ connId: string
             <span className="text-muted-foreground text-xs italic">any</span>
           );
         },
-        meta: { className: "hidden md:table-cell" },
+        meta: { hideOn: ["mobile"], mobileSlot: "content", mobileLabel: "Whitelist" },
       },
       {
         id: "quotas",
@@ -303,7 +308,7 @@ export default function AdminPage({ params }: { params: Promise<{ connId: string
             <div>W: {row.original.writeQuota}</div>
           </div>
         ),
-        meta: { className: "hidden md:table-cell" },
+        meta: { hideOn: ["mobile"], mobileSlot: "meta", mobileLabel: "Quotas" },
       },
       {
         id: "actions",
@@ -320,13 +325,14 @@ export default function AdminPage({ params }: { params: Promise<{ connId: string
             <Trash2 className="h-4 w-4" />
           </Button>
         ),
+        meta: { mobileSlot: "actions" },
       },
     ],
     [],
   );
 
   return (
-    <div className="animate-fade-in space-y-6 p-6 lg:p-8">
+    <div className="animate-fade-in space-y-6 p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Administration"
         description="Manage users and roles"
@@ -392,6 +398,7 @@ export default function AdminPage({ params }: { params: Promise<{ connId: string
               }
               className="rounded-md border"
               testId="admin-users-table"
+              mobileLayout="cards"
             />
           </TabsContent>
 
@@ -422,6 +429,7 @@ export default function AdminPage({ params }: { params: Promise<{ connId: string
               }
               className="rounded-md border"
               testId="admin-roles-table"
+              mobileLayout="cards"
             />
           </TabsContent>
         </Tabs>
@@ -429,7 +437,7 @@ export default function AdminPage({ params }: { params: Promise<{ connId: string
 
       {/* Create User Dialog */}
       <Dialog open={createUserOpen} onOpenChange={setCreateUserOpen}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent className="max-w-[95vw] sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>Create User</DialogTitle>
             <DialogDescription>Create a new Aerospike user with roles.</DialogDescription>
@@ -504,7 +512,7 @@ export default function AdminPage({ params }: { params: Promise<{ connId: string
 
       {/* Change Password Dialog */}
       <Dialog open={changePassOpen} onOpenChange={setChangePassOpen}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="max-w-[95vw] sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle>Change Password</DialogTitle>
             <DialogDescription>
@@ -550,7 +558,7 @@ export default function AdminPage({ params }: { params: Promise<{ connId: string
 
       {/* Create Role Dialog */}
       <Dialog open={createRoleOpen} onOpenChange={setCreateRoleOpen}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent className="max-w-[95vw] sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>Create Role</DialogTitle>
             <DialogDescription>Define a new role with privileges.</DialogDescription>

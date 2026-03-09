@@ -75,6 +75,22 @@ async def get_records(
     )
 
 
+@router.get(
+    "/{conn_id}/detail",
+    summary="Get record detail",
+    description="Retrieve a single record identified by namespace, set, and primary key.",
+)
+async def get_record_detail(
+    client: AerospikeClient,
+    ns: str = Query(..., min_length=1),
+    set: str = Query(...),
+    pk: str = Query(..., min_length=1),
+) -> AerospikeRecord:
+    """Retrieve a single record identified by namespace, set, and primary key."""
+    raw_result = await client.get((ns, set, _auto_detect_pk(pk)), policy=POLICY_READ)
+    return record_to_model(raw_result)
+
+
 @router.post(
     "/{conn_id}",
     status_code=201,

@@ -73,16 +73,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <ThemeHandler />
       <div className="bg-background flex h-screen flex-col">
         <Header />
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex min-w-0 flex-1 overflow-hidden">
           <Sidebar />
-          <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {connId && !isConnectionPage && (
               <div className="hidden md:block">
                 <TabBar connId={connId} />
               </div>
             )}
             <main
-              className={`dot-pattern ambient-glow flex-1 overflow-auto ${connId && !isConnectionPage ? "pb-16 md:pb-0" : ""}`}
+              className={`dot-pattern ambient-glow min-h-0 min-w-0 flex-1 overflow-auto ${connId && !isConnectionPage ? "pb-16 md:pb-0" : ""}`}
             >
               <ErrorBoundary>{children}</ErrorBoundary>
             </main>

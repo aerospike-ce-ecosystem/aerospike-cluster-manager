@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,12 +27,10 @@ export default function CreateTemplatePage() {
   const router = useRouter();
   const { createTemplate } = useK8sClusterStore();
   const [loading, setLoading] = useState(false);
-  const [namespaces, setNamespaces] = useState<string[]>([]);
   const [storageClasses, setStorageClasses] = useState<string[]>([]);
 
   // Form state
   const [name, setName] = useState("");
-  const [namespace, setNamespace] = useState("aerospike");
   const [description, setDescription] = useState("");
   const [image, setImage] = useState("aerospike:ce-8.1.1.1");
   const [size, setSize] = useState<number | undefined>(undefined);
@@ -54,10 +52,6 @@ export default function CreateTemplatePage() {
 
   useEffect(() => {
     api
-      .getK8sNamespaces()
-      .then(setNamespaces)
-      .catch(() => {});
-    api
       .getK8sStorageClasses()
       .then(setStorageClasses)
       .catch(() => {});
@@ -72,7 +66,6 @@ export default function CreateTemplatePage() {
     try {
       const data: CreateK8sTemplateRequest = {
         name: name.trim(),
-        namespace,
       };
       if (description.trim()) data.description = description.trim();
       if (image) data.image = image;
@@ -159,21 +152,9 @@ export default function CreateTemplatePage() {
                 placeholder="my-template"
                 disabled={loading}
               />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="tmpl-ns">Namespace</Label>
-              <Select value={namespace} onValueChange={setNamespace}>
-                <SelectTrigger id="tmpl-ns" disabled={loading}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {namespaces.map((ns) => (
-                    <SelectItem key={ns} value={ns}>
-                      {ns}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <p className="text-muted-foreground text-xs">
+                Cluster-scoped resource (no namespace)
+              </p>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="tmpl-image">Default Image</Label>

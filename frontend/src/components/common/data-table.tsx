@@ -3,20 +3,22 @@
 import * as React from "react";
 import {
   ColumnDef,
+  ColumnMeta,
   ColumnPinningState,
+  OnChangeFn,
+  Row,
+  RowSelectionState,
   SortingState,
   flexRender,
   getCoreRowModel,
   useReactTable,
-  RowSelectionState,
-  OnChangeFn,
-  Row,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Skeleton } from "@/components/ui/skeleton";
+import { ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
 import { EmptyState } from "@/components/common/empty-state";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useBreakpoint } from "@/hooks/use-breakpoint";
+import { cn } from "@/lib/utils";
 
 type Density = "compact" | "default" | "comfortable";
 
@@ -51,6 +53,49 @@ interface DataTableProps<TData, TValue> {
   testId?: string;
   virtualScrolling?: boolean;
   maxHeight?: string;
+  mobileLayout?: "table" | "cards";
+  mobileCardRenderer?: (row: Row<TData>, index: number) => React.ReactNode;
+  /** Number of skeleton rows to show while loading (default: 8). Card mode uses half this value. */
+  loadingRows?: number;
+}
+
+function shouldHideColumn<TData, TValue>(
+  meta: ColumnMeta<TData, TValue> | undefined,
+  isMobile: boolean,
+  isTablet: boolean,
+) {
+  if (!meta?.hideOn) return false;
+  if (isMobile && meta.hideOn.includes("mobile")) return true;
+  if (isTablet && meta.hideOn.includes("tablet")) return true;
+  return false;
+}
+
+function getMobileLabel<TData, TValue>(column: ColumnDef<TData, TValue>, fallback: string) {
+  if (column.meta?.mobileLabel) return column.meta.mobileLabel;
+  if (typeof column.header === "string") return column.header;
+  if ("accessorKey" in column && typeof column.accessorKey === "string") return column.accessorKey;
+  return fallback;
+}
+
+function getColumnWidthStyle(size: number | undefined) {
+  if (!size) return undefined;
+
+  return {
+    width: size,
+    minWidth: size,
+    maxWidth: size,
+  };
+}
+
+function getPinnedZIndex(
+  pinned: false | "left" | "right",
+  pinnedIndex: number,
+  surface: "header" | "cell",
+) {
+  if (!pinned) return undefined;
+
+  const base = surface === "header" ? 40 : 20;
+  return base - Math.max(pinnedIndex, 0);
 }
 
 export function DataTable<TData, TValue>({
@@ -72,18 +117,33 @@ export function DataTable<TData, TValue>({
   testId = "data-table",
   virtualScrolling = false,
   maxHeight = "600px",
+  mobileLayout = "table",
+  mobileCardRenderer,
+  loadingRows = 8,
 }: DataTableProps<TData, TValue>) {
+  const { isMobile, isTablet } = useBreakpoint();
+  const isCardMode = isMobile && mobileLayout === "cards";
+
+  const responsiveColumns = React.useMemo(
+    () =>
+      columns.filter((column) => {
+        const meta = column.meta as ColumnMeta<TData, TValue> | undefined;
+        return !shouldHideColumn(meta, isMobile, isTablet);
+      }),
+    [columns, isMobile, isTablet],
+  );
+
   const table = useReactTable({
     data,
-    columns,
+    columns: responsiveColumns,
     state: {
       rowSelection: rowSelection || {},
-      ...(enableColumnPinning && columnPinning ? { columnPinning } : {}),
+      ...(!isCardMode && enableColumnPinning && columnPinning ? { columnPinning } : {}),
       ...(sorting ? { sorting } : {}),
     },
     enableRowSelection: true,
-    enableColumnPinning,
-    onRowSelectionChange: onRowSelectionChange,
+    enableColumnPinning: !isCardMode && enableColumnPinning,
+    onRowSelectionChange,
     ...(onSortingChange ? { onSortingChange } : {}),
     getCoreRowModel: getCoreRowModel(),
     manualPagination: true,
@@ -94,56 +154,68 @@ export function DataTable<TData, TValue>({
   const pad = densityPadding[density];
   const { rows } = table.getRowModel();
 
-  // Virtual scrolling setup — hooks are always called, but virtualizer is
-  // only used when virtualScrolling is true.
   const parentRef = React.useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => densityRowHeight[density],
     overscan: 10,
-    enabled: virtualScrolling,
+    enabled: virtualScrolling && !isCardMode,
   });
-
-  // --- Shared renderers ---
 
   const renderHeaderGroups = () =>
     table.getHeaderGroups().map((headerGroup) => (
       <tr key={headerGroup.id}>
         {headerGroup.headers.map((header) => {
           const pinned = header.column.getIsPinned();
+          const widthStyle = getColumnWidthStyle(header.column.columnDef.size);
+          const pinnedIndex = header.column.getPinnedIndex();
+          const pinnedShadow =
+            pinned === "left"
+              ? "1px 0 0 hsl(var(--border))"
+              : pinned === "right"
+                ? "-1px 0 0 hsl(var(--border))"
+                : undefined;
           const canSort = onSortingChange && header.column.getCanSort();
           const sorted = header.column.getIsSorted();
+          const meta = header.column.columnDef.meta;
+
           return (
             <th
               key={header.id}
               className={cn(
-                "bg-muted/50 text-muted-foreground dark:bg-muted/30 overflow-hidden text-left text-[11px] font-semibold tracking-wider text-ellipsis whitespace-nowrap uppercase",
+                "text-muted-foreground overflow-hidden text-left text-[11px] font-semibold tracking-wider text-ellipsis whitespace-nowrap uppercase",
+                pinned ? "bg-muted dark:bg-muted" : "bg-muted/50 dark:bg-muted/30",
+                pinned && "relative isolate",
                 pad.th,
                 canSort && "cursor-pointer select-none",
-                (header.column.columnDef.meta as Record<string, unknown>)?.className as
-                  | string
-                  | undefined,
+                meta?.headerClassName ?? meta?.className,
               )}
               style={{
-                width: header.getSize() !== 150 ? header.getSize() : undefined,
+                ...widthStyle,
                 ...(pinned === "left"
                   ? {
                       position: "sticky" as const,
                       left: header.column.getStart("left"),
-                      zIndex: 30,
+                      zIndex: getPinnedZIndex(pinned, pinnedIndex, "header"),
                     }
                   : {}),
                 ...(pinned === "right"
                   ? {
                       position: "sticky" as const,
                       right: header.column.getAfter("right"),
-                      zIndex: 30,
+                      zIndex: getPinnedZIndex(pinned, pinnedIndex, "header"),
                     }
                   : {}),
-                ...((header.column.columnDef.meta as Record<string, unknown>)?.style as
-                  | React.CSSProperties
-                  | undefined),
+                ...(pinned
+                  ? {
+                      backgroundColor: "hsl(var(--muted))",
+                      backgroundClip: "padding-box",
+                      boxShadow: pinnedShadow,
+                      isolation: "isolate",
+                    }
+                  : {}),
+                ...meta?.style,
               }}
               onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
             >
@@ -188,6 +260,16 @@ export function DataTable<TData, TValue>({
     >
       {row.getVisibleCells().map((cell) => {
         const pinned = cell.column.getIsPinned();
+        const widthStyle = getColumnWidthStyle(cell.column.columnDef.size);
+        const pinnedIndex = cell.column.getPinnedIndex();
+        const pinnedShadow =
+          pinned === "left"
+            ? "1px 0 0 hsl(var(--border))"
+            : pinned === "right"
+              ? "-1px 0 0 hsl(var(--border))"
+              : undefined;
+        const meta = cell.column.columnDef.meta;
+
         return (
           <td
             key={cell.id}
@@ -195,28 +277,34 @@ export function DataTable<TData, TValue>({
               "overflow-hidden text-ellipsis whitespace-nowrap",
               pad.td,
               pinned && "bg-card",
-              (cell.column.columnDef.meta as Record<string, unknown>)?.className as
-                | string
-                | undefined,
+              pinned && "relative isolate",
+              meta?.cellClassName ?? meta?.className,
             )}
             style={{
+              ...widthStyle,
               ...(pinned === "left"
                 ? {
                     position: "sticky" as const,
                     left: cell.column.getStart("left"),
-                    zIndex: 10,
+                    zIndex: getPinnedZIndex(pinned, pinnedIndex, "cell"),
                   }
                 : {}),
               ...(pinned === "right"
                 ? {
                     position: "sticky" as const,
                     right: cell.column.getAfter("right"),
-                    zIndex: 10,
+                    zIndex: getPinnedZIndex(pinned, pinnedIndex, "cell"),
                   }
                 : {}),
-              ...((cell.column.columnDef.meta as Record<string, unknown>)?.style as
-                | React.CSSProperties
-                | undefined),
+              ...(pinned
+                ? {
+                    backgroundColor: "hsl(var(--card))",
+                    backgroundClip: "padding-box",
+                    boxShadow: pinnedShadow,
+                    isolation: "isolate",
+                  }
+                : {}),
+              ...meta?.style,
             }}
           >
             {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -226,18 +314,130 @@ export function DataTable<TData, TValue>({
     </tr>
   );
 
-  // --- Loading skeleton ---
-  if (loading && data.length === 0) {
+  const renderDefaultMobileCard = (row: Row<TData>, idx: number) => {
+    const sections = {
+      title: [] as Array<{ key: string; label: string; content: React.ReactNode }>,
+      meta: [] as Array<{ key: string; label: string; content: React.ReactNode }>,
+      content: [] as Array<{ key: string; label: string; content: React.ReactNode }>,
+      actions: [] as Array<{ key: string; label: string; content: React.ReactNode }>,
+    };
+
+    row.getVisibleCells().forEach((cell) => {
+      const meta = cell.column.columnDef.meta;
+      const slot: keyof typeof sections = meta?.mobileSlot ?? "content";
+      sections[slot].push({
+        key: cell.id,
+        label: getMobileLabel(cell.column.columnDef, cell.column.id),
+        content: flexRender(cell.column.columnDef.cell, cell.getContext()),
+      });
+    });
+
     return (
-      <div className={cn("relative flex-1 overflow-auto", className)} data-testid={testId}>
+      <div
+        key={row.id}
+        className={cn(
+          "record-card border-border/50 bg-card/90 animate-fade-in rounded-2xl border p-4 shadow-sm",
+          onRowClick && "cursor-pointer",
+        )}
+        style={{ animationDelay: `${idx * 25}ms` }}
+        onClick={() => onRowClick?.(row)}
+        onKeyDown={(e) => {
+          if (onRowClick && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault();
+            onRowClick(row);
+          }
+        }}
+        tabIndex={onRowClick ? 0 : undefined}
+        data-testid={`${testId}-row-${idx}`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1.5">
+            {sections.title.length > 0 ? (
+              sections.title.map((entry, titleIndex) => (
+                <div key={entry.key} className="min-w-0">
+                  {titleIndex === 0 ? (
+                    <div className="text-foreground truncate text-sm font-semibold">
+                      {entry.content}
+                    </div>
+                  ) : (
+                    <div className="text-muted-foreground text-xs">
+                      <span className="mr-1 uppercase">{entry.label}:</span>
+                      {entry.content}
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="text-muted-foreground text-xs">{row.id}</div>
+            )}
+          </div>
+
+          {sections.actions.length > 0 && (
+            <div className="flex shrink-0 items-center gap-1.5">
+              {sections.actions.map((entry) => (
+                <div key={entry.key}>{entry.content}</div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {sections.meta.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+            {sections.meta.map((entry) => (
+              <div key={entry.key} className="text-muted-foreground flex items-center gap-1.5">
+                <span className="uppercase opacity-60">{entry.label}</span>
+                <span className="text-foreground">{entry.content}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {sections.content.length > 0 && (
+          <div className="border-border/40 mt-3 space-y-2 border-t pt-3">
+            {sections.content.map((entry) => (
+              <div key={entry.key} className="flex items-start gap-3 text-sm">
+                <span className="text-muted-foreground/70 w-24 shrink-0 text-[11px] font-medium uppercase">
+                  {entry.label}
+                </span>
+                <div className="min-w-0 flex-1">{entry.content}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  if (loading && data.length === 0) {
+    if (isCardMode) {
+      return (
+        <div className={cn("relative min-w-0 flex-1", className)} data-testid={testId}>
+          <div className="space-y-3" data-testid={`${testId}-skeleton`}>
+            {Array.from({ length: Math.ceil(loadingRows / 2) }).map((_, idx) => (
+              <div key={idx} className="border-border/50 bg-card rounded-2xl border p-4">
+                <Skeleton className="mb-3 h-4 w-32" />
+                <div className="space-y-2">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-2/3" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className={cn("relative min-w-0 flex-1 overflow-auto", className)} data-testid={testId}>
         <div
           className="border-border/50 bg-card overflow-hidden rounded-lg border"
           data-testid={`${testId}-skeleton`}
         >
-          <table className={cn("table w-full table-fixed")}>
+          <table className="table w-full table-fixed">
             <thead className="grid-header sticky top-0 z-20">
               <tr>
-                {columns.map((_, i) => (
+                {responsiveColumns.map((_, i) => (
                   <th
                     key={i}
                     className={cn(
@@ -251,13 +451,13 @@ export function DataTable<TData, TValue>({
               </tr>
             </thead>
             <tbody>
-              {Array.from({ length: 8 }).map((_, rowIdx) => (
+              {Array.from({ length: loadingRows }).map((_, rowIdx) => (
                 <tr
                   key={rowIdx}
                   className="border-border/20 border-b last:border-b-0"
                   style={{ animationDelay: `${rowIdx * 60}ms` }}
                 >
-                  {columns.map((_, colIdx) => (
+                  {responsiveColumns.map((_, colIdx) => (
                     <td key={colIdx} className={pad.td}>
                       <Skeleton
                         className={cn("h-3.5", colIdx === 0 ? "w-3/4" : "w-1/2")}
@@ -274,32 +474,46 @@ export function DataTable<TData, TValue>({
     );
   }
 
-  // --- Empty state ---
   if (data.length === 0) {
     return (
-      <div className={cn("relative flex-1 overflow-auto", className)} data-testid={testId}>
+      <div className={cn("relative min-w-0 flex-1 overflow-auto", className)} data-testid={testId}>
         {emptyState || <EmptyState title="No records" description="No data available to display" />}
       </div>
     );
   }
 
-  // --- Loading bar (shared) ---
   const loadingBar = loading && data.length > 0 && (
     <div className="bg-accent/10 sticky top-0 right-0 left-0 z-30 h-[2px] overflow-hidden">
       <div className="loading-bar bg-accent h-full w-1/4 rounded-full" />
     </div>
   );
 
-  // --- Virtual scrolling ---
+  if (isCardMode) {
+    return (
+      <div className={cn("relative min-w-0 flex-1", className)} data-testid={testId}>
+        {loadingBar}
+        <div className="space-y-3" data-testid={`${testId}-body`}>
+          {rows.map((row, idx) =>
+            mobileCardRenderer ? (
+              <React.Fragment key={row.id}>{mobileCardRenderer(row, idx)}</React.Fragment>
+            ) : (
+              renderDefaultMobileCard(row, idx)
+            ),
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (virtualScrolling) {
     const virtualItems = virtualizer.getVirtualItems();
     const totalSize = virtualizer.getTotalSize();
 
     return (
-      <div className={cn("relative flex-1 overflow-auto", className)} data-testid={testId}>
+      <div className={cn("relative min-h-0 min-w-0 flex-1", className)} data-testid={testId}>
         {loadingBar}
-        <div className="border-border/50 bg-card overflow-hidden rounded-lg border">
-          <div ref={parentRef} className="overflow-auto" style={{ maxHeight }}>
+        <div className="border-border/50 bg-card min-w-0 overflow-hidden rounded-lg border">
+          <div ref={parentRef} className="w-full overflow-auto" style={{ maxHeight }}>
             <table
               className={cn("table table-fixed", !tableMinWidth && "w-full")}
               style={tableMinWidth ? { minWidth: tableMinWidth } : undefined}
@@ -311,19 +525,19 @@ export function DataTable<TData, TValue>({
                 {virtualItems.length > 0 && virtualItems[0].start > 0 && (
                   <tr>
                     <td
-                      colSpan={columns.length}
+                      colSpan={responsiveColumns.length}
                       style={{ height: virtualItems[0].start, padding: 0, border: "none" }}
                     />
                   </tr>
                 )}
-                {virtualItems.map((virtualRow) =>
+                {virtualItems.map((virtualRow: { index: number }) =>
                   renderRow(rows[virtualRow.index], virtualRow.index),
                 )}
                 {virtualItems.length > 0 &&
                   virtualItems[virtualItems.length - 1].end < totalSize && (
                     <tr>
                       <td
-                        colSpan={columns.length}
+                        colSpan={responsiveColumns.length}
                         style={{
                           height: totalSize - virtualItems[virtualItems.length - 1].end,
                           padding: 0,
@@ -340,22 +554,26 @@ export function DataTable<TData, TValue>({
     );
   }
 
-  // --- Standard rendering ---
   return (
-    <div className={cn("relative flex-1 overflow-auto", className)} data-testid={testId}>
+    <div
+      className={cn("relative min-h-0 min-w-0 flex-1 overflow-auto", className)}
+      data-testid={testId}
+    >
       {loadingBar}
-      <div className="border-border/50 bg-card overflow-hidden rounded-lg border">
-        <table
-          className={cn("table table-fixed", !tableMinWidth && "w-full")}
-          style={tableMinWidth ? { minWidth: tableMinWidth } : undefined}
-        >
-          <thead className="grid-header sticky top-0 z-20" data-testid={`${testId}-head`}>
-            {renderHeaderGroups()}
-          </thead>
-          <tbody data-testid={`${testId}-body`}>
-            {rows.map((row, idx) => renderRow(row, idx))}
-          </tbody>
-        </table>
+      <div className="border-border/50 bg-card min-w-0 overflow-hidden rounded-lg border">
+        <div className="w-full overflow-auto">
+          <table
+            className={cn("table table-fixed", !tableMinWidth && "w-full")}
+            style={tableMinWidth ? { minWidth: tableMinWidth } : undefined}
+          >
+            <thead className="grid-header sticky top-0 z-20" data-testid={`${testId}-head`}>
+              {renderHeaderGroups()}
+            </thead>
+            <tbody data-testid={`${testId}-body`}>
+              {rows.map((row, idx) => renderRow(row, idx))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

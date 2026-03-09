@@ -25,25 +25,31 @@ describe("InlineAlert", () => {
 
   it("applies error variant by default", () => {
     render(<InlineAlert message="Error" />);
-    const el = screen.getByText("Error");
+    const el = screen.getByRole("alert");
     expect(el.className).toContain("border-destructive");
   });
 
   it("applies warning variant", () => {
     render(<InlineAlert message="Warning" variant="warning" />);
-    const el = screen.getByText("Warning");
+    const el = screen.getByRole("alert");
     expect(el.className).toContain("border-warning");
   });
 
   it("applies info variant", () => {
     render(<InlineAlert message="Info" variant="info" />);
-    const el = screen.getByText("Info");
+    const el = screen.getByRole("alert");
     expect(el.className).toContain("border-accent");
   });
 
   it("applies custom className", () => {
     render(<InlineAlert message="Test" className="mt-4" />);
-    const el = screen.getByText("Test");
+    const el = screen.getByRole("alert");
     expect(el.className).toContain("mt-4");
+  });
+
+  it("has aria-live attribute", () => {
+    render(<InlineAlert message="Test" />);
+    const el = screen.getByRole("alert");
+    expect(el).toHaveAttribute("aria-live", "polite");
   });
 });

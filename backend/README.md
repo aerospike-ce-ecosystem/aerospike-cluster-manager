@@ -40,8 +40,16 @@ export AEROSPIKE_PORT=14790
 | `/api/udfs/{conn_id}` | UDF management |
 | `/api/terminal/{conn_id}` | AQL terminal |
 | `/api/metrics/{conn_id}` | Metrics & monitoring |
+| `/api/k8s/clusters` | K8s AerospikeCluster lifecycle (CRUD, scale, operations, HPA) |
+| `/api/k8s/templates` | K8s AerospikeClusterTemplate management |
+| `/api/k8s/namespaces` | K8s namespace listing |
+| `/api/k8s/storageclasses` | K8s storage class listing |
+| `/api/k8s/secrets` | K8s secret listing (ACL picker) |
+| `/api/k8s/nodes` | K8s node listing (rack config) |
 
 Interactive API docs available at `http://localhost:8000/docs` (Swagger UI).
+
+> K8s endpoints require `K8S_MANAGEMENT_ENABLED=true`. See the [main README](../README.md#k8s-api-endpoints) for the full endpoint reference.
 
 ## Linting
 

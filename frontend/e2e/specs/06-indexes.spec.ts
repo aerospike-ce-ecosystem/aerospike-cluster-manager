@@ -80,7 +80,23 @@ test.describe("06 - Secondary Indexes", () => {
     await page.getByRole("button", { name: "Cancel" }).click();
   });
 
-  test("5. Delete an index", async ({ page }) => {
+  test("5. Mobile index cards show actions", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await indexesPage.goto(connId);
+    await page.waitForTimeout(2_000);
+
+    const card = page
+      .locator("[data-testid^='indexes-table-row-']", { hasText: TEST_INDEX_NAME })
+      .first();
+    if ((await card.count()) > 0) {
+      await expect(card).toBeVisible({ timeout: 10_000 });
+      await expect(page.locator("table")).toHaveCount(0);
+      await expect(card.getByRole("button", { name: /Delete index/i })).toBeVisible();
+    }
+    await screenshot(page, "06-05-index-mobile-cards");
+  });
+
+  test("6. Delete an index", async ({ page }) => {
     await indexesPage.goto(connId);
     await page.waitForTimeout(2_000);
 
@@ -91,6 +107,6 @@ test.describe("06 - Secondary Indexes", () => {
       await confirmDialog(page, "Delete");
       await expectToast(page, /Index deleted/i);
     }
-    await screenshot(page, "06-05-index-deleted");
+    await screenshot(page, "06-06-index-deleted");
   });
 });

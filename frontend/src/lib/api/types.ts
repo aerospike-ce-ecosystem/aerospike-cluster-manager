@@ -413,16 +413,33 @@ export interface RollingUpdateConfig {
   disablePDB: boolean;
 }
 
+export interface RackPodSpecConfig {
+  affinity?: Record<string, unknown>;
+  tolerations?: TolerationConfig[];
+  nodeSelector?: Record<string, string>;
+}
+
+export interface RackStorageConfig {
+  volumes?: Record<string, unknown>[];
+}
+
 export interface RackConfig {
   id: number;
   zone?: string;
   region?: string;
-  maxPodsPerNode?: number;
+  rackLabel?: string;
   nodeName?: string;
+  aerospikeConfig?: Record<string, unknown>;
+  storage?: RackStorageConfig;
+  podSpec?: RackPodSpecConfig;
 }
 
 export interface RackAwareConfig {
   racks: RackConfig[];
+  namespaces?: string[];
+  scaleDownBatchSize?: string;
+  maxIgnorablePods?: string;
+  rollingUpdateBatchSize?: string;
 }
 
 export interface ClusterHealthSummary {
@@ -487,6 +504,33 @@ export interface K8sClusterCondition {
   lastTransitionTime?: string;
 }
 
+export type EventCategory =
+  | "Rolling Restart"
+  | "Configuration"
+  | "ACL Security"
+  | "Rack Management"
+  | "Scaling"
+  | "Lifecycle"
+  | "Monitoring"
+  | "Network"
+  | "Template"
+  | "Circuit Breaker"
+  | "Other";
+
+export const EVENT_CATEGORIES: EventCategory[] = [
+  "Lifecycle",
+  "Rolling Restart",
+  "Configuration",
+  "ACL Security",
+  "Scaling",
+  "Rack Management",
+  "Network",
+  "Monitoring",
+  "Template",
+  "Circuit Breaker",
+  "Other",
+];
+
 export interface K8sClusterEvent {
   type?: string;
   reason?: string;
@@ -495,6 +539,7 @@ export interface K8sClusterEvent {
   firstTimestamp?: string;
   lastTimestamp?: string;
   source?: string;
+  category?: EventCategory;
 }
 
 export interface K8sPodStatus {
@@ -546,6 +591,16 @@ export interface K8sClusterDetail {
   operatorVersion?: string;
 }
 
+export interface ReconciliationStatus {
+  circuitBreakerActive: boolean;
+  failedReconcileCount: number;
+  circuitBreakerThreshold: number;
+  lastReconcileError: string | null;
+  lastReconcileTime: string | null;
+  estimatedBackoffSeconds: number | null;
+  phase: string;
+}
+
 export interface AerospikeNamespaceStorage {
   type: "memory" | "device";
   dataSize?: number;
@@ -580,6 +635,29 @@ export interface NetworkAccessConfig {
   accessType: NetworkAccessType;
   alternateAccessType?: NetworkAccessType;
   fabricType?: NetworkAccessType;
+  customAccessNetworkNames?: string[];
+  customAlternateAccessNetworkNames?: string[];
+  customFabricNetworkNames?: string[];
+}
+
+export interface LoadBalancerSpec {
+  annotations?: Record<string, string>;
+  labels?: Record<string, string>;
+  externalTrafficPolicy?: "Cluster" | "Local";
+  port: number;
+  targetPort: number;
+  loadBalancerSourceRanges?: string[];
+}
+
+export interface SeedsFinderServicesConfig {
+  loadBalancer?: LoadBalancerSpec;
+}
+
+export type NetworkPolicyType = "kubernetes" | "cilium";
+
+export interface NetworkPolicyAutoConfig {
+  enabled: boolean;
+  type: NetworkPolicyType;
 }
 
 export interface ResourceSpec {
@@ -592,9 +670,65 @@ export interface ResourceConfig {
   limits: ResourceSpec;
 }
 
+export interface TolerationConfig {
+  key?: string;
+  operator?: "Exists" | "Equal";
+  value?: string;
+  effect?: "NoSchedule" | "PreferNoSchedule" | "NoExecute" | "";
+  tolerationSeconds?: number;
+}
+
+export interface PodMetadataConfig {
+  labels?: Record<string, string>;
+  annotations?: Record<string, string>;
+}
+
+export interface PodSchedulingConfig {
+  nodeSelector?: Record<string, string>;
+  tolerations?: TolerationConfig[];
+  multiPodPerHost?: boolean;
+  hostNetwork?: boolean;
+  serviceAccountName?: string;
+  terminationGracePeriodSeconds?: number;
+  readinessGateEnabled?: boolean;
+  podManagementPolicy?: "OrderedReady" | "Parallel";
+  dnsPolicy?: string;
+  metadata?: PodMetadataConfig;
+}
+
+export interface ServiceMonitorConfig {
+  enabled: boolean;
+  interval?: string;
+  labels?: Record<string, string>;
+}
+
+export interface PrometheusRuleConfig {
+  enabled: boolean;
+  labels?: Record<string, string>;
+}
+
 export interface MonitoringConfig {
   enabled: boolean;
   port: number;
+  exporterImage?: string;
+  serviceMonitor?: ServiceMonitorConfig;
+  prometheusRule?: PrometheusRuleConfig;
+  resources?: ResourceConfig;
+  metricLabels?: Record<string, string>;
+}
+
+export interface BandwidthConfig {
+  ingress?: string;
+  egress?: string;
+}
+
+export interface ValidationPolicyConfig {
+  skipWorkDirValidate?: boolean;
+}
+
+export interface ServiceMetadataConfig {
+  annotations?: Record<string, string>;
+  labels?: Record<string, string>;
 }
 
 export interface CreateK8sClusterRequest {
@@ -606,7 +740,7 @@ export interface CreateK8sClusterRequest {
   storage?: StorageVolumeConfig;
   resources?: ResourceConfig;
   monitoring?: MonitoringConfig;
-  templateRef?: { name: string; namespace?: string };
+  templateRef?: { name: string };
   templateOverrides?: TemplateOverrides;
   enableDynamicConfig?: boolean;
   autoConnect: boolean;
@@ -615,6 +749,15 @@ export interface CreateK8sClusterRequest {
   rackConfig?: RackAwareConfig;
   networkPolicy?: NetworkAccessConfig;
   k8sNodeBlockList?: string[];
+  podScheduling?: PodSchedulingConfig;
+  seedsFinderServices?: SeedsFinderServicesConfig;
+  networkPolicyConfig?: NetworkPolicyAutoConfig;
+  bandwidthConfig?: BandwidthConfig;
+  validationPolicy?: ValidationPolicyConfig;
+  headlessService?: ServiceMetadataConfig;
+  podService?: ServiceMetadataConfig;
+  enableRackIDOverride?: boolean;
+  podMetadata?: PodMetadataConfig;
 }
 
 export interface UpdateK8sClusterRequest {
@@ -631,6 +774,16 @@ export interface UpdateK8sClusterRequest {
   rackConfig?: RackAwareConfig;
   networkPolicy?: NetworkAccessConfig;
   k8sNodeBlockList?: string[];
+  podScheduling?: PodSchedulingConfig;
+  seedsFinderServices?: SeedsFinderServicesConfig;
+  networkPolicyConfig?: NetworkPolicyAutoConfig;
+  acl?: ACLConfig;
+  bandwidthConfig?: BandwidthConfig;
+  validationPolicy?: ValidationPolicyConfig;
+  headlessService?: ServiceMetadataConfig;
+  podService?: ServiceMetadataConfig;
+  enableRackIDOverride?: boolean;
+  podMetadata?: PodMetadataConfig;
 }
 
 export interface ScaleK8sClusterRequest {
@@ -645,7 +798,6 @@ export interface OperationRequest {
 
 export interface K8sTemplateSummary {
   name: string;
-  namespace: string;
   image?: string;
   size?: number;
   age?: string;
@@ -654,7 +806,6 @@ export interface K8sTemplateSummary {
 
 export interface K8sTemplateDetail {
   name: string;
-  namespace: string;
   spec: Record<string, unknown>;
   status?: Record<string, unknown>;
   age?: string;
@@ -674,7 +825,6 @@ export interface TemplateStorageConfig {
 
 export interface CreateK8sTemplateRequest {
   name: string;
-  namespace: string;
   description?: string;
   image?: string;
   size?: number;
@@ -698,6 +848,9 @@ export interface TemplateOverrides {
   image?: string;
   size?: number;
   resources?: ResourceConfig;
+  monitoring?: MonitoringConfig;
+  networkPolicy?: NetworkAccessConfig;
+  enableDynamicConfig?: boolean;
 }
 
 export interface PodLogsResponse {
@@ -718,11 +871,57 @@ export interface BinEntry {
   type: "string" | "integer" | "float" | "bool" | "list" | "map" | "bytes" | "geojson";
 }
 
+// === Config Drift ===
+export interface PodHashGroup {
+  configHash: string | null;
+  podSpecHash: string | null;
+  pods: string[];
+  isCurrent: boolean;
+}
+
+export interface ConfigDriftResponse {
+  hasDrift: boolean;
+  changedFields: string[];
+  podHashGroups: PodHashGroup[];
+  desiredConfigHash: string | null;
+}
+
+// === HPA (HorizontalPodAutoscaler) ===
+export interface HPAConfig {
+  minReplicas: number;
+  maxReplicas: number;
+  cpuTargetPercent?: number | null;
+  memoryTargetPercent?: number | null;
+}
+
+export interface HPACondition {
+  type: string;
+  status: string;
+  reason?: string;
+  message?: string;
+  lastTransitionTime?: string;
+}
+
+export interface HPAStatus {
+  currentReplicas: number;
+  desiredReplicas: number;
+  conditions: HPACondition[];
+}
+
+export interface HPAResponse {
+  enabled: boolean;
+  config: HPAConfig;
+  status: HPAStatus;
+}
+
 // === AerospikeCluster Spec (typed subset of the CRD spec) ===
 export interface AerospikeNetworkPolicySpec {
   accessType?: string;
   alternateAccessType?: string;
   fabricType?: string;
+  customAccessNetworkNames?: string[];
+  customAlternateAccessNetworkNames?: string[];
+  customFabricNetworkNames?: string[];
 }
 
 export interface AerospikeClusterSpec {
@@ -740,7 +939,20 @@ export interface AerospikeClusterSpec {
   aerospikeNetworkPolicy?: AerospikeNetworkPolicySpec;
   k8sNodeBlockList?: string[];
   monitoring?: MonitoringConfig;
+  podScheduling?: PodSchedulingConfig;
   acl?: ACLConfig;
   resources?: ResourceConfig;
+  seedsFinderServices?: SeedsFinderServicesConfig;
+  networkPolicyConfig?: NetworkPolicyAutoConfig;
+  bandwidthConfig?: BandwidthConfig;
+  validationPolicy?: ValidationPolicyConfig;
+  headlessService?: {
+    metadata?: { annotations?: Record<string, string>; labels?: Record<string, string> };
+  };
+  podService?: {
+    metadata?: { annotations?: Record<string, string>; labels?: Record<string, string> };
+  };
+  enableRackIDOverride?: boolean;
+  templateRef?: { name: string };
   [key: string]: unknown;
 }

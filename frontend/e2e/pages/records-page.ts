@@ -17,9 +17,9 @@ export class RecordsPage {
     await this.page.waitForTimeout(1_000);
   }
 
-  async openCreateDialog() {
+  async openCreatePage() {
     await this.newRecordBtn.click();
-    await expect(this.page.getByRole("dialog").getByText("New Record")).toBeVisible({
+    await expect(this.page.getByRole("heading", { name: "New Record" })).toBeVisible({
       timeout: 5_000,
     });
   }
@@ -64,11 +64,11 @@ export class RecordsPage {
   }
 
   async submitCreate() {
-    await this.page.getByRole("dialog").getByRole("button", { name: "Create" }).click();
+    await this.page.getByRole("button", { name: "Create" }).click();
   }
 
   async submitUpdate() {
-    await this.page.getByRole("dialog").getByRole("button", { name: "Update" }).click();
+    await this.page.getByRole("button", { name: "Save" }).click();
   }
 
   async clickViewRecord(rowIndex = 0) {

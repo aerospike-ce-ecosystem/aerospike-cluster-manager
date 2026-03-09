@@ -93,4 +93,17 @@ describe("FilterToolbar", () => {
     render(<FilterToolbar {...defaultProps} error="Something went wrong" />);
     expect(screen.getByText("Something went wrong")).toBeInTheDocument();
   });
+
+  it("shows stats summary when stats are provided for active filters", () => {
+    useFilterStore.getState().addCondition("age", "integer");
+    render(
+      <FilterToolbar
+        {...defaultProps}
+        stats={{ executionTimeMs: 12, scannedRecords: 40, returnedRecords: 3 }}
+      />,
+    );
+
+    expect(screen.getByText("12ms")).toBeInTheDocument();
+    expect(screen.getByText("3 / 40")).toBeInTheDocument();
+  });
 });

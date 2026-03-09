@@ -41,6 +41,7 @@ class K8sClient:
         self._custom_api = None
         self._core_api = None
         self._storage_api = None
+        self._autoscaling_api = None
         self._lock = threading.Lock()
         self._initialized = False
 
@@ -69,6 +70,7 @@ class K8sClient:
             self._custom_api = client.CustomObjectsApi()
             self._core_api = client.CoreV1Api()
             self._storage_api = client.StorageV1Api()
+            self._autoscaling_api = client.AutoscalingV2Api()
             self._initialized = True
 
     # ------------------------------------------------------------------
@@ -162,6 +164,62 @@ class K8sClient:
                 group=GROUP,
                 version=VERSION,
                 namespace=namespace,
+                plural=plural,
+                name=name,
+                _request_timeout=_K8S_API_TIMEOUT,
+            )
+        except Exception as e:
+            raise self._wrap_api_exception(e) from e
+
+    # ------------------------------------------------------------------
+    # Cluster-scoped custom-object helpers (for non-namespaced CRDs)
+    # ------------------------------------------------------------------
+
+    def _list_cluster_custom_objects_sync(self, plural: str) -> list[dict[str, Any]]:
+        self._ensure_initialized()
+        try:
+            result = self._custom_api.list_cluster_custom_object(
+                group=GROUP,
+                version=VERSION,
+                plural=plural,
+                _request_timeout=_K8S_API_TIMEOUT,
+            )
+            return result.get("items", [])
+        except Exception as e:
+            raise self._wrap_api_exception(e) from e
+
+    def _get_cluster_custom_object_sync(self, plural: str, name: str) -> dict[str, Any]:
+        self._ensure_initialized()
+        try:
+            return self._custom_api.get_cluster_custom_object(
+                group=GROUP,
+                version=VERSION,
+                plural=plural,
+                name=name,
+                _request_timeout=_K8S_API_TIMEOUT,
+            )
+        except Exception as e:
+            raise self._wrap_api_exception(e) from e
+
+    def _create_cluster_custom_object_sync(self, plural: str, body: dict[str, Any]) -> dict[str, Any]:
+        self._ensure_initialized()
+        try:
+            return self._custom_api.create_cluster_custom_object(
+                group=GROUP,
+                version=VERSION,
+                plural=plural,
+                body=body,
+                _request_timeout=_K8S_API_TIMEOUT,
+            )
+        except Exception as e:
+            raise self._wrap_api_exception(e) from e
+
+    def _delete_cluster_custom_object_sync(self, plural: str, name: str) -> dict[str, Any]:
+        self._ensure_initialized()
+        try:
+            return self._custom_api.delete_cluster_custom_object(
+                group=GROUP,
+                version=VERSION,
                 plural=plural,
                 name=name,
                 _request_timeout=_K8S_API_TIMEOUT,
@@ -270,21 +328,21 @@ class K8sClient:
     # Template-specific sync helpers
     # ------------------------------------------------------------------
 
-    def _list_templates_sync(self, namespace: str | None = None) -> list[dict[str, Any]]:
-        logger.debug("_list_templates_sync(namespace=%s)", namespace)
-        return self._list_custom_objects_sync(TEMPLATE_PLURAL, namespace)
+    def _list_templates_sync(self) -> list[dict[str, Any]]:
+        logger.debug("_list_templates_sync()")
+        return self._list_cluster_custom_objects_sync(TEMPLATE_PLURAL)
 
-    def _get_template_sync(self, namespace: str, name: str) -> dict[str, Any]:
-        logger.debug("_get_template_sync(namespace=%s, name=%s)", namespace, name)
-        return self._get_custom_object_sync(TEMPLATE_PLURAL, namespace, name)
+    def _get_template_sync(self, name: str) -> dict[str, Any]:
+        logger.debug("_get_template_sync(name=%s)", name)
+        return self._get_cluster_custom_object_sync(TEMPLATE_PLURAL, name)
 
-    def _create_template_sync(self, namespace: str, body: dict[str, Any]) -> dict[str, Any]:
-        logger.debug("_create_template_sync(namespace=%s)", namespace)
-        return self._create_custom_object_sync(TEMPLATE_PLURAL, namespace, body)
+    def _create_template_sync(self, body: dict[str, Any]) -> dict[str, Any]:
+        logger.debug("_create_template_sync()")
+        return self._create_cluster_custom_object_sync(TEMPLATE_PLURAL, body)
 
-    def _delete_template_sync(self, namespace: str, name: str) -> dict[str, Any]:
-        logger.debug("_delete_template_sync(namespace=%s, name=%s)", namespace, name)
-        return self._delete_custom_object_sync(TEMPLATE_PLURAL, namespace, name)
+    def _delete_template_sync(self, name: str) -> dict[str, Any]:
+        logger.debug("_delete_template_sync(name=%s)", name)
+        return self._delete_cluster_custom_object_sync(TEMPLATE_PLURAL, name)
 
     def _list_secrets_sync(self, namespace: str) -> list[str]:
         logger.debug("_list_secrets_sync(namespace=%s)", namespace)
@@ -396,17 +454,17 @@ class K8sClient:
     async def list_pods(self, namespace: str, label_selector: str) -> list[dict[str, Any]]:
         return await asyncio.to_thread(self._list_pods_sync, namespace, label_selector)
 
-    async def list_templates(self, namespace: str | None = None) -> list[dict[str, Any]]:
-        return await asyncio.to_thread(self._list_templates_sync, namespace)
+    async def list_templates(self) -> list[dict[str, Any]]:
+        return await asyncio.to_thread(self._list_templates_sync)
 
-    async def get_template(self, namespace: str, name: str) -> dict[str, Any]:
-        return await asyncio.to_thread(self._get_template_sync, namespace, name)
+    async def get_template(self, name: str) -> dict[str, Any]:
+        return await asyncio.to_thread(self._get_template_sync, name)
 
-    async def create_template(self, namespace: str, body: dict[str, Any]) -> dict[str, Any]:
-        return await asyncio.to_thread(self._create_template_sync, namespace, body)
+    async def create_template(self, body: dict[str, Any]) -> dict[str, Any]:
+        return await asyncio.to_thread(self._create_template_sync, body)
 
-    async def delete_template(self, namespace: str, name: str) -> dict[str, Any]:
-        return await asyncio.to_thread(self._delete_template_sync, namespace, name)
+    async def delete_template(self, name: str) -> dict[str, Any]:
+        return await asyncio.to_thread(self._delete_template_sync, name)
 
     async def list_secrets(self, namespace: str) -> list[str]:
         """List Secret names in a namespace (Opaque type only)."""
@@ -422,6 +480,198 @@ class K8sClient:
         self, namespace: str, pod_name: str, container: str | None = None, tail_lines: int = 500
     ) -> str:
         return await asyncio.to_thread(self._read_pod_log_sync, namespace, pod_name, container, tail_lines)
+
+    # ------------------------------------------------------------------
+    # HPA sync helpers
+    # ------------------------------------------------------------------
+
+    def _get_hpa_sync(self, namespace: str, name: str) -> dict[str, Any]:
+        """Get an HPA by namespace and name. Returns the raw API object as a dict."""
+        logger.debug("_get_hpa_sync(namespace=%s, name=%s)", namespace, name)
+        self._ensure_initialized()
+        try:
+            hpa = self._autoscaling_api.read_namespaced_horizontal_pod_autoscaler(
+                name=name,
+                namespace=namespace,
+                _request_timeout=_K8S_API_TIMEOUT,
+            )
+            return hpa.to_dict()
+        except Exception as e:
+            raise self._wrap_api_exception(e) from e
+
+    @staticmethod
+    def _build_hpa_object(
+        cluster_name: str,
+        namespace: str,
+        min_replicas: int,
+        max_replicas: int,
+        cpu_target_percent: int | None,
+        memory_target_percent: int | None,
+    ) -> Any:
+        """Build a V2HorizontalPodAutoscaler object (shared by create and update)."""
+        from kubernetes import client
+
+        metrics = []
+        if cpu_target_percent is not None:
+            metrics.append(
+                client.V2MetricSpec(
+                    type="Resource",
+                    resource=client.V2ResourceMetricSource(
+                        name="cpu",
+                        target=client.V2MetricTarget(
+                            type="Utilization",
+                            average_utilization=cpu_target_percent,
+                        ),
+                    ),
+                )
+            )
+        if memory_target_percent is not None:
+            metrics.append(
+                client.V2MetricSpec(
+                    type="Resource",
+                    resource=client.V2ResourceMetricSource(
+                        name="memory",
+                        target=client.V2MetricTarget(
+                            type="Utilization",
+                            average_utilization=memory_target_percent,
+                        ),
+                    ),
+                )
+            )
+
+        return client.V2HorizontalPodAutoscaler(
+            metadata=client.V1ObjectMeta(
+                name=cluster_name,
+                namespace=namespace,
+                labels={
+                    "app.kubernetes.io/managed-by": "aerospike-cluster-manager",
+                    "app.kubernetes.io/instance": cluster_name,
+                },
+            ),
+            spec=client.V2HorizontalPodAutoscalerSpec(
+                scale_target_ref=client.V2CrossVersionObjectReference(
+                    api_version=f"{GROUP}/{VERSION}",
+                    kind="AerospikeCluster",
+                    name=cluster_name,
+                ),
+                min_replicas=min_replicas,
+                max_replicas=max_replicas,
+                metrics=metrics,
+            ),
+        )
+
+    def _create_hpa_sync(
+        self,
+        namespace: str,
+        cluster_name: str,
+        min_replicas: int,
+        max_replicas: int,
+        cpu_target_percent: int | None = None,
+        memory_target_percent: int | None = None,
+    ) -> dict[str, Any]:
+        """Create an HPA targeting an AerospikeCluster."""
+        logger.debug("_create_hpa_sync(namespace=%s, cluster=%s)", namespace, cluster_name)
+        self._ensure_initialized()
+        hpa = self._build_hpa_object(
+            cluster_name, namespace, min_replicas, max_replicas, cpu_target_percent, memory_target_percent
+        )
+        try:
+            result = self._autoscaling_api.create_namespaced_horizontal_pod_autoscaler(
+                namespace=namespace,
+                body=hpa,
+                _request_timeout=_K8S_API_TIMEOUT,
+            )
+            return result.to_dict()
+        except Exception as e:
+            raise self._wrap_api_exception(e) from e
+
+    def _update_hpa_sync(
+        self,
+        namespace: str,
+        cluster_name: str,
+        min_replicas: int,
+        max_replicas: int,
+        cpu_target_percent: int | None = None,
+        memory_target_percent: int | None = None,
+    ) -> dict[str, Any]:
+        """Update (replace) an existing HPA."""
+        logger.debug("_update_hpa_sync(namespace=%s, cluster=%s)", namespace, cluster_name)
+        self._ensure_initialized()
+        hpa = self._build_hpa_object(
+            cluster_name, namespace, min_replicas, max_replicas, cpu_target_percent, memory_target_percent
+        )
+
+        try:
+            result = self._autoscaling_api.replace_namespaced_horizontal_pod_autoscaler(
+                name=cluster_name,
+                namespace=namespace,
+                body=hpa,
+                _request_timeout=_K8S_API_TIMEOUT,
+            )
+            return result.to_dict()
+        except Exception as e:
+            raise self._wrap_api_exception(e) from e
+
+    def _delete_hpa_sync(self, namespace: str, name: str) -> None:
+        """Delete an HPA."""
+        logger.debug("_delete_hpa_sync(namespace=%s, name=%s)", namespace, name)
+        self._ensure_initialized()
+        try:
+            self._autoscaling_api.delete_namespaced_horizontal_pod_autoscaler(
+                name=name,
+                namespace=namespace,
+                _request_timeout=_K8S_API_TIMEOUT,
+            )
+        except Exception as e:
+            raise self._wrap_api_exception(e) from e
+
+    # ------------------------------------------------------------------
+    # HPA async public API
+    # ------------------------------------------------------------------
+
+    async def get_hpa(self, namespace: str, name: str) -> dict[str, Any]:
+        return await asyncio.to_thread(self._get_hpa_sync, namespace, name)
+
+    async def create_hpa(
+        self,
+        namespace: str,
+        cluster_name: str,
+        min_replicas: int,
+        max_replicas: int,
+        cpu_target_percent: int | None = None,
+        memory_target_percent: int | None = None,
+    ) -> dict[str, Any]:
+        return await asyncio.to_thread(
+            self._create_hpa_sync,
+            namespace,
+            cluster_name,
+            min_replicas,
+            max_replicas,
+            cpu_target_percent,
+            memory_target_percent,
+        )
+
+    async def update_hpa(
+        self,
+        namespace: str,
+        cluster_name: str,
+        min_replicas: int,
+        max_replicas: int,
+        cpu_target_percent: int | None = None,
+        memory_target_percent: int | None = None,
+    ) -> dict[str, Any]:
+        return await asyncio.to_thread(
+            self._update_hpa_sync,
+            namespace,
+            cluster_name,
+            min_replicas,
+            max_replicas,
+            cpu_target_percent,
+            memory_target_percent,
+        )
+
+    async def delete_hpa(self, namespace: str, name: str) -> None:
+        return await asyncio.to_thread(self._delete_hpa_sync, namespace, name)
 
 
 k8s_client = K8sClient()

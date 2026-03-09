@@ -22,6 +22,10 @@ export const DEFAULT_PAGE_SIZE = 25;
 export const METRIC_HISTORY_POINTS = 60;
 export const METRIC_INTERVAL_MS = 2000;
 
+export const K8S_DETAIL_POLL_INTERVAL_MS = 5_000;
+export const K8S_DETAIL_POLL_MAX_BACKOFF_MS = 60_000;
+export const SIDEBAR_HEALTH_POLL_INTERVAL_MS = 30_000;
+
 export const QUICK_COMMANDS = [
   { label: "namespaces", command: "show namespaces" },
   { label: "sets", command: "show sets" },

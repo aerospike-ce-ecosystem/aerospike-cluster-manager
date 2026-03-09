@@ -1,7 +1,7 @@
 "use client";
 
-import { use, useEffect, useState, useMemo, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { use, useEffect, useRef, useState, useMemo, useCallback } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Plus,
   Eye,
@@ -16,20 +16,19 @@ import {
   FileJson,
   FileSpreadsheet,
 } from "lucide-react";
-import type { ColumnDef, ColumnPinningState } from "@tanstack/react-table";
+import type { ColumnDef, ColumnPinningState, Row } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { DataTable } from "@/components/common/data-table";
 import { TablePagination } from "@/components/common/table-pagination";
 import { renderCellValue } from "@/components/browser/record-cell-renderer";
-import { RecordViewDialog } from "@/components/browser/record-view-dialog";
 import {
   RecordEditorDialog,
   type BinEntry,
+  buildBinEntriesFromRecord,
+  createEmptyBinEntry,
   parseBinValue,
-  detectBinType,
-  serializeBinValue,
 } from "@/components/browser/record-editor-dialog";
 import { BatchReadDialog } from "@/components/browser/batch-read-dialog";
 import { FilterToolbar } from "@/components/browser/filter-toolbar";
@@ -37,6 +36,7 @@ import { useBrowserStore } from "@/stores/browser-store";
 import { useFilterStore } from "@/stores/filter-store";
 import { useConnectionStore } from "@/stores/connection-store";
 import { usePagination } from "@/hooks/use-pagination";
+import { useAsyncData } from "@/hooks/use-async-data";
 import type {
   AerospikeRecord,
   BinValue,
@@ -49,10 +49,17 @@ import { truncateMiddle, formatNumber, formatTTLAsExpiry } from "@/lib/formatter
 import { detectBinTypes } from "@/lib/bin-type-detector";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
 import { api } from "@/lib/api/client";
+import {
+  buildCurrentListReturnTo,
+  buildNewRecordHref,
+  buildRecordDetailHref,
+  buildRecordListSearchParams,
+  readRecordListRouteState,
+} from "@/lib/record-route-state";
 import { toast } from "sonner";
 
 const COLUMN_PINNING: ColumnPinningState = {
-  left: ["select", "rowNumber"],
+  left: ["select", "rowNumber", "pk", "gen", "ttl"],
   right: ["actions"],
 };
 
@@ -65,6 +72,8 @@ export default function BrowserPage({
 }) {
   const { connId, ns, set } = use(params);
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const {
     records,
@@ -78,8 +87,6 @@ export default function BrowserPage({
     fetchFilteredRecords,
     putRecord,
     deleteRecord,
-    setPage,
-    setPageSize,
   } = useBrowserStore();
 
   const filterStore = useFilterStore();
@@ -94,10 +101,8 @@ export default function BrowserPage({
 
   const [selectedPKs, setSelectedPKs] = useState<Set<string>>(new Set());
   const [batchDialogOpen, setBatchDialogOpen] = useState(false);
-
-  const [viewRecord, setViewRecord] = useState<AerospikeRecord | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
-  const [editorMode, setEditorMode] = useState<"create" | "edit" | "duplicate">("create");
+  const [editorMode, setEditorMode] = useState<"duplicate">("duplicate");
   const [deleteTarget, setDeleteTarget] = useState<AerospikeRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -105,27 +110,26 @@ export default function BrowserPage({
   // Editor form state
   const [editorPK, setEditorPK] = useState("");
   const [editorTTL, setEditorTTL] = useState("0");
-  const [editorBins, setEditorBins] = useState<BinEntry[]>([
-    { id: crypto.randomUUID(), name: "", value: "", type: "string" },
-  ]);
+  const [editorBins, setEditorBins] = useState<BinEntry[]>([createEmptyBinEntry()]);
   const [useCodeEditor, setUseCodeEditor] = useState<Record<string, boolean>>({});
 
   const decodedNs = decodeURIComponent(ns);
   const decodedSet = decodeURIComponent(set);
+  const routeState = useMemo(
+    () => readRecordListRouteState(new URLSearchParams(searchParams.toString())),
+    [searchParams],
+  );
+  const currentListReturnTo = useMemo(
+    () => buildCurrentListReturnTo(pathname, searchParams),
+    [pathname, searchParams],
+  );
 
   // Fetch secondary indexes for this connection
-  const [indexes, setIndexes] = useState<SecondaryIndex[]>([]);
-  useEffect(() => {
-    api
-      .getIndexes(connId)
-      .then(setIndexes)
-      .catch(() => setIndexes([]));
-  }, [connId]);
-
-  // Initial fetch
-  useEffect(() => {
-    fetchFilteredRecords(connId, decodedNs, decodedSet);
-  }, [connId, decodedNs, decodedSet, fetchFilteredRecords]);
+  const { data: indexesData } = useAsyncData<SecondaryIndex[]>(
+    () => api.getIndexes(connId),
+    [connId],
+  );
+  const indexes = useMemo<SecondaryIndex[]>(() => indexesData ?? [], [indexesData]);
 
   // Reset filter store when leaving
   useEffect(() => {
@@ -134,6 +138,45 @@ export default function BrowserPage({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const activeFilters = useMemo(() => filterStore.toFilterGroup(), [filterStore]);
+
+  useEffect(() => {
+    useFilterStore.setState({
+      primaryKey: routeState.primaryKey,
+      logic: routeState.filters?.logic ?? "and",
+      conditions: routeState.filters?.conditions ?? [],
+    });
+    useBrowserStore.setState({
+      page: routeState.page,
+      pageSize: routeState.pageSize,
+    });
+  }, [routeState.filters, routeState.page, routeState.pageSize, routeState.primaryKey]);
+
+  useEffect(() => {
+    fetchFilteredRecords(
+      connId,
+      decodedNs,
+      decodedSet,
+      routeState.filters,
+      routeState.page,
+      routeState.pageSize,
+      routeState.primaryKey || undefined,
+    );
+  }, [
+    connId,
+    decodedNs,
+    decodedSet,
+    fetchFilteredRecords,
+    routeState.filters,
+    routeState.page,
+    routeState.pageSize,
+    routeState.primaryKey,
+  ]);
+
+  useEffect(() => {
+    setSelectedPKs(new Set());
+  }, [searchParams]);
 
   const displayRecords = records;
   const displayLoading = loading;
@@ -177,68 +220,120 @@ export default function BrowserPage({
     [binTypeHints, indexedBinSet],
   );
 
-  // Execute filtered query
-  const refreshCurrentView = useCallback(
-    async (currentPage: number, currentPageSize: number, primaryKeyOverride?: string) => {
-      const filters = filterStore.toFilterGroup();
-      const primaryKey = primaryKeyOverride ?? (filterStore.primaryKey.trim() || undefined);
-      await fetchFilteredRecords(
-        connId,
-        decodedNs,
-        decodedSet,
-        filters,
-        currentPage,
-        currentPageSize,
-        primaryKey,
-      );
+  const replaceRouteState = useCallback(
+    (nextState: {
+      page: number;
+      pageSize: number;
+      primaryKey: string;
+      filters?: { logic: "and" | "or"; conditions: typeof filterStore.conditions };
+    }) => {
+      const nextParams = buildRecordListSearchParams({
+        page: nextState.page,
+        pageSize: nextState.pageSize,
+        primaryKey: nextState.primaryKey,
+        filters: nextState.filters,
+      });
+      const query = nextParams.toString();
+      const href = query ? `${pathname}?${query}` : pathname;
+      router.replace(href, { scroll: false });
     },
-    [connId, decodedNs, decodedSet, filterStore, fetchFilteredRecords],
+    // filterStore is only referenced in the TypeScript type annotation (typeof), not at runtime
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pathname, router],
   );
+
+  // Execute filtered query
+  const refreshCurrentView = useCallback(async () => {
+    await fetchFilteredRecords(
+      connId,
+      decodedNs,
+      decodedSet,
+      activeFilters,
+      routeState.page,
+      routeState.pageSize,
+      routeState.primaryKey || undefined,
+    );
+  }, [
+    activeFilters,
+    connId,
+    decodedNs,
+    decodedSet,
+    fetchFilteredRecords,
+    routeState.page,
+    routeState.pageSize,
+    routeState.primaryKey,
+  ]);
 
   const handleFilterExecute = useCallback(() => {
     setSelectedPKs(new Set());
-    refreshCurrentView(1, pageSize);
-  }, [pageSize, refreshCurrentView]);
+    replaceRouteState({
+      page: 1,
+      pageSize: routeState.pageSize,
+      primaryKey: filterStore.primaryKey.trim(),
+      filters:
+        filterStore.conditions.length > 0
+          ? {
+              logic: filterStore.logic,
+              conditions: filterStore.conditions,
+            }
+          : undefined,
+    });
+  }, [
+    filterStore.conditions,
+    filterStore.logic,
+    filterStore.primaryKey,
+    replaceRouteState,
+    routeState.pageSize,
+  ]);
 
   // PK lookup
   const handlePKLookup = useCallback(
     (pk: string) => {
       setSelectedPKs(new Set());
-      refreshCurrentView(1, pageSize, pk);
+      replaceRouteState({
+        page: 1,
+        pageSize: routeState.pageSize,
+        primaryKey: pk.trim(),
+        filters:
+          filterStore.conditions.length > 0
+            ? {
+                logic: filterStore.logic,
+                conditions: filterStore.conditions,
+              }
+            : undefined,
+      });
     },
-    [pageSize, refreshCurrentView],
+    [filterStore.conditions, filterStore.logic, replaceRouteState, routeState.pageSize],
   );
 
-  const openEditor = useCallback(
-    (mode: "create" | "edit" | "duplicate", record?: AerospikeRecord) => {
-      setEditorMode(mode);
-      if (record && (mode === "edit" || mode === "duplicate")) {
-        setEditorPK(mode === "duplicate" ? "" : record.key.pk);
-        setEditorTTL(String(record.meta.ttl));
-        setEditorBins(
-          Object.entries(record.bins).map(([name, value]) => ({
-            id: crypto.randomUUID(),
-            name,
-            value: serializeBinValue(value),
-            type: detectBinType(value),
-          })),
-        );
-      } else {
-        setEditorPK("");
-        setEditorTTL("0");
-        setEditorBins([{ id: crypto.randomUUID(), name: "", value: "", type: "string" }]);
-      }
-      setUseCodeEditor({});
-      setEditorOpen(true);
+  const openDuplicateEditor = useCallback((record: AerospikeRecord) => {
+    const nextBins = buildBinEntriesFromRecord(record);
+    setEditorMode("duplicate");
+    setEditorPK("");
+    setEditorTTL(String(record.meta.ttl));
+    setEditorBins(nextBins.length > 0 ? nextBins : [createEmptyBinEntry()]);
+    setUseCodeEditor({});
+    setEditorOpen(true);
+  }, []);
+
+  const openRecordDetail = useCallback(
+    (record: AerospikeRecord, intent?: "edit") => {
+      router.push(
+        buildRecordDetailHref({
+          connId,
+          namespace: decodedNs,
+          setName: decodedSet,
+          pk: record.key.pk,
+          intent,
+          returnTo: currentListReturnTo,
+        }),
+      );
     },
-    [],
+    [connId, currentListReturnTo, decodedNs, decodedSet, router],
   );
 
   const addBin = useCallback(() => {
-    setEditorBins((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), name: "", value: "", type: "string" },
-    ]);
+    setEditorBins((prev) => [...prev, createEmptyBinEntry()]);
   }, []);
 
   const removeBin = useCallback((id: string) => {
@@ -268,15 +363,9 @@ export default function BrowserPage({
         ttl: parseInt(editorTTL, 10) || 0,
       };
       await putRecord(connId, data, {
-        refresh: () => refreshCurrentView(page, pageSize),
+        refresh: refreshCurrentView,
       });
-      toast.success(
-        editorMode === "create"
-          ? "Record created"
-          : editorMode === "duplicate"
-            ? "Record duplicated"
-            : "Record updated",
-      );
+      toast.success("Record duplicated");
       setEditorOpen(false);
     } catch (err) {
       toast.error(getErrorMessage(err));
@@ -294,7 +383,7 @@ export default function BrowserPage({
         deleteTarget.key.namespace,
         deleteTarget.key.set,
         deleteTarget.key.pk,
-        { refresh: () => refreshCurrentView(page, pageSize) },
+        { refresh: refreshCurrentView },
       );
       toast.success("Record deleted");
       setDeleteTarget(null);
@@ -307,19 +396,32 @@ export default function BrowserPage({
 
   const handlePageChange = useCallback(
     (newPage: number) => {
-      setPage(newPage);
-      refreshCurrentView(newPage, pageSize);
+      replaceRouteState({
+        page: newPage,
+        pageSize: routeState.pageSize,
+        primaryKey: routeState.primaryKey,
+        filters: routeState.filters,
+      });
     },
-    [pageSize, refreshCurrentView, setPage],
+    [replaceRouteState, routeState.filters, routeState.pageSize, routeState.primaryKey],
   );
 
   const handlePageSizeChange = useCallback(
     (newSize: number) => {
-      setPageSize(newSize);
-      refreshCurrentView(1, newSize);
+      replaceRouteState({
+        page: 1,
+        pageSize: newSize,
+        primaryKey: routeState.primaryKey,
+        filters: routeState.filters,
+      });
     },
-    [refreshCurrentView, setPageSize],
+    [replaceRouteState, routeState.filters, routeState.primaryKey],
   );
+
+  // Ref so checkbox column header/cell can read the latest selectedPKs
+  // without being in tableColumns useMemo deps (avoids full column rebuild on every toggle)
+  const selectedPKsRef = useRef(selectedPKs);
+  selectedPKsRef.current = selectedPKs;
 
   const togglePK = useCallback((pk: string) => {
     setSelectedPKs((prev) => {
@@ -419,13 +521,16 @@ asyncio.run(main())`;
   }, [records]);
 
   const padLength = String(pagination.end).length;
-  const { isDesktop } = useBreakpoint();
+  const { isMobile, isTablet } = useBreakpoint();
 
   /* ─── DataTable column definitions ─────────────────── */
 
   const tableMinWidth = useMemo(
-    () => 40 + 56 + 180 + 70 + 80 + binColumns.length * 160 + 130,
-    [binColumns.length],
+    () =>
+      isTablet
+        ? 40 + 180 + Math.max(binColumns.length, 1) * 160 + 130
+        : 40 + 56 + 180 + 70 + 170 + binColumns.length * 160 + 130,
+    [binColumns.length, isTablet],
   );
 
   const tableColumns = useMemo<ColumnDef<AerospikeRecord, unknown>[]>(
@@ -434,42 +539,55 @@ asyncio.run(main())`;
       {
         id: "select",
         size: 40,
-        header: () => (
-          <button
-            onClick={toggleAllPKs}
-            className={cn(
-              "inline-flex h-4 w-4 items-center justify-center rounded border transition-colors",
-              selectedPKs.size === displayRecords.length && displayRecords.length > 0
-                ? "border-accent bg-accent text-accent-foreground"
-                : selectedPKs.size > 0
-                  ? "border-accent/60 bg-accent/20"
+        header: () => {
+          // Read from ref so this function doesn't need selectedPKs in useMemo deps
+          const pks = selectedPKsRef.current;
+          return (
+            <button
+              onClick={toggleAllPKs}
+              className={cn(
+                "inline-flex h-4 w-4 items-center justify-center rounded border transition-colors",
+                pks.size === displayRecords.length && displayRecords.length > 0
+                  ? "border-accent bg-accent text-accent-foreground"
+                  : pks.size > 0
+                    ? "border-accent/60 bg-accent/20"
+                    : "border-muted-foreground/30 hover:border-muted-foreground/50",
+              )}
+            >
+              {pks.size === displayRecords.length && displayRecords.length > 0 ? (
+                <Check className="h-3 w-3" />
+              ) : pks.size > 0 ? (
+                <Minus className="h-3 w-3" />
+              ) : null}
+            </button>
+          );
+        },
+        cell: ({ row }) => {
+          const pks = selectedPKsRef.current;
+          const pk = String(row.original.key.pk);
+          return (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                togglePK(pk);
+              }}
+              className={cn(
+                "inline-flex h-4 w-4 items-center justify-center rounded border transition-colors",
+                pks.has(pk)
+                  ? "border-accent bg-accent text-accent-foreground"
                   : "border-muted-foreground/30 hover:border-muted-foreground/50",
-            )}
-          >
-            {selectedPKs.size === displayRecords.length && displayRecords.length > 0 ? (
-              <Check className="h-3 w-3" />
-            ) : selectedPKs.size > 0 ? (
-              <Minus className="h-3 w-3" />
-            ) : null}
-          </button>
-        ),
-        cell: ({ row }) => (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              togglePK(String(row.original.key.pk));
-            }}
-            className={cn(
-              "inline-flex h-4 w-4 items-center justify-center rounded border transition-colors",
-              selectedPKs.has(String(row.original.key.pk))
-                ? "border-accent bg-accent text-accent-foreground"
-                : "border-muted-foreground/30 hover:border-muted-foreground/50",
-            )}
-          >
-            {selectedPKs.has(String(row.original.key.pk)) && <Check className="h-3 w-3" />}
-          </button>
-        ),
-        meta: { className: "px-2 text-center" },
+              )}
+            >
+              {pks.has(pk) && <Check className="h-3 w-3" />}
+            </button>
+          );
+        },
+        meta: {
+          headerClassName: "px-2 text-center",
+          cellClassName: "px-2 text-center",
+          hideOn: ["mobile"],
+          mobileSlot: "meta",
+        },
       },
       // Row number (pinned left)
       {
@@ -481,7 +599,12 @@ asyncio.run(main())`;
             {String(pagination.start + row.index).padStart(padLength, "0")}
           </span>
         ),
-        meta: { className: "px-4 text-right" },
+        meta: {
+          headerClassName: "px-4 text-right",
+          cellClassName: "px-4 text-right",
+          hideOn: ["mobile", "tablet"],
+          mobileSlot: "meta",
+        },
       },
       // PK
       {
@@ -496,14 +619,18 @@ asyncio.run(main())`;
           <button
             onClick={(e) => {
               e.stopPropagation();
-              setViewRecord(row.original);
+              openRecordDetail(row.original);
             }}
             className="text-foreground hover:text-accent w-full truncate text-left font-mono text-[13px] font-medium hover:underline"
           >
             {truncateMiddle(String(row.original.key.pk), 28)}
           </button>
         ),
-        meta: { className: "overflow-hidden" },
+        meta: {
+          cellClassName: "overflow-hidden",
+          mobileLabel: "PK",
+          mobileSlot: "title",
+        },
       },
       // Generation
       {
@@ -514,6 +641,11 @@ asyncio.run(main())`;
             Gen
           </span>
         ),
+        meta: {
+          hideOn: ["mobile", "tablet"],
+          mobileLabel: "Generation",
+          mobileSlot: "meta",
+        },
         cell: ({ row }) => (
           <span className="text-muted-foreground font-mono text-xs tabular-nums">
             {row.original.meta.generation}
@@ -537,6 +669,11 @@ asyncio.run(main())`;
             </span>
           );
         },
+        meta: {
+          hideOn: ["mobile", "tablet"],
+          mobileLabel: "Expiry",
+          mobileSlot: "meta",
+        },
       },
       // Dynamic bin columns
       ...binColumns.map(
@@ -549,7 +686,12 @@ asyncio.run(main())`;
             </span>
           ),
           cell: ({ row }) => renderCellValue(row.original.bins[col]),
-          meta: { className: "overflow-hidden" },
+          meta: {
+            cellClassName: "overflow-hidden",
+            hideOn: ["mobile"],
+            mobileLabel: col,
+            mobileSlot: "content",
+          },
         }),
       ),
       // Actions (pinned right)
@@ -564,9 +706,10 @@ asyncio.run(main())`;
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    setViewRecord(row.original);
+                    openRecordDetail(row.original);
                   }}
                   className="text-muted-foreground hover:text-foreground hover:bg-muted/50 inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors"
+                  aria-label={`View ${row.original.key.pk}`}
                 >
                   <Eye className="h-3.5 w-3.5" />
                 </button>
@@ -581,9 +724,10 @@ asyncio.run(main())`;
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    openEditor("edit", row.original);
+                    openRecordDetail(row.original, "edit");
                   }}
                   className="text-muted-foreground hover:text-foreground hover:bg-muted/50 inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors"
+                  aria-label={`Edit ${row.original.key.pk}`}
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
@@ -598,9 +742,10 @@ asyncio.run(main())`;
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    openEditor("duplicate", row.original);
+                    openDuplicateEditor(row.original);
                   }}
                   className="text-muted-foreground hover:text-foreground hover:bg-muted/50 inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors"
+                  aria-label={`Duplicate ${row.original.key.pk}`}
                 >
                   <Copy className="h-3.5 w-3.5" />
                 </button>
@@ -618,6 +763,7 @@ asyncio.run(main())`;
                     setDeleteTarget(row.original);
                   }}
                   className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors"
+                  aria-label={`Delete ${row.original.key.pk}`}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -628,13 +774,21 @@ asyncio.run(main())`;
             </Tooltip>
           </div>
         ),
+        meta: {
+          headerClassName: "px-2",
+          cellClassName: "px-2",
+          hideOn: ["mobile"],
+          mobileSlot: "actions",
+        },
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // selectedPKs intentionally omitted — read via selectedPKsRef to avoid
+    // rebuilding all column definitions on every checkbox toggle.
     [
       binColumns,
-      selectedPKs,
       displayRecords.length,
+      openDuplicateEditor,
+      openRecordDetail,
       toggleAllPKs,
       togglePK,
       pagination.start,
@@ -642,10 +796,119 @@ asyncio.run(main())`;
     ],
   );
 
+  const renderMobileRecordCard = useCallback(
+    (row: Row<AerospikeRecord>, idx: number) => {
+      const record = row.original;
+
+      return (
+        <div
+          key={record.key.pk + idx}
+          className="border-border/40 bg-card/60 animate-fade-in rounded-2xl border p-3 shadow-sm"
+          style={{ animationDelay: `${idx * 25}ms` }}
+          onClick={() => openRecordDetail(record)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              openRecordDetail(record);
+            }
+          }}
+          tabIndex={0}
+          data-testid={`records-table-row-${idx}`}
+        >
+          <div className="mb-2 flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  togglePK(String(record.key.pk));
+                }}
+                className={cn(
+                  "inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors",
+                  selectedPKs.has(String(record.key.pk))
+                    ? "border-accent bg-accent text-accent-foreground"
+                    : "border-muted-foreground/30 hover:border-muted-foreground/50",
+                )}
+                aria-label={`Select ${record.key.pk}`}
+              >
+                {selectedPKs.has(String(record.key.pk)) && <Check className="h-3 w-3" />}
+              </button>
+
+              <div className="min-w-0">
+                <div className="text-accent truncate font-mono text-sm font-medium">
+                  {truncateMiddle(String(record.key.pk), 24)}
+                </div>
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                  <span className="text-muted-foreground">
+                    Gen: <span className="text-foreground font-mono">{record.meta.generation}</span>
+                  </span>
+                  <span className="text-muted-foreground" title={`TTL: ${record.meta.ttl}s`}>
+                    Expiry:{" "}
+                    <span className="text-foreground font-mono">
+                      {formatTTLAsExpiry(record.meta.ttl)}
+                    </span>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className="flex shrink-0 items-center gap-1"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => openRecordDetail(record)}
+                className="text-muted-foreground hover:text-foreground hover:bg-muted/50 inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors"
+                aria-label={`View ${record.key.pk}`}
+              >
+                <Eye className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => openRecordDetail(record, "edit")}
+                className="text-muted-foreground hover:text-foreground hover:bg-muted/50 inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors"
+                aria-label={`Edit ${record.key.pk}`}
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setDeleteTarget(record)}
+                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors"
+                aria-label={`Delete ${record.key.pk}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {binColumns.length > 0 && (
+            <div className="border-border/30 mt-2 space-y-1 border-t pt-2">
+              {binColumns.slice(0, 3).map((col) => (
+                <div key={col} className="flex items-start gap-2 text-xs">
+                  <span className="text-muted-foreground/60 w-20 shrink-0 truncate font-mono">
+                    {col}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">
+                    {renderCellValue(record.bins[col])}
+                  </span>
+                </div>
+              ))}
+              {binColumns.length > 3 && (
+                <span className="text-muted-foreground/50 text-[10px]">
+                  +{binColumns.length - 3} more bins in details
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    },
+    [binColumns, openRecordDetail, selectedPKs, togglePK],
+  );
+
   /* ─── Render ───────────────────────────────────────── */
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 min-w-0 flex-col">
       {/* ── Command Bar ──────────────────────────────── */}
       <div className="border-border/50 bg-card/80 border-b px-3 py-2.5 backdrop-blur-md sm:px-6">
         <div className="flex items-center justify-between gap-2">
@@ -684,11 +947,21 @@ asyncio.run(main())`;
           </div>
 
           <Button
-            onClick={() => openEditor("create")}
+            onClick={() =>
+              router.push(
+                buildNewRecordHref({
+                  connId,
+                  namespace: decodedNs,
+                  setName: decodedSet,
+                  returnTo: currentListReturnTo,
+                }),
+              )
+            }
             size="sm"
             variant="outline"
             className="border-accent/30 text-accent hover:bg-accent/10 hover:border-accent/50 h-8 shrink-0 gap-1.5 font-mono text-xs transition-colors sm:h-7"
             data-compact
+            aria-label="New record"
           >
             <Plus className="h-3 w-3" />
             <span className="hidden sm:inline">new record</span>
@@ -715,170 +988,97 @@ asyncio.run(main())`;
 
       {/* ── Export bar (when filters active) ─────────── */}
       {filterStore.conditions.length > 0 && records.length > 0 && (
-        <div className="bg-card/60 animate-fade-in flex items-center justify-end gap-2 border-b px-3 py-1.5 sm:px-6">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportJSON}
-            data-compact
-            className="h-7"
-          >
-            <FileJson className="mr-1 h-3.5 w-3.5" />
-            <span className="hidden sm:inline">JSON</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportCSV}
-            data-compact
-            className="h-7"
-          >
-            <FileSpreadsheet className="mr-1 h-3.5 w-3.5" />
-            <span className="hidden sm:inline">CSV</span>
-          </Button>
+        <div className="bg-card/60 animate-fade-in flex shrink-0 flex-wrap items-center justify-between gap-2 border-b px-3 py-2 sm:px-6">
+          <span className="text-muted-foreground text-xs">
+            Export {formatNumber(records.length)} visible record{records.length === 1 ? "" : "s"}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportJSON}
+              data-compact
+              className="h-7"
+              aria-label="Export JSON"
+            >
+              <FileJson className="mr-1 h-3.5 w-3.5" />
+              <span className="hidden sm:inline">JSON</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportCSV}
+              data-compact
+              className="h-7"
+              aria-label="Export CSV"
+            >
+              <FileSpreadsheet className="mr-1 h-3.5 w-3.5" />
+              <span className="hidden sm:inline">CSV</span>
+            </Button>
+          </div>
         </div>
       )}
 
       {/* ── Data Grid ────────────────────────────────── */}
-      <div className="relative flex-1 overflow-auto">
-        {!isDesktop && displayRecords.length > 0 ? (
-          <>
-            {/* Loading indicator (page navigation) */}
-            {displayLoading && (
-              <div className="bg-accent/10 sticky top-0 right-0 left-0 z-20 h-[2px] overflow-hidden">
-                <div className="loading-bar bg-accent h-full w-1/4 rounded-full" />
-              </div>
-            )}
-            {/* Mobile card view */}
-            <div className="space-y-2 p-3">
-              {displayRecords.map((record, idx) => (
-                <div
-                  key={record.key.pk + idx}
-                  className="border-border/40 bg-card/60 animate-fade-in rounded-lg border p-3"
-                  style={{ animationDelay: `${idx * 25}ms` }}
-                >
-                  <div className="mb-2 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => togglePK(String(record.key.pk))}
-                        className={cn(
-                          "inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors",
-                          selectedPKs.has(String(record.key.pk))
-                            ? "border-accent bg-accent text-accent-foreground"
-                            : "border-muted-foreground/30 hover:border-muted-foreground/50",
-                        )}
-                      >
-                        {selectedPKs.has(String(record.key.pk)) && <Check className="h-3 w-3" />}
-                      </button>
-                      <span className="text-accent font-mono text-sm font-medium">
-                        {truncateMiddle(String(record.key.pk), 24)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setViewRecord(record)}
-                        className="text-muted-foreground hover:text-foreground hover:bg-muted/50 inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => openEditor("edit", record)}
-                        className="text-muted-foreground hover:text-foreground hover:bg-muted/50 inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => setDeleteTarget(record)}
-                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex gap-3 text-xs">
-                    <span className="text-muted-foreground">
-                      Gen:{" "}
-                      <span className="text-foreground font-mono">{record.meta.generation}</span>
-                    </span>
-                    <span className="text-muted-foreground" title={`TTL: ${record.meta.ttl}s`}>
-                      Expiry:{" "}
-                      <span className="text-foreground font-mono">
-                        {formatTTLAsExpiry(record.meta.ttl)}
-                      </span>
-                    </span>
-                  </div>
-                  {binColumns.length > 0 && (
-                    <div className="border-border/30 mt-2 space-y-1 border-t pt-2">
-                      {binColumns.slice(0, 3).map((col) => (
-                        <div key={col} className="flex items-center gap-2 text-xs">
-                          <span className="text-muted-foreground/60 w-20 shrink-0 truncate font-mono">
-                            {col}
-                          </span>
-                          <span className="min-w-0 truncate">
-                            {renderCellValue(record.bins[col])}
-                          </span>
-                        </div>
-                      ))}
-                      {binColumns.length > 3 && (
-                        <span className="text-muted-foreground/50 text-[10px]">
-                          +{binColumns.length - 3} more bins
-                        </span>
-                      )}
-                    </div>
-                  )}
+      <div className="relative min-h-0 min-w-0 flex-1">
+        <TooltipProvider delayDuration={300}>
+          <DataTable
+            data={displayRecords}
+            columns={tableColumns}
+            loading={displayLoading}
+            emptyState={
+              filterStore.conditions.length > 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <Database className="text-muted-foreground/30 mb-4 h-16 w-16" />
+                  <h3 className="text-base-content/70 mb-2 text-lg font-semibold">No Results</h3>
+                  <p className="text-base-content/50 max-w-md text-sm">
+                    No records match the current filters. Try adjusting or clearing the filters.
+                  </p>
                 </div>
-              ))}
-            </div>
-          </>
-        ) : (
-          <TooltipProvider delayDuration={300}>
-            <DataTable
-              data={displayRecords}
-              columns={tableColumns}
-              loading={displayLoading}
-              emptyState={
-                filterStore.conditions.length > 0 ? (
-                  <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <Database className="text-muted-foreground/30 mb-4 h-16 w-16" />
-                    <h3 className="text-base-content/70 mb-2 text-lg font-semibold">No Results</h3>
-                    <p className="text-base-content/50 max-w-md text-sm">
-                      No records match the current filters. Try adjusting or clearing the filters.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <Database className="text-muted-foreground/30 mb-4 h-16 w-16" />
-                    <h3 className="text-base-content/70 mb-2 text-lg font-semibold">
-                      No Records Found
-                    </h3>
-                    <p className="text-base-content/50 mb-6 max-w-md text-sm">
-                      This set appears to be empty. Create a new record to get started.
-                    </p>
-                    <button
-                      className="btn btn-primary btn-sm gap-2"
-                      onClick={() => openEditor("create")}
-                    >
-                      <Plus className="h-4 w-4" />
-                      Create Record
-                    </button>
-                  </div>
-                )
-              }
-              enableColumnPinning
-              columnPinning={COLUMN_PINNING}
-              tableMinWidth={tableMinWidth}
-              testId="records-table"
-              virtualScrolling
-              maxHeight="calc(100vh - 280px)"
-            />
-          </TooltipProvider>
-        )}
+              ) : (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <Database className="text-muted-foreground/30 mb-4 h-16 w-16" />
+                  <h3 className="text-base-content/70 mb-2 text-lg font-semibold">
+                    No Records Found
+                  </h3>
+                  <p className="text-base-content/50 mb-6 max-w-md text-sm">
+                    This set appears to be empty. Create a new record to get started.
+                  </p>
+                  <button
+                    className="btn btn-primary btn-sm gap-2"
+                    onClick={() =>
+                      router.push(
+                        buildNewRecordHref({
+                          connId,
+                          namespace: decodedNs,
+                          setName: decodedSet,
+                          returnTo: currentListReturnTo,
+                        }),
+                      )
+                    }
+                  >
+                    <Plus className="h-4 w-4" />
+                    Create Record
+                  </button>
+                </div>
+              )
+            }
+            enableColumnPinning
+            columnPinning={COLUMN_PINNING}
+            tableMinWidth={tableMinWidth}
+            testId="records-table"
+            virtualScrolling={!isMobile}
+            maxHeight="calc(100vh - 280px)"
+            mobileLayout="cards"
+            mobileCardRenderer={renderMobileRecordCard}
+          />
+        </TooltipProvider>
       </div>
 
       {/* ── Selection Toolbar ─────────────────────────── */}
       {selectedPKs.size > 0 && (
-        <div className="border-accent/30 bg-accent/5 border-t px-3 py-2 backdrop-blur-md sm:px-6">
-          <div className="flex items-center justify-between gap-2">
+        <div className="border-accent/30 bg-accent/5 shrink-0 border-t px-3 py-2 backdrop-blur-md sm:px-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <span className="text-accent font-mono text-[11px] font-medium tabular-nums">
                 {selectedPKs.size} selected
@@ -899,7 +1099,7 @@ asyncio.run(main())`;
               data-compact
             >
               <Code className="h-3 w-3" />
-              Generate batch_read
+              <span>{isMobile ? "batch_read" : "Generate batch_read"}</span>
             </Button>
           </div>
         </div>
@@ -914,9 +1114,8 @@ asyncio.run(main())`;
         onPageSizeChange={handlePageSizeChange}
         loading={loading}
         pageSizeOptions={PAGE_SIZE_OPTIONS}
+        className="safe-bottom w-full"
       />
-
-      <RecordViewDialog record={viewRecord} onClose={() => setViewRecord(null)} />
 
       <RecordEditorDialog
         open={editorOpen}

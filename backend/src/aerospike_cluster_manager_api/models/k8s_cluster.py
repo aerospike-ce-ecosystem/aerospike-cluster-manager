@@ -3,9 +3,10 @@ from __future__ import annotations
 import logging
 import re
 import warnings
+from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,66 @@ class NetworkAccessConfig(BaseModel):
     )
     fabric_type: Literal["pod", "hostInternal", "hostExternal", "configuredIP"] | None = Field(
         default=None, alias="fabricType", description="Network type for inter-node communication"
+    )
+    custom_access_network_names: list[str] | None = Field(
+        default=None, alias="customAccessNetworkNames", description="Network names for configuredIP access type"
+    )
+    custom_alternate_access_network_names: list[str] | None = Field(
+        default=None,
+        alias="customAlternateAccessNetworkNames",
+        description="Network names for configuredIP alternate access type",
+    )
+    custom_fabric_network_names: list[str] | None = Field(
+        default=None, alias="customFabricNetworkNames", description="Network names for configuredIP fabric type"
+    )
+
+    @model_validator(mode="after")
+    def configured_ip_requires_network_names(self) -> NetworkAccessConfig:
+        """Validate that configuredIP types have corresponding network names."""
+        if self.access_type == "configuredIP" and not self.custom_access_network_names:
+            raise ValueError("customAccessNetworkNames required when accessType is configuredIP")
+        if self.alternate_access_type == "configuredIP" and not self.custom_alternate_access_network_names:
+            raise ValueError("customAlternateAccessNetworkNames required when alternateAccessType is configuredIP")
+        if self.fabric_type == "configuredIP" and not self.custom_fabric_network_names:
+            raise ValueError("customFabricNetworkNames required when fabricType is configuredIP")
+        return self
+
+
+class LoadBalancerSpec(BaseModel):
+    """LoadBalancer service configuration for seed discovery."""
+
+    model_config = {"populate_by_name": True}
+
+    annotations: dict[str, str] | None = Field(default=None, description="Service annotations")
+    labels: dict[str, str] | None = Field(default=None, description="Service labels")
+    external_traffic_policy: Literal["Cluster", "Local"] | None = Field(
+        default=None, alias="externalTrafficPolicy", description="External traffic policy"
+    )
+    port: int = Field(default=3000, ge=1, le=65535, description="Service port")
+    target_port: int = Field(default=3000, ge=1, le=65535, alias="targetPort", description="Target port")
+    load_balancer_source_ranges: list[str] | None = Field(
+        default=None, alias="loadBalancerSourceRanges", description="Allowed source IP ranges"
+    )
+
+
+class SeedsFinderServicesConfig(BaseModel):
+    """Seeds finder services configuration for external seed discovery."""
+
+    model_config = {"populate_by_name": True}
+
+    load_balancer: LoadBalancerSpec | None = Field(
+        default=None, alias="loadBalancer", description="LoadBalancer service for seed discovery"
+    )
+
+
+class NetworkPolicyAutoConfig(BaseModel):
+    """Auto-generate Kubernetes NetworkPolicy resources."""
+
+    model_config = {"populate_by_name": True}
+
+    enabled: bool = Field(default=False, description="Enable automatic NetworkPolicy creation")
+    type: Literal["kubernetes", "cilium"] = Field(
+        default="kubernetes", description="NetworkPolicy type: kubernetes or cilium"
     )
 
 
@@ -129,13 +190,97 @@ class ResourceConfig(BaseModel):
         return self
 
 
+class TolerationConfig(BaseModel):
+    """Kubernetes toleration for pod scheduling."""
+
+    model_config = {"populate_by_name": True}
+
+    key: str | None = None
+    operator: Literal["Exists", "Equal"] = Field(default="Equal")
+    value: str | None = None
+    effect: Literal["NoSchedule", "PreferNoSchedule", "NoExecute", ""] | None = None
+    toleration_seconds: int | None = Field(default=None, alias="tolerationSeconds")
+
+
+class PodMetadataConfig(BaseModel):
+    """Extra labels and annotations for pods."""
+
+    model_config = {"populate_by_name": True}
+
+    labels: dict[str, str] | None = Field(default=None, description="Additional pod labels")
+    annotations: dict[str, str] | None = Field(default=None, description="Additional pod annotations")
+
+
+class PodSchedulingConfig(BaseModel):
+    """Pod scheduling configuration (nodeSelector, tolerations, affinity)."""
+
+    model_config = {"populate_by_name": True}
+
+    node_selector: dict[str, str] | None = Field(
+        default=None, alias="nodeSelector", description="Node labels for pod scheduling"
+    )
+    tolerations: list[TolerationConfig] | None = Field(default=None, description="Pod tolerations")
+    multi_pod_per_host: bool | None = Field(
+        default=None, alias="multiPodPerHost", description="Allow multiple pods per node"
+    )
+    host_network: bool | None = Field(default=None, alias="hostNetwork", description="Enable host networking")
+    service_account_name: str | None = Field(
+        default=None, alias="serviceAccountName", description="ServiceAccount to use"
+    )
+    termination_grace_period: int | None = Field(
+        default=None, ge=0, alias="terminationGracePeriodSeconds", description="Grace period for termination"
+    )
+    readiness_gate_enabled: bool | None = Field(
+        default=None,
+        alias="readinessGateEnabled",
+        description="Enable custom Pod Readiness Gate (acko.io/aerospike-ready)",
+    )
+    pod_management_policy: Literal["OrderedReady", "Parallel"] | None = Field(
+        default=None, alias="podManagementPolicy", description="Pod management policy (OrderedReady or Parallel)"
+    )
+    dns_policy: str | None = Field(
+        default=None, alias="dnsPolicy", description="DNS policy for pods (e.g. ClusterFirst, Default)"
+    )
+    metadata: PodMetadataConfig | None = Field(default=None, description="Extra labels and annotations for pods")
+
+
+class ServiceMonitorConfig(BaseModel):
+    """ServiceMonitor configuration for Prometheus Operator."""
+
+    model_config = {"populate_by_name": True}
+
+    enabled: bool = Field(default=False)
+    interval: str | None = Field(default=None, description="Scrape interval (e.g. '30s')")
+    labels: dict[str, str] | None = Field(default=None, description="Additional labels for discovery")
+
+
+class PrometheusRuleConfig(BaseModel):
+    """PrometheusRule configuration for Aerospike alerts."""
+
+    model_config = {"populate_by_name": True}
+
+    enabled: bool = Field(default=False)
+    labels: dict[str, str] | None = Field(default=None, description="Additional labels for discovery")
+
+
 class MonitoringConfig(BaseModel):
-    """Optional monitoring configuration for the cluster."""
+    """Monitoring configuration for the cluster."""
 
     model_config = {"populate_by_name": True}
 
     enabled: bool = Field(default=False)
     port: int = Field(default=9145, ge=1024, le=65535)
+    exporter_image: str | None = Field(default=None, alias="exporterImage", description="Prometheus exporter image")
+    resources: ResourceConfig | None = Field(default=None, description="Exporter container resources")
+    metric_labels: dict[str, str] | None = Field(
+        default=None, alias="metricLabels", description="Custom metric labels for exporter"
+    )
+    service_monitor: ServiceMonitorConfig | None = Field(
+        default=None, alias="serviceMonitor", description="ServiceMonitor configuration"
+    )
+    prometheus_rule: PrometheusRuleConfig | None = Field(
+        default=None, alias="prometheusRule", description="PrometheusRule configuration"
+    )
 
 
 class ACLRoleSpec(BaseModel):
@@ -169,6 +314,28 @@ class ACLConfig(BaseModel):
     admin_policy_timeout: int = Field(default=2000, ge=100, le=30000, alias="adminPolicyTimeout")
 
 
+class RackPodSpecConfig(BaseModel):
+    """Rack-level pod scheduling overrides."""
+
+    model_config = {"populate_by_name": True}
+
+    affinity: dict[str, Any] | None = Field(default=None, description="Rack-level affinity override (K8s Affinity)")
+    tolerations: list[TolerationConfig] | None = Field(default=None, description="Rack-level tolerations override")
+    node_selector: dict[str, str] | None = Field(
+        default=None, alias="nodeSelector", description="Rack-level node selector override"
+    )
+
+
+class RackStorageConfig(BaseModel):
+    """Rack-level storage overrides."""
+
+    model_config = {"populate_by_name": True}
+
+    volumes: list[dict[str, Any]] | None = Field(
+        default=None, description="Rack-level volume definitions (same schema as spec.storage.volumes)"
+    )
+
+
 class RackConfig(BaseModel):
     """Rack configuration for zone-aware deployment."""
 
@@ -177,8 +344,19 @@ class RackConfig(BaseModel):
     id: int = Field(ge=1, le=100, description="Rack ID (must be unique)")
     zone: str | None = Field(default=None, description="K8s zone for node affinity")
     region: str | None = Field(default=None, description="K8s region for node affinity")
-    max_pods_per_node: int | None = Field(default=None, ge=1, alias="maxPodsPerNode")
+    rack_label: str | None = Field(default=None, alias="rackLabel", description="Custom label for rack scheduling")
     node_name: str | None = Field(default=None, alias="nodeName", description="Specific node name")
+    aerospike_config: dict[str, Any] | None = Field(
+        default=None,
+        alias="aerospikeConfig",
+        description="Rack-specific Aerospike config override",
+    )
+    storage: RackStorageConfig | None = Field(default=None, description="Rack-specific storage config override")
+    pod_spec: RackPodSpecConfig | None = Field(
+        default=None,
+        alias="podSpec",
+        description="Rack-specific pod scheduling override (affinity, tolerations, nodeSelector)",
+    )
 
 
 class RackAwareConfig(BaseModel):
@@ -187,6 +365,22 @@ class RackAwareConfig(BaseModel):
     model_config = {"populate_by_name": True}
 
     racks: list[RackConfig] = Field(default_factory=list, max_length=10)
+    namespaces: list[str] | None = Field(
+        default=None, max_length=2, description="Rack-aware namespace list (max 2 for CE)"
+    )
+    scale_down_batch_size: str | None = Field(
+        default=None, alias="scaleDownBatchSize", description="Batch size for scale-down (int or percentage)"
+    )
+    max_ignorable_pods: str | None = Field(
+        default=None,
+        alias="maxIgnorablePods",
+        description="Max pending/failed pods to ignore during reconciliation (int or percentage)",
+    )
+    rolling_update_batch_size: str | None = Field(
+        default=None,
+        alias="rollingUpdateBatchSize",
+        description="Per-rack rolling update batch size (int or percentage), overrides spec-level",
+    )
 
     @field_validator("racks")
     @classmethod
@@ -229,13 +423,43 @@ class TemplateOverrides(BaseModel):
     image: str | None = None
     size: int | None = Field(default=None, ge=1, le=8)
     resources: ResourceConfig | None = None
+    monitoring: MonitoringConfig | None = None
+    network_policy: NetworkAccessConfig | None = Field(default=None, alias="networkPolicy")
+    enable_dynamic_config: bool | None = Field(default=None, alias="enableDynamicConfig")
+
+
+class BandwidthConfig(BaseModel):
+    """CNI bandwidth shaping configuration."""
+
+    model_config = {"populate_by_name": True}
+
+    ingress: str | None = Field(default=None, description="Ingress bandwidth limit (e.g. '1M')")
+    egress: str | None = Field(default=None, description="Egress bandwidth limit (e.g. '1M')")
+
+
+class ValidationPolicyConfig(BaseModel):
+    """Validation policy configuration."""
+
+    model_config = {"populate_by_name": True}
+
+    skip_work_dir_validate: bool = Field(
+        default=False, alias="skipWorkDirValidate", description="Skip work directory validation"
+    )
+
+
+class ServiceMetadataConfig(BaseModel):
+    """Custom metadata for headless/pod services."""
+
+    model_config = {"populate_by_name": True}
+
+    annotations: dict[str, str] | None = Field(default=None, description="Service annotations")
+    labels: dict[str, str] | None = Field(default=None, description="Service labels")
 
 
 class TemplateRefConfig(BaseModel):
-    """Reference to an AerospikeClusterTemplate."""
+    """Reference to an AerospikeClusterTemplate (cluster-scoped, no namespace)."""
 
     name: str
-    namespace: str | None = None
 
     model_config = {"populate_by_name": True}
 
@@ -284,6 +508,33 @@ class CreateK8sClusterRequest(BaseModel):
     auto_connect: bool = Field(default=True, alias="autoConnect")
     network_policy: NetworkAccessConfig | None = Field(default=None, alias="networkPolicy")
     k8s_node_block_list: list[str] | None = Field(default=None, alias="k8sNodeBlockList")
+    pod_scheduling: PodSchedulingConfig | None = Field(
+        default=None, alias="podScheduling", description="Pod scheduling configuration"
+    )
+    seeds_finder_services: SeedsFinderServicesConfig | None = Field(
+        default=None, alias="seedsFinderServices", description="LoadBalancer service for seed discovery"
+    )
+    network_policy_config: NetworkPolicyAutoConfig | None = Field(
+        default=None, alias="networkPolicyConfig", description="Auto-generate K8s NetworkPolicy"
+    )
+    bandwidth_config: BandwidthConfig | None = Field(
+        default=None, alias="bandwidthConfig", description="CNI bandwidth shaping"
+    )
+    validation_policy: ValidationPolicyConfig | None = Field(
+        default=None, alias="validationPolicy", description="Validation policy"
+    )
+    headless_service: ServiceMetadataConfig | None = Field(
+        default=None, alias="headlessService", description="Custom metadata for headless service"
+    )
+    pod_service: ServiceMetadataConfig | None = Field(
+        default=None, alias="podService", description="Custom metadata for per-pod services"
+    )
+    enable_rack_id_override: bool | None = Field(
+        default=None, alias="enableRackIDOverride", description="Enable dynamic rack ID assignment"
+    )
+    pod_metadata: PodMetadataConfig | None = Field(
+        default=None, alias="podMetadata", description="Extra labels and annotations for pods"
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -319,6 +570,34 @@ class UpdateK8sClusterRequest(BaseModel):
     rack_config: RackAwareConfig | None = Field(default=None, alias="rackConfig")
     network_policy: NetworkAccessConfig | None = Field(default=None, alias="networkPolicy")
     k8s_node_block_list: list[str] | None = Field(default=None, alias="k8sNodeBlockList")
+    pod_scheduling: PodSchedulingConfig | None = Field(
+        default=None, alias="podScheduling", description="Pod scheduling configuration"
+    )
+    seeds_finder_services: SeedsFinderServicesConfig | None = Field(
+        default=None, alias="seedsFinderServices", description="LoadBalancer service for seed discovery"
+    )
+    network_policy_config: NetworkPolicyAutoConfig | None = Field(
+        default=None, alias="networkPolicyConfig", description="Auto-generate K8s NetworkPolicy"
+    )
+    acl: ACLConfig | None = Field(default=None, alias="acl")
+    bandwidth_config: BandwidthConfig | None = Field(
+        default=None, alias="bandwidthConfig", description="CNI bandwidth shaping"
+    )
+    validation_policy: ValidationPolicyConfig | None = Field(
+        default=None, alias="validationPolicy", description="Validation policy"
+    )
+    headless_service: ServiceMetadataConfig | None = Field(
+        default=None, alias="headlessService", description="Custom metadata for headless service"
+    )
+    pod_service: ServiceMetadataConfig | None = Field(
+        default=None, alias="podService", description="Custom metadata for per-pod services"
+    )
+    enable_rack_id_override: bool | None = Field(
+        default=None, alias="enableRackIDOverride", description="Enable dynamic rack ID assignment"
+    )
+    pod_metadata: PodMetadataConfig | None = Field(
+        default=None, alias="podMetadata", description="Extra labels and annotations for pods"
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -390,6 +669,20 @@ class K8sClusterDetail(BaseModel):
     operator_version: str | None = Field(default=None, alias="operatorVersion")
 
 
+class EventCategory(StrEnum):
+    ROLLING_RESTART = "Rolling Restart"
+    CONFIG = "Configuration"
+    ACL = "ACL Security"
+    RACK = "Rack Management"
+    SCALING = "Scaling"
+    LIFECYCLE = "Lifecycle"
+    MONITORING = "Monitoring"
+    NETWORK = "Network"
+    TEMPLATE = "Template"
+    CIRCUIT_BREAKER = "Circuit Breaker"
+    OTHER = "Other"
+
+
 class K8sClusterEvent(BaseModel):
     type: str | None = None
     reason: str | None = None
@@ -398,11 +691,11 @@ class K8sClusterEvent(BaseModel):
     firstTimestamp: str | None = None
     lastTimestamp: str | None = None
     source: str | None = None
+    category: str | None = None
 
 
 class K8sTemplateSummary(BaseModel):
     name: str
-    namespace: str
     image: str | None = None
     size: int | None = None
     age: str | None = None
@@ -411,7 +704,6 @@ class K8sTemplateSummary(BaseModel):
 
 class K8sTemplateDetail(BaseModel):
     name: str
-    namespace: str
     spec: dict = Field(default_factory=dict)
     status: dict = Field(default_factory=dict)
     age: str | None = None
@@ -445,12 +737,6 @@ class CreateK8sTemplateRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
     name: str = Field(min_length=1, max_length=63, pattern=r"^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$")
-    namespace: str = Field(
-        default="aerospike",
-        min_length=1,
-        max_length=253,
-        pattern=r"^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$",
-    )
     image: str | None = Field(default=None, pattern=r"^[a-z0-9]([a-z0-9._/-]*[a-z0-9])?:[a-zA-Z0-9._-]+$")
     size: int | None = Field(default=None, ge=1, le=8)
     resources: ResourceConfig | None = None
@@ -510,3 +796,93 @@ class ClusterHealthResponse(BaseModel):
     failed_reconcile_count: int = Field(default=0, alias="failedReconcileCount")
     pending_restart_count: int = Field(default=0, alias="pendingRestartCount")
     rack_distribution: list[RackDistribution] = Field(default_factory=list, alias="rackDistribution")
+
+
+class PodHashGroup(BaseModel):
+    config_hash: str | None = Field(None, alias="configHash")
+    pod_spec_hash: str | None = Field(None, alias="podSpecHash")
+    pods: list[str] = []
+    is_current: bool = Field(False, alias="isCurrent")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ConfigDriftResponse(BaseModel):
+    has_drift: bool = Field(False, alias="hasDrift")
+    changed_fields: list[str] = Field(default_factory=list, alias="changedFields")
+    pod_hash_groups: list[PodHashGroup] = Field(default_factory=list, alias="podHashGroups")
+    desired_config_hash: str | None = Field(None, alias="desiredConfigHash")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ReconciliationStatus(BaseModel):
+    circuit_breaker_active: bool = Field(False, alias="circuitBreakerActive")
+    failed_reconcile_count: int = Field(0, alias="failedReconcileCount")
+    circuit_breaker_threshold: int = Field(10, alias="circuitBreakerThreshold")
+    last_reconcile_error: str | None = Field(None, alias="lastReconcileError")
+    last_reconcile_time: str | None = Field(None, alias="lastReconcileTime")
+    estimated_backoff_seconds: int | None = Field(None, alias="estimatedBackoffSeconds")
+    phase: str = "Unknown"
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+# ---------------------------------------------------------------------------
+# HPA (HorizontalPodAutoscaler) models
+# ---------------------------------------------------------------------------
+
+
+class HPAConfig(BaseModel):
+    """Configuration for creating/updating an HPA targeting an AerospikeCluster."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    min_replicas: int = Field(ge=1, le=8, alias="minReplicas")
+    max_replicas: int = Field(ge=1, le=8, alias="maxReplicas")
+    cpu_target_percent: int | None = Field(default=None, ge=1, le=100, alias="cpuTargetPercent")
+    memory_target_percent: int | None = Field(default=None, ge=1, le=100, alias="memoryTargetPercent")
+
+    @model_validator(mode="after")
+    def max_gte_min(self) -> HPAConfig:
+        if self.max_replicas < self.min_replicas:
+            raise ValueError(f"maxReplicas ({self.max_replicas}) must be >= minReplicas ({self.min_replicas})")
+        return self
+
+    @model_validator(mode="after")
+    def at_least_one_metric(self) -> HPAConfig:
+        if self.cpu_target_percent is None and self.memory_target_percent is None:
+            raise ValueError("At least one metric target (cpuTargetPercent or memoryTargetPercent) must be specified")
+        return self
+
+
+class HPACondition(BaseModel):
+    """A single HPA condition from status.conditions[]."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    type: str
+    status: str
+    reason: str | None = None
+    message: str | None = None
+    last_transition_time: str | None = Field(default=None, alias="lastTransitionTime")
+
+
+class HPAStatus(BaseModel):
+    """Current status of an HPA."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    current_replicas: int = Field(default=0, alias="currentReplicas")
+    desired_replicas: int = Field(default=0, alias="desiredReplicas")
+    conditions: list[HPACondition] = Field(default_factory=list)
+
+
+class HPAResponse(BaseModel):
+    """Combined HPA config and status response."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    enabled: bool = True
+    config: HPAConfig
+    status: HPAStatus

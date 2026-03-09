@@ -177,11 +177,13 @@ export default function UDFsPage({ params }: { params: Promise<{ connId: string 
         cell: ({ getValue }) => (
           <span className="font-mono font-medium">{getValue() as string}</span>
         ),
+        meta: { mobileSlot: "title", mobileLabel: "Module" },
       },
       {
         accessorKey: "type",
         header: "Type",
         cell: ({ getValue }) => <Badge variant="secondary">{getValue() as string}</Badge>,
+        meta: { mobileSlot: "meta" },
       },
       {
         accessorKey: "hash",
@@ -191,7 +193,7 @@ export default function UDFsPage({ params }: { params: Promise<{ connId: string 
             {truncateMiddle(getValue() as string, 24)}
           </span>
         ),
-        meta: { className: "hidden md:table-cell" },
+        meta: { hideOn: ["mobile"], mobileSlot: "content", mobileLabel: "Hash" },
       },
       {
         id: "actions",
@@ -228,6 +230,7 @@ export default function UDFsPage({ params }: { params: Promise<{ connId: string 
             </Button>
           </div>
         ),
+        meta: { mobileSlot: "actions" },
       },
     ],
 
@@ -235,7 +238,7 @@ export default function UDFsPage({ params }: { params: Promise<{ connId: string 
   );
 
   return (
-    <div className="animate-fade-in space-y-6 p-6 lg:p-8">
+    <div className="animate-fade-in space-y-6 p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="UDF Modules"
         description="Manage User-Defined Functions (Lua scripts)"
@@ -287,11 +290,12 @@ export default function UDFsPage({ params }: { params: Promise<{ connId: string 
         }
         className="rounded-lg border"
         testId="udfs-table"
+        mobileLayout="cards"
       />
 
       {/* Upload / Paste Dialog */}
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
-        <DialogContent className="flex max-h-[80vh] flex-col sm:max-w-[600px]">
+        <DialogContent className="flex max-h-[80vh] max-w-[95vw] flex-col sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Upload UDF Module</DialogTitle>
             <DialogDescription>Provide a Lua script filename and content.</DialogDescription>
@@ -334,7 +338,7 @@ export default function UDFsPage({ params }: { params: Promise<{ connId: string 
 
       {/* View Source Dialog */}
       <Dialog open={!!viewSource} onOpenChange={(open) => !open && setViewSource(null)}>
-        <DialogContent className="flex max-h-[80vh] flex-col sm:max-w-[700px]">
+        <DialogContent className="flex max-h-[80vh] max-w-[95vw] flex-col sm:max-w-[700px]">
           <DialogHeader>
             <DialogTitle>{viewSource?.filename}</DialogTitle>
             <DialogDescription>Read-only view of the UDF source code.</DialogDescription>
@@ -352,7 +356,7 @@ export default function UDFsPage({ params }: { params: Promise<{ connId: string 
 
       {/* Apply UDF Dialog */}
       <Dialog open={applyOpen} onOpenChange={setApplyOpen}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent className="max-w-[95vw] sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>Apply UDF</DialogTitle>
             <DialogDescription>Execute {applyModule} on a specific record.</DialogDescription>

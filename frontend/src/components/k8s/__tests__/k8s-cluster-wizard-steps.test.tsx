@@ -222,15 +222,9 @@ describe("Wizard canProceed logic", () => {
 
 describe("Template prefill", () => {
   describe("buildFormUpdatesFromTemplate", () => {
-    it("sets templateRef with name only when no namespace", () => {
+    it("sets templateRef with name (cluster-scoped, no namespace)", () => {
       const result = buildFormUpdatesFromTemplate({}, "my-template");
       expect(result.templateRef).toEqual({ name: "my-template" });
-      expect(result.templateOverrides).toBeUndefined();
-    });
-
-    it("sets templateRef with name and namespace", () => {
-      const result = buildFormUpdatesFromTemplate({}, "my-template", "acko-system");
-      expect(result.templateRef).toEqual({ name: "my-template", namespace: "acko-system" });
       expect(result.templateOverrides).toBeUndefined();
     });
 

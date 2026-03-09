@@ -2,7 +2,7 @@
 
 import { Server, Pencil, Trash2, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,8 +11,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/common/status-badge";
+import { InteractiveCard } from "@/components/common/interactive-card";
 import type { ConnectionProfile, ConnectionStatus } from "@/lib/api/types";
-import { cn } from "@/lib/utils";
 
 interface ConnectionCardProps {
   conn: ConnectionProfile;
@@ -37,22 +37,7 @@ export function ConnectionCard({
     isCheckingHealth && !status ? "checking" : status?.connected ? "connected" : "disconnected";
 
   return (
-    <Card
-      className={cn(
-        "group card-interactive animate-fade-in-up cursor-pointer",
-        "hover:border-accent/30",
-      )}
-      style={{ animationDelay: `${index * 0.05}s`, animationFillMode: "backwards" }}
-      role="button"
-      tabIndex={0}
-      onClick={onClick}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onClick();
-        }
-      }}
-    >
+    <InteractiveCard index={index} onClick={onClick}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-2.5">
@@ -138,6 +123,6 @@ export function ConnectionCard({
           </p>
         )}
       </CardContent>
-    </Card>
+    </InteractiveCard>
   );
 }

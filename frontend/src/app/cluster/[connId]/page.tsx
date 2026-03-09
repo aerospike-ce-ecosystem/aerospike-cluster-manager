@@ -17,12 +17,7 @@ import { ClusterAckoInfoTab } from "@/components/k8s/cluster-acko-info-tab";
 import { useAsyncData } from "@/hooks/use-async-data";
 import { useK8sClusterStore } from "@/stores/k8s-cluster-store";
 import { api } from "@/lib/api/client";
-import {
-  TRANSITIONAL_PHASES,
-  type ClusterHealthSummary,
-  type K8sClusterEvent,
-  type UpdateK8sClusterRequest,
-} from "@/lib/api/types";
+import { type UpdateK8sClusterRequest } from "@/lib/api/types";
 import { getErrorMessage } from "@/lib/utils";
 import { useConnectionStore } from "@/stores/connection-store";
 import { toast } from "sonner";
@@ -49,13 +44,16 @@ export default function ClusterPage({ params }: { params: Promise<{ connId: stri
   const k8sLoading = useK8sClusterStore((s) => s.loading);
   const k8sAvailable = useK8sClusterStore((s) => s.k8sAvailable);
   const fetchClusters = useK8sClusterStore((s) => s.fetchClusters);
-  const fetchK8sCluster = useK8sClusterStore((s) => s.fetchCluster);
   const scaleCluster = useK8sClusterStore((s) => s.scaleCluster);
   const deleteCluster = useK8sClusterStore((s) => s.deleteCluster);
   const updateCluster = useK8sClusterStore((s) => s.updateCluster);
   const triggerOperation = useK8sClusterStore((s) => s.triggerOperation);
   const pauseCluster = useK8sClusterStore((s) => s.pauseCluster);
   const resumeCluster = useK8sClusterStore((s) => s.resumeCluster);
+  const startDetailPolling = useK8sClusterStore((s) => s.startDetailPolling);
+  const stopDetailPolling = useK8sClusterStore((s) => s.stopDetailPolling);
+  const storeEvents = useK8sClusterStore((s) => s.detailEvents);
+  const storeHealth = useK8sClusterStore((s) => s.detailHealth);
 
   // Ensure K8s clusters are loaded (may not be if navigated directly to this page)
   useEffect(() => {
@@ -72,9 +70,9 @@ export default function ClusterPage({ params }: { params: Promise<{ connId: stri
   const k8sNamespace = linkedK8s?.namespace ?? "";
   const k8sName = linkedK8s?.name ?? "";
 
-  // K8s auxiliary state
-  const [events, setEvents] = useState<K8sClusterEvent[]>([]);
-  const [health, setHealth] = useState<ClusterHealthSummary | null>(null);
+  // K8s auxiliary state (events/health come from store via startDetailPolling)
+  const events = storeEvents;
+  const health = storeHealth;
   const [selectedPods, setSelectedPods] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<"overview" | "acko-info">("overview");
 
@@ -86,37 +84,17 @@ export default function ClusterPage({ params }: { params: Promise<{ connId: stri
   const [warmRestartConfirmOpen, setWarmRestartConfirmOpen] = useState(false);
   const [podRestartConfirmOpen, setPodRestartConfirmOpen] = useState(false);
 
-  // Fetch K8s data when linked cluster is found
+  // Start polling when linked K8s cluster is found; stop on unmount or when unlinked
   useEffect(() => {
     if (!isK8s || !k8sNamespace || !k8sName) return;
-    fetchK8sCluster(k8sNamespace, k8sName);
-    api
-      .getK8sClusterEvents(k8sNamespace, k8sName)
-      .then(setEvents)
-      .catch((err) => console.error("Failed to fetch cluster events:", err));
-    api
-      .getK8sClusterHealth(k8sNamespace, k8sName)
-      .then(setHealth)
-      .catch((err) => console.error("Failed to fetch cluster health:", err));
-  }, [isK8s, k8sNamespace, k8sName, fetchK8sCluster]);
-
-  // Auto-refresh when K8s cluster is in transitional phase
-  useEffect(() => {
-    if (!k8sDetail?.phase || !(TRANSITIONAL_PHASES as string[]).includes(k8sDetail.phase)) return;
-    const interval = setInterval(() => {
-      fetchK8sCluster(k8sNamespace, k8sName);
-      api.getK8sClusterEvents(k8sNamespace, k8sName).then(setEvents).catch(console.error);
-      api.getK8sClusterHealth(k8sNamespace, k8sName).then(setHealth).catch(console.error);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [k8sDetail?.phase, k8sNamespace, k8sName, fetchK8sCluster]);
+    startDetailPolling(k8sNamespace, k8sName);
+    return () => stopDetailPolling();
+  }, [isK8s, k8sNamespace, k8sName, startDetailPolling, stopDetailPolling]);
 
   const handleRefresh = () => {
     refetchCluster();
     if (isK8s && k8sNamespace && k8sName) {
-      fetchK8sCluster(k8sNamespace, k8sName);
-      api.getK8sClusterEvents(k8sNamespace, k8sName).then(setEvents).catch(console.error);
-      api.getK8sClusterHealth(k8sNamespace, k8sName).then(setHealth).catch(console.error);
+      startDetailPolling(k8sNamespace, k8sName);
     }
   };
 

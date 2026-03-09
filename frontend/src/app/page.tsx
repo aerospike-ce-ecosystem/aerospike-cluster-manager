@@ -435,7 +435,7 @@ export default function ConnectionsPage() {
 
       {/* Connection Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent className="max-w-[95vw] sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>{editingId ? "Edit Connection" : "New Connection"}</DialogTitle>
             <DialogDescription>

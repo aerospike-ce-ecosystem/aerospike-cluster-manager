@@ -72,7 +72,11 @@ export function K8sPodTable({
             aria-label={`Select ${row.original.name}`}
           />
         ),
-        meta: { className: "text-center" },
+        meta: {
+          headerClassName: "text-center",
+          cellClassName: "text-center",
+          mobileSlot: "meta",
+        },
       });
     }
 
@@ -81,6 +85,7 @@ export function K8sPodTable({
         accessorKey: "name",
         header: "Name",
         cell: ({ getValue }) => <span className="font-mono text-xs">{getValue<string>()}</span>,
+        meta: { mobileSlot: "title", mobileLabel: "Pod" },
       },
       {
         accessorKey: "isReady",
@@ -97,12 +102,13 @@ export function K8sPodTable({
             {row.original.isReady ? "Ready" : row.original.phase}
           </Badge>
         ),
+        meta: { mobileSlot: "meta" },
       },
       {
         accessorKey: "nodeId",
         header: "Node ID",
         size: 100,
-        meta: { className: "hidden md:table-cell" },
+        meta: { hideOn: ["mobile"], mobileSlot: "meta", mobileLabel: "Node ID" },
         cell: ({ getValue }) => {
           const nodeId = getValue<string | undefined>();
           return nodeId ? (
@@ -128,6 +134,7 @@ export function K8sPodTable({
             <span className="text-muted-foreground">-</span>
           );
         },
+        meta: { mobileSlot: "meta" },
       },
       {
         accessorKey: "podIP",
@@ -136,12 +143,13 @@ export function K8sPodTable({
         cell: ({ getValue }) => (
           <span className="font-mono text-xs">{getValue<string | null>() || "-"}</span>
         ),
+        meta: { mobileSlot: "content", mobileLabel: "Pod IP" },
       },
       {
         accessorKey: "hostIP",
         header: "Host IP",
         size: 130,
-        meta: { className: "hidden xl:table-cell" },
+        meta: { hideOn: ["mobile", "tablet"], mobileSlot: "content", mobileLabel: "Host IP" },
         cell: ({ getValue }) => (
           <span className="font-mono text-xs">{getValue<string | null>() || "-"}</span>
         ),
@@ -149,7 +157,7 @@ export function K8sPodTable({
       {
         accessorKey: "image",
         header: "Image",
-        meta: { className: "hidden lg:table-cell" },
+        meta: { hideOn: ["mobile", "tablet"], mobileSlot: "content", mobileLabel: "Image" },
         cell: ({ getValue }) => (
           <span className="font-mono text-xs">{getValue<string | null>() || "-"}</span>
         ),
@@ -158,7 +166,7 @@ export function K8sPodTable({
         accessorKey: "dynamicConfigStatus",
         header: "Config Status",
         size: 120,
-        meta: { className: "hidden md:table-cell" },
+        meta: { hideOn: ["mobile"], mobileSlot: "meta", mobileLabel: "Config Status" },
         cell: ({ getValue }) => {
           const status = getValue<"Applied" | "Failed" | "Pending" | undefined>();
           if (!status) return <span className="text-muted-foreground text-xs">-</span>;
@@ -180,7 +188,7 @@ export function K8sPodTable({
       {
         id: "lastRestart",
         header: "Last Restart",
-        meta: { className: "hidden lg:table-cell" },
+        meta: { hideOn: ["mobile", "tablet"], mobileSlot: "content", mobileLabel: "Last Restart" },
         cell: ({ row }) =>
           row.original.lastRestartReason ? (
             <div className="space-y-0.5">
@@ -214,6 +222,7 @@ export function K8sPodTable({
             <FileText className="h-3.5 w-3.5" />
           </Button>
         ),
+        meta: { mobileSlot: "actions" },
       });
     }
 
@@ -240,6 +249,7 @@ export function K8sPodTable({
         onRowSelectionChange={selectable ? handleRowSelectionChange : undefined}
         density="compact"
         testId="k8s-pod-table"
+        mobileLayout="cards"
       />
       {namespace && clusterName && logsPodName && (
         <K8sPodLogsDialog

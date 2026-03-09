@@ -115,4 +115,21 @@ describe("TablePagination", () => {
     await user.click(option50);
     expect(onPageSizeChange).toHaveBeenCalledWith(50);
   });
+
+  it("adds safe-bottom styling for compact mobile layouts", () => {
+    const onPageChange = vi.fn();
+    const onPageSizeChange = vi.fn();
+    const { container } = render(
+      <TablePagination
+        total={100}
+        page={2}
+        pageSize={25}
+        onPageChange={onPageChange}
+        onPageSizeChange={onPageSizeChange}
+      />,
+    );
+
+    expect(screen.getByText("2 / 4")).toBeInTheDocument();
+    expect(container.firstChild).toHaveClass("safe-bottom");
+  });
 });

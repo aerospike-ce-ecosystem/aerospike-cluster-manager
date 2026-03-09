@@ -147,10 +147,12 @@ export default function IndexesPage({ params }: { params: Promise<{ connId: stri
         cell: ({ getValue }) => (
           <span className="font-mono font-medium">{getValue() as string}</span>
         ),
+        meta: { mobileSlot: "title", mobileLabel: "Index" },
       },
       {
         accessorKey: "namespace",
         header: "Namespace",
+        meta: { mobileSlot: "meta" },
       },
       {
         accessorKey: "set",
@@ -159,12 +161,13 @@ export default function IndexesPage({ params }: { params: Promise<{ connId: stri
           const val = getValue() as string;
           return val ? val : <span className="text-muted-foreground italic">all</span>;
         },
-        meta: { className: "hidden md:table-cell" },
+        meta: { hideOn: ["mobile"], mobileSlot: "meta", mobileLabel: "Set" },
       },
       {
         accessorKey: "bin",
         header: "Bin",
         cell: ({ getValue }) => <span className="font-mono">{getValue() as string}</span>,
+        meta: { mobileSlot: "content" },
       },
       {
         accessorKey: "type",
@@ -173,6 +176,7 @@ export default function IndexesPage({ params }: { params: Promise<{ connId: stri
           const type = getValue() as IndexType;
           return <Badge variant={indexTypeBadgeVariant(type)}>{type}</Badge>;
         },
+        meta: { mobileSlot: "meta" },
       },
       {
         accessorKey: "state",
@@ -185,7 +189,7 @@ export default function IndexesPage({ params }: { params: Promise<{ connId: stri
             />
           );
         },
-        meta: { className: "hidden md:table-cell" },
+        meta: { hideOn: ["mobile"], mobileSlot: "meta" },
       },
       {
         id: "actions",
@@ -202,13 +206,14 @@ export default function IndexesPage({ params }: { params: Promise<{ connId: stri
             <Trash2 className="h-4 w-4" />
           </Button>
         ),
+        meta: { mobileSlot: "actions" },
       },
     ],
     [],
   );
 
   return (
-    <div className="animate-fade-in space-y-6 p-6 lg:p-8">
+    <div className="animate-fade-in space-y-6 p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Secondary Indexes"
         description="Manage secondary indexes for faster queries"
@@ -250,11 +255,12 @@ export default function IndexesPage({ params }: { params: Promise<{ connId: stri
         }
         className="border-border/60 rounded-lg border"
         testId="indexes-table"
+        mobileLayout="cards"
       />
 
       {/* Create Index Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent className="max-w-[95vw] sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>Create Secondary Index</DialogTitle>
             <DialogDescription>Create a new secondary index on a bin.</DialogDescription>
