@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -15,7 +16,13 @@ import { WizardAclStep } from "./WizardAclStep";
 import { WizardRollingUpdateStep } from "./WizardRollingUpdateStep";
 import { WizardRackConfigStep } from "./WizardRackConfigStep";
 import type { WizardAdvancedStepProps } from "./types";
-import type { PodSchedulingConfig, BandwidthConfig, K8sNodeInfo } from "@/lib/api/types";
+import type {
+  PodSchedulingConfig,
+  BandwidthConfig,
+  ValidationPolicyConfig,
+  TolerationConfig,
+  K8sNodeInfo,
+} from "@/lib/api/types";
 
 function CollapsibleSection({
   title,

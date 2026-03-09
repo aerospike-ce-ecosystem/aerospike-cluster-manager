@@ -241,6 +241,15 @@ class PodSchedulingConfig(BaseModel):
     dns_policy: str | None = Field(
         default=None, alias="dnsPolicy", description="DNS policy for pods (e.g. ClusterFirst, Default)"
     )
+    image_pull_secrets: list[str] | None = Field(
+        default=None, alias="imagePullSecrets", description="Private registry image pull secrets"
+    )
+    security_context: dict[str, Any] | None = Field(
+        default=None, alias="securityContext", description="Pod-level security context"
+    )
+    topology_spread_constraints: list[dict[str, Any]] | None = Field(
+        default=None, alias="topologySpreadConstraints", description="Topology spread constraints for pod scheduling"
+    )
     metadata: PodMetadataConfig | None = Field(default=None, description="Extra labels and annotations for pods")
 
 
@@ -447,6 +456,20 @@ class ValidationPolicyConfig(BaseModel):
     )
 
 
+class SidecarConfig(BaseModel):
+    """Sidecar or init container configuration."""
+
+    model_config = {"populate_by_name": True}
+
+    name: str
+    image: str
+    ports: list[dict[str, Any]] | None = None
+    env: list[dict[str, Any]] | None = None
+    volume_mounts: list[dict[str, Any]] | None = Field(default=None, alias="volumeMounts")
+    resources: dict[str, Any] | None = None
+    security_context: dict[str, Any] | None = Field(default=None, alias="securityContext")
+
+
 class ServiceMetadataConfig(BaseModel):
     """Custom metadata for headless/pod services."""
 
@@ -535,6 +558,12 @@ class CreateK8sClusterRequest(BaseModel):
     pod_metadata: PodMetadataConfig | None = Field(
         default=None, alias="podMetadata", description="Extra labels and annotations for pods"
     )
+    sidecars: list[SidecarConfig] | None = Field(
+        default=None, description="Sidecar containers to add to the pod"
+    )
+    init_containers: list[SidecarConfig] | None = Field(
+        default=None, alias="initContainers", description="Init containers to add to the pod"
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -597,6 +626,12 @@ class UpdateK8sClusterRequest(BaseModel):
     )
     pod_metadata: PodMetadataConfig | None = Field(
         default=None, alias="podMetadata", description="Extra labels and annotations for pods"
+    )
+    sidecars: list[SidecarConfig] | None = Field(
+        default=None, description="Sidecar containers to add to the pod"
+    )
+    init_containers: list[SidecarConfig] | None = Field(
+        default=None, alias="initContainers", description="Init containers to add to the pod"
     )
 
     model_config = {"populate_by_name": True}

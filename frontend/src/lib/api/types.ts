@@ -690,6 +690,7 @@ export interface PodSchedulingConfig {
   hostNetwork?: boolean;
   serviceAccountName?: string;
   terminationGracePeriodSeconds?: number;
+  imagePullSecrets?: string[];
   readinessGateEnabled?: boolean;
   podManagementPolicy?: "OrderedReady" | "Parallel";
   dnsPolicy?: string;

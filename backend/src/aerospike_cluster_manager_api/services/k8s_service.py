@@ -140,6 +140,12 @@ def build_pod_scheduling(sched: Any) -> dict[str, Any]:
         result["podManagementPolicy"] = sched.pod_management_policy
     if sched.dns_policy:
         result["dnsPolicy"] = sched.dns_policy
+    if sched.image_pull_secrets:
+        result["imagePullSecrets"] = [{"name": s} for s in sched.image_pull_secrets]
+    if sched.security_context:
+        result["securityContext"] = sched.security_context
+    if sched.topology_spread_constraints:
+        result["topologySpreadConstraints"] = sched.topology_spread_constraints
     if sched.metadata:
         meta: dict[str, Any] = {}
         if sched.metadata.labels:
@@ -471,6 +477,16 @@ def build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
             pod_spec["metadata"] = meta
             cr["spec"]["podSpec"] = pod_spec
 
+    # Sidecars and init containers
+    if req.sidecars:
+        pod_spec = cr["spec"].get("podSpec", {})
+        pod_spec["sidecars"] = [s.model_dump(exclude_none=True) for s in req.sidecars]
+        cr["spec"]["podSpec"] = pod_spec
+    if req.init_containers:
+        pod_spec = cr["spec"].get("podSpec", {})
+        pod_spec["initContainers"] = [c.model_dump(exclude_none=True) for c in req.init_containers]
+        cr["spec"]["podSpec"] = pod_spec
+
     return cr
 
 
@@ -671,6 +687,8 @@ def has_update_fields(body: UpdateK8sClusterRequest) -> bool:
             body.pod_service,
             body.enable_rack_id_override,
             body.pod_metadata,
+            body.sidecars,
+            body.init_containers,
         )
     )
 
@@ -784,6 +802,14 @@ def build_update_patch(body: UpdateK8sClusterRequest) -> dict[str, Any]:
         if body.pod_metadata.annotations:
             pod_meta["annotations"] = body.pod_metadata.annotations
         pod_spec["metadata"] = pod_meta if pod_meta else None
+        patch["spec"]["podSpec"] = pod_spec
+    if body.sidecars is not None:
+        pod_spec = patch["spec"].get("podSpec", {})
+        pod_spec["sidecars"] = [s.model_dump(exclude_none=True) for s in body.sidecars]
+        patch["spec"]["podSpec"] = pod_spec
+    if body.init_containers is not None:
+        pod_spec = patch["spec"].get("podSpec", {})
+        pod_spec["initContainers"] = [c.model_dump(exclude_none=True) for c in body.init_containers]
         patch["spec"]["podSpec"] = pod_spec
     return patch
 
