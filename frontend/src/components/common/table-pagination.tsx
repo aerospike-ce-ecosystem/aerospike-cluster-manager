@@ -54,7 +54,7 @@ export function TablePagination({
       <div className="flex min-w-0 flex-wrap items-center gap-3">
         <span className="text-muted-foreground font-mono text-[11px] tabular-nums">
           {start}–{end}
-          <span className="text-muted-foreground/40 mx-1.5">of</span>
+          <span className="text-muted-foreground/60 mx-1.5">of</span>
           {formatNumber(total)}
         </span>
         <Select
@@ -70,7 +70,7 @@ export function TablePagination({
             </option>
           ))}
         </Select>
-        <span className="text-muted-foreground/40 hidden text-[10px] tracking-wider uppercase sm:inline">
+        <span className="text-muted-foreground/60 hidden text-[10px] tracking-wider uppercase sm:inline">
           per page
         </span>
       </div>
@@ -104,7 +104,7 @@ export function TablePagination({
             p === "ellipsis" ? (
               <span
                 key={`dots-${i}`}
-                className="text-muted-foreground/30 px-1 font-mono text-[11px] select-none"
+                className="text-muted-foreground/50 px-1 font-mono text-[11px] select-none"
                 aria-hidden="true"
               >
                 ···

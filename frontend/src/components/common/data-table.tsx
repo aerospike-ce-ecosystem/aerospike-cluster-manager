@@ -228,7 +228,7 @@ export function DataTable<TData, TValue>({
                     {sorted === "asc" && <ChevronUp className="text-accent h-3 w-3 shrink-0" />}
                     {sorted === "desc" && <ChevronDown className="text-accent h-3 w-3 shrink-0" />}
                     {!sorted && (
-                      <ChevronsUpDown className="text-muted-foreground/30 h-3 w-3 shrink-0" />
+                      <ChevronsUpDown className="text-muted-foreground/50 h-3 w-3 shrink-0" />
                     )}
                   </>
                 )}
@@ -243,7 +243,7 @@ export function DataTable<TData, TValue>({
     <tr
       key={row.id}
       className={cn(
-        "record-grid-row border-base-300/20 group border-b last:border-b-0",
+        "record-grid-row border-base-300 group border-b last:border-b-0",
         onRowClick && "cursor-pointer",
         onRowClick && "focus-visible:ring-primary focus:outline-none focus-visible:ring-2",
       )}
@@ -336,7 +336,7 @@ export function DataTable<TData, TValue>({
       <div
         key={row.id}
         className={cn(
-          "record-card border-base-300/50 bg-base-100/90 animate-fade-in rounded-2xl border p-4 shadow-sm",
+          "record-card border-base-300 bg-base-100/90 animate-fade-in rounded-2xl border p-4 shadow-sm",
           onRowClick && "cursor-pointer",
         )}
         style={{ animationDelay: `${idx * 25}ms` }}
@@ -414,7 +414,7 @@ export function DataTable<TData, TValue>({
         <div className={cn("relative min-w-0 flex-1", className)} data-testid={testId}>
           <div className="space-y-3" data-testid={`${testId}-skeleton`}>
             {Array.from({ length: Math.ceil(loadingRows / 2) }).map((_, idx) => (
-              <div key={idx} className="border-base-300/50 bg-base-100 rounded-2xl border p-4">
+              <div key={idx} className="border-base-300 bg-base-100 rounded-2xl border p-4">
                 <Skeleton className="mb-3 h-4 w-32" />
                 <div className="space-y-2">
                   <Skeleton className="h-3 w-20" />
@@ -431,7 +431,7 @@ export function DataTable<TData, TValue>({
     return (
       <div className={cn("relative min-w-0 flex-1 overflow-auto", className)} data-testid={testId}>
         <div
-          className="border-base-300/50 bg-base-100 overflow-hidden rounded-lg border"
+          className="border-base-300 bg-base-100 overflow-hidden rounded-lg border"
           data-testid={`${testId}-skeleton`}
         >
           <table className="table w-full table-fixed">
@@ -454,7 +454,7 @@ export function DataTable<TData, TValue>({
               {Array.from({ length: loadingRows }).map((_, rowIdx) => (
                 <tr
                   key={rowIdx}
-                  className="border-base-300/20 border-b last:border-b-0"
+                  className="border-base-300 border-b last:border-b-0"
                   style={{ animationDelay: `${rowIdx * 60}ms` }}
                 >
                   {responsiveColumns.map((_, colIdx) => (
@@ -512,7 +512,7 @@ export function DataTable<TData, TValue>({
     return (
       <div className={cn("relative min-h-0 min-w-0 flex-1", className)} data-testid={testId}>
         {loadingBar}
-        <div className="border-base-300/50 bg-base-100 min-w-0 overflow-hidden rounded-lg border">
+        <div className="border-base-300 bg-base-100 min-w-0 overflow-hidden rounded-lg border">
           <div ref={parentRef} className="w-full overflow-auto" style={{ maxHeight }}>
             <table
               className={cn("table table-fixed", !tableMinWidth && "w-full")}
@@ -560,7 +560,7 @@ export function DataTable<TData, TValue>({
       data-testid={testId}
     >
       {loadingBar}
-      <div className="border-base-300/50 bg-base-100 min-w-0 overflow-hidden rounded-lg border">
+      <div className="border-base-300 bg-base-100 min-w-0 overflow-hidden rounded-lg border">
         <div className="w-full overflow-auto">
           <table
             className={cn("table table-fixed", !tableMinWidth && "w-full")}

@@ -3,9 +3,6 @@
   themes: false;
 }
 
-/* Dark mode variant using data-theme attribute */
-@custom-variant dark (&:is([data-theme="dracula"] *));
-
 /* ─── Bumblebee Light Theme ──────────────────────────── */
 @plugin "daisyui/theme" {
   name: "bumblebee";
@@ -44,33 +41,33 @@
   --noise: 0;
 }
 
-/* ─── Dracula Dark Theme ─────────────────────────────── */
+/* ─── Bumblebee Dark Theme ───────────────────────────── */
 @plugin "daisyui/theme" {
-  name: "dracula";
+  name: "bumblebee-dark";
   default: false;
   prefersdark: true;
   color-scheme: "dark";
 
-  --color-base-100: oklch(28.822% 0.022 277.508);
-  --color-base-200: oklch(26.805% 0.02 277.508);
-  --color-base-300: oklch(24.787% 0.019 277.508);
-  --color-base-content: oklch(97.747% 0.007 106.545);
-  --color-primary: oklch(75.461% 0.183 346.812);
-  --color-primary-content: oklch(15.092% 0.036 346.812);
-  --color-secondary: oklch(74.202% 0.148 301.883);
-  --color-secondary-content: oklch(14.84% 0.029 301.883);
-  --color-accent: oklch(83.392% 0.124 66.558);
-  --color-accent-content: oklch(16.678% 0.024 66.558);
-  --color-neutral: oklch(39.445% 0.032 275.524);
-  --color-neutral-content: oklch(87.889% 0.006 275.524);
-  --color-info: oklch(88.263% 0.093 212.846);
-  --color-info-content: oklch(17.652% 0.018 212.846);
-  --color-success: oklch(87.099% 0.219 148.024);
-  --color-success-content: oklch(17.419% 0.043 148.024);
-  --color-warning: oklch(95.533% 0.134 112.757);
-  --color-warning-content: oklch(19.106% 0.026 112.757);
-  --color-error: oklch(68.22% 0.206 24.43);
-  --color-error-content: oklch(13.644% 0.041 24.43);
+  --color-base-100: oklch(22% 0.015 75);
+  --color-base-200: oklch(19% 0.012 75);
+  --color-base-300: oklch(16% 0.01 75);
+  --color-base-content: oklch(95% 0.01 90);
+  --color-primary: oklch(85% 0.199 91.936);
+  --color-primary-content: oklch(20% 0.05 91);
+  --color-secondary: oklch(75% 0.183 55.934);
+  --color-secondary-content: oklch(20% 0.05 55);
+  --color-accent: oklch(95% 0.01 90);
+  --color-accent-content: oklch(20% 0.015 75);
+  --color-neutral: oklch(30% 0.015 75);
+  --color-neutral-content: oklch(90% 0.01 90);
+  --color-info: oklch(74% 0.16 232.661);
+  --color-info-content: oklch(20% 0.03 232);
+  --color-success: oklch(76% 0.177 163.223);
+  --color-success-content: oklch(20% 0.03 163);
+  --color-warning: oklch(82% 0.189 84.429);
+  --color-warning-content: oklch(20% 0.03 84);
+  --color-error: oklch(70% 0.191 22.216);
+  --color-error-content: oklch(20% 0.03 22);
 
   --radius-selector: 1rem;
   --radius-field: 0.5rem;
@@ -82,10 +79,13 @@
   --noise: 0;
 }
 
+/* Dark mode variant using data-theme attribute */
+@custom-variant dark (&:where([data-theme=bumblebee-dark], [data-theme=bumblebee-dark] *));
+
 /* ─── Custom Theme Extensions (non-DaisyUI tokens) ──── */
 @theme {
   /* Muted foreground — no DaisyUI equivalent */
-  --color-muted-foreground: oklch(55% 0 0);
+  --color-muted-foreground: oklch(45% 0.01 75);
 
   /* Sidebar colors — derived from bumblebee base tones */
   --color-sidebar: oklch(100% 0 0);
@@ -182,18 +182,18 @@
 }
 
 /* Dark theme overrides for custom tokens */
-[data-theme="dracula"] {
-  --color-muted-foreground: oklch(65% 0.01 277);
-  --color-sidebar: oklch(26.805% 0.02 277.508);
-  --color-sidebar-foreground: oklch(97.747% 0.007 106.545);
-  --color-sidebar-border: oklch(24.787% 0.019 277.508);
-  --color-sidebar-accent: oklch(28.822% 0.022 277.508);
-  --color-sidebar-accent-foreground: oklch(97.747% 0.007 106.545);
-  --color-chart-1: oklch(88.263% 0.093 212.846);
-  --color-chart-2: oklch(75.461% 0.183 346.812);
-  --color-chart-3: oklch(87.099% 0.219 148.024);
-  --color-chart-4: oklch(95.533% 0.134 112.757);
-  --color-chart-5: oklch(68.22% 0.206 24.43);
+[data-theme="bumblebee-dark"] {
+  --color-muted-foreground: oklch(68% 0.01 75);
+  --color-sidebar: oklch(19% 0.012 75);
+  --color-sidebar-foreground: oklch(95% 0.01 90);
+  --color-sidebar-border: oklch(16% 0.01 75);
+  --color-sidebar-accent: oklch(22% 0.015 75);
+  --color-sidebar-accent-foreground: oklch(95% 0.01 90);
+  --color-chart-1: oklch(74% 0.16 232.661);
+  --color-chart-2: oklch(85% 0.199 91.936);
+  --color-chart-3: oklch(76% 0.177 163.223);
+  --color-chart-4: oklch(82% 0.189 84.429);
+  --color-chart-5: oklch(70% 0.191 22.216);
 }
 
 /* ─── Shadow Variables ───────────────────────────────── */
@@ -204,8 +204,8 @@
   --card-hover-shadow: 0 10px 25px -5px rgb(0 0 0 / 0.08), 0 8px 10px -6px rgb(0 0 0 / 0.04);
 }
 
-[data-theme="dracula"] {
-  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.25), 0 0 0 1px oklch(24.787% 0.019 277.508 / 0.4);
+[data-theme="bumblebee-dark"] {
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.25), 0 0 0 1px oklch(16% 0.01 75 / 0.4);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.35), 0 2px 4px -2px rgb(0 0 0 / 0.3);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.5);
   --card-hover-shadow:
@@ -243,7 +243,7 @@
   pointer-events: none;
   z-index: -1;
 }
-[data-theme="dracula"] .ambient-glow::before {
+[data-theme="bumblebee-dark"] .ambient-glow::before {
   background: radial-gradient(
     ellipse,
     color-mix(in oklch, var(--color-accent) 6%, transparent) 0%,
@@ -317,7 +317,7 @@
   background-size: 20px 20px;
 }
 
-[data-theme="dracula"] .dot-pattern {
+[data-theme="bumblebee-dark"] .dot-pattern {
   background-image: radial-gradient(
     color-mix(in oklch, var(--color-base-content) 3%, transparent) 1px,
     transparent 1px
@@ -408,7 +408,7 @@ kbd {
   background: color-mix(in oklch, var(--color-base-200) 50%, transparent);
 }
 
-[data-theme="dracula"] .record-grid-row:hover {
+[data-theme="bumblebee-dark"] .record-grid-row:hover {
   background: color-mix(in oklch, var(--color-base-200) 30%, transparent);
 }
 
@@ -439,7 +439,7 @@ kbd {
   box-shadow: inset 0 -1px 0 color-mix(in oklch, var(--color-base-300) 50%, transparent);
 }
 
-[data-theme="dracula"] .grid-header th {
+[data-theme="bumblebee-dark"] .grid-header th {
   box-shadow: inset 0 -1px 0 color-mix(in oklch, var(--color-base-300) 30%, transparent);
 }
 
@@ -448,7 +448,7 @@ kbd {
   font-variant-numeric: tabular-nums;
   font-size: 10px;
   letter-spacing: 0.04em;
-  color: color-mix(in oklch, var(--color-muted-foreground) 30%, transparent);
+  color: color-mix(in oklch, var(--color-muted-foreground) 60%, transparent);
   user-select: none;
 }
 
@@ -460,7 +460,7 @@ kbd {
 
 .cell-val-null {
   font-style: italic;
-  color: color-mix(in oklch, var(--color-muted-foreground) 35%, transparent);
+  color: color-mix(in oklch, var(--color-muted-foreground) 65%, transparent);
 }
 
 .cell-val-complex {
@@ -470,9 +470,9 @@ kbd {
   border-radius: 3px;
   padding: 1px 6px;
   font-size: 11px;
-  background: color-mix(in oklch, var(--color-accent) 7%, transparent);
+  background: color-mix(in oklch, var(--color-accent) 5%, transparent);
   color: var(--color-muted-foreground);
-  border: 1px solid color-mix(in oklch, var(--color-accent) 10%, transparent);
+  border: 1px solid color-mix(in oklch, var(--color-accent) 15%, transparent);
 }
 
 .cell-val-geo {
@@ -516,7 +516,7 @@ kbd {
 }
 
 .page-num-btn:disabled {
-  opacity: 0.25;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 

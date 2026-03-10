@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { Plus, Search, X, Clock, Filter, DatabaseZap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,18 @@ export function FilterToolbar({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pkExpanded, setPkExpanded] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setPickerOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [pickerOpen]);
 
   const hasFilters = store.conditions.length > 0;
   const showStats = hasFilters && stats && stats.executionTimeMs > 0;
@@ -137,10 +149,9 @@ export function FilterToolbar({
 
           {pkExpanded && <div className="bg-border/40 mx-0.5 hidden h-4 w-px sm:block" />}
 
-          <div className="dropdown">
+          <div ref={pickerRef} className="relative">
             <button
               type="button"
-              tabIndex={0}
               className={cn(
                 "border-base-300/60 hover:border-base-300 hover:bg-base-200/60 inline-flex h-7 items-center gap-1 rounded-md border border-dashed px-2 text-xs transition-colors",
                 "text-muted-foreground hover:text-base-content",
@@ -165,7 +176,7 @@ export function FilterToolbar({
               )}
             </button>
             {pickerOpen && (
-              <div className="dropdown-content bg-base-100 rounded-box border-base-300 z-50 w-64 border p-4 shadow-lg">
+              <div className="bg-base-100 border-base-300 absolute top-full left-0 z-50 mt-1 rounded-lg border shadow-lg">
                 <FilterColumnPicker
                   bins={availableBins}
                   onSelect={handleAddFilter}
@@ -178,15 +189,13 @@ export function FilterToolbar({
           {store.conditions.map((cond) => (
             <div key={cond.id} className="relative">
               {editingId === cond.id ? (
-                <div className="dropdown dropdown-open">
-                  <div className="inline-flex" tabIndex={0}>
-                    <FilterChip
-                      condition={cond}
-                      onEdit={handleEditChip}
-                      onRemove={handleRemoveChip}
-                    />
-                  </div>
-                  <div className="dropdown-content bg-base-100 rounded-box border-base-300 z-50 w-64 border p-4 shadow-lg">
+                <div className="relative">
+                  <FilterChip
+                    condition={cond}
+                    onEdit={handleEditChip}
+                    onRemove={handleRemoveChip}
+                  />
+                  <div className="bg-base-100 border-base-300 absolute top-full left-0 z-50 mt-1 rounded-lg border shadow-lg">
                     {editingCondition && (
                       <FilterConditionEditor
                         condition={editingCondition}

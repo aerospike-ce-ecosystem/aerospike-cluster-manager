@@ -11,13 +11,13 @@ export function renderCellValue(value: BinValue): React.ReactNode {
       <span
         className={cn(
           "inline-flex items-center gap-1.5 font-mono text-xs",
-          value ? "text-success" : "text-error/60",
+          value ? "text-success" : "text-error/80",
         )}
       >
         <span
           className={cn(
             "inline-block h-1.5 w-1.5 shrink-0 rounded-full",
-            value ? "bg-success" : "bg-error/60",
+            value ? "bg-success" : "bg-error/80",
           )}
         />
         {value.toString()}
