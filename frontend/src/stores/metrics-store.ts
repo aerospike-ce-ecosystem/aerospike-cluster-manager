@@ -16,6 +16,7 @@ interface MetricsState {
   error: string | null;
   _isFetching: boolean;
   _isTabVisible: boolean;
+  _pollingConnId: string | null;
   consecutiveErrors: number;
 
   fetchMetrics: (connId: string) => Promise<void>;
@@ -29,6 +30,7 @@ export const useMetricsStore = create<MetricsState>()((set, get) => ({
   error: null,
   _isFetching: false,
   _isTabVisible: true,
+  _pollingConnId: null,
   consecutiveErrors: 0,
 
   fetchMetrics: async (connId) => {
@@ -43,7 +45,8 @@ export const useMetricsStore = create<MetricsState>()((set, get) => ({
       set({ metrics, loading: false, _isFetching: false, consecutiveErrors: 0 });
       // Reset interval back to base when recovering from errors
       if (hadErrors && _intervalId) {
-        get().startPolling(connId);
+        const currentConnId = get()._pollingConnId;
+        if (currentConnId) get().startPolling(currentConnId);
       }
     } catch (error) {
       const consecutiveErrors = get().consecutiveErrors + 1;
@@ -57,7 +60,8 @@ export const useMetricsStore = create<MetricsState>()((set, get) => ({
         );
         _intervalId = setInterval(() => {
           if (!get()._isTabVisible) return;
-          get().fetchMetrics(connId);
+          const currentConnId = get()._pollingConnId;
+          if (currentConnId) get().fetchMetrics(currentConnId);
         }, backoff);
       }
     }
@@ -67,12 +71,14 @@ export const useMetricsStore = create<MetricsState>()((set, get) => ({
     if (_intervalId) clearInterval(_intervalId);
     if (_visibilityCleanup) _visibilityCleanup();
 
+    set({ _pollingConnId: connId });
     get().fetchMetrics(connId);
 
     _intervalId = setInterval(() => {
       // Skip polling when tab is not visible
       if (!get()._isTabVisible) return;
-      get().fetchMetrics(connId);
+      const currentConnId = get()._pollingConnId;
+      if (currentConnId) get().fetchMetrics(currentConnId);
     }, METRIC_INTERVAL_MS);
 
     // Visibility change listener
@@ -97,6 +103,6 @@ export const useMetricsStore = create<MetricsState>()((set, get) => ({
       _visibilityCleanup();
       _visibilityCleanup = null;
     }
-    set({ _isFetching: false });
+    set({ _isFetching: false, _pollingConnId: null });
   },
 }));

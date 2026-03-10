@@ -280,7 +280,7 @@ export function RecordEditorDialog({
   onSave,
 }: RecordEditorDialogProps) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} preventClose>
+    <Dialog open={open} onOpenChange={onOpenChange} preventClose={saving}>
       <DialogContent className="border-base-300/50 flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[700px]">
         <DialogHeader className="border-base-300/40 space-y-0.5 border-b px-5 pt-5 pb-3">
           <DialogTitle className="font-mono text-sm font-medium">

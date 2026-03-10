@@ -20,8 +20,12 @@ export function useSwipe({
   const isEdgeSwipe = useRef(false);
 
   useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
+
     function handleTouchStart(e: TouchEvent) {
       const touch = e.touches[0];
+      if (!touch) return;
       startX.current = touch.clientX;
       startY.current = touch.clientY;
       isEdgeSwipe.current = touch.clientX <= edgeThreshold;
@@ -29,6 +33,7 @@ export function useSwipe({
 
     function handleTouchEnd(e: TouchEvent) {
       const touch = e.changedTouches[0];
+      if (!touch) return;
       const dx = touch.clientX - startX.current;
       const dy = touch.clientY - startY.current;
 
@@ -42,11 +47,10 @@ export function useSwipe({
       }
     }
 
-    document.addEventListener("touchstart", handleTouchStart, { passive: true });
-    document.addEventListener("touchend", handleTouchEnd, { passive: true });
+    document.addEventListener("touchstart", handleTouchStart, { passive: true, signal });
+    document.addEventListener("touchend", handleTouchEnd, { passive: true, signal });
     return () => {
-      document.removeEventListener("touchstart", handleTouchStart);
-      document.removeEventListener("touchend", handleTouchEnd);
+      controller.abort();
     };
   }, [onSwipeRight, onSwipeLeft, edgeThreshold, minDistance]);
 }

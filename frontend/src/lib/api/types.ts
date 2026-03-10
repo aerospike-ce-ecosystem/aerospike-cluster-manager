@@ -741,6 +741,16 @@ export interface ServiceMetadataConfig {
   labels?: Record<string, string>;
 }
 
+export interface SidecarConfig {
+  name: string;
+  image: string;
+  ports?: Record<string, unknown>[];
+  env?: Record<string, unknown>[];
+  volumeMounts?: Record<string, unknown>[];
+  resources?: Record<string, unknown>;
+  securityContext?: Record<string, unknown>;
+}
+
 export interface CreateK8sClusterRequest {
   name: string;
   namespace: string;
@@ -768,6 +778,8 @@ export interface CreateK8sClusterRequest {
   podService?: ServiceMetadataConfig;
   enableRackIDOverride?: boolean;
   podMetadata?: PodMetadataConfig;
+  sidecars?: SidecarConfig[];
+  initContainers?: SidecarConfig[];
 }
 
 export interface UpdateK8sClusterRequest {
@@ -794,6 +806,8 @@ export interface UpdateK8sClusterRequest {
   podService?: ServiceMetadataConfig;
   enableRackIDOverride?: boolean;
   podMetadata?: PodMetadataConfig;
+  sidecars?: SidecarConfig[];
+  initContainers?: SidecarConfig[];
 }
 
 export interface ScaleK8sClusterRequest {

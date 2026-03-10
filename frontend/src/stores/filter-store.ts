@@ -57,8 +57,8 @@ export const useFilterStore = create<FilterState>()((set, get) => ({
     // Strip client-side `id` field before sending to API
     return {
       logic,
-      conditions: conditions.map(({ id: _id, ...rest }) => rest) as FilterCondition[],
-    };
+      conditions: conditions.map(({ id: _id, ...rest }) => rest) as Omit<FilterCondition, "id">[],
+    } as FilterGroup;
   },
 
   reset: () => set({ conditions: [], logic: "and", primaryKey: "" }),

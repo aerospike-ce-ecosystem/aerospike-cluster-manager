@@ -48,8 +48,8 @@ export const useQueryStore = create<QueryState>()((set, get) => ({
   error: null,
   hasExecuted: false,
 
-  setNamespace: (ns) => set({ namespace: ns }),
-  setSet: (s) => set({ set: s }),
+  setNamespace: (ns) => set({ namespace: ns, results: [], error: null, hasExecuted: false }),
+  setSet: (s) => set({ set: s, results: [], error: null, hasExecuted: false }),
   setPredicate: (pred) => set({ predicate: pred }),
   setSelectBins: (bins) => set({ selectBins: bins }),
   setExpression: (expr) => set({ expression: expr }),

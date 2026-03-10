@@ -30,6 +30,7 @@ interface K8sClusterState {
   detailEvents: K8sClusterEvent[];
   detailHealth: ClusterHealthSummary | null;
   consecutiveErrors: number;
+  _pollingTarget: { namespace: string; name: string } | null;
 
   checkAvailability: () => Promise<void>;
   fetchClusters: (namespace?: string) => Promise<void>;
@@ -80,6 +81,7 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
     detailEvents: [],
     detailHealth: null,
     consecutiveErrors: 0,
+    _pollingTarget: null,
 
     checkAvailability: async () => {
       try {
@@ -266,14 +268,16 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
 
     startDetailPolling: (namespace: string, name: string) => {
       if (_k8sDetailIntervalId) clearInterval(_k8sDetailIntervalId);
-      set({ consecutiveErrors: 0 });
+      set({ consecutiveErrors: 0, _pollingTarget: { namespace, name } });
 
       const poll = async () => {
+        const target = get()._pollingTarget;
+        if (!target) return;
         try {
-          await loadCluster(namespace, name);
+          await loadCluster(target.namespace, target.name);
           const [events, health] = await Promise.all([
-            api.getK8sClusterEvents(namespace, name).catch(() => get().detailEvents),
-            api.getK8sClusterHealth(namespace, name).catch(() => get().detailHealth),
+            api.getK8sClusterEvents(target.namespace, target.name).catch(() => get().detailEvents),
+            api.getK8sClusterHealth(target.namespace, target.name).catch(() => get().detailHealth),
           ]);
           const hadErrors = get().consecutiveErrors > 0;
           set({ detailEvents: events, detailHealth: health, consecutiveErrors: 0 });
@@ -297,11 +301,9 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
         }
       };
 
-      // Set the interval first so that if the immediate poll() fails fast and
-      // triggers backoff (which replaces _k8sDetailIntervalId), it won't be
-      // overwritten by a stale base-rate interval on the next line.
-      _k8sDetailIntervalId = setInterval(poll, K8S_DETAIL_POLL_INTERVAL_MS);
+      // Call poll() immediately, then start the interval
       poll();
+      _k8sDetailIntervalId = setInterval(poll, K8S_DETAIL_POLL_INTERVAL_MS);
     },
 
     stopDetailPolling: () => {
@@ -309,7 +311,7 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
         clearInterval(_k8sDetailIntervalId);
         _k8sDetailIntervalId = null;
       }
-      set({ consecutiveErrors: 0, detailEvents: [], detailHealth: null });
+      set({ consecutiveErrors: 0, detailEvents: [], detailHealth: null, _pollingTarget: null });
     },
   };
 });

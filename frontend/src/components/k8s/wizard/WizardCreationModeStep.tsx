@@ -101,7 +101,7 @@ export function WizardCreationModeStep({
                       <span className="text-sm font-medium">{t.name}</span>
                     </div>
                     {t.description && (
-                      <p className="text-base-content/60 mt-0.5 truncate text-xs">
+                      <p className="text-base-content/60 mt-0.5 line-clamp-2 text-xs break-words">
                         {t.description}
                       </p>
                     )}

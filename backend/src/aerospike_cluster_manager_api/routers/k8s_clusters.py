@@ -204,7 +204,7 @@ async def get_k8s_pod_logs(
     cluster_pods = await k8s_client.list_pods(namespace, f"app.kubernetes.io/instance={name}")
     pod_names = {p["name"] for p in cluster_pods}
     if pod not in pod_names:
-        raise HTTPException(status_code=403, detail=f"Pod '{pod}' does not belong to cluster '{name}'")
+        raise HTTPException(status_code=404, detail=f"Pod '{pod}' does not belong to cluster '{name}'")
     logs = await k8s_client.read_pod_log(namespace, pod, container=container, tail_lines=tail)
     return {"pod": pod, "logs": logs, "tailLines": tail}
 

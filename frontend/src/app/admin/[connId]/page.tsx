@@ -544,6 +544,7 @@ export default function AdminPage({ params }: { params: Promise<{ connId: string
                 try {
                   await changePassword(connId, changePassUser, newPass);
                   useToastStore.getState().addToast("success", "Password updated");
+                  setNewPass("");
                   setChangePassOpen(false);
                 } catch (err) {
                   useToastStore.getState().addToast("error", getErrorMessage(err));

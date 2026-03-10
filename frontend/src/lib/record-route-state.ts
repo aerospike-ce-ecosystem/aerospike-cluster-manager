@@ -1,5 +1,5 @@
 import { DEFAULT_PAGE_SIZE } from "@/lib/constants";
-import type { FilterCondition } from "@/lib/api/types";
+import type { BinDataType, FilterCondition, FilterOperator } from "@/lib/api/types";
 
 type FilterLogic = "and" | "or";
 
@@ -57,6 +57,43 @@ function sanitizeLogic(value: unknown): FilterLogic {
   return value === "or" ? "or" : "and";
 }
 
+const VALID_OPERATORS: readonly FilterOperator[] = [
+  "eq",
+  "ne",
+  "gt",
+  "ge",
+  "lt",
+  "le",
+  "between",
+  "contains",
+  "not_contains",
+  "regex",
+  "exists",
+  "not_exists",
+  "is_true",
+  "is_false",
+  "geo_within",
+  "geo_contains",
+] as const;
+
+const VALID_BIN_TYPES: readonly BinDataType[] = [
+  "integer",
+  "float",
+  "string",
+  "bool",
+  "list",
+  "map",
+  "geo",
+] as const;
+
+function isValidOperator(value: string): value is FilterOperator {
+  return (VALID_OPERATORS as readonly string[]).includes(value);
+}
+
+function isValidBinType(value: string): value is BinDataType {
+  return (VALID_BIN_TYPES as readonly string[]).includes(value);
+}
+
 function sanitizeConditions(value: unknown): FilterCondition[] {
   if (!Array.isArray(value)) return [];
 
@@ -69,6 +106,10 @@ function sanitizeConditions(value: unknown): FilterCondition[] {
       typeof candidate.operator !== "string" ||
       typeof candidate.binType !== "string"
     ) {
+      return [];
+    }
+
+    if (!isValidOperator(candidate.operator) || !isValidBinType(candidate.binType)) {
       return [];
     }
 

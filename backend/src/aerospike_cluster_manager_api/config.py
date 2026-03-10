@@ -15,7 +15,7 @@ def _get_int(name: str, default: int) -> int:
 
 
 CORS_ORIGINS: list[str] = [
-    o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",") if o.strip()
+    o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3100").split(",") if o.strip()
 ]
 
 HOST: str = os.getenv("HOST", "0.0.0.0")

@@ -322,11 +322,11 @@ class K8sClient:
                             break
                 pods.append(
                     {
-                        "name": pod.metadata.name,
+                        "name": pod.metadata.name if pod.metadata else "",
                         "podIP": pod.status.pod_ip if pod.status else None,
                         "hostIP": pod.status.host_ip if pod.status else None,
                         "isReady": ready,
-                        "phase": pod.status.phase if pod.status else "Unknown",
+                        "phase": (pod.status.phase or "Unknown") if pod.status else "Unknown",
                         "image": (
                             pod.spec.containers[0].image
                             if pod.spec and pod.spec.containers and len(pod.spec.containers) > 0

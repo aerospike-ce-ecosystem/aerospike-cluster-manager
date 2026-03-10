@@ -80,7 +80,10 @@ async def close_db() -> None:
 def _row_to_profile(row: asyncpg.Record) -> ConnectionProfile:
     hosts = row["hosts"]
     if isinstance(hosts, str):
-        hosts = json.loads(hosts)
+        try:
+            hosts = json.loads(hosts)
+        except json.JSONDecodeError:
+            hosts = [hosts]
     return ConnectionProfile(
         id=row["id"],
         name=row["name"],
