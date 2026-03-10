@@ -25,6 +25,7 @@ from aerospike_cluster_manager_api.models.k8s_cluster import (
     OperationStatusResponse,
     RackConfig,
     RackDistribution,
+    TemplateSnapshotStatus,
     UpdateK8sClusterRequest,
     UpdateK8sTemplateRequest,
 )
@@ -739,6 +740,17 @@ def extract_detail(item: dict[str, Any], pods_raw: list[dict[str, Any]]) -> K8sC
     if last_reconcile_time_raw and isinstance(last_reconcile_time_raw, str):
         last_reconcile_time = last_reconcile_time_raw
 
+    # Extract template snapshot sync status
+    template_snapshot = None
+    ts_raw = status.get("templateSnapshot")
+    if ts_raw and isinstance(ts_raw, dict):
+        template_snapshot = TemplateSnapshotStatus(
+            name=ts_raw.get("name"),
+            resourceVersion=ts_raw.get("resourceVersion"),
+            snapshotTimestamp=ts_raw.get("snapshotTimestamp"),
+            synced=ts_raw.get("synced"),
+        )
+
     return K8sClusterDetail(
         name=metadata.get("name", ""),
         namespace=metadata.get("namespace", ""),
@@ -758,6 +770,7 @@ def extract_detail(item: dict[str, Any], pods_raw: list[dict[str, Any]]) -> K8sC
         pendingRestartPods=status.get("pendingRestartPods", []),
         lastReconcileTime=last_reconcile_time,
         operatorVersion=status.get("operatorVersion"),
+        templateSnapshot=template_snapshot,
     )
 
 

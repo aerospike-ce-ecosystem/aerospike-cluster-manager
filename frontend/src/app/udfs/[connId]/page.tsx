@@ -244,15 +244,16 @@ export default function UDFsPage({ params }: { params: Promise<{ connId: string 
         description="Manage User-Defined Functions (Lua scripts)"
         actions={
           <>
-            <Button variant="outline" size="sm" onClick={fetchUDFs}>
+            <Button variant="neutral" size="sm" onClick={fetchUDFs}>
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
             </Button>
-            <Button variant="outline" size="sm" onClick={handleFileInput}>
+            <Button variant="warning" size="sm" onClick={handleFileInput}>
               <Upload className="mr-2 h-4 w-4" />
               Upload File
             </Button>
             <Button
+              variant="success"
               onClick={() => {
                 setUploadFilename("");
                 setUploadContent("");

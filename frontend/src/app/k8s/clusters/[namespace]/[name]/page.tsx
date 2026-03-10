@@ -185,28 +185,28 @@ export default function K8sClusterDetailPage() {
         description={`${selectedCluster.namespace} / ${selectedCluster.image}`}
         actions={
           <>
-            <Button variant="outline" size="sm" onClick={() => router.push("/k8s/clusters")}>
+            <Button variant="ghost" size="sm" onClick={() => router.push("/k8s/clusters")}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
             </Button>
-            <Button variant="outline" size="sm" onClick={() => fetchCluster(namespace, name)}>
+            <Button variant="neutral" size="sm" onClick={() => fetchCluster(namespace, name)}>
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setScaleOpen(true)}>
+            <Button variant="info" size="sm" onClick={() => setScaleOpen(true)}>
               <Scale className="mr-2 h-4 w-4" />
               Scale
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+            <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)}>
               <Pencil className="mr-2 h-4 w-4" />
               Edit
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setHpaOpen(true)}>
+            <Button variant="info" size="sm" onClick={() => setHpaOpen(true)}>
               <Gauge className="mr-2 h-4 w-4" />
               HPA
             </Button>
             <Button
-              variant="outline"
+              variant="warning"
               size="sm"
               disabled={loading}
               onClick={() => setWarmRestartConfirmOpen(true)}
@@ -214,7 +214,7 @@ export default function K8sClusterDetailPage() {
               Warm Restart
             </Button>
             <Button
-              variant="outline"
+              variant="warning"
               size="sm"
               disabled={loading}
               onClick={() => setPodRestartConfirmOpen(true)}
@@ -239,7 +239,7 @@ export default function K8sClusterDetailPage() {
             )}
             {selectedCluster.phase === "Paused" ? (
               <Button
-                variant="outline"
+                variant="success"
                 size="sm"
                 disabled={loading}
                 onClick={async () => {
@@ -255,7 +255,7 @@ export default function K8sClusterDetailPage() {
               </Button>
             ) : (
               <Button
-                variant="outline"
+                variant="neutral"
                 size="sm"
                 disabled={loading}
                 onClick={async () => {

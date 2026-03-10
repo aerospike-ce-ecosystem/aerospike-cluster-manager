@@ -244,12 +244,12 @@ export default function ConnectionsPage() {
         actions={
           <>
             {k8sAvailable && (
-              <Button variant="outline" onClick={() => router.push("/k8s/clusters/new")}>
+              <Button variant="info" onClick={() => router.push("/k8s/clusters/new")}>
                 <Boxes className="mr-2 h-4 w-4 sm:mr-2" />
                 <span className="hidden sm:inline">Create Cluster</span>
               </Button>
             )}
-            <Button variant="outline" onClick={openCreateDialog}>
+            <Button variant="success" onClick={openCreateDialog}>
               <Plus className="mr-2 h-4 w-4 sm:mr-2" />
               <span className="hidden sm:inline">New Connection</span>
             </Button>
