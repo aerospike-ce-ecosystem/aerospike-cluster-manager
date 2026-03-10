@@ -709,6 +709,7 @@ export interface ServiceMonitorConfig {
 export interface PrometheusRuleConfig {
   enabled: boolean;
   labels?: Record<string, string>;
+  customRules?: Record<string, unknown>[];
 }
 
 export interface MonitoringConfig {

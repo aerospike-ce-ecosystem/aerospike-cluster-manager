@@ -249,15 +249,28 @@ export function K8sClusterWizard() {
       }
       if (payload.rackConfig && payload.rackConfig.racks.length > 0) {
         payload.rackConfig = {
+          ...payload.rackConfig,
           racks: payload.rackConfig.racks.map((r) => ({
             id: r.id,
             ...(r.zone ? { zone: r.zone } : {}),
             ...(r.region ? { region: r.region } : {}),
             ...(r.rackLabel ? { rackLabel: r.rackLabel } : {}),
+            ...(r.aerospikeConfig ? { aerospikeConfig: r.aerospikeConfig } : {}),
+            ...(r.storage?.volumes?.length ? { storage: r.storage } : {}),
+            ...(r.podSpec?.nodeSelector || r.podSpec?.tolerations?.length || r.podSpec?.affinity
+              ? { podSpec: r.podSpec }
+              : {}),
           })),
         } as typeof payload.rackConfig;
       } else {
         payload.rackConfig = undefined;
+      }
+      // Clean up empty service metadata
+      if (payload.headlessService && !payload.headlessService.annotations && !payload.headlessService.labels) {
+        payload.headlessService = undefined;
+      }
+      if (payload.podService && !payload.podService.annotations && !payload.podService.labels) {
+        payload.podService = undefined;
       }
       // Clean up empty podScheduling
       if (payload.podScheduling) {

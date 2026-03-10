@@ -289,7 +289,9 @@ class PrometheusRuleConfig(BaseModel):
 
     enabled: bool = Field(default=False)
     labels: dict[str, str] | None = Field(default=None, description="Additional labels for discovery")
-    custom_rules: list[dict[str, Any]] | None = Field(None, description="Custom Prometheus rule groups")
+    custom_rules: list[dict[str, Any]] | None = Field(
+        default=None, alias="customRules", description="Custom Prometheus rule groups"
+    )
 
 
 class MonitoringConfig(BaseModel):

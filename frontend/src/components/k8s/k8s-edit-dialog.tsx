@@ -81,6 +81,11 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
   const [imagePullSecrets, setImagePullSecrets] = useState<string[]>([]);
   // Validation Policy
   const [skipWorkDirValidate, setSkipWorkDirValidate] = useState(false);
+  // Service Metadata
+  const [headlessServiceAnnotations, setHeadlessServiceAnnotations] = useState("");
+  const [headlessServiceLabels, setHeadlessServiceLabels] = useState("");
+  const [podServiceAnnotations, setPodServiceAnnotations] = useState("");
+  const [podServiceLabels, setPodServiceLabels] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
@@ -154,6 +159,25 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
     [];
   // Validation Policy initial values
   const initialSkipWorkDirValidate = Boolean(cluster.spec?.validationPolicy?.skipWorkDirValidate);
+  // Service Metadata initial values
+  const kvsToString = (kv: Record<string, string> | undefined) =>
+    kv ? Object.entries(kv).map(([k, v]) => `${k}=${v}`).join(", ") : "";
+  const initialHeadlessServiceAnnotations = kvsToString(
+    (cluster.spec?.headlessService as Record<string, Record<string, Record<string, string>>> | undefined)
+      ?.metadata?.annotations,
+  );
+  const initialHeadlessServiceLabels = kvsToString(
+    (cluster.spec?.headlessService as Record<string, Record<string, Record<string, string>>> | undefined)
+      ?.metadata?.labels,
+  );
+  const initialPodServiceAnnotations = kvsToString(
+    (cluster.spec?.podService as Record<string, Record<string, Record<string, string>>> | undefined)
+      ?.metadata?.annotations,
+  );
+  const initialPodServiceLabels = kvsToString(
+    (cluster.spec?.podService as Record<string, Record<string, Record<string, string>>> | undefined)
+      ?.metadata?.labels,
+  );
   const initialAerospikeConfig = useMemo(
     () => cluster.spec?.aerospikeConfig ?? {},
     [cluster.spec?.aerospikeConfig],
@@ -197,6 +221,10 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
       setTerminationGracePeriod(initialTerminationGracePeriod);
       setImagePullSecrets([...initialImagePullSecrets]);
       setSkipWorkDirValidate(initialSkipWorkDirValidate);
+      setHeadlessServiceAnnotations(initialHeadlessServiceAnnotations);
+      setHeadlessServiceLabels(initialHeadlessServiceLabels);
+      setPodServiceAnnotations(initialPodServiceAnnotations);
+      setPodServiceLabels(initialPodServiceLabels);
       setError(null);
       setConfigError(null);
     }
@@ -233,6 +261,10 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
     initialTerminationGracePeriod,
     initialImagePullSecrets,
     initialSkipWorkDirValidate,
+    initialHeadlessServiceAnnotations,
+    initialHeadlessServiceLabels,
+    initialPodServiceAnnotations,
+    initialPodServiceLabels,
   ]);
 
   // Validate JSON on every keystroke
@@ -280,7 +312,11 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
     serviceAccountName !== initialServiceAccountName ||
     terminationGracePeriod !== initialTerminationGracePeriod ||
     JSON.stringify(imagePullSecrets) !== JSON.stringify(initialImagePullSecrets) ||
-    skipWorkDirValidate !== initialSkipWorkDirValidate;
+    skipWorkDirValidate !== initialSkipWorkDirValidate ||
+    headlessServiceAnnotations !== initialHeadlessServiceAnnotations ||
+    headlessServiceLabels !== initialHeadlessServiceLabels ||
+    podServiceAnnotations !== initialPodServiceAnnotations ||
+    podServiceLabels !== initialPodServiceLabels;
 
   const handleSave = async () => {
     setLoading(true);
@@ -424,6 +460,35 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
       // Validation Policy
       if (skipWorkDirValidate !== initialSkipWorkDirValidate) {
         data.validationPolicy = skipWorkDirValidate ? { skipWorkDirValidate: true } : undefined;
+      }
+
+      // Service Metadata
+      const parseKvString = (s: string): Record<string, string> | undefined => {
+        const entries = s.split(",").map((e) => e.trim()).filter(Boolean);
+        const result: Record<string, string> = {};
+        for (const entry of entries) {
+          const eqIdx = entry.indexOf("=");
+          if (eqIdx > 0) {
+            result[entry.slice(0, eqIdx).trim()] = entry.slice(eqIdx + 1).trim();
+          }
+        }
+        return Object.keys(result).length > 0 ? result : undefined;
+      };
+      if (
+        headlessServiceAnnotations !== initialHeadlessServiceAnnotations ||
+        headlessServiceLabels !== initialHeadlessServiceLabels
+      ) {
+        const annotations = parseKvString(headlessServiceAnnotations);
+        const labels = parseKvString(headlessServiceLabels);
+        data.headlessService = annotations || labels ? { annotations, labels } : undefined;
+      }
+      if (
+        podServiceAnnotations !== initialPodServiceAnnotations ||
+        podServiceLabels !== initialPodServiceLabels
+      ) {
+        const annotations = parseKvString(podServiceAnnotations);
+        const labels = parseKvString(podServiceLabels);
+        data.podService = annotations || labels ? { annotations, labels } : undefined;
       }
 
       await onSave(data);
@@ -950,6 +1015,90 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
             </div>
           </EditCollapsible>
 
+          {/* Service Metadata */}
+          <EditCollapsible
+            title="Service Metadata"
+            summary={
+              [
+                headlessServiceAnnotations ? "Headless annotations" : null,
+                headlessServiceLabels ? "Headless labels" : null,
+                podServiceAnnotations ? "Pod annotations" : null,
+                podServiceLabels ? "Pod labels" : null,
+              ]
+                .filter(Boolean)
+                .join(", ") || "None"
+            }
+          >
+            <div className="space-y-4">
+              <div className="grid gap-2">
+                <Label className="text-xs font-semibold">Headless Service</Label>
+                <div className="grid gap-1">
+                  <Label htmlFor="edit-headless-annotations" className="text-[10px]">
+                    Annotations (key=value, comma-separated)
+                  </Label>
+                  <Input
+                    id="edit-headless-annotations"
+                    value={headlessServiceAnnotations}
+                    onChange={(e) => {
+                      setHeadlessServiceAnnotations(e.target.value);
+                      setError(null);
+                    }}
+                    placeholder="e.g. service.beta.kubernetes.io/aws-load-balancer-type=nlb"
+                    disabled={loading}
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <Label htmlFor="edit-headless-labels" className="text-[10px]">
+                    Labels (key=value, comma-separated)
+                  </Label>
+                  <Input
+                    id="edit-headless-labels"
+                    value={headlessServiceLabels}
+                    onChange={(e) => {
+                      setHeadlessServiceLabels(e.target.value);
+                      setError(null);
+                    }}
+                    placeholder="e.g. app.kubernetes.io/component=aerospike"
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-xs font-semibold">Pod Service</Label>
+                <div className="grid gap-1">
+                  <Label htmlFor="edit-pod-annotations" className="text-[10px]">
+                    Annotations (key=value, comma-separated)
+                  </Label>
+                  <Input
+                    id="edit-pod-annotations"
+                    value={podServiceAnnotations}
+                    onChange={(e) => {
+                      setPodServiceAnnotations(e.target.value);
+                      setError(null);
+                    }}
+                    placeholder="e.g. service.beta.kubernetes.io/aws-load-balancer-type=nlb"
+                    disabled={loading}
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <Label htmlFor="edit-pod-labels" className="text-[10px]">
+                    Labels (key=value, comma-separated)
+                  </Label>
+                  <Input
+                    id="edit-pod-labels"
+                    value={podServiceLabels}
+                    onChange={(e) => {
+                      setPodServiceLabels(e.target.value);
+                      setError(null);
+                    }}
+                    placeholder="e.g. app.kubernetes.io/component=aerospike"
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+            </div>
+          </EditCollapsible>
+
           {/* Aerospike Config */}
           <div className="grid gap-2">
             <Label htmlFor="edit-aerospike-config">Aerospike Config (JSON)</Label>
@@ -990,6 +1139,56 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
 // ---------------------------------------------------------------------------
 // Monitoring Section for Edit Dialog
 // ---------------------------------------------------------------------------
+
+/** Custom Prometheus rule groups JSON editor for edit dialog. */
+function EditCustomRulesEditor({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: Record<string, unknown>[] | undefined;
+  onChange: (v: Record<string, unknown>[] | undefined) => void;
+  disabled?: boolean;
+}) {
+  const [rawText, setRawText] = useState(() =>
+    value ? JSON.stringify(value, null, 2) : "",
+  );
+  const [parseError, setParseError] = useState<string | null>(null);
+
+  const handleChange = (text: string) => {
+    setRawText(text);
+    if (!text.trim()) {
+      setParseError(null);
+      onChange(undefined);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(text);
+      if (!Array.isArray(parsed)) {
+        setParseError("Must be a JSON array of rule groups");
+        return;
+      }
+      setParseError(null);
+      onChange(parsed);
+    } catch {
+      setParseError("Invalid JSON");
+    }
+  };
+
+  return (
+    <div className="space-y-1">
+      <Textarea
+        value={rawText}
+        onChange={(e) => handleChange(e.target.value)}
+        rows={6}
+        className="font-mono text-xs"
+        disabled={disabled}
+        placeholder={`[\n  {\n    "name": "aerospike-alerts",\n    "rules": [...]\n  }\n]`}
+      />
+      {parseError && <p className="text-xs text-red-500">{parseError}</p>}
+    </div>
+  );
+}
 
 /** Inline key-value pair editor for Record<string, string> fields. */
 function EditKvEditor({
@@ -1397,18 +1596,35 @@ function EditMonitoringSection({
                 </Label>
               </div>
               {config.prometheusRule?.enabled && (
-                <div className="grid gap-1">
-                  <Label className="text-[10px]">Labels</Label>
-                  <EditKvEditor
-                    value={config.prometheusRule.labels}
-                    onChange={(labels) =>
-                      patch({
-                        prometheusRule: { ...config.prometheusRule!, labels },
-                      })
-                    }
-                    disabled={disabled}
-                  />
-                </div>
+                <>
+                  <div className="grid gap-1">
+                    <Label className="text-[10px]">Labels</Label>
+                    <EditKvEditor
+                      value={config.prometheusRule.labels}
+                      onChange={(labels) =>
+                        patch({
+                          prometheusRule: { ...config.prometheusRule!, labels },
+                        })
+                      }
+                      disabled={disabled}
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label className="text-[10px]">Custom Rule Groups (JSON)</Label>
+                    <p className="text-muted-foreground text-[10px]">
+                      Define custom Prometheus alerting/recording rule groups as a JSON array.
+                    </p>
+                    <EditCustomRulesEditor
+                      value={config.prometheusRule.customRules}
+                      onChange={(customRules) =>
+                        patch({
+                          prometheusRule: { ...config.prometheusRule!, customRules },
+                        })
+                      }
+                      disabled={disabled}
+                    />
+                  </div>
+                </>
               )}
             </div>
           </EditCollapsible>

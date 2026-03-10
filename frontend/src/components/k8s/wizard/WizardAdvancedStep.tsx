@@ -16,12 +16,14 @@ import { WizardAclStep } from "./WizardAclStep";
 import { WizardRollingUpdateStep } from "./WizardRollingUpdateStep";
 import { WizardRackConfigStep } from "./WizardRackConfigStep";
 import type { WizardAdvancedStepProps } from "./types";
+import { Button } from "@/components/ui/button";
 import type {
   PodSchedulingConfig,
   BandwidthConfig,
   ValidationPolicyConfig,
   TolerationConfig,
   K8sNodeInfo,
+  ServiceMetadataConfig,
 } from "@/lib/api/types";
 
 function CollapsibleSection({
@@ -769,6 +771,175 @@ function WizardBandwidthStep({
   );
 }
 
+/** Inline key-value pair editor for Record<string, string> fields. */
+function ServiceKvEditor({
+  value,
+  onChange,
+  keyPlaceholder = "key",
+  valuePlaceholder = "value",
+  addLabel = "Add",
+}: {
+  value: Record<string, string> | undefined;
+  onChange: (v: Record<string, string> | undefined) => void;
+  keyPlaceholder?: string;
+  valuePlaceholder?: string;
+  addLabel?: string;
+}) {
+  const entries = value ? Object.entries(value) : [];
+  const [newKey, setNewKey] = useState("");
+  const [newVal, setNewVal] = useState("");
+
+  const addEntry = () => {
+    const k = newKey.trim();
+    const v = newVal.trim();
+    if (!k) return;
+    onChange({ ...value, [k]: v });
+    setNewKey("");
+    setNewVal("");
+  };
+
+  const removeEntry = (key: string) => {
+    if (!value) return;
+    const next = { ...value };
+    delete next[key];
+    onChange(Object.keys(next).length > 0 ? next : undefined);
+  };
+
+  return (
+    <div className="space-y-2">
+      {entries.map(([k, v]) => (
+        <div key={k} className="flex items-center gap-2">
+          <code className="bg-muted truncate rounded px-2 py-1 text-xs">{k}</code>
+          <span className="text-muted-foreground text-xs">=</span>
+          <code className="bg-muted flex-1 truncate rounded px-2 py-1 text-xs">{v}</code>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-destructive p-1"
+            onClick={() => removeEntry(k)}
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      ))}
+      <div className="flex items-center gap-2">
+        <Input
+          className="h-8 text-xs"
+          placeholder={keyPlaceholder}
+          value={newKey}
+          onChange={(e) => setNewKey(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addEntry())}
+        />
+        <Input
+          className="h-8 text-xs"
+          placeholder={valuePlaceholder}
+          value={newVal}
+          onChange={(e) => setNewVal(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addEntry())}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-8 shrink-0 text-xs"
+          onClick={addEntry}
+          disabled={!newKey.trim()}
+        >
+          <Plus className="mr-1 h-3 w-3" />
+          {addLabel}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Service Metadata editor for headless and pod services. */
+function ServiceMetadataEditor({
+  title,
+  description,
+  value,
+  onChange,
+}: {
+  title: string;
+  description: string;
+  value: ServiceMetadataConfig | undefined;
+  onChange: (v: ServiceMetadataConfig | undefined) => void;
+}) {
+  const patch = (updates: Partial<ServiceMetadataConfig>) => {
+    const next = { ...value, ...updates };
+    // Clear if both are empty
+    if (!next.annotations && !next.labels) {
+      onChange(undefined);
+    } else {
+      onChange(next);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-muted-foreground text-sm">{description}</p>
+
+      <div className="grid gap-2">
+        <Label className="text-xs font-semibold">{title} Annotations</Label>
+        <p className="text-muted-foreground text-[10px]">
+          Custom annotations applied to the {title.toLowerCase()} resource.
+        </p>
+        <ServiceKvEditor
+          value={value?.annotations}
+          onChange={(annotations) => patch({ annotations })}
+          keyPlaceholder="e.g. service.beta.kubernetes.io/aws-load-balancer-type"
+          valuePlaceholder="e.g. nlb"
+        />
+      </div>
+
+      <div className="grid gap-2">
+        <Label className="text-xs font-semibold">{title} Labels</Label>
+        <p className="text-muted-foreground text-[10px]">
+          Custom labels applied to the {title.toLowerCase()} resource.
+        </p>
+        <ServiceKvEditor
+          value={value?.labels}
+          onChange={(labels) => patch({ labels })}
+          keyPlaceholder="e.g. app.kubernetes.io/component"
+          valuePlaceholder="e.g. aerospike"
+        />
+      </div>
+    </div>
+  );
+}
+
+function WizardServiceMetadataStep({
+  form,
+  updateForm,
+}: {
+  form: WizardAdvancedStepProps["form"];
+  updateForm: WizardAdvancedStepProps["updateForm"];
+}) {
+  return (
+    <div className="space-y-6">
+      <p className="text-muted-foreground text-sm">
+        Configure custom metadata (annotations and labels) for the Kubernetes services created by
+        the Aerospike operator.
+      </p>
+
+      <ServiceMetadataEditor
+        title="Headless Service"
+        description="The headless service is used for inter-pod discovery within the StatefulSet."
+        value={form.headlessService}
+        onChange={(headlessService) => updateForm({ headlessService })}
+      />
+
+      <div className="border-t" />
+
+      <ServiceMetadataEditor
+        title="Pod Service"
+        description="Per-pod services provide stable network endpoints for individual Aerospike nodes."
+        value={form.podService}
+        onChange={(podService) => updateForm({ podService })}
+      />
+    </div>
+  );
+}
+
 export function WizardAdvancedStep({
   form,
   updateForm,
@@ -833,6 +1004,16 @@ export function WizardAdvancedStep({
           .join(", ")
       : "No limits";
 
+  const serviceMetadataSummary =
+    [
+      form.headlessService?.annotations ? "Headless annotations" : null,
+      form.headlessService?.labels ? "Headless labels" : null,
+      form.podService?.annotations ? "Pod annotations" : null,
+      form.podService?.labels ? "Pod labels" : null,
+    ]
+      .filter(Boolean)
+      .join(", ") || "None";
+
   return (
     <div className="space-y-3">
       <p className="text-muted-foreground text-sm">
@@ -870,6 +1051,10 @@ export function WizardAdvancedStep({
 
       <CollapsibleSection title="Validation Policy" summary={validationPolicySummary}>
         <WizardValidationPolicyStep form={form} updateForm={updateForm} />
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Service Metadata" summary={serviceMetadataSummary}>
+        <WizardServiceMetadataStep form={form} updateForm={updateForm} />
       </CollapsibleSection>
     </div>
   );
