@@ -9,6 +9,10 @@ const variantClasses: Record<string, string> = {
   secondary: "btn-secondary",
   ghost: "btn-ghost",
   link: "btn-link",
+  info: "btn-info",
+  success: "btn-success",
+  warning: "btn-warning",
+  neutral: "btn-neutral",
 };
 
 const sizeClasses: Record<string, string> = {
@@ -19,7 +23,17 @@ const sizeClasses: Record<string, string> = {
 };
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link";
+  variant?:
+    | "default"
+    | "destructive"
+    | "outline"
+    | "secondary"
+    | "ghost"
+    | "link"
+    | "info"
+    | "success"
+    | "warning"
+    | "neutral";
   size?: "default" | "sm" | "lg" | "icon";
   asChild?: boolean;
 }

@@ -31,7 +31,17 @@ export function InteractiveCard({ index = 0, onClick, className, children }: Int
       {...(interactive && {
         role: "button",
         tabIndex: 0,
-        onClick,
+        onClick: (e: React.MouseEvent) => {
+          // Ignore clicks originating from dropdown menus or interactive children
+          const target = e.target as HTMLElement;
+          if (
+            target.closest('[role="menu"]') ||
+            target.closest('[role="menuitem"]') ||
+            target.closest(".dropdown")
+          )
+            return;
+          onClick();
+        },
         onKeyDown: (e: React.KeyboardEvent) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();

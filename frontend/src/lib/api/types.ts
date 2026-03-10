@@ -469,6 +469,7 @@ export interface OperationStatusResponse {
   phase: string;
   completedPods: string[];
   failedPods: string[];
+  podList: string[];
 }
 
 // === K8s Cluster Management ===
@@ -592,6 +593,7 @@ export interface K8sClusterDetail {
   pendingRestartPods: string[];
   lastReconcileTime?: string;
   operatorVersion?: string;
+  templateSnapshot?: TemplateSnapshot;
 }
 
 export interface ReconciliationStatus {
@@ -630,6 +632,8 @@ export interface StorageVolumeConfig {
     | "headerCleanup"
     | "blkdiscardWithHeaderCleanup";
   cascadeDelete?: boolean;
+  localStorageClasses?: string[];
+  deleteLocalStorageOnRestart?: boolean;
 }
 
 export type NetworkAccessType = "pod" | "hostInternal" | "hostExternal" | "configuredIP";
@@ -833,6 +837,10 @@ export interface TemplateStorageConfig {
   size?: string;
 }
 
+export interface TemplateRackConfig {
+  maxRacksPerNode?: number;
+}
+
 export interface CreateK8sTemplateRequest {
   name: string;
   description?: string;
@@ -860,7 +868,7 @@ export interface UpdateK8sTemplateRequest {
 
 export interface TemplateSnapshot {
   synced?: boolean;
-  templateName?: string;
+  name?: string;
   resourceVersion?: string;
   snapshotTimestamp?: string;
   spec?: unknown;
@@ -873,6 +881,10 @@ export interface TemplateOverrides {
   monitoring?: MonitoringConfig;
   networkPolicy?: NetworkAccessConfig;
   enableDynamicConfig?: boolean;
+  scheduling?: TemplateSchedulingConfig;
+  storage?: TemplateStorageConfig;
+  rackConfig?: TemplateRackConfig;
+  aerospikeConfig?: Record<string, unknown>;
 }
 
 export interface PodLogsResponse {

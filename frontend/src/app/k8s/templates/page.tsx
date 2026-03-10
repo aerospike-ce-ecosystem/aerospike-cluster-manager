@@ -62,11 +62,11 @@ export default function K8sTemplatesPage() {
         description="Reusable cluster configuration templates"
         actions={
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => fetchTemplates()}>
+            <Button variant="neutral" size="sm" onClick={() => fetchTemplates()}>
               <RefreshCw className="mr-2 h-4 w-4" />
               <span className="hidden sm:inline">Refresh</span>
             </Button>
-            <Button onClick={() => router.push("/k8s/templates/new")}>
+            <Button variant="info" onClick={() => router.push("/k8s/templates/new")}>
               <Plus className="mr-2 h-4 w-4" />
               <span className="hidden sm:inline">New Template</span>
             </Button>

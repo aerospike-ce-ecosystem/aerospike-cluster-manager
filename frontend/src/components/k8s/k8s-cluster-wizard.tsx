@@ -47,7 +47,7 @@ const SCRATCH_STEPS = [
   "Review",
 ];
 
-const TEMPLATE_STEPS = ["Creation Mode", "Name & Namespace", "Review"];
+const TEMPLATE_STEPS = ["Creation Mode", "Name & Namespace", "Namespace & Storage", "Review"];
 
 export function K8sClusterWizard() {
   const router = useRouter();
@@ -195,6 +195,10 @@ export function K8sClusterWizard() {
       // Template mode step 1: Name & Namespace only
       if (step === 1) {
         return validateK8sName(form.name) === null && form.namespace.length > 0;
+      }
+      // Template mode step 2: Namespace & Storage
+      if (step === 2) {
+        return validateNamespaces(form.namespaces, form.size) === null;
       }
       return true;
     }
@@ -419,7 +423,7 @@ export function K8sClusterWizard() {
             />
           )}
 
-          {step === 2 && !isTemplateMode && (
+          {step === 2 && (
             <WizardNamespaceStorageStep
               form={form}
               updateForm={updateForm}

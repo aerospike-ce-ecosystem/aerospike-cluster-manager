@@ -295,6 +295,48 @@ export function WizardNamespaceStorageStep({
               Delete PVCs when cluster is deleted (cascade delete)
             </Label>
           </div>
+
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="delete-local-on-restart"
+              checked={form.storage?.deleteLocalStorageOnRestart ?? false}
+              onCheckedChange={(checked) => {
+                const base = form.storage ?? defaultStorage;
+                updateForm({ storage: { ...base, deleteLocalStorageOnRestart: checked === true } });
+              }}
+            />
+            <Label htmlFor="delete-local-on-restart" className="text-sm font-normal">
+              Delete local storage PVCs on pod restart
+            </Label>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="local-storage-classes" className="text-sm">
+              Local Storage Classes
+            </Label>
+            <Input
+              id="local-storage-classes"
+              placeholder="e.g. local-path, openebs-hostpath (comma-separated)"
+              value={form.storage?.localStorageClasses?.join(", ") || ""}
+              onChange={(e) => {
+                const base = form.storage ?? defaultStorage;
+                const classes = e.target.value
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+                updateForm({
+                  storage: {
+                    ...base,
+                    localStorageClasses: classes.length > 0 ? classes : undefined,
+                  },
+                });
+              }}
+            />
+            <p className="text-base-content/60 text-xs">
+              Storage classes using local storage. PVCs with these classes are deleted when a pod
+              migrates to another node.
+            </p>
+          </div>
         </div>
       )}
     </>

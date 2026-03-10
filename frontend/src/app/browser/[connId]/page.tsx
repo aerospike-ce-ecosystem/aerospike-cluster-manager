@@ -166,11 +166,11 @@ export default function BrowserSetListPage({ params }: { params: Promise<{ connI
         description="Select a set to browse records"
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setSampleDataOpen(true)}>
+            <Button variant="warning" size="sm" onClick={() => setSampleDataOpen(true)}>
               <FlaskConical className="mr-2 h-4 w-4" />
               Create Sample Data
             </Button>
-            <Button variant="outline" size="sm" onClick={fetchData}>
+            <Button variant="neutral" size="sm" onClick={fetchData}>
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
             </Button>

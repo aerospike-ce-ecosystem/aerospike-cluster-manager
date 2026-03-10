@@ -134,12 +134,13 @@ services:
       - postgres-data:/var/lib/postgresql/data
     restart: unless-stopped
 
-  # ── Backend ────────────────────────────────────────────────────────
-  aerospike-cluster-manager-backend:
-    container_name: aerospike-cluster-manager-backend
-    build: ./backend
+  # ── Backend + Frontend (single container) ──────────────────────────
+  aerospike-cluster-manager:
+    container_name: aerospike-cluster-manager
+    build: .
     ports:
       - "${BACKEND_PORT:-8000}:8000"
+      - "${FRONTEND_PORT:-3100}:3000"
     environment:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3100}
       - HOST=0.0.0.0
@@ -152,7 +153,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 15s
     depends_on:
       postgres:
         condition: service_healthy
@@ -161,28 +162,6 @@ services:
       aerospike-node-2:
         condition: service_healthy
       aerospike-node-3:
-        condition: service_healthy
-    restart: unless-stopped
-
-  # ── Frontend ───────────────────────────────────────────────────────
-  aerospike-cluster-manager-frontend:
-    container_name: aerospike-cluster-manager-frontend
-    build:
-      context: ./frontend
-      args:
-        BACKEND_URL: http://aerospike-cluster-manager-backend:8000
-    ports:
-      - "${FRONTEND_PORT:-3100}:3000"
-    environment:
-      - BACKEND_URL=http://aerospike-cluster-manager-backend:8000
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
-    depends_on:
-      aerospike-cluster-manager-backend:
         condition: service_healthy
     restart: unless-stopped
 

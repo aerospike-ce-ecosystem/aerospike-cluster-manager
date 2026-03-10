@@ -7,7 +7,6 @@ import {
   Scale,
   Trash2,
   RefreshCw,
-  Activity,
   X,
   ChevronDown,
   ChevronRight,
@@ -32,16 +31,12 @@ import { K8sEventTimeline } from "@/components/k8s/k8s-event-timeline";
 import { K8sEditDialog } from "@/components/k8s/k8s-edit-dialog";
 import { K8sHPADialog } from "@/components/k8s/k8s-hpa-dialog";
 import { K8sReconciliationHealth } from "@/components/k8s/k8s-reconciliation-health";
+import { K8sOperationStatus } from "@/components/k8s/k8s-operation-status";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { useK8sClusterStore } from "@/stores/k8s-cluster-store";
 import { useToastStore } from "@/stores/toast-store";
 import { cn, getErrorMessage } from "@/lib/utils";
-import {
-  TRANSITIONAL_PHASES,
-  type K8sClusterPhase,
-  type UpdateK8sClusterRequest,
-  type TemplateSnapshot,
-} from "@/lib/api/types";
+import { TRANSITIONAL_PHASES, type UpdateK8sClusterRequest } from "@/lib/api/types";
 import { api } from "@/lib/api/client";
 
 function formatRelativeTime(isoString: string): string {
@@ -185,28 +180,28 @@ export default function K8sClusterDetailPage() {
         description={`${selectedCluster.namespace} / ${selectedCluster.image}`}
         actions={
           <>
-            <Button variant="outline" size="sm" onClick={() => router.push("/k8s/clusters")}>
+            <Button variant="ghost" size="sm" onClick={() => router.push("/k8s/clusters")}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
             </Button>
-            <Button variant="outline" size="sm" onClick={() => fetchCluster(namespace, name)}>
+            <Button variant="neutral" size="sm" onClick={() => fetchCluster(namespace, name)}>
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setScaleOpen(true)}>
+            <Button variant="info" size="sm" onClick={() => setScaleOpen(true)}>
               <Scale className="mr-2 h-4 w-4" />
               Scale
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+            <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)}>
               <Pencil className="mr-2 h-4 w-4" />
               Edit
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setHpaOpen(true)}>
+            <Button variant="info" size="sm" onClick={() => setHpaOpen(true)}>
               <Gauge className="mr-2 h-4 w-4" />
               HPA
             </Button>
             <Button
-              variant="outline"
+              variant="warning"
               size="sm"
               disabled={loading}
               onClick={() => setWarmRestartConfirmOpen(true)}
@@ -214,7 +209,7 @@ export default function K8sClusterDetailPage() {
               Warm Restart
             </Button>
             <Button
-              variant="outline"
+              variant="warning"
               size="sm"
               disabled={loading}
               onClick={() => setPodRestartConfirmOpen(true)}
@@ -239,7 +234,7 @@ export default function K8sClusterDetailPage() {
             )}
             {selectedCluster.phase === "Paused" ? (
               <Button
-                variant="outline"
+                variant="success"
                 size="sm"
                 disabled={loading}
                 onClick={async () => {
@@ -255,7 +250,7 @@ export default function K8sClusterDetailPage() {
               </Button>
             ) : (
               <Button
-                variant="outline"
+                variant="neutral"
                 size="sm"
                 disabled={loading}
                 onClick={async () => {
@@ -573,33 +568,10 @@ export default function K8sClusterDetailPage() {
 
       {/* Operation Status */}
       {selectedCluster.operationStatus && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Active Operation</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <span className="text-base-content/60">Type</span>
-              <span className="font-medium">{selectedCluster.operationStatus.kind}</span>
-              <span className="text-base-content/60">Phase</span>
-              <K8sClusterStatusBadge
-                phase={selectedCluster.operationStatus.phase as K8sClusterPhase}
-              />
-              <span className="text-base-content/60">Completed</span>
-              <span className="font-medium">
-                {selectedCluster.operationStatus.completedPods.length} pods
-              </span>
-              {selectedCluster.operationStatus.failedPods.length > 0 && (
-                <>
-                  <span className="text-base-content/60">Failed</span>
-                  <span className="text-error font-medium">
-                    {selectedCluster.operationStatus.failedPods.join(", ")}
-                  </span>
-                </>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <K8sOperationStatus
+          operationStatus={selectedCluster.operationStatus}
+          totalPodCount={selectedCluster.pods.length}
+        />
       )}
 
       {/* Conditions */}
@@ -691,10 +663,7 @@ export default function K8sClusterDetailPage() {
 
       {/* Template Snapshot */}
       {(() => {
-        const templateSnapshot = selectedCluster.status?.templateSnapshot as
-          | TemplateSnapshot
-          | null
-          | undefined;
+        const templateSnapshot = selectedCluster.templateSnapshot;
         if (templateSnapshot == null) return null;
         return (
           <Card>
@@ -751,7 +720,7 @@ export default function K8sClusterDetailPage() {
                 <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
                   <div>
                     <span className="text-base-content/60 text-xs">Template Name</span>
-                    <p className="font-medium">{String(templateSnapshot.templateName || "-")}</p>
+                    <p className="font-medium">{String(templateSnapshot.name || "-")}</p>
                   </div>
                   <div>
                     <span className="text-base-content/60 text-xs">Resource Version</span>

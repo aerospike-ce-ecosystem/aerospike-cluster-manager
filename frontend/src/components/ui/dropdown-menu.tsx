@@ -41,7 +41,14 @@ const DropdownMenu: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
   return (
     <DropdownMenuContext.Provider value={{ open, setOpen }}>
-      <div ref={ref} className="dropdown relative inline-block">
+      <div
+        ref={ref}
+        className="dropdown relative inline-block"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") e.stopPropagation();
+        }}
+      >
         {children}
       </div>
     </DropdownMenuContext.Provider>
@@ -60,6 +67,7 @@ const DropdownMenuTrigger = React.forwardRef<HTMLButtonElement, DropdownMenuTrig
       const childProps = children.props as Record<string, unknown>;
       return React.cloneElement(children as React.ReactElement<Record<string, unknown>>, {
         onClick: (e: React.MouseEvent) => {
+          e.stopPropagation();
           if (typeof childProps.onClick === "function") childProps.onClick(e);
           setOpen(!open);
         },
@@ -67,7 +75,16 @@ const DropdownMenuTrigger = React.forwardRef<HTMLButtonElement, DropdownMenuTrig
     }
 
     return (
-      <button ref={ref} className={cn(className)} onClick={() => setOpen(!open)} {...props}>
+      <button
+        ref={ref}
+        className={cn(className)}
+        {...props}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (typeof props.onClick === "function") props.onClick(e);
+          setOpen(!open);
+        }}
+      >
         {children}
       </button>
     );
@@ -95,6 +112,10 @@ const DropdownMenuContent = React.forwardRef<HTMLDivElement, DropdownMenuContent
           className,
         )}
         {...props}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (props.onClick) props.onClick(e);
+        }}
       >
         {children}
       </div>
@@ -123,6 +144,7 @@ const DropdownMenuItem = React.forwardRef<HTMLDivElement, DropdownMenuItemProps>
           className,
         )}
         onClick={(e) => {
+          e.stopPropagation();
           if (disabled) return;
           onClick?.(e);
           setOpen(false);

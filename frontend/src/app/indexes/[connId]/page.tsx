@@ -213,11 +213,11 @@ export default function IndexesPage({ params }: { params: Promise<{ connId: stri
         description="Manage secondary indexes for faster queries"
         actions={
           <>
-            <Button variant="outline" size="sm" onClick={fetchIndexes}>
+            <Button variant="neutral" size="sm" onClick={fetchIndexes}>
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
             </Button>
-            <Button onClick={() => setCreateOpen(true)}>
+            <Button variant="info" onClick={() => setCreateOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Create Index
             </Button>
@@ -239,7 +239,7 @@ export default function IndexesPage({ params }: { params: Promise<{ connId: stri
               title="No secondary indexes"
               description="Create an index to speed up queries on specific bins."
               action={
-                <Button onClick={() => setCreateOpen(true)}>
+                <Button variant="info" onClick={() => setCreateOpen(true)}>
                   <Plus className="mr-2 h-4 w-4" />
                   Create Index
                 </Button>

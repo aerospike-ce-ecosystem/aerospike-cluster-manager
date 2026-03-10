@@ -1,5 +1,16 @@
 import { useState } from "react";
-import { Activity, AlertTriangle, ChevronDown, ChevronRight, Clock, Layers, X } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  Layers,
+  RefreshCw,
+  X,
+  XCircle,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -258,6 +269,165 @@ export function ClusterAckoInfoTab({
           </dl>
         </CardContent>
       </Card>
+
+      {/* ── Template Sync Status ── */}
+      {k8sDetail.templateSnapshot && (
+        <Card
+          className={cn(
+            "border",
+            k8sDetail.templateSnapshot.synced
+              ? "border-success/30"
+              : "border-warning/30 bg-warning/5",
+          )}
+        >
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Layers className="text-base-content/60 h-4 w-4" />
+              Template Sync
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-base-content/60 text-xs">Template:</span>
+                  <span className="font-mono text-xs font-medium">
+                    {k8sDetail.templateSnapshot.name || "—"}
+                  </span>
+                </div>
+                {k8sDetail.templateSnapshot.snapshotTimestamp && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-base-content/60 text-xs">Last synced:</span>
+                    <span className="text-xs">
+                      {formatRelativeTime(k8sDetail.templateSnapshot.snapshotTimestamp)}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-[11px]",
+                  k8sDetail.templateSnapshot.synced
+                    ? "bg-success/10 text-success border-success/20"
+                    : "bg-warning/10 text-warning border-warning/20",
+                )}
+              >
+                {k8sDetail.templateSnapshot.synced ? (
+                  <>
+                    <CheckCircle2 className="mr-1 h-3 w-3" />
+                    Synced
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle className="mr-1 h-3 w-3" />
+                    Out of Sync
+                  </>
+                )}
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Operation Status ── */}
+      {k8sDetail.operationStatus && k8sDetail.operationStatus.kind && (
+        <Card className="border-info/30 bg-info/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <RefreshCw className="text-info h-4 w-4 animate-spin" />
+              Active Operation
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className="bg-info/10 text-info border-info/20 text-[11px]"
+                >
+                  {k8sDetail.operationStatus.kind}
+                </Badge>
+                {k8sDetail.operationStatus.id && (
+                  <span className="text-base-content/60 font-mono text-xs">
+                    #{k8sDetail.operationStatus.id}
+                  </span>
+                )}
+              </div>
+              {k8sDetail.operationStatus.phase && (
+                <Badge variant="outline" className="text-[11px]">
+                  {k8sDetail.operationStatus.phase}
+                </Badge>
+              )}
+            </div>
+
+            {/* Progress bar */}
+            {(() => {
+              const total = k8sDetail.operationStatus.podList?.length || k8sDetail.pods.length;
+              const completed = k8sDetail.operationStatus.completedPods?.length || 0;
+              const failed = k8sDetail.operationStatus.failedPods?.length || 0;
+              const pct = total > 0 ? Math.round(((completed + failed) / total) * 100) : 0;
+              return (
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-base-content/60">Progress</span>
+                    <span className="font-medium">
+                      {completed + failed}/{total} ({pct}%)
+                    </span>
+                  </div>
+                  <div className="bg-base-200 h-2 overflow-hidden rounded-full">
+                    <div
+                      className={cn(
+                        "h-full rounded-full transition-all",
+                        failed > 0 ? "bg-warning" : "bg-success",
+                      )}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Completed/Failed pods */}
+            <div className="flex flex-wrap gap-4 text-xs">
+              {k8sDetail.operationStatus.completedPods?.length > 0 && (
+                <div className="space-y-1">
+                  <span className="text-success flex items-center gap-1 font-medium">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Completed ({k8sDetail.operationStatus.completedPods.length})
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {k8sDetail.operationStatus.completedPods.map((pod) => (
+                      <Badge key={pod} variant="outline" className="bg-success/5 text-[10px]">
+                        {pod}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {k8sDetail.operationStatus.failedPods?.length > 0 && (
+                <div className="space-y-1">
+                  <span className="text-error flex items-center gap-1 font-medium">
+                    <XCircle className="h-3 w-3" />
+                    Failed ({k8sDetail.operationStatus.failedPods.length})
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {k8sDetail.operationStatus.failedPods.map((pod) => (
+                      <Badge
+                        key={pod}
+                        variant="outline"
+                        className="bg-error/5 text-error text-[10px]"
+                      >
+                        {pod}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Pods ── */}
       <div className="space-y-4">

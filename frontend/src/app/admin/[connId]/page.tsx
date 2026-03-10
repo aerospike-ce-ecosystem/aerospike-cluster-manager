@@ -337,7 +337,7 @@ export default function AdminPage({ params }: { params: Promise<{ connId: string
         title="Administration"
         description="Manage users and roles"
         actions={
-          <Button variant="outline" size="sm" onClick={handleRefresh}>
+          <Button variant="neutral" size="sm" onClick={handleRefresh}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
           </Button>
@@ -378,7 +378,7 @@ export default function AdminPage({ params }: { params: Promise<{ connId: string
           {/* Users Tab */}
           <TabsContent value="users" className="mt-4 space-y-4">
             <div className="flex justify-end">
-              <Button onClick={() => setCreateUserOpen(true)}>
+              <Button variant="success" onClick={() => setCreateUserOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
                 Create User
               </Button>
@@ -409,7 +409,7 @@ export default function AdminPage({ params }: { params: Promise<{ connId: string
           {/* Roles Tab */}
           <TabsContent value="roles" className="mt-4 space-y-4">
             <div className="flex justify-end">
-              <Button onClick={() => setCreateRoleOpen(true)}>
+              <Button variant="info" onClick={() => setCreateRoleOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
                 Create Role
               </Button>

@@ -198,22 +198,22 @@ export default function ClusterPage({ params }: { params: Promise<{ connId: stri
         }
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleRefresh}>
+            <Button variant="neutral" size="sm" onClick={handleRefresh}>
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
             </Button>
             {isK8s && k8sDetail && (
               <>
-                <Button variant="outline" size="sm" onClick={() => setScaleOpen(true)}>
+                <Button variant="info" size="sm" onClick={() => setScaleOpen(true)}>
                   <Scale className="mr-2 h-4 w-4" />
                   Scale
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+                <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)}>
                   <Pencil className="mr-2 h-4 w-4" />
                   Edit
                 </Button>
                 <Button
-                  variant="outline"
+                  variant="warning"
                   size="sm"
                   disabled={k8sLoading}
                   onClick={() => setWarmRestartConfirmOpen(true)}
@@ -221,7 +221,7 @@ export default function ClusterPage({ params }: { params: Promise<{ connId: stri
                   Warm Restart
                 </Button>
                 <Button
-                  variant="outline"
+                  variant="warning"
                   size="sm"
                   disabled={k8sLoading}
                   onClick={() => setPodRestartConfirmOpen(true)}
@@ -230,7 +230,7 @@ export default function ClusterPage({ params }: { params: Promise<{ connId: stri
                 </Button>
                 {k8sDetail.phase === "Paused" ? (
                   <Button
-                    variant="outline"
+                    variant="success"
                     size="sm"
                     disabled={k8sLoading}
                     onClick={async () => {
@@ -246,7 +246,7 @@ export default function ClusterPage({ params }: { params: Promise<{ connId: stri
                   </Button>
                 ) : (
                   <Button
-                    variant="outline"
+                    variant="neutral"
                     size="sm"
                     disabled={k8sLoading}
                     onClick={async () => {
