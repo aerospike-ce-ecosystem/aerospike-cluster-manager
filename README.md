@@ -109,14 +109,14 @@ npm run dev                        # http://localhost:3000
   - Configuration drift detection (spec vs appliedSpec comparison, per-pod config hash groups)
   - Circuit breaker / reconciliation health dashboard (threshold progress, backoff timer, manual reset)
   - K8s secrets picker for ACL credential management
-  - Storage volume policies (init method, wipe method, cascade delete)
+  - Storage volume policies (init method, wipe method, cascade delete, cleanup threads, filesystem/block volume policies)
   - Network access type configuration (Pod IP, Host Internal/External, Configured IP) with custom network names for configuredIP
   - Kubernetes NetworkPolicy auto-generation (standard K8s or Cilium)
   - Seeds Finder LoadBalancer service for external seed discovery
   - K8s node block list UI for selecting nodes to exclude from scheduling (wizard + edit dialog)
   - CNI bandwidth annotations for ingress/egress limits (wizard + edit dialog)
   - HorizontalPodAutoscaler (HPA) management: create, view, and delete HPAs targeting AerospikeCluster resources
-  - Enhanced monitoring configuration: exporter image, metric labels, exporter resources (CPU/memory), exporter environment variables, ServiceMonitor config (enabled/interval/labels), PrometheusRule config (enabled/labels)
+  - Enhanced monitoring configuration: exporter image, metric labels, exporter resources (CPU/memory), exporter environment variables, ServiceMonitor config (enabled/interval/labels), PrometheusRule config (enabled/labels/custom alerting rules)
   - Seeds Finder Services advanced config: LoadBalancer annotations, labels, and source ranges
   - Cluster health dashboard with rack distribution and migration status
   - Pod logs viewer with tail lines, copy, and download
@@ -142,8 +142,8 @@ When running inside a Kubernetes cluster (or with `K8S_MANAGEMENT_ENABLED=true`)
 Create, scale, update, and delete Aerospike clusters through a guided 9-step wizard:
 
 1. **Basic** — Cluster name, Kubernetes namespace, size (1-8 nodes), Aerospike image selection
-2. **Namespace & Storage** — Aerospike namespace configuration with in-memory or persistent (PVC) storage, replication factor, storage class selection, volume init/wipe methods, cascade delete
-3. **Monitoring & Options** — Enable Prometheus metrics exporter (custom image, metric labels, exporter resources, exporter environment variables, ServiceMonitor, PrometheusRule), select an AerospikeClusterTemplate, enable dynamic configuration updates, configure network access type (Pod IP, Host Internal/External, Configured IP with custom network names), auto-generate Kubernetes NetworkPolicy (standard or Cilium), configure Seeds Finder LoadBalancer for external seed discovery (annotations, labels, source ranges)
+2. **Namespace & Storage** — Aerospike namespace configuration with in-memory or persistent (PVC) storage, replication factor, storage class selection, volume init/wipe methods, cascade delete, cleanup threads, filesystem volume policy, block volume policy
+3. **Monitoring & Options** — Enable Prometheus metrics exporter (custom image, metric labels, exporter resources, exporter environment variables, ServiceMonitor, PrometheusRule with custom alerting rules), select an AerospikeClusterTemplate, enable dynamic configuration updates, configure network access type (Pod IP, Host Internal/External, Configured IP with custom network names), auto-generate Kubernetes NetworkPolicy (standard or Cilium), configure Seeds Finder LoadBalancer for external seed discovery (annotations, labels, source ranges)
 4. **Resources** — CPU/memory requests and limits with validation, auto-connect toggle
 5. **Security (ACL)** — Enable access control, define roles (with privileges and CIDR allowlists), configure users with K8s Secret-backed credentials
 6. **Rolling Update** — Configure rolling update strategy: batch size, max unavailable (absolute or percentage), PodDisruptionBudget control
@@ -179,11 +179,12 @@ The cluster detail page displays real-time operator conditions (Available, Ready
 Full lifecycle management of `AerospikeClusterTemplate` resources:
 
 - **Browse** — List all templates cluster-wide with image, size, and age
-- **Create** — Define new templates with defaults for image, size, resources, scheduling (anti-affinity, pod management policy, tolerations, node affinity, topology spread constraints), storage (class, volume mode, size), monitoring, and network access
+- **Create** — Define new templates with defaults for image, size, resources, scheduling (anti-affinity, pod management policy, tolerations, node affinity, topology spread constraints), storage (class, volume mode, size, local PV requirement), monitoring, network access, service config (feature key file), network config (heartbeat mode/port/interval/timeout), and rack config (maxRacksPerNode)
 - **View Details** — Inspect template spec, resource defaults, and see which clusters reference the template via the "Referenced By" display
 - **Delete** — Remove unused templates (protected against deletion while referenced by clusters)
 - **Reference** — Select templates during cluster creation via the wizard
 - **Scheduling** — Template scheduling supports tolerations, node affinity rules, and topology spread constraints in addition to pod anti-affinity and pod management policy
+- **Advanced Config** — Templates support service config (feature key file), network config (heartbeat mode/port/interval/timeout), rack config (maxRacksPerNode), and local PV storage requirements
 
 ### Operations
 
@@ -288,6 +289,55 @@ The create/update cluster requests support additional pod-level fields:
 | `topologySpreadConstraints` | `object[]` | Topology spread constraints for pod scheduling |
 | `sidecars` | `SidecarConfig[]` | Sidecar containers to add to the pod |
 | `initContainers` | `SidecarConfig[]` | Init containers to add to the pod |
+
+### PrometheusRule Custom Rules
+
+The `PrometheusRule` monitoring configuration now supports user-defined Prometheus alerting rule groups via the `customRules` field. This allows operators to ship cluster-specific alerting rules alongside the standard metrics exporter.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `customRules` | `dict[]` | Custom Prometheus rule groups (each entry is a standard Prometheus rule group object with `name`, `rules`, etc.) |
+
+### Template Advanced Configuration
+
+Templates (`AerospikeClusterTemplate`) now support additional configuration sections for service, network, rack, and storage settings:
+
+**Service Config** (`serviceConfig`)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `featureKeyFile` | `string` | Path to an Aerospike feature key file |
+
+**Network Config** (`networkConfig`)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `heartbeatMode` | `"mesh" \| "multicast"` | Heartbeat protocol mode |
+| `heartbeatPort` | `int` (1024-65535) | Heartbeat communication port |
+| `heartbeatInterval` | `int` (>=50) | Heartbeat interval in milliseconds |
+| `heartbeatTimeout` | `int` (>=1) | Heartbeat timeout (number of intervals before a node is considered departed) |
+
+**Rack Config** (`rackConfig`)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `maxRacksPerNode` | `int` (>=1) | Maximum number of racks allowed per node |
+
+**Storage Config** (additional field)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `localPVRequired` | `bool` | Whether a local PersistentVolume is required for storage |
+
+### Storage Advanced Settings
+
+Cluster creation and update requests now support additional storage-level fields on `StorageVolumeConfig`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `cleanupThreads` | `int` (>=1) | Number of threads for storage cleanup operations |
+| `filesystemVolumePolicy` | `object` | Policy for filesystem volume initialization (e.g., default initMethod, wipeMethod) |
+| `blockVolumePolicy` | `object` | Policy for block volume initialization (e.g., default initMethod, wipeMethod) |
 
 ## Project Structure
 
