@@ -4,6 +4,7 @@ import type {
   K8sTemplateDetail,
   K8sTemplateSummary,
   StorageVolumeConfig,
+  StorageSpec,
 } from "@/lib/api/types";
 
 export interface WizardStepProps {
@@ -33,6 +34,7 @@ export interface WizardBasicStepProps extends WizardStepProps {
 export interface WizardNamespaceStorageStepProps extends WizardStepProps {
   storageClasses: string[];
   defaultStorage: StorageVolumeConfig;
+  defaultStorageSpec: StorageSpec;
 }
 
 export type WizardMonitoringStepProps = WizardStepProps;

@@ -92,6 +92,7 @@ npm run dev                        # http://localhost:3000
 - **UDF Management** — Lua UDF upload/delete
 - **AQL Terminal** — Web-based AQL command execution
 - **Prometheus Metrics** — Cluster metrics export
+- **Sample Data Generator** — Generate deterministic sample records with optional indexes and UDFs
 - **K8s Cluster Management** — Full lifecycle management of Aerospike clusters on Kubernetes (see below)
   - ACL/Security configuration with role and user management via wizard
   - Rolling update strategy (batch size, max unavailable, PDB control)
@@ -132,6 +133,193 @@ npm run dev                        # http://localhost:3000
   - Enhanced pod table: readiness gate status, access endpoints, stability indicators (unstableSince)
   - Accessibility: aria-labels, keyboard navigation, screen-reader support across all K8s components
 - **Light/Dark Mode** — System theme integration
+
+## Aerospike Data Management
+
+Beyond Kubernetes cluster lifecycle management, the Aerospike Cluster Manager provides a comprehensive set of tools for interacting with Aerospike data directly from the browser.
+
+### Connection Management
+
+Manage multiple Aerospike cluster connections with color-coded profiles. Each connection profile stores the host(s), port, optional cluster name, and credentials. Features include:
+
+- **Create / Edit / Delete** profiles for different clusters or environments
+- **Test Connection** — Validate connectivity without saving the profile
+- **Health Check** — Live health indicator showing node count, namespace count, server build, and edition
+- **Import / Export** — Share connection profiles across team members
+
+### Record Browser
+
+Browse, create, edit, duplicate, and delete Aerospike records through an interactive data grid. The record browser supports:
+
+- **Namespace & Set Navigation** — Drill into any namespace and set in the cluster
+- **CRUD Operations** — Create new records with arbitrary bins, edit existing records inline, duplicate records, and delete individual records
+- **Pagination** — Server-side pagination with configurable page size (up to 500 records per page)
+- **Filtered Scan** — Scan records with expression-based filters (e.g., filter by bin value, type, or metadata) and optional bin selection
+- **Batch Read** — Retrieve multiple records by primary key in a single request
+- **TTL Support** — Set or modify record time-to-live on write
+
+### Query Builder
+
+Execute queries against Aerospike using multiple strategies:
+
+- **Primary Key Lookup** — Direct record retrieval by namespace, set, and primary key (integer keys are auto-detected)
+- **Predicate Queries** — Filter records using secondary index predicates (equality, range) on indexed bins
+- **Full Scan** — Scan all records in a namespace/set with optional bin selection and max record limits
+- **Expression Filters** — Combine predicate queries with server-side expression filters for complex conditions
+- **Bin Selection** — Choose specific bins to return, reducing network transfer
+- **Execution Stats** — View execution time, scanned record count, and returned record count for each query
+
+### Secondary Index Management
+
+Create and manage secondary indexes on Aerospike bins:
+
+- **Create Index** — Define indexes on numeric, string, or geo2dsphere bin types for any namespace/set/bin combination
+- **Delete Index** — Remove indexes by name from a given namespace
+- **Index State** — View index status (ready, building, error) across all namespaces
+
+### AQL Terminal
+
+A web-based terminal for executing AQL-style commands against the connected cluster. Supported commands include:
+
+- `show namespaces` — List all namespaces
+- `show sets` — List all sets with object/tombstone counts
+- `show bins` — List all bin names across namespaces
+- `show indexes` / `show sindex` — List all secondary indexes
+- `status` — Show server status
+- `build` — Show server edition and build version
+- `node` — Show current node identifier
+- `statistics` — Show per-node statistics
+- Raw info commands are also supported as a fallback
+
+### User & Role Management (ACL)
+
+Manage Aerospike access control lists (requires security to be enabled in `aerospike.conf`):
+
+- **Users** — List all users with their assigned roles, read/write quotas, and active connections. Create new users with roles, change passwords, and delete users.
+- **Roles** — List all roles with their privileges and IP allowlists. Create roles with granular privileges (per-namespace, per-set) and CIDR-based allowlists. Delete unused roles.
+
+> Note: ACL features require Aerospike security to be enabled. The UI shows limitation indicators when security is not available.
+
+### UDF Management
+
+Upload and manage Lua User-Defined Functions (UDFs):
+
+- **List Modules** — View all registered UDF modules with filename, type, and content hash
+- **Upload** — Register a new Lua UDF module by providing the script content directly in the browser
+- **Delete** — Remove a registered UDF module by filename
+
+### Prometheus Metrics & Monitoring
+
+Real-time cluster metrics dashboard with historical time-series data:
+
+- **TPS Charts** — Read and write transactions per second with 10-minute rolling history
+- **Client Connections** — Active connection count over time
+- **Memory Usage** — Per-namespace memory utilization (used vs total) as time series
+- **Device Usage** — Per-namespace device/SSD utilization as time series
+- **Read/Write Success Rates** — Cumulative success and error counts per namespace
+- **Uptime Tracking** — Cluster uptime aggregated across nodes
+
+### Sample Data Generator
+
+Generate deterministic sample data sets for testing and demonstration:
+
+- **Record Generation** — Create a configurable number of sample records in any namespace/set
+- **Secondary Indexes** — Optionally create indexes on sample data bins (numeric, string, geo2dsphere)
+- **UDF Registration** — Optionally register bundled Lua UDF modules alongside sample data
+
+## Aerospike Data Management API Reference
+
+All data management endpoints are prefixed with `/api` and require a `{conn_id}` parameter identifying the connection profile to use.
+
+### Health API
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/health` | Basic health check (returns `{"status": "ok"}`) |
+| `GET` | `/api/health?detail=true` | Detailed health check with database component status |
+
+### Connections API (`/api/connections`)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/connections` | List all saved connection profiles |
+| `POST` | `/api/connections` | Create a new connection profile |
+| `GET` | `/api/connections/{conn_id}` | Get a single connection profile by ID |
+| `PUT` | `/api/connections/{conn_id}` | Update an existing connection profile |
+| `DELETE` | `/api/connections/{conn_id}` | Delete a connection profile and close its client |
+| `GET` | `/api/connections/{conn_id}/health` | Check connection health (node count, namespaces, build, edition) |
+| `POST` | `/api/connections/test` | Test connectivity without saving the profile |
+
+### Clusters API (`/api/clusters`)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/clusters/{conn_id}` | Get full cluster info (nodes, namespaces, sets, statistics) |
+| `POST` | `/api/clusters/{conn_id}/namespaces` | Configure runtime-tunable namespace parameters (memory-size, replication-factor) |
+
+### Records API (`/api/records`)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/records/{conn_id}?ns=...&set=...&page=...&pageSize=...` | List records with pagination |
+| `GET` | `/api/records/{conn_id}/detail?ns=...&set=...&pk=...` | Get a single record by primary key |
+| `POST` | `/api/records/{conn_id}` | Create or update a record (with bins and optional TTL) |
+| `DELETE` | `/api/records/{conn_id}?ns=...&set=...&pk=...` | Delete a record by primary key |
+| `POST` | `/api/records/{conn_id}/filter` | Filtered scan with expression filters, predicates, bin selection, and pagination |
+
+### Query API (`/api/query`)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/query/{conn_id}` | Execute a query (primary key lookup, predicate filter, or full scan with bin selection and max records) |
+
+### Indexes API (`/api/indexes`)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/indexes/{conn_id}` | List all secondary indexes across all namespaces |
+| `POST` | `/api/indexes/{conn_id}` | Create a secondary index (numeric, string, or geo2dsphere) |
+| `DELETE` | `/api/indexes/{conn_id}?name=...&ns=...` | Delete a secondary index by name and namespace |
+
+### Admin API (`/api/admin`)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/admin/{conn_id}/users` | List all users with roles, quotas, and connection counts |
+| `POST` | `/api/admin/{conn_id}/users` | Create a new user with username, password, and roles |
+| `PATCH` | `/api/admin/{conn_id}/users` | Change a user's password |
+| `DELETE` | `/api/admin/{conn_id}/users?username=...` | Delete a user by username |
+| `GET` | `/api/admin/{conn_id}/roles` | List all roles with privileges, allowlists, and quotas |
+| `POST` | `/api/admin/{conn_id}/roles` | Create a new role with privileges, allowlist, and quotas |
+| `DELETE` | `/api/admin/{conn_id}/roles?name=...` | Delete a role by name |
+
+### UDFs API (`/api/udfs`)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/udfs/{conn_id}` | List all registered UDF modules |
+| `POST` | `/api/udfs/{conn_id}` | Upload and register a Lua UDF module |
+| `DELETE` | `/api/udfs/{conn_id}?filename=...` | Delete a UDF module by filename |
+
+### Terminal API (`/api/terminal`)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/terminal/{conn_id}` | Execute an AQL-style terminal command |
+
+### Metrics API (`/api/metrics`)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/metrics/{conn_id}` | Get cluster metrics (TPS, memory, device, connections, per-namespace stats) |
+
+### Sample Data API (`/api/sample-data`)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/sample-data/{conn_id}` | Generate sample records with optional indexes and UDFs |
+
+> Interactive API documentation (Swagger UI) is available at `http://localhost:8000/docs` when the backend is running.
 
 ## K8s Cluster Management
 
@@ -464,6 +652,96 @@ pre-commit run --all-files
 | `CORS_ORIGINS` | `http://localhost:3100` | Allowed CORS origins |
 | `BACKEND_URL` | `http://localhost:8000` | Backend URL (frontend proxy target) |
 | `K8S_MANAGEMENT_ENABLED` | `false` | Enable K8s cluster management endpoints (requires in-cluster or kubeconfig access) |
+
+## Production Deployment
+
+### Single Container Deployment
+
+The project includes a multi-stage `Dockerfile` that bundles both the frontend (Next.js standalone) and backend (FastAPI/Uvicorn) into a single container image. The container runs as a non-root user (`appuser`) and exposes two ports:
+
+- **Port 3000** — Frontend (Next.js)
+- **Port 8000** — Backend API (Uvicorn)
+
+```bash
+# Build the container image
+podman build -t aerospike-cluster-manager .
+
+# Run the container
+podman run -d \
+  -p 3100:3000 \
+  -p 8000:8000 \
+  -e DATABASE_URL=postgresql://user:pass@db-host:5432/aerospike_manager \
+  aerospike-cluster-manager
+```
+
+A built-in health check (`/api/health`) is configured with a 10-second interval and 15-second start period.
+
+### Environment Variables for Production
+
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_URL` | `postgresql://aerospike:aerospike@localhost:5432/aerospike_manager` | PostgreSQL connection string for storing connection profiles and settings |
+| `HOST` | `0.0.0.0` | Backend bind address |
+| `PORT` | `8000` | Backend bind port |
+| `CORS_ORIGINS` | `http://localhost:3000` | Comma-separated list of allowed CORS origins |
+| `BACKEND_URL` | `http://localhost:8000` | Backend URL used by the frontend proxy |
+| `K8S_MANAGEMENT_ENABLED` | `false` | Enable Kubernetes cluster management endpoints (requires in-cluster or kubeconfig access) |
+| `LOG_LEVEL` | `INFO` | Backend log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+| `LOG_FORMAT` | `text` | Log output format (`text` or `json` for structured logging) |
+
+### PostgreSQL Setup
+
+The backend requires a PostgreSQL database for persisting connection profiles and application state.
+
+**External PostgreSQL (recommended for production):**
+
+Point `DATABASE_URL` to your existing PostgreSQL instance:
+
+```bash
+export DATABASE_URL=postgresql://user:password@your-db-host:5432/aerospike_manager
+```
+
+**Sidecar PostgreSQL (development / single-node):**
+
+Use `compose.yaml` which includes a PostgreSQL service alongside the application containers:
+
+```bash
+podman compose -f compose.yaml up --build
+```
+
+### Reverse Proxy / Ingress Configuration
+
+When deploying behind a reverse proxy (Nginx, Traefik, etc.) or Kubernetes Ingress, route traffic to both services:
+
+- `/` and all static assets to the frontend on port 3000
+- `/api/*` to the backend on port 8000
+
+Example Nginx configuration:
+
+```nginx
+server {
+    listen 80;
+    server_name aerospike-manager.example.com;
+
+    location /api/ {
+        proxy_pass http://localhost:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+When running inside Kubernetes, set `K8S_MANAGEMENT_ENABLED=true` and ensure the pod's service account has permissions to manage `AerospikeCluster` and `AerospikeClusterTemplate` custom resources.
 
 ## License
 

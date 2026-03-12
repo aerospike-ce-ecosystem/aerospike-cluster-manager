@@ -14,7 +14,13 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LoadingButton } from "@/components/common/loading-button";
 import { getErrorMessage } from "@/lib/utils";
-import { Select } from "@/components/ui/select";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import type { K8sTemplateDetail, UpdateK8sTemplateRequest } from "@/lib/api/types";
 
 interface K8sTemplateEditDialogProps {
@@ -44,6 +50,12 @@ export function K8sTemplateEditDialog({
   const [memRequest, setMemRequest] = useState("");
   const [cpuLimit, setCpuLimit] = useState("");
   const [memLimit, setMemLimit] = useState("");
+  // Network config (heartbeat)
+  const [heartbeatMode, setHeartbeatMode] = useState<"mesh" | "multicast">("mesh");
+  const [heartbeatInterval, setHeartbeatInterval] = useState<number | undefined>(undefined);
+  const [heartbeatTimeout, setHeartbeatTimeout] = useState<number | undefined>(undefined);
+  // Rack config
+  const [maxRacksPerNode, setMaxRacksPerNode] = useState<number | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,6 +63,8 @@ export function K8sTemplateEditDialog({
   const scheduling = spec.scheduling as Record<string, unknown> | undefined;
   const monitoring = spec.monitoring as Record<string, unknown> | undefined;
   const resources = spec.resources as Record<string, Record<string, string>> | undefined;
+  const networkConfig = spec.networkConfig as Record<string, unknown> | undefined;
+  const rackConfigSpec = spec.rackConfig as Record<string, unknown> | undefined;
 
   const initialDescription = String(spec.description || "");
   const initialImage = String(spec.image || "");
@@ -63,6 +77,13 @@ export function K8sTemplateEditDialog({
   const initialMemRequest = resources?.requests?.memory || "";
   const initialCpuLimit = resources?.limits?.cpu || "";
   const initialMemLimit = resources?.limits?.memory || "";
+  const initialHeartbeatMode = (networkConfig?.heartbeatMode as "mesh" | "multicast") || "mesh";
+  const initialHeartbeatInterval =
+    networkConfig?.heartbeatInterval != null ? Number(networkConfig.heartbeatInterval) : undefined;
+  const initialHeartbeatTimeout =
+    networkConfig?.heartbeatTimeout != null ? Number(networkConfig.heartbeatTimeout) : undefined;
+  const initialMaxRacksPerNode =
+    rackConfigSpec?.maxRacksPerNode != null ? Number(rackConfigSpec.maxRacksPerNode) : undefined;
 
   // Reset form on open
   useEffect(() => {
@@ -78,6 +99,10 @@ export function K8sTemplateEditDialog({
       setMemRequest(initialMemRequest);
       setCpuLimit(initialCpuLimit);
       setMemLimit(initialMemLimit);
+      setHeartbeatMode(initialHeartbeatMode);
+      setHeartbeatInterval(initialHeartbeatInterval);
+      setHeartbeatTimeout(initialHeartbeatTimeout);
+      setMaxRacksPerNode(initialMaxRacksPerNode);
       setError(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -95,7 +120,11 @@ export function K8sTemplateEditDialog({
       cpuRequest !== initialCpuRequest ||
       memRequest !== initialMemRequest ||
       cpuLimit !== initialCpuLimit ||
-      memLimit !== initialMemLimit
+      memLimit !== initialMemLimit ||
+      heartbeatMode !== initialHeartbeatMode ||
+      heartbeatInterval !== initialHeartbeatInterval ||
+      heartbeatTimeout !== initialHeartbeatTimeout ||
+      maxRacksPerNode !== initialMaxRacksPerNode
     );
   }, [
     description,
@@ -109,6 +138,10 @@ export function K8sTemplateEditDialog({
     memRequest,
     cpuLimit,
     memLimit,
+    heartbeatMode,
+    heartbeatInterval,
+    heartbeatTimeout,
+    maxRacksPerNode,
     initialDescription,
     initialImage,
     initialSize,
@@ -120,6 +153,10 @@ export function K8sTemplateEditDialog({
     initialMemRequest,
     initialCpuLimit,
     initialMemLimit,
+    initialHeartbeatMode,
+    initialHeartbeatInterval,
+    initialHeartbeatTimeout,
+    initialMaxRacksPerNode,
   ]);
 
   const handleSave = async () => {
@@ -165,6 +202,24 @@ export function K8sTemplateEditDialog({
           requests: { cpu: cpuRequest, memory: memRequest },
           limits: { cpu: cpuLimit, memory: memLimit },
         };
+      }
+
+      // Network Config
+      if (
+        heartbeatMode !== initialHeartbeatMode ||
+        heartbeatInterval !== initialHeartbeatInterval ||
+        heartbeatTimeout !== initialHeartbeatTimeout
+      ) {
+        data.networkConfig = {
+          heartbeatMode: heartbeatMode,
+          ...(heartbeatInterval != null ? { heartbeatInterval } : {}),
+          ...(heartbeatTimeout != null ? { heartbeatTimeout } : {}),
+        };
+      }
+
+      // Rack Config
+      if (maxRacksPerNode !== initialMaxRacksPerNode) {
+        data.rackConfig = maxRacksPerNode != null ? { maxRacksPerNode } : undefined;
       }
 
       await onSave(data);
@@ -322,6 +377,83 @@ export function K8sTemplateEditDialog({
               />
             </div>
           )}
+
+          {/* Network Config (Heartbeat) */}
+          <div className="space-y-2">
+            <Label className="font-semibold">Network Config (Heartbeat)</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label htmlFor="tmpl-hb-mode" className="text-xs">
+                  Heartbeat Mode
+                </Label>
+                <Select
+                  value={heartbeatMode}
+                  onValueChange={(v) => setHeartbeatMode(v as "mesh" | "multicast")}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="mesh">Mesh (CE only)</SelectItem>
+                    <SelectItem value="multicast">Multicast</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="tmpl-hb-interval" className="text-xs">
+                  Heartbeat Interval (ms)
+                </Label>
+                <Input
+                  id="tmpl-hb-interval"
+                  type="number"
+                  min={50}
+                  value={heartbeatInterval ?? ""}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value);
+                    setHeartbeatInterval(isNaN(v) ? undefined : Math.max(50, v));
+                  }}
+                  placeholder="Default (150)"
+                />
+              </div>
+              <div>
+                <Label htmlFor="tmpl-hb-timeout" className="text-xs">
+                  Heartbeat Timeout (intervals)
+                </Label>
+                <Input
+                  id="tmpl-hb-timeout"
+                  type="number"
+                  min={1}
+                  value={heartbeatTimeout ?? ""}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value);
+                    setHeartbeatTimeout(isNaN(v) ? undefined : Math.max(1, v));
+                  }}
+                  placeholder="Default (10)"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Rack Config */}
+          <div className="space-y-1">
+            <Label htmlFor="tmpl-max-racks" className="font-semibold">
+              Max Racks Per Node
+            </Label>
+            <Input
+              id="tmpl-max-racks"
+              type="number"
+              min={1}
+              value={maxRacksPerNode ?? ""}
+              onChange={(e) => {
+                const v = parseInt(e.target.value);
+                setMaxRacksPerNode(isNaN(v) ? undefined : Math.max(1, v));
+              }}
+              placeholder="No limit"
+            />
+            <p className="text-muted-foreground text-xs">
+              Maximum number of racks per Kubernetes node. Leave empty for no limit.
+            </p>
+          </div>
         </div>
 
         <DialogFooter>

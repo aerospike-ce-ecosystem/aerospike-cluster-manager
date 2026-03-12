@@ -28,6 +28,7 @@ import type {
   K8sNodeInfo,
   K8sTemplateDetail,
   StorageVolumeConfig,
+  StorageSpec,
 } from "@/lib/api/types";
 import { buildFormUpdatesFromTemplate } from "./wizard/template-prefill";
 import {
@@ -79,6 +80,29 @@ export function K8sClusterWizard() {
     storageClass: "standard",
     size: "10Gi",
     mountPath: "/opt/aerospike/data",
+  };
+
+  const DEFAULT_STORAGE_SPEC: StorageSpec = {
+    volumes: [
+      {
+        name: "data-vol",
+        source: "persistentVolume",
+        persistentVolume: {
+          storageClass: "standard",
+          size: "10Gi",
+          volumeMode: "Filesystem",
+          accessModes: ["ReadWriteOnce"],
+        },
+        aerospike: { path: "/opt/aerospike/data" },
+        cascadeDelete: true,
+      },
+      {
+        name: "workdir",
+        source: "emptyDir",
+        emptyDir: {},
+        aerospike: { path: "/opt/aerospike/work" },
+      },
+    ],
   };
 
   const [form, setForm] = useState<CreateK8sClusterRequest>({
@@ -308,6 +332,13 @@ export function K8sClusterWizard() {
       if (payload.validationPolicy && !payload.validationPolicy.skipWorkDirValidate) {
         payload.validationPolicy = undefined;
       }
+      // Clean up empty sidecars and initContainers
+      if (payload.sidecars && payload.sidecars.length === 0) {
+        payload.sidecars = undefined;
+      }
+      if (payload.initContainers && payload.initContainers.length === 0) {
+        payload.initContainers = undefined;
+      }
       await createCluster(payload);
       useToastStore.getState().addToast("success", `Cluster "${form.name}" creation initiated`);
       router.push("/k8s/clusters");
@@ -429,6 +460,7 @@ export function K8sClusterWizard() {
               updateForm={updateForm}
               storageClasses={storageClasses}
               defaultStorage={DEFAULT_STORAGE}
+              defaultStorageSpec={DEFAULT_STORAGE_SPEC}
             />
           )}
 

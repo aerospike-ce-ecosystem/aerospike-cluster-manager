@@ -242,7 +242,12 @@ export function WizardReviewStep({
               <span className="text-base-content/60">Storage</span>
               <span className="font-medium">
                 {ns.storageEngine.type === "device"
-                  ? `Persistent (${form.storage?.size || "10Gi"})`
+                  ? `Persistent (${
+                      form.storage && "volumes" in form.storage
+                        ? form.storage.volumes.find((v) => v.source === "persistentVolume")
+                            ?.persistentVolume?.size || "10Gi"
+                        : (form.storage as { size?: string } | undefined)?.size || "10Gi"
+                    })`
                   : `In-Memory (${formatBytes(ns.storageEngine.dataSize || 1073741824)})`}
               </span>
               <span className="text-base-content/60">Replication</span>
@@ -507,7 +512,66 @@ export function WizardReviewStep({
           </>
         )}
 
-        {form.storage && (
+        {(form.sidecars ?? []).length > 0 && (
+          <>
+            <span className="text-muted-foreground">Sidecars</span>
+            <div className="space-y-1">
+              {form.sidecars!.map((sc, i) => (
+                <span key={i} className="block font-mono text-xs">
+                  {sc.name} ({sc.image})
+                  {(sc.ports ?? []).length > 0 &&
+                    ` ports: ${sc.ports!.map((p) => p.containerPort).join(", ")}`}
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+
+        {(form.initContainers ?? []).length > 0 && (
+          <>
+            <span className="text-muted-foreground">Init Containers</span>
+            <div className="space-y-1">
+              {form.initContainers!.map((ic, i) => (
+                <span key={i} className="block font-mono text-xs">
+                  {ic.name} ({ic.image})
+                </span>
+              ))}
+            </div>
+          </>
+        )}
+
+        {form.storage && "volumes" in form.storage ? (
+          <>
+            <span className="text-muted-foreground">Storage</span>
+            <div className="col-span-1 space-y-1">
+              <span className="font-medium">
+                {form.storage.volumes.length} volume{form.storage.volumes.length !== 1 ? "s" : ""}
+              </span>
+              {form.storage.volumes.map((vol, vi) => (
+                <div key={vi} className="ml-2 rounded border p-1.5 text-xs">
+                  <span className="font-medium">{vol.name}</span>
+                  <span className="text-muted-foreground ml-1">
+                    [{vol.source === "persistentVolume" ? "PVC" : vol.source}]
+                  </span>
+                  {vol.source === "persistentVolume" && vol.persistentVolume && (
+                    <span className="text-muted-foreground ml-1">
+                      {vol.persistentVolume.size}
+                      {vol.persistentVolume.storageClass
+                        ? ` (${vol.persistentVolume.storageClass})`
+                        : ""}
+                    </span>
+                  )}
+                  {vol.aerospike?.path && (
+                    <span className="text-muted-foreground ml-1"> at {vol.aerospike.path}</span>
+                  )}
+                  {vol.initMethod ? `, init: ${vol.initMethod}` : ""}
+                  {vol.wipeMethod ? `, wipe: ${vol.wipeMethod}` : ""}
+                  {vol.cascadeDelete ? ", cascade" : ""}
+                </div>
+              ))}
+            </div>
+          </>
+        ) : form.storage && !("volumes" in form.storage) ? (
           <>
             <span className="text-base-content/60">Storage</span>
             <span className="font-medium">
@@ -515,16 +579,16 @@ export function WizardReviewStep({
                 <span className="inline-flex flex-wrap items-center gap-1">
                   {renderEditable(
                     "storageSize",
-                    form.storage.size,
-                    form.storage.size,
+                    (form.storage as { size: string }).size,
+                    (form.storage as { size: string }).size,
                     "text",
                     "w-16",
                   )}
                   <span className="text-base-content/60">(</span>
                   {renderEditable(
                     "storageClass",
-                    form.storage.storageClass,
-                    form.storage.storageClass,
+                    (form.storage as { storageClass: string }).storageClass,
+                    (form.storage as { storageClass: string }).storageClass,
                     "text",
                     "w-24",
                   )}
@@ -532,13 +596,74 @@ export function WizardReviewStep({
                 </span>
               ) : (
                 <>
-                  {form.storage.size} ({form.storage.storageClass})
+                  {(form.storage as { size: string }).size} (
+                  {(form.storage as { storageClass: string }).storageClass})
                 </>
               )}
-              {form.storage.initMethod ? `, init: ${form.storage.initMethod}` : ""}
-              {form.storage.wipeMethod ? `, wipe: ${form.storage.wipeMethod}` : ""}
-              {form.storage.cascadeDelete === false ? ", no cascade delete" : ""}
+              {(form.storage as { initMethod?: string }).initMethod
+                ? `, init: ${(form.storage as { initMethod: string }).initMethod}`
+                : ""}
+              {(form.storage as { wipeMethod?: string }).wipeMethod
+                ? `, wipe: ${(form.storage as { wipeMethod: string }).wipeMethod}`
+                : ""}
+              {(form.storage as { cascadeDelete?: boolean }).cascadeDelete === false
+                ? ", no cascade delete"
+                : ""}
             </span>
+          </>
+        ) : null}
+
+        {form.podService != null && (
+          <>
+            <span className="text-muted-foreground">Pod Service</span>
+            <span className="font-medium">
+              Enabled
+              {form.podService.annotations
+                ? `, ${Object.keys(form.podService.annotations).length} annotation(s)`
+                : ""}
+              {form.podService.labels
+                ? `, ${Object.keys(form.podService.labels).length} label(s)`
+                : ""}
+            </span>
+          </>
+        )}
+
+        {(form.headlessService?.annotations || form.headlessService?.labels) && (
+          <>
+            <span className="text-muted-foreground">Headless Service</span>
+            <span className="font-medium">
+              {[
+                form.headlessService?.annotations
+                  ? `${Object.keys(form.headlessService.annotations).length} annotation(s)`
+                  : null,
+                form.headlessService?.labels
+                  ? `${Object.keys(form.headlessService.labels).length} label(s)`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(", ")}
+            </span>
+          </>
+        )}
+
+        {form.enableRackIDOverride && (
+          <>
+            <span className="text-muted-foreground">Rack ID Override</span>
+            <span className="font-medium">Enabled</span>
+          </>
+        )}
+
+        {(form.storage?.localStorageClasses ?? []).length > 0 && (
+          <>
+            <span className="text-muted-foreground">Local Storage Classes</span>
+            <span className="font-medium">{form.storage!.localStorageClasses!.join(", ")}</span>
+          </>
+        )}
+
+        {form.storage?.deleteLocalStorageOnRestart && (
+          <>
+            <span className="text-muted-foreground">Delete Local Storage</span>
+            <span className="font-medium">On restart</span>
           </>
         )}
 

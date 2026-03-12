@@ -9,6 +9,7 @@ import { WizardMonitoringStep } from "./WizardMonitoringStep";
 import { WizardAclStep } from "./WizardAclStep";
 import { WizardRollingUpdateStep } from "./WizardRollingUpdateStep";
 import { WizardRackConfigStep } from "./WizardRackConfigStep";
+import { WizardSidecarsStep } from "./WizardSidecarsStep";
 import type { WizardAdvancedStepProps } from "./types";
 import { Button } from "@/components/ui/button";
 import type {
@@ -18,6 +19,7 @@ import type {
   TolerationConfig,
   K8sNodeInfo,
   ServiceMetadataConfig,
+  PodSecurityContextConfig,
 } from "@/lib/api/types";
 
 function CollapsibleSection({
@@ -523,6 +525,140 @@ function WizardPodSettingsStep({
           </button>
         </div>
       </div>
+
+      {/* Topology Spread Constraints */}
+      <div className="grid gap-2">
+        <Label className="text-sm font-semibold">Topology Spread Constraints</Label>
+        <p className="text-base-content/60 text-[10px]">
+          Control how pods are spread across topology domains (zones, nodes, etc.).
+        </p>
+        {(scheduling?.topologySpreadConstraints ?? []).map((tsc, idx) => (
+          <div key={idx} className="space-y-2 rounded border p-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium">Constraint #{idx + 1}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const current = (scheduling?.topologySpreadConstraints ?? []).filter(
+                    (_, i) => i !== idx,
+                  );
+                  updateScheduling({
+                    topologySpreadConstraints: current.length > 0 ? current : undefined,
+                  });
+                }}
+                className="text-base-content/60 hover:text-error p-1"
+                title="Remove constraint"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="grid gap-1">
+                <Label className="text-[10px]">Max Skew</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={tsc.maxSkew}
+                  onChange={(e) => {
+                    const current = [...(scheduling?.topologySpreadConstraints ?? [])];
+                    current[idx] = { ...current[idx], maxSkew: parseInt(e.target.value) || 1 };
+                    updateScheduling({ topologySpreadConstraints: current });
+                  }}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="grid gap-1">
+                <Label className="text-[10px]">Topology Key</Label>
+                <Select
+                  value={tsc.topologyKey}
+                  onChange={(e) => {
+                    const current = [...(scheduling?.topologySpreadConstraints ?? [])];
+                    current[idx] = { ...current[idx], topologyKey: e.target.value };
+                    updateScheduling({ topologySpreadConstraints: current });
+                  }}
+                  className="h-8 text-xs"
+                >
+                  <option value="topology.kubernetes.io/zone">topology.kubernetes.io/zone</option>
+                  <option value="kubernetes.io/hostname">kubernetes.io/hostname</option>
+                  <option value="topology.kubernetes.io/region">
+                    topology.kubernetes.io/region
+                  </option>
+                </Select>
+              </div>
+              <div className="grid gap-1">
+                <Label className="text-[10px]">When Unsatisfiable</Label>
+                <Select
+                  value={tsc.whenUnsatisfiable}
+                  onChange={(e) => {
+                    const current = [...(scheduling?.topologySpreadConstraints ?? [])];
+                    current[idx] = {
+                      ...current[idx],
+                      whenUnsatisfiable: e.target.value as "DoNotSchedule" | "ScheduleAnyway",
+                    };
+                    updateScheduling({ topologySpreadConstraints: current });
+                  }}
+                  className="h-8 text-xs"
+                >
+                  <option value="DoNotSchedule">DoNotSchedule</option>
+                  <option value="ScheduleAnyway">ScheduleAnyway</option>
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-[10px]">
+                Label Selector (optional, key=value comma-separated)
+              </Label>
+              <Input
+                value={
+                  tsc.labelSelector
+                    ? Object.entries(tsc.labelSelector)
+                        .map(([k, v]) => `${k}=${v}`)
+                        .join(", ")
+                    : ""
+                }
+                onChange={(e) => {
+                  const entries = e.target.value
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean);
+                  const labels: Record<string, string> = {};
+                  for (const entry of entries) {
+                    const [k, v] = entry.split("=").map((s) => s.trim());
+                    if (k && v) labels[k] = v;
+                  }
+                  const current = [...(scheduling?.topologySpreadConstraints ?? [])];
+                  current[idx] = {
+                    ...current[idx],
+                    labelSelector: Object.keys(labels).length > 0 ? labels : undefined,
+                  };
+                  updateScheduling({ topologySpreadConstraints: current });
+                }}
+                placeholder="e.g. app=aerospike, env=prod"
+                className="h-8 text-xs"
+              />
+            </div>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => {
+            const current = scheduling?.topologySpreadConstraints ?? [];
+            updateScheduling({
+              topologySpreadConstraints: [
+                ...current,
+                {
+                  maxSkew: 1,
+                  topologyKey: "topology.kubernetes.io/zone",
+                  whenUnsatisfiable: "DoNotSchedule",
+                },
+              ],
+            });
+          }}
+          className="text-accent hover:text-accent/80 flex items-center gap-1 text-xs font-medium"
+        >
+          <Plus className="h-3.5 w-3.5" /> Add Topology Spread Constraint
+        </button>
+      </div>
     </div>
   );
 }
@@ -751,87 +887,6 @@ function WizardBandwidthStep({
   );
 }
 
-/** Inline key-value pair editor for Record<string, string> fields. */
-function ServiceKvEditor({
-  value,
-  onChange,
-  keyPlaceholder = "key",
-  valuePlaceholder = "value",
-  addLabel = "Add",
-}: {
-  value: Record<string, string> | undefined;
-  onChange: (v: Record<string, string> | undefined) => void;
-  keyPlaceholder?: string;
-  valuePlaceholder?: string;
-  addLabel?: string;
-}) {
-  const entries = value ? Object.entries(value) : [];
-  const [newKey, setNewKey] = useState("");
-  const [newVal, setNewVal] = useState("");
-
-  const addEntry = () => {
-    const k = newKey.trim();
-    const v = newVal.trim();
-    if (!k) return;
-    onChange({ ...value, [k]: v });
-    setNewKey("");
-    setNewVal("");
-  };
-
-  const removeEntry = (key: string) => {
-    if (!value) return;
-    const next = { ...value };
-    delete next[key];
-    onChange(Object.keys(next).length > 0 ? next : undefined);
-  };
-
-  return (
-    <div className="space-y-2">
-      {entries.map(([k, v]) => (
-        <div key={k} className="flex items-center gap-2">
-          <code className="bg-muted truncate rounded px-2 py-1 text-xs">{k}</code>
-          <span className="text-muted-foreground text-xs">=</span>
-          <code className="bg-muted flex-1 truncate rounded px-2 py-1 text-xs">{v}</code>
-          <button
-            type="button"
-            className="text-muted-foreground hover:text-destructive p-1"
-            onClick={() => removeEntry(k)}
-          >
-            <X className="h-3 w-3" />
-          </button>
-        </div>
-      ))}
-      <div className="flex items-center gap-2">
-        <Input
-          className="h-8 text-xs"
-          placeholder={keyPlaceholder}
-          value={newKey}
-          onChange={(e) => setNewKey(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addEntry())}
-        />
-        <Input
-          className="h-8 text-xs"
-          placeholder={valuePlaceholder}
-          value={newVal}
-          onChange={(e) => setNewVal(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addEntry())}
-        />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-8 shrink-0 text-xs"
-          onClick={addEntry}
-          disabled={!newKey.trim()}
-        >
-          <Plus className="mr-1 h-3 w-3" />
-          {addLabel}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 /** Service Metadata editor for headless and pod services. */
 function ServiceMetadataEditor({
   title,
@@ -844,9 +899,52 @@ function ServiceMetadataEditor({
   value: ServiceMetadataConfig | undefined;
   onChange: (v: ServiceMetadataConfig | undefined) => void;
 }) {
-  const patch = (updates: Partial<ServiceMetadataConfig>) => {
-    const next = { ...value, ...updates };
-    // Clear if both are empty
+  const [annotationKey, setAnnotationKey] = useState("");
+  const [annotationVal, setAnnotationVal] = useState("");
+  const [labelKey, setLabelKey] = useState("");
+  const [labelVal, setLabelVal] = useState("");
+
+  const addAnnotation = () => {
+    const k = annotationKey.trim();
+    const v = annotationVal.trim();
+    if (!k) return;
+    const next = { ...value, annotations: { ...(value?.annotations ?? {}), [k]: v } };
+    onChange(next);
+    setAnnotationKey("");
+    setAnnotationVal("");
+  };
+
+  const removeAnnotation = (key: string) => {
+    const annotations = { ...(value?.annotations ?? {}) };
+    delete annotations[key];
+    const next = {
+      ...value,
+      annotations: Object.keys(annotations).length > 0 ? annotations : undefined,
+    };
+    if (!next.annotations && !next.labels) {
+      onChange(undefined);
+    } else {
+      onChange(next);
+    }
+  };
+
+  const addLabel = () => {
+    const k = labelKey.trim();
+    const v = labelVal.trim();
+    if (!k) return;
+    const next = { ...value, labels: { ...(value?.labels ?? {}), [k]: v } };
+    onChange(next);
+    setLabelKey("");
+    setLabelVal("");
+  };
+
+  const removeLabel = (key: string) => {
+    const labels = { ...(value?.labels ?? {}) };
+    delete labels[key];
+    const next = {
+      ...value,
+      labels: Object.keys(labels).length > 0 ? labels : undefined,
+    };
     if (!next.annotations && !next.labels) {
       onChange(undefined);
     } else {
@@ -855,33 +953,290 @@ function ServiceMetadataEditor({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <p className="text-muted-foreground text-sm">{description}</p>
 
+      {/* Annotations */}
       <div className="grid gap-2">
-        <Label className="text-xs font-semibold">{title} Annotations</Label>
-        <p className="text-muted-foreground text-[10px]">
-          Custom annotations applied to the {title.toLowerCase()} resource.
-        </p>
-        <ServiceKvEditor
-          value={value?.annotations}
-          onChange={(annotations) => patch({ annotations })}
-          keyPlaceholder="e.g. service.beta.kubernetes.io/aws-load-balancer-type"
-          valuePlaceholder="e.g. nlb"
-        />
+        <Label className="text-xs font-semibold">Annotations</Label>
+        {Object.entries(value?.annotations ?? {}).length > 0 && (
+          <div className="space-y-1">
+            {Object.entries(value!.annotations!).map(([k, v]) => (
+              <div key={k} className="flex items-center gap-1.5">
+                <code className="bg-muted truncate rounded px-1.5 py-0.5 text-[10px]">{k}</code>
+                <span className="text-muted-foreground text-[10px]">=</span>
+                <code className="bg-muted flex-1 truncate rounded px-1.5 py-0.5 text-[10px]">
+                  {v}
+                </code>
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-foreground shrink-0"
+                  onClick={() => removeAnnotation(k)}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <Input
+            className="h-8 text-xs"
+            placeholder="annotation key"
+            value={annotationKey}
+            onChange={(e) => setAnnotationKey(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addAnnotation())}
+          />
+          <Input
+            className="h-8 text-xs"
+            placeholder="value"
+            value={annotationVal}
+            onChange={(e) => setAnnotationVal(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addAnnotation())}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 shrink-0 text-xs"
+            onClick={addAnnotation}
+            disabled={!annotationKey.trim()}
+          >
+            <Plus className="mr-1 h-3 w-3" />
+            Add
+          </Button>
+        </div>
       </div>
 
+      {/* Labels */}
       <div className="grid gap-2">
-        <Label className="text-xs font-semibold">{title} Labels</Label>
-        <p className="text-muted-foreground text-[10px]">
-          Custom labels applied to the {title.toLowerCase()} resource.
+        <Label className="text-xs font-semibold">Labels</Label>
+        {Object.entries(value?.labels ?? {}).length > 0 && (
+          <div className="space-y-1">
+            {Object.entries(value!.labels!).map(([k, v]) => (
+              <div key={k} className="flex items-center gap-1.5">
+                <code className="bg-muted truncate rounded px-1.5 py-0.5 text-[10px]">{k}</code>
+                <span className="text-muted-foreground text-[10px]">=</span>
+                <code className="bg-muted flex-1 truncate rounded px-1.5 py-0.5 text-[10px]">
+                  {v}
+                </code>
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-foreground shrink-0"
+                  onClick={() => removeLabel(k)}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <Input
+            className="h-8 text-xs"
+            placeholder="label key"
+            value={labelKey}
+            onChange={(e) => setLabelKey(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addLabel())}
+          />
+          <Input
+            className="h-8 text-xs"
+            placeholder="value"
+            value={labelVal}
+            onChange={(e) => setLabelVal(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addLabel())}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 shrink-0 text-xs"
+            onClick={addLabel}
+            disabled={!labelKey.trim()}
+          >
+            <Plus className="mr-1 h-3 w-3" />
+            Add
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WizardPodSecurityContextStep({
+  form,
+  updateForm,
+}: {
+  form: WizardAdvancedStepProps["form"];
+  updateForm: WizardAdvancedStepProps["updateForm"];
+}) {
+  const scheduling = form.podScheduling;
+  const ctx = scheduling?.podSecurityContext;
+
+  const updateSecurityContext = (updates: Partial<PodSecurityContextConfig>) => {
+    const next = { ...ctx, ...updates };
+    const hasValue =
+      next.runAsUser != null ||
+      next.runAsGroup != null ||
+      next.runAsNonRoot != null ||
+      next.fsGroup != null ||
+      (next.supplementalGroups && next.supplementalGroups.length > 0);
+    updateForm({
+      podScheduling: {
+        ...scheduling,
+        podSecurityContext: hasValue ? (next as PodSecurityContextConfig) : undefined,
+      },
+    });
+  };
+
+  const [newSupGroup, setNewSupGroup] = useState("");
+
+  return (
+    <div className="space-y-4">
+      <p className="text-base-content/60 text-sm">
+        Configure the pod-level security context for Aerospike pods.
+      </p>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-1.5">
+          <Label htmlFor="run-as-user" className="text-xs">
+            Run As User
+          </Label>
+          <Input
+            id="run-as-user"
+            type="number"
+            min={0}
+            value={ctx?.runAsUser ?? ""}
+            onChange={(e) => {
+              const val = e.target.value;
+              updateSecurityContext({ runAsUser: val ? parseInt(val, 10) : undefined });
+            }}
+            placeholder="e.g. 1000"
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="run-as-group" className="text-xs">
+            Run As Group
+          </Label>
+          <Input
+            id="run-as-group"
+            type="number"
+            min={0}
+            value={ctx?.runAsGroup ?? ""}
+            onChange={(e) => {
+              const val = e.target.value;
+              updateSecurityContext({ runAsGroup: val ? parseInt(val, 10) : undefined });
+            }}
+            placeholder="e.g. 1000"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-1.5">
+          <Label htmlFor="fs-group" className="text-xs">
+            FS Group
+          </Label>
+          <Input
+            id="fs-group"
+            type="number"
+            min={0}
+            value={ctx?.fsGroup ?? ""}
+            onChange={(e) => {
+              const val = e.target.value;
+              updateSecurityContext({ fsGroup: val ? parseInt(val, 10) : undefined });
+            }}
+            placeholder="e.g. 1000"
+          />
+          <p className="text-base-content/60 text-[10px]">
+            GID applied to all volumes mounted in the pod.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 self-start pt-6">
+          <Switch
+            id="run-as-non-root"
+            checked={ctx?.runAsNonRoot ?? false}
+            onCheckedChange={(checked) =>
+              updateSecurityContext({ runAsNonRoot: checked || undefined })
+            }
+          />
+          <Label htmlFor="run-as-non-root" className="cursor-pointer text-xs">
+            Run As Non-Root
+          </Label>
+        </div>
+      </div>
+
+      {/* Supplemental Groups */}
+      <div className="grid gap-2">
+        <Label className="text-xs font-semibold">Supplemental Groups</Label>
+        <p className="text-base-content/60 text-[10px]">
+          Additional GIDs applied to the first process run in each container.
         </p>
-        <ServiceKvEditor
-          value={value?.labels}
-          onChange={(labels) => patch({ labels })}
-          keyPlaceholder="e.g. app.kubernetes.io/component"
-          valuePlaceholder="e.g. aerospike"
-        />
+        {(ctx?.supplementalGroups ?? []).length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {ctx!.supplementalGroups!.map((gid) => (
+              <span
+                key={gid}
+                className="bg-accent/10 text-accent inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
+              >
+                {gid}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = (ctx?.supplementalGroups ?? []).filter((g) => g !== gid);
+                    updateSecurityContext({
+                      supplementalGroups: next.length > 0 ? next : undefined,
+                    });
+                  }}
+                  className="hover:bg-accent/20 ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full"
+                  title={`Remove ${gid}`}
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <Input
+            value={newSupGroup}
+            onChange={(e) => setNewSupGroup(e.target.value)}
+            type="number"
+            min={0}
+            placeholder="e.g. 1000"
+            className="w-32"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                const val = parseInt(newSupGroup, 10);
+                if (!isNaN(val)) {
+                  const current = ctx?.supplementalGroups ?? [];
+                  if (!current.includes(val)) {
+                    updateSecurityContext({ supplementalGroups: [...current, val] });
+                  }
+                  setNewSupGroup("");
+                }
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              const val = parseInt(newSupGroup, 10);
+              if (!isNaN(val)) {
+                const current = ctx?.supplementalGroups ?? [];
+                if (!current.includes(val)) {
+                  updateSecurityContext({ supplementalGroups: [...current, val] });
+                }
+                setNewSupGroup("");
+              }
+            }}
+            disabled={!newSupGroup.trim() || isNaN(parseInt(newSupGroup, 10))}
+            className="bg-accent text-accent-foreground hover:bg-accent/80 rounded px-3 text-xs font-medium disabled:opacity-50"
+          >
+            Add
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -896,26 +1251,84 @@ function WizardServiceMetadataStep({
 }) {
   return (
     <div className="space-y-6">
-      <p className="text-muted-foreground text-sm">
-        Configure custom metadata (annotations and labels) for the Kubernetes services created by
-        the Aerospike operator.
-      </p>
+      <div className="space-y-4">
+        <Label className="text-sm font-semibold">Pod Service</Label>
+        <div className="flex items-center justify-between">
+          <div>
+            <Label htmlFor="pod-service-enabled" className="cursor-pointer text-xs">
+              Enable per-pod Service
+            </Label>
+            <p className="text-muted-foreground text-[10px]">
+              Create a dedicated Kubernetes Service for each Aerospike pod, enabling direct pod
+              addressing.
+            </p>
+          </div>
+          <Switch
+            id="pod-service-enabled"
+            checked={form.podService != null}
+            onCheckedChange={(checked) => {
+              if (checked) {
+                updateForm({ podService: {} });
+              } else {
+                updateForm({ podService: undefined });
+              }
+            }}
+          />
+        </div>
+        {form.podService != null && (
+          <ServiceMetadataEditor
+            title="Pod Service Metadata"
+            description="Annotations and labels applied to per-pod Service resources."
+            value={form.podService}
+            onChange={(v) => updateForm({ podService: v ?? {} })}
+          />
+        )}
+      </div>
 
-      <ServiceMetadataEditor
-        title="Headless Service"
-        description="The headless service is used for inter-pod discovery within the StatefulSet."
-        value={form.headlessService}
-        onChange={(headlessService) => updateForm({ headlessService })}
-      />
+      <div className="border-t pt-4">
+        <Label className="text-sm font-semibold">Headless Service</Label>
+        <p className="text-muted-foreground mb-3 text-[10px]">
+          Custom annotations and labels for the headless Service used for pod discovery.
+        </p>
+        <ServiceMetadataEditor
+          title="Headless Service Metadata"
+          description="Annotations and labels applied to the headless Service resource."
+          value={form.headlessService}
+          onChange={(v) => updateForm({ headlessService: v })}
+        />
+      </div>
+    </div>
+  );
+}
 
-      <div className="border-t" />
-
-      <ServiceMetadataEditor
-        title="Pod Service"
-        description="Per-pod services provide stable network endpoints for individual Aerospike nodes."
-        value={form.podService}
-        onChange={(podService) => updateForm({ podService })}
-      />
+function WizardRackIDOverrideStep({
+  form,
+  updateForm,
+}: {
+  form: WizardAdvancedStepProps["form"];
+  updateForm: WizardAdvancedStepProps["updateForm"];
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <Label htmlFor="rack-id-override" className="cursor-pointer text-xs">
+            Enable Rack ID Override
+          </Label>
+          <p className="text-muted-foreground text-[10px]">
+            Allow rack ID override for existing data migration. When enabled, the operator
+            dynamically assigns rack IDs to pods, which is useful when migrating data from an
+            existing cluster with different rack configurations.
+          </p>
+        </div>
+        <Switch
+          id="rack-id-override"
+          checked={form.enableRackIDOverride ?? false}
+          onCheckedChange={(checked) => {
+            updateForm({ enableRackIDOverride: checked || undefined });
+          }}
+        />
+      </div>
     </div>
   );
 }
@@ -961,9 +1374,24 @@ export function WizardAdvancedStep({
       form.podScheduling?.imagePullSecrets?.length
         ? `${form.podScheduling.imagePullSecrets.length} pull secret(s)`
         : null,
+      form.podScheduling?.topologySpreadConstraints?.length
+        ? `${form.podScheduling.topologySpreadConstraints.length} spread constraint(s)`
+        : null,
     ]
       .filter(Boolean)
       .join(", ") || "Default";
+
+  const sidecarCount = (form.sidecars ?? []).length;
+  const initContainerCount = (form.initContainers ?? []).length;
+  const sidecarsSummary =
+    sidecarCount > 0 || initContainerCount > 0
+      ? [
+          sidecarCount > 0 ? `${sidecarCount} sidecar(s)` : null,
+          initContainerCount > 0 ? `${initContainerCount} init container(s)` : null,
+        ]
+          .filter(Boolean)
+          .join(", ")
+      : "None";
 
   const validationPolicySummary = form.validationPolicy?.skipWorkDirValidate
     ? "Skip WorkDir Validate"
@@ -984,15 +1412,31 @@ export function WizardAdvancedStep({
           .join(", ")
       : "No limits";
 
-  const serviceMetadataSummary =
+  const securityContextSummary =
     [
-      form.headlessService?.annotations ? "Headless annotations" : null,
-      form.headlessService?.labels ? "Headless labels" : null,
-      form.podService?.annotations ? "Pod annotations" : null,
-      form.podService?.labels ? "Pod labels" : null,
+      form.podScheduling?.podSecurityContext?.runAsUser != null
+        ? `UID: ${form.podScheduling.podSecurityContext.runAsUser}`
+        : null,
+      form.podScheduling?.podSecurityContext?.runAsGroup != null
+        ? `GID: ${form.podScheduling.podSecurityContext.runAsGroup}`
+        : null,
+      form.podScheduling?.podSecurityContext?.runAsNonRoot ? "Non-Root" : null,
+      form.podScheduling?.podSecurityContext?.fsGroup != null
+        ? `fsGroup: ${form.podScheduling.podSecurityContext.fsGroup}`
+        : null,
     ]
       .filter(Boolean)
-      .join(", ") || "None";
+      .join(", ") || "Default";
+
+  const serviceMetadataSummary =
+    [
+      form.podService != null ? "Pod Service" : null,
+      form.headlessService?.annotations || form.headlessService?.labels ? "Headless Service" : null,
+    ]
+      .filter(Boolean)
+      .join(", ") || "Default";
+
+  const rackIDOverrideSummary = form.enableRackIDOverride ? "Enabled" : "Disabled";
 
   return (
     <div className="space-y-3">
@@ -1021,6 +1465,10 @@ export function WizardAdvancedStep({
         <WizardPodSettingsStep form={form} updateForm={updateForm} />
       </CollapsibleSection>
 
+      <CollapsibleSection title="Sidecars & Init Containers" summary={sidecarsSummary}>
+        <WizardSidecarsStep form={form} updateForm={updateForm} />
+      </CollapsibleSection>
+
       <CollapsibleSection title="Node Block List" summary={nodeBlockListSummary}>
         <WizardNodeBlockListStep form={form} updateForm={updateForm} nodes={nodes} />
       </CollapsibleSection>
@@ -1035,6 +1483,10 @@ export function WizardAdvancedStep({
 
       <CollapsibleSection title="Service Metadata" summary={serviceMetadataSummary}>
         <WizardServiceMetadataStep form={form} updateForm={updateForm} />
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Rack ID Override" summary={rackIDOverrideSummary}>
+        <WizardRackIDOverrideStep form={form} updateForm={updateForm} />
       </CollapsibleSection>
     </div>
   );

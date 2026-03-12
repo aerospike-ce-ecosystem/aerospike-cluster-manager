@@ -16,7 +16,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { LoadingButton } from "@/components/common/loading-button";
 import { getErrorMessage } from "@/lib/utils";
-import { Select } from "@/components/ui/select";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ChevronDown, ChevronRight, Plus, X } from "lucide-react";
 import type {
@@ -28,6 +34,13 @@ import type {
   BandwidthConfig,
   MonitoringConfig,
   TolerationConfig,
+  SidecarConfig,
+  ServiceMetadataConfig,
+  StorageSpec,
+  VolumeSpec,
+  VolumeSourceType,
+  VolumeInitMethod,
+  VolumeWipeMethod,
 } from "@/lib/api/types";
 
 interface K8sEditDialogProps {
@@ -73,13 +86,32 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
     undefined,
   );
   const [imagePullSecrets, setImagePullSecrets] = useState<string[]>([]);
+  // Topology Spread Constraints
+  const [topologySpreadConstraints, setTopologySpreadConstraints] = useState<
+    TopologySpreadConstraintConfig[]
+  >([]);
+  // Pod Security Context
+  const [podSecurityRunAsUser, setPodSecurityRunAsUser] = useState<number | undefined>(undefined);
+  const [podSecurityRunAsGroup, setPodSecurityRunAsGroup] = useState<number | undefined>(undefined);
+  const [podSecurityRunAsNonRoot, setPodSecurityRunAsNonRoot] = useState(false);
+  const [podSecurityFsGroup, setPodSecurityFsGroup] = useState<number | undefined>(undefined);
+  const [podSecuritySupGroups, setPodSecuritySupGroups] = useState<number[]>([]);
   // Validation Policy
   const [skipWorkDirValidate, setSkipWorkDirValidate] = useState(false);
+  // Sidecars & Init Containers
+  const [sidecars, setSidecars] = useState<SidecarConfig[]>([]);
+  const [initContainers, setInitContainers] = useState<SidecarConfig[]>([]);
   // Service Metadata
-  const [headlessServiceAnnotations, setHeadlessServiceAnnotations] = useState("");
-  const [headlessServiceLabels, setHeadlessServiceLabels] = useState("");
-  const [podServiceAnnotations, setPodServiceAnnotations] = useState("");
-  const [podServiceLabels, setPodServiceLabels] = useState("");
+  const [podServiceConfig, setPodServiceConfig] = useState<ServiceMetadataConfig | null>(null);
+  const [headlessServiceConfig, setHeadlessServiceConfig] = useState<ServiceMetadataConfig | null>(
+    null,
+  );
+  // Rack ID Override
+  const [enableRackIDOverride, setEnableRackIDOverride] = useState(false);
+  // Storage (multi-volume)
+  const [storageVolumes, setStorageVolumes] = useState<VolumeSpec[]>([]);
+  const [storageCleanupThreads, setStorageCleanupThreads] = useState<number | undefined>(undefined);
+  const [storageDeleteLocalOnRestart, setStorageDeleteLocalOnRestart] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
@@ -151,36 +183,98 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
     specPodScheduling?.imagePullSecrets ??
     (specPodSpec?.imagePullSecrets as string[] | undefined) ??
     [];
+  // Topology Spread Constraints initial values
+  const initialTopologySpreadConstraints: TopologySpreadConstraintConfig[] =
+    specPodScheduling?.topologySpreadConstraints ??
+    (specPodSpec?.topologySpreadConstraints as TopologySpreadConstraintConfig[] | undefined) ??
+    [];
+  // Pod Security Context initial values
+  const specSecCtx =
+    specPodScheduling?.podSecurityContext ??
+    (specPodSpec?.securityContext as PodSecurityContextConfig | undefined);
+  const initialPodSecurityRunAsUser = specSecCtx?.runAsUser;
+  const initialPodSecurityRunAsGroup = specSecCtx?.runAsGroup;
+  const initialPodSecurityRunAsNonRoot = Boolean(specSecCtx?.runAsNonRoot);
+  const initialPodSecurityFsGroup = specSecCtx?.fsGroup;
+  const initialPodSecuritySupGroups: number[] = specSecCtx?.supplementalGroups ?? [];
   // Validation Policy initial values
   const initialSkipWorkDirValidate = Boolean(cluster.spec?.validationPolicy?.skipWorkDirValidate);
+  // Sidecars & Init Containers initial values
+  const initialSidecars: SidecarConfig[] = (podSpec?.sidecars as SidecarConfig[] | undefined) ?? [];
+  const initialInitContainers: SidecarConfig[] =
+    (podSpec?.initContainers as SidecarConfig[] | undefined) ?? [];
   // Service Metadata initial values
-  const kvsToString = (kv: Record<string, string> | undefined) =>
-    kv
-      ? Object.entries(kv)
-          .map(([k, v]) => `${k}=${v}`)
-          .join(", ")
-      : "";
-  const initialHeadlessServiceAnnotations = kvsToString(
-    (
-      cluster.spec?.headlessService as
-        | Record<string, Record<string, Record<string, string>>>
-        | undefined
-    )?.metadata?.annotations,
-  );
-  const initialHeadlessServiceLabels = kvsToString(
-    (
-      cluster.spec?.headlessService as
-        | Record<string, Record<string, Record<string, string>>>
-        | undefined
-    )?.metadata?.labels,
-  );
-  const initialPodServiceAnnotations = kvsToString(
-    (cluster.spec?.podService as Record<string, Record<string, Record<string, string>>> | undefined)
-      ?.metadata?.annotations,
-  );
-  const initialPodServiceLabels = kvsToString(
-    (cluster.spec?.podService as Record<string, Record<string, Record<string, string>>> | undefined)
-      ?.metadata?.labels,
+  const specPodService = cluster.spec?.podService as
+    | { metadata?: ServiceMetadataConfig }
+    | undefined;
+  const initialPodServiceConfig: ServiceMetadataConfig | null = specPodService?.metadata
+    ? {
+        annotations: specPodService.metadata.annotations,
+        labels: specPodService.metadata.labels,
+      }
+    : specPodService
+      ? {}
+      : null;
+  const specHeadlessService = cluster.spec?.headlessService as
+    | { metadata?: ServiceMetadataConfig }
+    | undefined;
+  const initialHeadlessServiceConfig: ServiceMetadataConfig | null = specHeadlessService?.metadata
+    ? {
+        annotations: specHeadlessService.metadata.annotations,
+        labels: specHeadlessService.metadata.labels,
+      }
+    : null;
+  // Rack ID Override initial value
+  const initialEnableRackIDOverride = Boolean(cluster.spec?.enableRackIDOverride);
+  // Storage initial values - parse from CRD spec.storage.volumes
+  const specStorage = cluster.spec?.storage as StorageSpec | undefined;
+  const initialStorageVolumes: VolumeSpec[] = useMemo(() => {
+    if (!specStorage || !("volumes" in specStorage)) return [];
+    return (specStorage.volumes ?? []).map((v: Record<string, unknown>) => {
+      const vol: VolumeSpec = {
+        name: (v.name as string) || "",
+        source: "emptyDir" as VolumeSourceType,
+      };
+      const src = v.source as Record<string, unknown> | undefined;
+      if (src?.persistentVolume) {
+        vol.source = "persistentVolume";
+        const pv = src.persistentVolume as Record<string, unknown>;
+        vol.persistentVolume = {
+          storageClass: (pv.storageClass as string) || undefined,
+          size: (pv.size as string) || "1Gi",
+          volumeMode: (pv.volumeMode as "Filesystem" | "Block") || "Filesystem",
+          accessModes: (pv.accessModes as string[]) || ["ReadWriteOnce"],
+        };
+      } else if (src?.emptyDir !== undefined) {
+        vol.source = "emptyDir";
+        vol.emptyDir = (src.emptyDir as Record<string, unknown>) || {};
+      } else if (src?.secret) {
+        vol.source = "secret";
+        vol.secret = src.secret as Record<string, unknown>;
+      } else if (src?.configMap) {
+        vol.source = "configMap";
+        vol.configMap = src.configMap as Record<string, unknown>;
+      } else if (src?.hostPath) {
+        vol.source = "hostPath";
+        vol.hostPath = src.hostPath as Record<string, unknown>;
+      }
+      const aero = v.aerospike as Record<string, unknown> | undefined;
+      if (aero) {
+        vol.aerospike = {
+          path: (aero.path as string) || "",
+          readOnly: Boolean(aero.readOnly),
+        };
+      }
+      if (v.initMethod) vol.initMethod = v.initMethod as VolumeInitMethod;
+      if (v.wipeMethod) vol.wipeMethod = v.wipeMethod as VolumeWipeMethod;
+      if (v.cascadeDelete) vol.cascadeDelete = Boolean(v.cascadeDelete);
+      return vol;
+    });
+  }, [specStorage]);
+  const initialStorageCleanupThreads = (specStorage as Record<string, unknown> | undefined)
+    ?.cleanupThreads as number | undefined;
+  const initialStorageDeleteLocalOnRestart = Boolean(
+    (specStorage as Record<string, unknown> | undefined)?.deleteLocalStorageOnRestart,
   );
   const initialAerospikeConfig = useMemo(
     () => cluster.spec?.aerospikeConfig ?? {},
@@ -224,11 +318,23 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
       setServiceAccountName(initialServiceAccountName);
       setTerminationGracePeriod(initialTerminationGracePeriod);
       setImagePullSecrets([...initialImagePullSecrets]);
+      setTopologySpreadConstraints(initialTopologySpreadConstraints.map((t) => ({ ...t })));
+      setPodSecurityRunAsUser(initialPodSecurityRunAsUser);
+      setPodSecurityRunAsGroup(initialPodSecurityRunAsGroup);
+      setPodSecurityRunAsNonRoot(initialPodSecurityRunAsNonRoot);
+      setPodSecurityFsGroup(initialPodSecurityFsGroup);
+      setPodSecuritySupGroups([...initialPodSecuritySupGroups]);
       setSkipWorkDirValidate(initialSkipWorkDirValidate);
-      setHeadlessServiceAnnotations(initialHeadlessServiceAnnotations);
-      setHeadlessServiceLabels(initialHeadlessServiceLabels);
-      setPodServiceAnnotations(initialPodServiceAnnotations);
-      setPodServiceLabels(initialPodServiceLabels);
+      setSidecars(initialSidecars.map((s) => ({ ...s })));
+      setInitContainers(initialInitContainers.map((c) => ({ ...c })));
+      setPodServiceConfig(initialPodServiceConfig ? { ...initialPodServiceConfig } : null);
+      setHeadlessServiceConfig(
+        initialHeadlessServiceConfig ? { ...initialHeadlessServiceConfig } : null,
+      );
+      setEnableRackIDOverride(initialEnableRackIDOverride);
+      setStorageVolumes(initialStorageVolumes.map((v) => ({ ...v })));
+      setStorageCleanupThreads(initialStorageCleanupThreads);
+      setStorageDeleteLocalOnRestart(initialStorageDeleteLocalOnRestart);
       setError(null);
       setConfigError(null);
     }
@@ -264,11 +370,21 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
     initialServiceAccountName,
     initialTerminationGracePeriod,
     initialImagePullSecrets,
+    initialTopologySpreadConstraints,
+    initialPodSecurityRunAsUser,
+    initialPodSecurityRunAsGroup,
+    initialPodSecurityRunAsNonRoot,
+    initialPodSecurityFsGroup,
+    initialPodSecuritySupGroups,
     initialSkipWorkDirValidate,
-    initialHeadlessServiceAnnotations,
-    initialHeadlessServiceLabels,
-    initialPodServiceAnnotations,
-    initialPodServiceLabels,
+    initialSidecars,
+    initialInitContainers,
+    initialPodServiceConfig,
+    initialHeadlessServiceConfig,
+    initialEnableRackIDOverride,
+    initialStorageVolumes,
+    initialStorageCleanupThreads,
+    initialStorageDeleteLocalOnRestart,
   ]);
 
   // Validate JSON on every keystroke
@@ -316,11 +432,22 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
     serviceAccountName !== initialServiceAccountName ||
     terminationGracePeriod !== initialTerminationGracePeriod ||
     JSON.stringify(imagePullSecrets) !== JSON.stringify(initialImagePullSecrets) ||
+    JSON.stringify(topologySpreadConstraints) !==
+      JSON.stringify(initialTopologySpreadConstraints) ||
+    podSecurityRunAsUser !== initialPodSecurityRunAsUser ||
+    podSecurityRunAsGroup !== initialPodSecurityRunAsGroup ||
+    podSecurityRunAsNonRoot !== initialPodSecurityRunAsNonRoot ||
+    podSecurityFsGroup !== initialPodSecurityFsGroup ||
+    JSON.stringify(podSecuritySupGroups) !== JSON.stringify(initialPodSecuritySupGroups) ||
     skipWorkDirValidate !== initialSkipWorkDirValidate ||
-    headlessServiceAnnotations !== initialHeadlessServiceAnnotations ||
-    headlessServiceLabels !== initialHeadlessServiceLabels ||
-    podServiceAnnotations !== initialPodServiceAnnotations ||
-    podServiceLabels !== initialPodServiceLabels;
+    JSON.stringify(sidecars) !== JSON.stringify(initialSidecars) ||
+    JSON.stringify(initContainers) !== JSON.stringify(initialInitContainers) ||
+    JSON.stringify(podServiceConfig) !== JSON.stringify(initialPodServiceConfig) ||
+    JSON.stringify(headlessServiceConfig) !== JSON.stringify(initialHeadlessServiceConfig) ||
+    enableRackIDOverride !== initialEnableRackIDOverride ||
+    JSON.stringify(storageVolumes) !== JSON.stringify(initialStorageVolumes) ||
+    storageCleanupThreads !== initialStorageCleanupThreads ||
+    storageDeleteLocalOnRestart !== initialStorageDeleteLocalOnRestart;
 
   const handleSave = async () => {
     setLoading(true);
@@ -414,7 +541,14 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
         hostNetwork !== initialHostNetwork ||
         serviceAccountName !== initialServiceAccountName ||
         terminationGracePeriod !== initialTerminationGracePeriod ||
-        JSON.stringify(imagePullSecrets) !== JSON.stringify(initialImagePullSecrets);
+        JSON.stringify(imagePullSecrets) !== JSON.stringify(initialImagePullSecrets) ||
+        JSON.stringify(topologySpreadConstraints) !==
+          JSON.stringify(initialTopologySpreadConstraints) ||
+        podSecurityRunAsUser !== initialPodSecurityRunAsUser ||
+        podSecurityRunAsGroup !== initialPodSecurityRunAsGroup ||
+        podSecurityRunAsNonRoot !== initialPodSecurityRunAsNonRoot ||
+        podSecurityFsGroup !== initialPodSecurityFsGroup ||
+        JSON.stringify(podSecuritySupGroups) !== JSON.stringify(initialPodSecuritySupGroups);
       if (podSchedulingChanged) {
         data.podScheduling = {
           ...data.podScheduling,
@@ -431,6 +565,23 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
           serviceAccountName: serviceAccountName || undefined,
           terminationGracePeriodSeconds: terminationGracePeriod,
           imagePullSecrets: imagePullSecrets.length > 0 ? imagePullSecrets : undefined,
+          topologySpreadConstraints:
+            topologySpreadConstraints.length > 0 ? topologySpreadConstraints : undefined,
+          podSecurityContext:
+            podSecurityRunAsUser != null ||
+            podSecurityRunAsGroup != null ||
+            podSecurityRunAsNonRoot ||
+            podSecurityFsGroup != null ||
+            podSecuritySupGroups.length > 0
+              ? {
+                  runAsUser: podSecurityRunAsUser,
+                  runAsGroup: podSecurityRunAsGroup,
+                  runAsNonRoot: podSecurityRunAsNonRoot || undefined,
+                  fsGroup: podSecurityFsGroup,
+                  supplementalGroups:
+                    podSecuritySupGroups.length > 0 ? podSecuritySupGroups : undefined,
+                }
+              : undefined,
         };
       }
 
@@ -466,36 +617,38 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
         data.validationPolicy = skipWorkDirValidate ? { skipWorkDirValidate: true } : undefined;
       }
 
-      // Service Metadata
-      const parseKvString = (s: string): Record<string, string> | undefined => {
-        const entries = s
-          .split(",")
-          .map((e) => e.trim())
-          .filter(Boolean);
-        const result: Record<string, string> = {};
-        for (const entry of entries) {
-          const eqIdx = entry.indexOf("=");
-          if (eqIdx > 0) {
-            result[entry.slice(0, eqIdx).trim()] = entry.slice(eqIdx + 1).trim();
-          }
-        }
-        return Object.keys(result).length > 0 ? result : undefined;
-      };
-      if (
-        headlessServiceAnnotations !== initialHeadlessServiceAnnotations ||
-        headlessServiceLabels !== initialHeadlessServiceLabels
-      ) {
-        const annotations = parseKvString(headlessServiceAnnotations);
-        const labels = parseKvString(headlessServiceLabels);
-        data.headlessService = annotations || labels ? { annotations, labels } : undefined;
+      // Sidecars & Init Containers
+      if (JSON.stringify(sidecars) !== JSON.stringify(initialSidecars)) {
+        data.sidecars = sidecars.length > 0 ? sidecars : undefined;
       }
-      if (
-        podServiceAnnotations !== initialPodServiceAnnotations ||
-        podServiceLabels !== initialPodServiceLabels
-      ) {
-        const annotations = parseKvString(podServiceAnnotations);
-        const labels = parseKvString(podServiceLabels);
-        data.podService = annotations || labels ? { annotations, labels } : undefined;
+      if (JSON.stringify(initContainers) !== JSON.stringify(initialInitContainers)) {
+        data.initContainers = initContainers.length > 0 ? initContainers : undefined;
+      }
+
+      // Service Metadata
+      if (JSON.stringify(podServiceConfig) !== JSON.stringify(initialPodServiceConfig)) {
+        data.podService = podServiceConfig ?? undefined;
+      }
+      if (JSON.stringify(headlessServiceConfig) !== JSON.stringify(initialHeadlessServiceConfig)) {
+        data.headlessService = headlessServiceConfig ?? undefined;
+      }
+
+      // Rack ID Override
+      if (enableRackIDOverride !== initialEnableRackIDOverride) {
+        data.enableRackIDOverride = enableRackIDOverride;
+      }
+
+      // Storage (multi-volume)
+      const storageChanged =
+        JSON.stringify(storageVolumes) !== JSON.stringify(initialStorageVolumes) ||
+        storageCleanupThreads !== initialStorageCleanupThreads ||
+        storageDeleteLocalOnRestart !== initialStorageDeleteLocalOnRestart;
+      if (storageChanged) {
+        data.storage = {
+          volumes: storageVolumes,
+          ...(storageCleanupThreads ? { cleanupThreads: storageCleanupThreads } : {}),
+          ...(storageDeleteLocalOnRestart ? { deleteLocalStorageOnRestart: true } : {}),
+        };
       }
 
       await onSave(data);
@@ -981,6 +1134,308 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
             disabled={loading}
           />
 
+          {/* Storage (Multi-Volume) */}
+          <EditCollapsible
+            title="Storage Volumes"
+            summary={
+              storageVolumes.length > 0
+                ? `${storageVolumes.length} volume${storageVolumes.length !== 1 ? "s" : ""}`
+                : "Not configured"
+            }
+          >
+            <EditStorageSection
+              volumes={storageVolumes}
+              cleanupThreads={storageCleanupThreads}
+              deleteLocalOnRestart={storageDeleteLocalOnRestart}
+              onVolumesChange={setStorageVolumes}
+              onCleanupThreadsChange={setStorageCleanupThreads}
+              onDeleteLocalChange={setStorageDeleteLocalOnRestart}
+              loading={loading}
+            />
+          </EditCollapsible>
+
+          {/* Topology Spread Constraints */}
+          <EditCollapsible
+            title="Topology Spread Constraints"
+            summary={
+              topologySpreadConstraints.length > 0
+                ? `${topologySpreadConstraints.length} constraint(s)`
+                : "None"
+            }
+          >
+            <div className="space-y-3">
+              <p className="text-base-content/60 text-[10px]">
+                Control how pods are spread across topology domains.
+              </p>
+              {topologySpreadConstraints.map((tsc, idx) => (
+                <div key={idx} className="space-y-2 rounded border p-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-medium">Constraint #{idx + 1}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTopologySpreadConstraints(
+                          topologySpreadConstraints.filter((_, i) => i !== idx),
+                        );
+                        setError(null);
+                      }}
+                      className="text-base-content/60 hover:text-error p-0.5"
+                      disabled={loading}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="grid gap-1">
+                      <Label className="text-[10px]">Max Skew</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={tsc.maxSkew}
+                        onChange={(e) => {
+                          const next = [...topologySpreadConstraints];
+                          next[idx] = { ...next[idx], maxSkew: parseInt(e.target.value) || 1 };
+                          setTopologySpreadConstraints(next);
+                          setError(null);
+                        }}
+                        className="h-7 text-[10px]"
+                        disabled={loading}
+                      />
+                    </div>
+                    <div className="grid gap-1">
+                      <Label className="text-[10px]">Topology Key</Label>
+                      <Select
+                        value={tsc.topologyKey}
+                        onChange={(e) => {
+                          const next = [...topologySpreadConstraints];
+                          next[idx] = { ...next[idx], topologyKey: e.target.value };
+                          setTopologySpreadConstraints(next);
+                          setError(null);
+                        }}
+                        className="h-7 text-[10px]"
+                        disabled={loading}
+                      >
+                        <option value="topology.kubernetes.io/zone">
+                          topology.kubernetes.io/zone
+                        </option>
+                        <option value="kubernetes.io/hostname">kubernetes.io/hostname</option>
+                        <option value="topology.kubernetes.io/region">
+                          topology.kubernetes.io/region
+                        </option>
+                      </Select>
+                    </div>
+                    <div className="grid gap-1">
+                      <Label className="text-[10px]">When Unsatisfiable</Label>
+                      <Select
+                        value={tsc.whenUnsatisfiable}
+                        onChange={(e) => {
+                          const next = [...topologySpreadConstraints];
+                          next[idx] = {
+                            ...next[idx],
+                            whenUnsatisfiable: e.target.value as "DoNotSchedule" | "ScheduleAnyway",
+                          };
+                          setTopologySpreadConstraints(next);
+                          setError(null);
+                        }}
+                        className="h-7 text-[10px]"
+                        disabled={loading}
+                      >
+                        <option value="DoNotSchedule">DoNotSchedule</option>
+                        <option value="ScheduleAnyway">ScheduleAnyway</option>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="grid gap-1">
+                    <Label className="text-[10px]">
+                      Label Selector (key=value, comma-separated)
+                    </Label>
+                    <Input
+                      value={
+                        tsc.labelSelector
+                          ? Object.entries(tsc.labelSelector)
+                              .map(([k, v]) => `${k}=${v}`)
+                              .join(", ")
+                          : ""
+                      }
+                      onChange={(e) => {
+                        const entries = e.target.value
+                          .split(",")
+                          .map((s) => s.trim())
+                          .filter(Boolean);
+                        const labels: Record<string, string> = {};
+                        for (const entry of entries) {
+                          const eqIdx = entry.indexOf("=");
+                          if (eqIdx > 0) {
+                            labels[entry.slice(0, eqIdx).trim()] = entry.slice(eqIdx + 1).trim();
+                          }
+                        }
+                        const next = [...topologySpreadConstraints];
+                        next[idx] = {
+                          ...next[idx],
+                          labelSelector: Object.keys(labels).length > 0 ? labels : undefined,
+                        };
+                        setTopologySpreadConstraints(next);
+                        setError(null);
+                      }}
+                      placeholder="e.g. app=aerospike"
+                      className="h-7 text-[10px]"
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setTopologySpreadConstraints([
+                    ...topologySpreadConstraints,
+                    {
+                      maxSkew: 1,
+                      topologyKey: "topology.kubernetes.io/zone",
+                      whenUnsatisfiable: "DoNotSchedule",
+                    },
+                  ]);
+                  setError(null);
+                }}
+                className="text-accent hover:text-accent/80 flex items-center gap-1 text-[10px] font-medium"
+                disabled={loading}
+              >
+                <Plus className="h-3 w-3" /> Add Constraint
+              </button>
+            </div>
+          </EditCollapsible>
+
+          {/* Pod Security Context */}
+          <EditCollapsible
+            title="Pod Security Context"
+            summary={
+              [
+                podSecurityRunAsUser != null ? `UID: ${podSecurityRunAsUser}` : null,
+                podSecurityRunAsGroup != null ? `GID: ${podSecurityRunAsGroup}` : null,
+                podSecurityRunAsNonRoot ? "Non-Root" : null,
+                podSecurityFsGroup != null ? `fsGroup: ${podSecurityFsGroup}` : null,
+              ]
+                .filter(Boolean)
+                .join(", ") || "Default"
+            }
+          >
+            <div className="space-y-3">
+              <p className="text-base-content/60 text-[10px]">
+                Configure the pod-level security context.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-1">
+                  <Label htmlFor="edit-run-as-user" className="text-[10px]">
+                    Run As User
+                  </Label>
+                  <Input
+                    id="edit-run-as-user"
+                    type="number"
+                    min={0}
+                    value={podSecurityRunAsUser ?? ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPodSecurityRunAsUser(val ? parseInt(val, 10) : undefined);
+                      setError(null);
+                    }}
+                    placeholder="e.g. 1000"
+                    className="h-7 text-[10px]"
+                    disabled={loading}
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <Label htmlFor="edit-run-as-group" className="text-[10px]">
+                    Run As Group
+                  </Label>
+                  <Input
+                    id="edit-run-as-group"
+                    type="number"
+                    min={0}
+                    value={podSecurityRunAsGroup ?? ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPodSecurityRunAsGroup(val ? parseInt(val, 10) : undefined);
+                      setError(null);
+                    }}
+                    placeholder="e.g. 1000"
+                    className="h-7 text-[10px]"
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-1">
+                  <Label htmlFor="edit-fs-group" className="text-[10px]">
+                    FS Group
+                  </Label>
+                  <Input
+                    id="edit-fs-group"
+                    type="number"
+                    min={0}
+                    value={podSecurityFsGroup ?? ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPodSecurityFsGroup(val ? parseInt(val, 10) : undefined);
+                      setError(null);
+                    }}
+                    placeholder="e.g. 1000"
+                    className="h-7 text-[10px]"
+                    disabled={loading}
+                  />
+                </div>
+                <div className="flex items-center gap-2 self-end pb-1">
+                  <Switch
+                    id="edit-run-as-non-root"
+                    checked={podSecurityRunAsNonRoot}
+                    onCheckedChange={(checked) => {
+                      setPodSecurityRunAsNonRoot(checked);
+                      setError(null);
+                    }}
+                    disabled={loading}
+                  />
+                  <Label htmlFor="edit-run-as-non-root" className="cursor-pointer text-[10px]">
+                    Run As Non-Root
+                  </Label>
+                </div>
+              </div>
+              <div className="grid gap-1">
+                <Label className="text-[10px] font-semibold">Supplemental Groups</Label>
+                {podSecuritySupGroups.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {podSecuritySupGroups.map((gid) => (
+                      <span
+                        key={gid}
+                        className="bg-accent/10 text-accent inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                      >
+                        {gid}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPodSecuritySupGroups(podSecuritySupGroups.filter((g) => g !== gid));
+                            setError(null);
+                          }}
+                          className="hover:bg-accent/20 ml-0.5 inline-flex h-3 w-3 items-center justify-center rounded-full"
+                          disabled={loading}
+                        >
+                          <X className="h-2 w-2" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <EditSupGroupInput
+                  onAdd={(gid) => {
+                    if (!podSecuritySupGroups.includes(gid)) {
+                      setPodSecuritySupGroups([...podSecuritySupGroups, gid]);
+                      setError(null);
+                    }
+                  }}
+                  disabled={loading}
+                />
+              </div>
+            </div>
+          </EditCollapsible>
+
           {/* Validation Policy */}
           <EditCollapsible
             title="Validation Policy"
@@ -1007,87 +1462,146 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
             </div>
           </EditCollapsible>
 
+          {/* Sidecars & Init Containers */}
+          <EditSidecarsSection
+            sidecars={sidecars}
+            initContainers={initContainers}
+            onSidecarsChange={setSidecars}
+            onInitContainersChange={setInitContainers}
+            loading={loading}
+          />
+
           {/* Service Metadata */}
           <EditCollapsible
             title="Service Metadata"
             summary={
               [
-                headlessServiceAnnotations ? "Headless annotations" : null,
-                headlessServiceLabels ? "Headless labels" : null,
-                podServiceAnnotations ? "Pod annotations" : null,
-                podServiceLabels ? "Pod labels" : null,
+                podServiceConfig != null ? "Pod Service" : null,
+                headlessServiceConfig?.annotations || headlessServiceConfig?.labels
+                  ? "Headless Service"
+                  : null,
               ]
                 .filter(Boolean)
-                .join(", ") || "None"
+                .join(", ") || "Default"
             }
           >
             <div className="space-y-4">
-              <div className="grid gap-2">
-                <Label className="text-xs font-semibold">Headless Service</Label>
-                <div className="grid gap-1">
-                  <Label htmlFor="edit-headless-annotations" className="text-[10px]">
-                    Annotations (key=value, comma-separated)
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="edit-pod-service" className="cursor-pointer text-xs">
+                    Enable per-pod Service
                   </Label>
-                  <Input
-                    id="edit-headless-annotations"
-                    value={headlessServiceAnnotations}
-                    onChange={(e) => {
-                      setHeadlessServiceAnnotations(e.target.value);
-                      setError(null);
-                    }}
-                    placeholder="e.g. service.beta.kubernetes.io/aws-load-balancer-type=nlb"
-                    disabled={loading}
-                  />
+                  <p className="text-muted-foreground text-[10px]">
+                    Create a dedicated K8s Service for each Aerospike pod.
+                  </p>
                 </div>
-                <div className="grid gap-1">
-                  <Label htmlFor="edit-headless-labels" className="text-[10px]">
-                    Labels (key=value, comma-separated)
-                  </Label>
-                  <Input
-                    id="edit-headless-labels"
-                    value={headlessServiceLabels}
-                    onChange={(e) => {
-                      setHeadlessServiceLabels(e.target.value);
-                      setError(null);
-                    }}
-                    placeholder="e.g. app.kubernetes.io/component=aerospike"
-                    disabled={loading}
-                  />
+                <Switch
+                  id="edit-pod-service"
+                  checked={podServiceConfig != null}
+                  onCheckedChange={(checked) => {
+                    setPodServiceConfig(checked ? {} : null);
+                    setError(null);
+                  }}
+                  disabled={loading}
+                />
+              </div>
+              {podServiceConfig != null && (
+                <div className="space-y-3">
+                  <div className="grid gap-1.5">
+                    <Label className="text-[10px] font-semibold">Pod Service Annotations</Label>
+                    <EditKvEditor
+                      value={podServiceConfig.annotations}
+                      onChange={(v) => setPodServiceConfig({ ...podServiceConfig, annotations: v })}
+                      keyPlaceholder="annotation key"
+                      valuePlaceholder="value"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label className="text-[10px] font-semibold">Pod Service Labels</Label>
+                    <EditKvEditor
+                      value={podServiceConfig.labels}
+                      onChange={(v) => setPodServiceConfig({ ...podServiceConfig, labels: v })}
+                      keyPlaceholder="label key"
+                      valuePlaceholder="value"
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="border-t pt-3">
+                <Label className="text-xs font-semibold">Headless Service Metadata</Label>
+                <p className="text-muted-foreground mb-2 text-[10px]">
+                  Custom annotations and labels for the headless Service.
+                </p>
+                <div className="space-y-3">
+                  <div className="grid gap-1.5">
+                    <Label className="text-[10px] font-semibold">Annotations</Label>
+                    <EditKvEditor
+                      value={headlessServiceConfig?.annotations}
+                      onChange={(v) => {
+                        const next = { ...headlessServiceConfig, annotations: v };
+                        if (!next.annotations && !next.labels) {
+                          setHeadlessServiceConfig(null);
+                        } else {
+                          setHeadlessServiceConfig(next);
+                        }
+                        setError(null);
+                      }}
+                      keyPlaceholder="annotation key"
+                      valuePlaceholder="value"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label className="text-[10px] font-semibold">Labels</Label>
+                    <EditKvEditor
+                      value={headlessServiceConfig?.labels}
+                      onChange={(v) => {
+                        const next = { ...headlessServiceConfig, labels: v };
+                        if (!next.annotations && !next.labels) {
+                          setHeadlessServiceConfig(null);
+                        } else {
+                          setHeadlessServiceConfig(next);
+                        }
+                        setError(null);
+                      }}
+                      keyPlaceholder="label key"
+                      valuePlaceholder="value"
+                      disabled={loading}
+                    />
+                  </div>
                 </div>
               </div>
-              <div className="grid gap-2">
-                <Label className="text-xs font-semibold">Pod Service</Label>
-                <div className="grid gap-1">
-                  <Label htmlFor="edit-pod-annotations" className="text-[10px]">
-                    Annotations (key=value, comma-separated)
-                  </Label>
-                  <Input
-                    id="edit-pod-annotations"
-                    value={podServiceAnnotations}
-                    onChange={(e) => {
-                      setPodServiceAnnotations(e.target.value);
-                      setError(null);
-                    }}
-                    placeholder="e.g. service.beta.kubernetes.io/aws-load-balancer-type=nlb"
-                    disabled={loading}
-                  />
-                </div>
-                <div className="grid gap-1">
-                  <Label htmlFor="edit-pod-labels" className="text-[10px]">
-                    Labels (key=value, comma-separated)
-                  </Label>
-                  <Input
-                    id="edit-pod-labels"
-                    value={podServiceLabels}
-                    onChange={(e) => {
-                      setPodServiceLabels(e.target.value);
-                      setError(null);
-                    }}
-                    placeholder="e.g. app.kubernetes.io/component=aerospike"
-                    disabled={loading}
-                  />
-                </div>
+            </div>
+          </EditCollapsible>
+
+          {/* Rack ID Override */}
+          <EditCollapsible
+            title="Rack ID Override"
+            summary={enableRackIDOverride ? "Enabled" : "Disabled"}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="edit-rack-id-override" className="cursor-pointer text-xs">
+                  Enable Rack ID Override
+                </Label>
+                <p className="text-muted-foreground text-[10px]">
+                  Allow rack ID override for existing data migration. When enabled, the operator
+                  dynamically assigns rack IDs to pods, useful when migrating data from an existing
+                  cluster with different rack configurations.
+                </p>
               </div>
+              <Switch
+                id="edit-rack-id-override"
+                checked={enableRackIDOverride}
+                onCheckedChange={(checked) => {
+                  setEnableRackIDOverride(checked);
+                  setError(null);
+                }}
+                disabled={loading}
+              />
             </div>
           </EditCollapsible>
 
@@ -2002,5 +2516,765 @@ function EditPodSchedulingSection({
         </div>
       </div>
     </EditCollapsible>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sidecars & Init Containers Section for Edit Dialog
+// ---------------------------------------------------------------------------
+
+function EditContainerEntry({
+  container,
+  onChange,
+  onRemove,
+  disabled,
+}: {
+  container: SidecarConfig;
+  onChange: (updated: SidecarConfig) => void;
+  onRemove: () => void;
+  disabled: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const label = container.name || "(unnamed)";
+
+  const updateField = <K extends keyof SidecarConfig>(key: K, value: SidecarConfig[K]) => {
+    onChange({ ...container, [key]: value });
+  };
+
+  return (
+    <div className="rounded border">
+      <div className="flex items-center justify-between px-3 py-2">
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-2 text-left text-xs font-medium"
+        >
+          {expanded ? (
+            <ChevronDown className="text-muted-foreground h-3.5 w-3.5" />
+          ) : (
+            <ChevronRight className="text-muted-foreground h-3.5 w-3.5" />
+          )}
+          <span className="font-mono">{label}</span>
+          {container.image && (
+            <span className="text-muted-foreground text-[10px]">({container.image})</span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={disabled}
+          className="text-muted-foreground hover:text-destructive p-0.5"
+          title="Remove"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {expanded && (
+        <div className="space-y-2 border-t px-3 pt-2 pb-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="grid gap-0.5">
+              <Label className="text-[10px]">Name *</Label>
+              <Input
+                value={container.name}
+                onChange={(e) => updateField("name", e.target.value)}
+                placeholder="e.g. log-collector"
+                className="h-7 text-[10px]"
+                disabled={disabled}
+              />
+            </div>
+            <div className="grid gap-0.5">
+              <Label className="text-[10px]">Image *</Label>
+              <Input
+                value={container.image}
+                onChange={(e) => updateField("image", e.target.value)}
+                placeholder="e.g. fluent/fluent-bit:latest"
+                className="h-7 text-[10px]"
+                disabled={disabled}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="grid gap-0.5">
+              <Label className="text-[10px]">Command (comma-separated)</Label>
+              <Input
+                value={(container.command ?? []).join(", ")}
+                onChange={(e) => {
+                  const parts = e.target.value
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean);
+                  updateField("command", parts.length > 0 ? parts : undefined);
+                }}
+                placeholder='/bin/sh, -c, "echo hi"'
+                className="h-7 text-[10px]"
+                disabled={disabled}
+              />
+            </div>
+            <div className="grid gap-0.5">
+              <Label className="text-[10px]">Args (comma-separated)</Label>
+              <Input
+                value={(container.args ?? []).join(", ")}
+                onChange={(e) => {
+                  const parts = e.target.value
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean);
+                  updateField("args", parts.length > 0 ? parts : undefined);
+                }}
+                placeholder="--config, /etc/config.yaml"
+                className="h-7 text-[10px]"
+                disabled={disabled}
+              />
+            </div>
+          </div>
+          {/* Env vars - simple comma-separated key=value */}
+          <div className="grid gap-0.5">
+            <Label className="text-[10px]">Env Vars (NAME=value, ...)</Label>
+            <Input
+              value={(container.env ?? []).map((e) => `${e.name}=${e.value ?? ""}`).join(", ")}
+              onChange={(e) => {
+                const entries = e.target.value
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+                const envList = entries
+                  .map((entry) => {
+                    const eqIdx = entry.indexOf("=");
+                    if (eqIdx > 0) {
+                      return {
+                        name: entry.slice(0, eqIdx).trim(),
+                        value: entry.slice(eqIdx + 1).trim() || undefined,
+                      };
+                    }
+                    return { name: entry.trim() };
+                  })
+                  .filter((e) => e.name);
+                updateField("env", envList.length > 0 ? envList : undefined);
+              }}
+              placeholder="MY_VAR=value, OTHER=123"
+              className="h-7 text-[10px]"
+              disabled={disabled}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EditSidecarsSection({
+  sidecars,
+  initContainers,
+  onSidecarsChange,
+  onInitContainersChange,
+  loading,
+}: {
+  sidecars: SidecarConfig[];
+  initContainers: SidecarConfig[];
+  onSidecarsChange: (sc: SidecarConfig[]) => void;
+  onInitContainersChange: (ic: SidecarConfig[]) => void;
+  loading: boolean;
+}) {
+  const totalCount = sidecars.length + initContainers.length;
+  const summary =
+    totalCount > 0
+      ? [
+          sidecars.length > 0 ? `${sidecars.length} sidecar(s)` : null,
+          initContainers.length > 0 ? `${initContainers.length} init` : null,
+        ]
+          .filter(Boolean)
+          .join(", ")
+      : "None";
+
+  return (
+    <EditCollapsible title="Sidecars & Init Containers" summary={summary}>
+      <div className="space-y-3">
+        {/* Sidecars */}
+        <div className="space-y-2">
+          <Label className="text-[10px] font-semibold">Sidecar Containers</Label>
+          {sidecars.map((sc, idx) => (
+            <EditContainerEntry
+              key={idx}
+              container={sc}
+              onChange={(updated) => {
+                const next = [...sidecars];
+                next[idx] = updated;
+                onSidecarsChange(next);
+              }}
+              onRemove={() => onSidecarsChange(sidecars.filter((_, i) => i !== idx))}
+              disabled={loading}
+            />
+          ))}
+          <button
+            type="button"
+            onClick={() => onSidecarsChange([...sidecars, { name: "", image: "" }])}
+            disabled={loading}
+            className="text-accent hover:text-accent/80 flex items-center gap-1 text-[10px] font-medium disabled:opacity-50"
+          >
+            <Plus className="h-3 w-3" /> Add Sidecar
+          </button>
+        </div>
+
+        {/* Init Containers */}
+        <div className="space-y-2 border-t pt-2">
+          <Label className="text-[10px] font-semibold">Init Containers</Label>
+          {initContainers.map((ic, idx) => (
+            <EditContainerEntry
+              key={idx}
+              container={ic}
+              onChange={(updated) => {
+                const next = [...initContainers];
+                next[idx] = updated;
+                onInitContainersChange(next);
+              }}
+              onRemove={() => onInitContainersChange(initContainers.filter((_, i) => i !== idx))}
+              disabled={loading}
+            />
+          ))}
+          <button
+            type="button"
+            onClick={() => onInitContainersChange([...initContainers, { name: "", image: "" }])}
+            disabled={loading}
+            className="text-accent hover:text-accent/80 flex items-center gap-1 text-[10px] font-medium disabled:opacity-50"
+          >
+            <Plus className="h-3 w-3" /> Add Init Container
+          </button>
+        </div>
+      </div>
+    </EditCollapsible>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// EditStorageSection — multi-volume storage editing
+// ---------------------------------------------------------------------------
+
+const VOLUME_SOURCE_LABELS: Record<VolumeSourceType, string> = {
+  persistentVolume: "PVC",
+  emptyDir: "EmptyDir",
+  secret: "Secret",
+  configMap: "ConfigMap",
+  hostPath: "HostPath",
+};
+
+function EditStorageSection({
+  volumes,
+  cleanupThreads,
+  deleteLocalOnRestart,
+  onVolumesChange,
+  onCleanupThreadsChange,
+  onDeleteLocalChange,
+  loading,
+}: {
+  volumes: VolumeSpec[];
+  cleanupThreads: number | undefined;
+  deleteLocalOnRestart: boolean;
+  onVolumesChange: (v: VolumeSpec[]) => void;
+  onCleanupThreadsChange: (v: number | undefined) => void;
+  onDeleteLocalChange: (v: boolean) => void;
+  loading: boolean;
+}) {
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+
+  const updateVolume = (index: number, updated: VolumeSpec) => {
+    const next = [...volumes];
+    next[index] = updated;
+    onVolumesChange(next);
+  };
+
+  const removeVolume = (index: number) => {
+    onVolumesChange(volumes.filter((_, i) => i !== index));
+    if (expandedIdx === index) setExpandedIdx(null);
+  };
+
+  const addVolume = (type: VolumeSourceType) => {
+    const n = volumes.length + 1;
+    const vol: VolumeSpec = {
+      name: `vol-${n}`,
+      source: type,
+      aerospike: {
+        path: type === "persistentVolume" ? "/opt/aerospike/data" : "/opt/aerospike/work",
+      },
+    };
+    if (type === "persistentVolume") {
+      vol.persistentVolume = {
+        size: "10Gi",
+        volumeMode: "Filesystem",
+        accessModes: ["ReadWriteOnce"],
+      };
+    } else if (type === "emptyDir") {
+      vol.emptyDir = {};
+    } else if (type === "secret") {
+      vol.secret = { secretName: "" };
+    } else if (type === "configMap") {
+      vol.configMap = { name: "" };
+    } else if (type === "hostPath") {
+      vol.hostPath = { path: "", type: "DirectoryOrCreate" };
+    }
+    onVolumesChange([...volumes, vol]);
+    setExpandedIdx(volumes.length);
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Add buttons */}
+      <div className="flex flex-wrap gap-1">
+        {(Object.entries(VOLUME_SOURCE_LABELS) as [VolumeSourceType, string][]).map(
+          ([type, label]) => (
+            <button
+              key={type}
+              type="button"
+              disabled={loading}
+              onClick={() => addVolume(type)}
+              className="text-accent hover:text-accent/80 flex items-center gap-0.5 text-[10px] font-medium disabled:opacity-50"
+            >
+              <Plus className="h-3 w-3" /> {label}
+            </button>
+          ),
+        )}
+      </div>
+
+      {volumes.length === 0 && (
+        <p className="text-muted-foreground py-2 text-center text-xs">No volumes configured.</p>
+      )}
+
+      {volumes.map((vol, vi) => {
+        const isExpanded = expandedIdx === vi;
+        return (
+          <div key={vi} className="rounded border">
+            <div className="flex items-center justify-between px-2 py-1.5">
+              <button
+                type="button"
+                className="flex items-center gap-1 text-xs font-medium"
+                onClick={() => setExpandedIdx(isExpanded ? null : vi)}
+              >
+                {isExpanded ? (
+                  <ChevronDown className="h-3 w-3" />
+                ) : (
+                  <ChevronRight className="h-3 w-3" />
+                )}
+                {vol.name || `vol-${vi + 1}`}
+                <span className="text-muted-foreground text-[10px] font-normal">
+                  [{VOLUME_SOURCE_LABELS[vol.source]}]
+                </span>
+                {vol.source === "persistentVolume" && vol.persistentVolume && (
+                  <span className="text-muted-foreground text-[10px]">
+                    {vol.persistentVolume.size}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => removeVolume(vi)}
+                className="text-muted-foreground hover:text-destructive disabled:opacity-50"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+
+            {isExpanded && (
+              <div className="space-y-2 border-t px-2 pt-2 pb-2">
+                {/* Name and source type */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="grid gap-1">
+                    <Label className="text-[10px]">Name</Label>
+                    <Input
+                      value={vol.name}
+                      onChange={(e) => updateVolume(vi, { ...vol, name: e.target.value })}
+                      className="h-7 text-xs"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label className="text-[10px]">Source</Label>
+                    <Select
+                      value={vol.source}
+                      onValueChange={(v) => {
+                        const src = v as VolumeSourceType;
+                        const updated: VolumeSpec = { ...vol, source: src };
+                        if (src === "persistentVolume") {
+                          updated.persistentVolume = {
+                            size: "10Gi",
+                            volumeMode: "Filesystem",
+                            accessModes: ["ReadWriteOnce"],
+                          };
+                          updated.emptyDir = undefined;
+                          updated.secret = undefined;
+                          updated.configMap = undefined;
+                          updated.hostPath = undefined;
+                        } else if (src === "emptyDir") {
+                          updated.emptyDir = {};
+                          updated.persistentVolume = undefined;
+                          updated.secret = undefined;
+                          updated.configMap = undefined;
+                          updated.hostPath = undefined;
+                        } else if (src === "secret") {
+                          updated.secret = { secretName: "" };
+                          updated.persistentVolume = undefined;
+                          updated.emptyDir = undefined;
+                          updated.configMap = undefined;
+                          updated.hostPath = undefined;
+                        } else if (src === "configMap") {
+                          updated.configMap = { name: "" };
+                          updated.persistentVolume = undefined;
+                          updated.emptyDir = undefined;
+                          updated.secret = undefined;
+                          updated.hostPath = undefined;
+                        } else if (src === "hostPath") {
+                          updated.hostPath = { path: "", type: "DirectoryOrCreate" };
+                          updated.persistentVolume = undefined;
+                          updated.emptyDir = undefined;
+                          updated.secret = undefined;
+                          updated.configMap = undefined;
+                        }
+                        updateVolume(vi, updated);
+                      }}
+                      disabled={loading}
+                    >
+                      <SelectTrigger className="h-7 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(VOLUME_SOURCE_LABELS).map(([k, label]) => (
+                          <SelectItem key={k} value={k} className="text-xs">
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* PVC source fields */}
+                {vol.source === "persistentVolume" && vol.persistentVolume && (
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="grid gap-1">
+                      <Label className="text-[10px]">Storage Class</Label>
+                      <Input
+                        value={vol.persistentVolume.storageClass || ""}
+                        onChange={(e) =>
+                          updateVolume(vi, {
+                            ...vol,
+                            persistentVolume: {
+                              ...vol.persistentVolume!,
+                              storageClass: e.target.value,
+                            },
+                          })
+                        }
+                        className="h-7 text-xs"
+                        disabled={loading}
+                        placeholder="standard"
+                      />
+                    </div>
+                    <div className="grid gap-1">
+                      <Label className="text-[10px]">Size</Label>
+                      <Input
+                        value={vol.persistentVolume.size}
+                        onChange={(e) =>
+                          updateVolume(vi, {
+                            ...vol,
+                            persistentVolume: { ...vol.persistentVolume!, size: e.target.value },
+                          })
+                        }
+                        className="h-7 text-xs"
+                        disabled={loading}
+                        placeholder="10Gi"
+                      />
+                    </div>
+                    <div className="grid gap-1">
+                      <Label className="text-[10px]">Volume Mode</Label>
+                      <Select
+                        value={vol.persistentVolume.volumeMode || "Filesystem"}
+                        onValueChange={(v) =>
+                          updateVolume(vi, {
+                            ...vol,
+                            persistentVolume: {
+                              ...vol.persistentVolume!,
+                              volumeMode: v as "Filesystem" | "Block",
+                            },
+                          })
+                        }
+                        disabled={loading}
+                      >
+                        <SelectTrigger className="h-7 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Filesystem" className="text-xs">
+                            Filesystem
+                          </SelectItem>
+                          <SelectItem value="Block" className="text-xs">
+                            Block
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+
+                {/* Secret */}
+                {vol.source === "secret" && (
+                  <div className="grid gap-1">
+                    <Label className="text-[10px]">Secret Name</Label>
+                    <Input
+                      value={(vol.secret as Record<string, string>)?.secretName || ""}
+                      onChange={(e) =>
+                        updateVolume(vi, {
+                          ...vol,
+                          secret: { ...vol.secret, secretName: e.target.value },
+                        })
+                      }
+                      className="h-7 text-xs"
+                      disabled={loading}
+                    />
+                  </div>
+                )}
+
+                {/* ConfigMap */}
+                {vol.source === "configMap" && (
+                  <div className="grid gap-1">
+                    <Label className="text-[10px]">ConfigMap Name</Label>
+                    <Input
+                      value={(vol.configMap as Record<string, string>)?.name || ""}
+                      onChange={(e) =>
+                        updateVolume(vi, {
+                          ...vol,
+                          configMap: { ...vol.configMap, name: e.target.value },
+                        })
+                      }
+                      className="h-7 text-xs"
+                      disabled={loading}
+                    />
+                  </div>
+                )}
+
+                {/* HostPath */}
+                {vol.source === "hostPath" && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="grid gap-1">
+                      <Label className="text-[10px]">Path</Label>
+                      <Input
+                        value={(vol.hostPath as Record<string, string>)?.path || ""}
+                        onChange={(e) =>
+                          updateVolume(vi, {
+                            ...vol,
+                            hostPath: { ...vol.hostPath, path: e.target.value },
+                          })
+                        }
+                        className="h-7 text-xs"
+                        disabled={loading}
+                      />
+                    </div>
+                    <div className="grid gap-1">
+                      <Label className="text-[10px]">Type</Label>
+                      <Select
+                        value={
+                          (vol.hostPath as Record<string, string>)?.type || "DirectoryOrCreate"
+                        }
+                        onValueChange={(v) =>
+                          updateVolume(vi, { ...vol, hostPath: { ...vol.hostPath, type: v } })
+                        }
+                        disabled={loading}
+                      >
+                        <SelectTrigger className="h-7 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="DirectoryOrCreate" className="text-xs">
+                            DirectoryOrCreate
+                          </SelectItem>
+                          <SelectItem value="Directory" className="text-xs">
+                            Directory
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+
+                {/* Mount path */}
+                <div className="grid gap-1">
+                  <Label className="text-[10px]">Mount Path</Label>
+                  <Input
+                    value={vol.aerospike?.path || ""}
+                    onChange={(e) =>
+                      updateVolume(vi, {
+                        ...vol,
+                        aerospike: { ...vol.aerospike, path: e.target.value },
+                      })
+                    }
+                    className="h-7 text-xs"
+                    disabled={loading}
+                    placeholder="/opt/aerospike/data"
+                  />
+                </div>
+
+                {/* Init/Wipe/Cascade */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="grid gap-1">
+                    <Label className="text-[10px]">Init Method</Label>
+                    <Select
+                      value={vol.initMethod || "none"}
+                      onValueChange={(v) =>
+                        updateVolume(vi, {
+                          ...vol,
+                          initMethod: v === "none" ? undefined : (v as VolumeInitMethod),
+                        })
+                      }
+                      disabled={loading}
+                    >
+                      <SelectTrigger className="h-7 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none" className="text-xs">
+                          None
+                        </SelectItem>
+                        <SelectItem value="deleteFiles" className="text-xs">
+                          Delete Files
+                        </SelectItem>
+                        <SelectItem value="dd" className="text-xs">
+                          DD
+                        </SelectItem>
+                        <SelectItem value="blkdiscard" className="text-xs">
+                          Block Discard
+                        </SelectItem>
+                        <SelectItem value="headerCleanup" className="text-xs">
+                          Header Cleanup
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-1">
+                    <Label className="text-[10px]">Wipe Method</Label>
+                    <Select
+                      value={vol.wipeMethod || "none"}
+                      onValueChange={(v) =>
+                        updateVolume(vi, {
+                          ...vol,
+                          wipeMethod: v === "none" ? undefined : (v as VolumeWipeMethod),
+                        })
+                      }
+                      disabled={loading}
+                    >
+                      <SelectTrigger className="h-7 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none" className="text-xs">
+                          None
+                        </SelectItem>
+                        <SelectItem value="deleteFiles" className="text-xs">
+                          Delete Files
+                        </SelectItem>
+                        <SelectItem value="dd" className="text-xs">
+                          DD
+                        </SelectItem>
+                        <SelectItem value="blkdiscard" className="text-xs">
+                          Block Discard
+                        </SelectItem>
+                        <SelectItem value="headerCleanup" className="text-xs">
+                          Header Cleanup
+                        </SelectItem>
+                        <SelectItem value="blkdiscardWithHeaderCleanup" className="text-xs">
+                          Blk+Header
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-end gap-1.5 pb-1">
+                    <Checkbox
+                      checked={vol.cascadeDelete ?? false}
+                      onCheckedChange={(checked) =>
+                        updateVolume(vi, { ...vol, cascadeDelete: checked === true })
+                      }
+                      disabled={loading}
+                    />
+                    <Label className="text-[10px]">Cascade</Label>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* Global storage policies */}
+      {volumes.length > 0 && (
+        <div className="space-y-2 border-t pt-2">
+          <Label className="text-muted-foreground text-[10px]">Global Policies</Label>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="grid gap-1">
+              <Label className="text-[10px]">Cleanup Threads</Label>
+              <Input
+                type="number"
+                min={1}
+                value={cleanupThreads ?? 1}
+                onChange={(e) => onCleanupThreadsChange(parseInt(e.target.value) || undefined)}
+                className="h-7 text-xs"
+                disabled={loading}
+              />
+            </div>
+            <div className="flex items-end gap-1.5 pb-1">
+              <Checkbox
+                checked={deleteLocalOnRestart}
+                onCheckedChange={(checked) => onDeleteLocalChange(checked === true)}
+                disabled={loading}
+              />
+              <Label className="text-[10px]">Delete local PVCs on restart</Label>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Small input for adding supplemental group GIDs. */
+function EditSupGroupInput({
+  onAdd,
+  disabled,
+}: {
+  onAdd: (gid: number) => void;
+  disabled?: boolean;
+}) {
+  const [val, setVal] = useState("");
+  const add = () => {
+    const n = parseInt(val, 10);
+    if (!isNaN(n) && n >= 0) {
+      onAdd(n);
+      setVal("");
+    }
+  };
+  return (
+    <div className="flex gap-1.5">
+      <Input
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        type="number"
+        min={0}
+        placeholder="e.g. 1000"
+        className="h-7 w-24 text-[10px]"
+        disabled={disabled}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            add();
+          }
+        }}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-7 shrink-0 text-[10px]"
+        onClick={add}
+        disabled={disabled || !val.trim() || isNaN(parseInt(val, 10))}
+      >
+        <Plus className="mr-0.5 h-3 w-3" />
+        Add
+      </Button>
+    </div>
   );
 }

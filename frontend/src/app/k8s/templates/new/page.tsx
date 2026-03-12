@@ -10,7 +10,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LoadingButton } from "@/components/common/loading-button";
 import { PageHeader } from "@/components/common/page-header";
-import { Select } from "@/components/ui/select";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import { useK8sClusterStore } from "@/stores/k8s-cluster-store";
 import { api } from "@/lib/api/client";
 import { useToastStore } from "@/stores/toast-store";
@@ -43,6 +49,13 @@ export default function CreateTemplatePage() {
   const [storageClass, setStorageClass] = useState("standard");
   const [volumeSize, setVolumeSize] = useState("10Gi");
   const [accessType, setAccessType] = useState("pod");
+  // Network config (heartbeat)
+  const [heartbeatMode, setHeartbeatMode] = useState<"mesh" | "multicast">("mesh");
+  const [heartbeatInterval, setHeartbeatInterval] = useState<number | undefined>(undefined);
+  const [heartbeatTimeout, setHeartbeatTimeout] = useState<number | undefined>(undefined);
+  const [includeNetworkConfig, setIncludeNetworkConfig] = useState(false);
+  // Rack config
+  const [maxRacksPerNode, setMaxRacksPerNode] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     api
@@ -91,6 +104,16 @@ export default function CreateTemplatePage() {
         data.networkPolicy = {
           accessType: accessType as "pod" | "hostInternal" | "hostExternal" | "configuredIP",
         };
+      }
+      if (includeNetworkConfig) {
+        data.networkConfig = {
+          heartbeatMode: heartbeatMode,
+          ...(heartbeatInterval != null ? { heartbeatInterval } : {}),
+          ...(heartbeatTimeout != null ? { heartbeatTimeout } : {}),
+        };
+      }
+      if (maxRacksPerNode != null && maxRacksPerNode > 0) {
+        data.rackConfig = { maxRacksPerNode };
       }
 
       await createTemplate(data);
@@ -341,6 +364,100 @@ export default function CreateTemplatePage() {
               <option value="hostExternal">Host External</option>
               <option value="configuredIP">Configured IP</option>
             </Select>
+          </div>
+        </div>
+
+        {/* Network Config (Heartbeat) */}
+        <div className="bg-card space-y-4 rounded-xl border p-6">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="tmpl-network-config"
+              checked={includeNetworkConfig}
+              onCheckedChange={(c) => setIncludeNetworkConfig(c === true)}
+              disabled={loading}
+            />
+            <Label htmlFor="tmpl-network-config" className="cursor-pointer text-sm font-semibold">
+              Include Network Config (Heartbeat)
+            </Label>
+          </div>
+          {includeNetworkConfig && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label className="text-xs">Heartbeat Mode</Label>
+                <Select
+                  value={heartbeatMode}
+                  onValueChange={(v) => setHeartbeatMode(v as "mesh" | "multicast")}
+                >
+                  <SelectTrigger disabled={loading}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="mesh">Mesh (CE only)</SelectItem>
+                    <SelectItem value="multicast">Multicast</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-muted-foreground text-[10px]">
+                  Mesh mode is the only option for Aerospike Community Edition.
+                </p>
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-xs">Heartbeat Interval (ms)</Label>
+                <Input
+                  type="number"
+                  min={50}
+                  value={heartbeatInterval ?? ""}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value);
+                    setHeartbeatInterval(isNaN(v) ? undefined : Math.max(50, v));
+                  }}
+                  placeholder="Default (150)"
+                  disabled={loading}
+                />
+                <p className="text-muted-foreground text-[10px]">
+                  How often heartbeat messages are sent between nodes.
+                </p>
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-xs">Heartbeat Timeout (intervals)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={heartbeatTimeout ?? ""}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value);
+                    setHeartbeatTimeout(isNaN(v) ? undefined : Math.max(1, v));
+                  }}
+                  placeholder="Default (10)"
+                  disabled={loading}
+                />
+                <p className="text-muted-foreground text-[10px]">
+                  Number of missed heartbeat intervals before a node is considered dead.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Rack Config */}
+        <div className="bg-card space-y-4 rounded-xl border p-6">
+          <h3 className="text-sm font-semibold">Rack Config</h3>
+          <div className="grid gap-2 sm:w-1/2">
+            <Label className="text-xs">Max Racks Per Node</Label>
+            <Input
+              type="number"
+              min={1}
+              value={maxRacksPerNode ?? ""}
+              onChange={(e) => {
+                const v = parseInt(e.target.value);
+                setMaxRacksPerNode(isNaN(v) ? undefined : Math.max(1, v));
+              }}
+              placeholder="No limit"
+              disabled={loading}
+            />
+            <p className="text-muted-foreground text-[10px]">
+              Maximum number of racks that can be placed on a single Kubernetes node. Leave empty
+              for no limit.
+            </p>
           </div>
         </div>
 

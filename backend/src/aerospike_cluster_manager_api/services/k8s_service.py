@@ -25,9 +25,12 @@ from aerospike_cluster_manager_api.models.k8s_cluster import (
     OperationStatusResponse,
     RackConfig,
     RackDistribution,
+    StorageSpec,
+    StorageVolumeConfig,
     TemplateSnapshotStatus,
     UpdateK8sClusterRequest,
     UpdateK8sTemplateRequest,
+    VolumeSpec,
 )
 
 
@@ -234,16 +237,118 @@ def build_seeds_finder_services(sfs) -> dict[str, Any]:
     return result
 
 
+def _build_volume_cr(vol: VolumeSpec) -> dict[str, Any]:
+    """Convert a VolumeSpec model to an operator CRD volume dict."""
+    v: dict[str, Any] = {"name": vol.name}
+
+    # Build source
+    source: dict[str, Any] = {}
+    if vol.source == "persistentVolume" and vol.persistent_volume:
+        pv: dict[str, Any] = {"size": vol.persistent_volume.size}
+        if vol.persistent_volume.storage_class:
+            pv["storageClass"] = vol.persistent_volume.storage_class
+        if vol.persistent_volume.volume_mode:
+            pv["volumeMode"] = vol.persistent_volume.volume_mode
+        if vol.persistent_volume.access_modes:
+            pv["accessModes"] = vol.persistent_volume.access_modes
+        if vol.persistent_volume.labels:
+            pv.setdefault("metadata", {})["labels"] = vol.persistent_volume.labels
+        if vol.persistent_volume.annotations:
+            pv.setdefault("metadata", {})["annotations"] = vol.persistent_volume.annotations
+        if vol.persistent_volume.selector:
+            pv["selector"] = vol.persistent_volume.selector
+        source["persistentVolume"] = pv
+    elif vol.source == "emptyDir":
+        source["emptyDir"] = vol.empty_dir or {}
+    elif vol.source == "secret" and vol.secret:
+        source["secret"] = vol.secret
+    elif vol.source == "configMap" and vol.config_map:
+        source["configMap"] = vol.config_map
+    elif vol.source == "hostPath" and vol.host_path:
+        source["hostPath"] = vol.host_path
+    v["source"] = source
+
+    # Aerospike container mount
+    if vol.aerospike:
+        aero: dict[str, Any] = {"path": vol.aerospike.path}
+        if vol.aerospike.read_only:
+            aero["readOnly"] = True
+        if vol.aerospike.sub_path:
+            aero["subPath"] = vol.aerospike.sub_path
+        if vol.aerospike.sub_path_expr:
+            aero["subPathExpr"] = vol.aerospike.sub_path_expr
+        if vol.aerospike.mount_propagation:
+            aero["mountPropagation"] = vol.aerospike.mount_propagation
+        v["aerospike"] = aero
+
+    # Sidecar and init container mounts
+    for field_name, cr_key in [("sidecars", "sidecars"), ("init_containers", "initContainers")]:
+        attachments = getattr(vol, field_name)
+        if attachments:
+            items = []
+            for att in attachments:
+                item: dict[str, Any] = {"containerName": att.container_name, "path": att.path}
+                if att.read_only:
+                    item["readOnly"] = True
+                if att.sub_path:
+                    item["subPath"] = att.sub_path
+                if att.sub_path_expr:
+                    item["subPathExpr"] = att.sub_path_expr
+                if att.mount_propagation:
+                    item["mountPropagation"] = att.mount_propagation
+                items.append(item)
+            v[cr_key] = items
+
+    # Lifecycle
+    if vol.init_method:
+        v["initMethod"] = vol.init_method
+    if vol.wipe_method:
+        v["wipeMethod"] = vol.wipe_method
+    if vol.cascade_delete:
+        v["cascadeDelete"] = True
+
+    return v
+
+
+def _build_storage_spec_cr(storage: StorageSpec) -> dict[str, Any]:
+    """Convert a StorageSpec model to an operator CRD storage dict."""
+    result: dict[str, Any] = {
+        "volumes": [_build_volume_cr(vol) for vol in storage.volumes],
+    }
+    if storage.filesystem_volume_policy is not None:
+        result["filesystemVolumePolicy"] = storage.filesystem_volume_policy
+    if storage.block_volume_policy is not None:
+        result["blockVolumePolicy"] = storage.block_volume_policy
+    if storage.cleanup_threads is not None:
+        result["cleanupThreads"] = storage.cleanup_threads
+    if storage.local_storage_classes is not None:
+        result["localStorageClasses"] = storage.local_storage_classes
+    if storage.delete_local_storage_on_restart:
+        result["deleteLocalStorageOnRestart"] = True
+    return result
+
+
 def build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
     """Convert CreateK8sClusterRequest to AerospikeCluster CR dict."""
+    # Determine the mount path for device-based namespaces
+    _default_mount = "/opt/aerospike/data"
+    if req.storage:
+        if isinstance(req.storage, StorageVolumeConfig):
+            _default_mount = req.storage.mount_path
+        elif isinstance(req.storage, StorageSpec):
+            # Use the first persistentVolume's aerospike path as the default
+            for _v in req.storage.volumes:
+                if _v.source == "persistentVolume" and _v.aerospike:
+                    _default_mount = _v.aerospike.path
+                    break
+
     ns_configs = []
     for ns in req.namespaces:
         storage_engine: dict[str, Any] = {"type": ns.storage_engine.type}
         if ns.storage_engine.type == "memory":
             storage_engine["data-size"] = ns.storage_engine.data_size or 1073741824
         else:
-            mount_path = req.storage.mount_path if req.storage else "/opt/aerospike/data"
-            storage_engine["file"] = ns.storage_engine.file or f"{mount_path}/{ns.name}.dat"
+            storage_engine["file"] = ns.storage_engine.file or f"{_default_mount}/{ns.name}.dat"
             storage_engine["filesize"] = ns.storage_engine.filesize or 4294967296
 
         ns_configs.append(
@@ -284,43 +389,48 @@ def build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
 
     # Storage volumes
     if req.storage:
-        data_vol: dict[str, Any] = {
-            "name": "data-vol",
-            "source": {
-                "persistentVolume": {
-                    "storageClass": req.storage.storage_class,
-                    "size": req.storage.size,
-                    "volumeMode": "Filesystem",
-                }
-            },
-            "aerospike": {"path": req.storage.mount_path},
-            "cascadeDelete": req.storage.cascade_delete,
-        }
-        if req.storage.init_method:
-            data_vol["initMethod"] = req.storage.init_method
-        if req.storage.wipe_method:
-            data_vol["wipeMethod"] = req.storage.wipe_method
-        storage_spec: dict[str, Any] = {
-            "volumes": [
-                data_vol,
-                {
-                    "name": "workdir",
-                    "source": {"emptyDir": {}},
-                    "aerospike": {"path": "/opt/aerospike/work"},
+        if isinstance(req.storage, StorageSpec):
+            # New multi-volume format — pass through directly
+            cr["spec"]["storage"] = _build_storage_spec_cr(req.storage)
+        else:
+            # Legacy single-volume format — convert to CRD volumes
+            data_vol: dict[str, Any] = {
+                "name": "data-vol",
+                "source": {
+                    "persistentVolume": {
+                        "storageClass": req.storage.storage_class,
+                        "size": req.storage.size,
+                        "volumeMode": "Filesystem",
+                    }
                 },
-            ]
-        }
-        if req.storage.cleanup_threads is not None:
-            storage_spec["cleanupThreads"] = req.storage.cleanup_threads
-        if req.storage.filesystem_volume_policy is not None:
-            storage_spec["filesystemVolumePolicy"] = req.storage.filesystem_volume_policy
-        if req.storage.block_volume_policy is not None:
-            storage_spec["blockVolumePolicy"] = req.storage.block_volume_policy
-        if req.storage.local_storage_classes is not None:
-            storage_spec["localStorageClasses"] = req.storage.local_storage_classes
-        if req.storage.delete_local_storage_on_restart is not None:
-            storage_spec["deleteLocalStorageOnRestart"] = req.storage.delete_local_storage_on_restart
-        cr["spec"]["storage"] = storage_spec
+                "aerospike": {"path": req.storage.mount_path},
+                "cascadeDelete": req.storage.cascade_delete,
+            }
+            if req.storage.init_method:
+                data_vol["initMethod"] = req.storage.init_method
+            if req.storage.wipe_method:
+                data_vol["wipeMethod"] = req.storage.wipe_method
+            storage_spec: dict[str, Any] = {
+                "volumes": [
+                    data_vol,
+                    {
+                        "name": "workdir",
+                        "source": {"emptyDir": {}},
+                        "aerospike": {"path": "/opt/aerospike/work"},
+                    },
+                ]
+            }
+            if req.storage.cleanup_threads is not None:
+                storage_spec["cleanupThreads"] = req.storage.cleanup_threads
+            if req.storage.filesystem_volume_policy is not None:
+                storage_spec["filesystemVolumePolicy"] = req.storage.filesystem_volume_policy
+            if req.storage.block_volume_policy is not None:
+                storage_spec["blockVolumePolicy"] = req.storage.block_volume_policy
+            if req.storage.local_storage_classes is not None:
+                storage_spec["localStorageClasses"] = req.storage.local_storage_classes
+            if req.storage.delete_local_storage_on_restart is not None:
+                storage_spec["deleteLocalStorageOnRestart"] = req.storage.delete_local_storage_on_restart
+            cr["spec"]["storage"] = storage_spec
 
     # Pod resources
     if req.resources:
@@ -892,6 +1002,8 @@ def build_update_patch(body: UpdateK8sClusterRequest) -> dict[str, Any]:
         patch["spec"]["size"] = body.size
     if body.image is not None:
         patch["spec"]["image"] = body.image
+    if body.storage is not None:
+        patch["spec"]["storage"] = _build_storage_spec_cr(body.storage)
     if body.resources is not None:
         patch["spec"]["podSpec"] = {
             "aerospikeContainer": {

@@ -636,6 +636,72 @@ export interface StorageVolumeConfig {
   deleteLocalStorageOnRestart?: boolean;
 }
 
+// --- Multi-volume storage types (matching operator CRD) ---
+
+export type VolumeSourceType =
+  | "persistentVolume"
+  | "emptyDir"
+  | "secret"
+  | "configMap"
+  | "hostPath";
+
+export type VolumeInitMethod = "none" | "deleteFiles" | "dd" | "blkdiscard" | "headerCleanup";
+
+export type VolumeWipeMethod =
+  | "none"
+  | "deleteFiles"
+  | "dd"
+  | "blkdiscard"
+  | "headerCleanup"
+  | "blkdiscardWithHeaderCleanup";
+
+export interface AerospikeVolumeAttachment {
+  path: string;
+  readOnly?: boolean;
+  subPath?: string;
+  subPathExpr?: string;
+  mountPropagation?: string;
+}
+
+export interface VolumeAttachment extends AerospikeVolumeAttachment {
+  containerName: string;
+}
+
+export interface PersistentVolumeClaimSource {
+  storageClass?: string;
+  size: string;
+  accessModes?: string[];
+  volumeMode?: "Filesystem" | "Block";
+  labels?: Record<string, string>;
+  annotations?: Record<string, string>;
+  selector?: Record<string, unknown>;
+}
+
+export interface VolumeSpec {
+  name: string;
+  source: VolumeSourceType;
+  persistentVolume?: PersistentVolumeClaimSource;
+  emptyDir?: Record<string, unknown>;
+  secret?: Record<string, unknown>;
+  configMap?: Record<string, unknown>;
+  hostPath?: Record<string, unknown>;
+  aerospike?: AerospikeVolumeAttachment;
+  sidecars?: VolumeAttachment[];
+  initContainers?: VolumeAttachment[];
+  initMethod?: VolumeInitMethod;
+  wipeMethod?: VolumeWipeMethod;
+  cascadeDelete?: boolean;
+}
+
+export interface StorageSpec {
+  volumes: VolumeSpec[];
+  filesystemVolumePolicy?: Record<string, unknown>;
+  blockVolumePolicy?: Record<string, unknown>;
+  cleanupThreads?: number;
+  localStorageClasses?: string[];
+  deleteLocalStorageOnRestart?: boolean;
+}
+
 export type NetworkAccessType = "pod" | "hostInternal" | "hostExternal" | "configuredIP";
 
 export interface NetworkAccessConfig {
@@ -690,6 +756,21 @@ export interface PodMetadataConfig {
   annotations?: Record<string, string>;
 }
 
+export interface TopologySpreadConstraintConfig {
+  maxSkew: number;
+  topologyKey: string;
+  whenUnsatisfiable: "DoNotSchedule" | "ScheduleAnyway";
+  labelSelector?: Record<string, string>;
+}
+
+export interface PodSecurityContextConfig {
+  runAsUser?: number;
+  runAsGroup?: number;
+  runAsNonRoot?: boolean;
+  fsGroup?: number;
+  supplementalGroups?: number[];
+}
+
 export interface PodSchedulingConfig {
   nodeSelector?: Record<string, string>;
   tolerations?: TolerationConfig[];
@@ -702,6 +783,8 @@ export interface PodSchedulingConfig {
   podManagementPolicy?: "OrderedReady" | "Parallel";
   dnsPolicy?: string;
   metadata?: PodMetadataConfig;
+  topologySpreadConstraints?: TopologySpreadConstraintConfig[];
+  podSecurityContext?: PodSecurityContextConfig;
 }
 
 export interface ServiceMonitorConfig {
@@ -741,14 +824,34 @@ export interface ServiceMetadataConfig {
   labels?: Record<string, string>;
 }
 
+export interface ContainerPortConfig {
+  name?: string;
+  containerPort: number;
+  protocol?: string;
+}
+
+export interface ContainerEnvConfig {
+  name: string;
+  value?: string;
+  valueFrom?: Record<string, unknown>;
+}
+
+export interface ContainerVolumeMountConfig {
+  name: string;
+  mountPath: string;
+  readOnly?: boolean;
+}
+
 export interface SidecarConfig {
   name: string;
   image: string;
-  ports?: Record<string, unknown>[];
-  env?: Record<string, unknown>[];
-  volumeMounts?: Record<string, unknown>[];
-  resources?: Record<string, unknown>;
+  ports?: ContainerPortConfig[];
+  env?: ContainerEnvConfig[];
+  volumeMounts?: ContainerVolumeMountConfig[];
+  resources?: ResourceConfig;
   securityContext?: Record<string, unknown>;
+  command?: string[];
+  args?: string[];
 }
 
 export interface CreateK8sClusterRequest {
@@ -757,7 +860,7 @@ export interface CreateK8sClusterRequest {
   size: number;
   image: string;
   namespaces: AerospikeNamespaceConfig[];
-  storage?: StorageVolumeConfig;
+  storage?: StorageVolumeConfig | StorageSpec;
   resources?: ResourceConfig;
   monitoring?: MonitoringConfig;
   templateRef?: { name: string };
@@ -785,6 +888,7 @@ export interface CreateK8sClusterRequest {
 export interface UpdateK8sClusterRequest {
   size?: number;
   image?: string;
+  storage?: StorageSpec;
   resources?: ResourceConfig;
   monitoring?: MonitoringConfig;
   paused?: boolean;
@@ -851,6 +955,13 @@ export interface TemplateStorageConfig {
   size?: string;
 }
 
+export interface TemplateNetworkConfig {
+  heartbeatMode?: "mesh" | "multicast";
+  heartbeatPort?: number;
+  heartbeatInterval?: number;
+  heartbeatTimeout?: number;
+}
+
 export interface TemplateRackConfig {
   maxRacksPerNode?: number;
 }
@@ -866,6 +977,8 @@ export interface CreateK8sTemplateRequest {
   storage?: TemplateStorageConfig;
   networkPolicy?: NetworkAccessConfig;
   aerospikeConfig?: Record<string, unknown>;
+  networkConfig?: TemplateNetworkConfig;
+  rackConfig?: TemplateRackConfig;
 }
 
 export interface UpdateK8sTemplateRequest {
@@ -878,6 +991,8 @@ export interface UpdateK8sTemplateRequest {
   storage?: TemplateStorageConfig;
   networkPolicy?: NetworkAccessConfig;
   aerospikeConfig?: Record<string, unknown>;
+  networkConfig?: TemplateNetworkConfig;
+  rackConfig?: TemplateRackConfig;
 }
 
 export interface TemplateSnapshot {
@@ -977,7 +1092,7 @@ export interface AerospikeClusterSpec {
   size?: number;
   aerospikeConfig?: Record<string, unknown>;
   rackConfig?: RackAwareConfig;
-  storage?: StorageVolumeConfig;
+  storage?: StorageSpec | StorageVolumeConfig;
   podSpec?: Record<string, unknown>;
   operationsList?: Record<string, unknown>[];
   rollingUpdateBatchSize?: number;

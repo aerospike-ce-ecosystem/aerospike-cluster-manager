@@ -7,5 +7,6 @@ export { WizardAclStep } from "./WizardAclStep";
 export { WizardRollingUpdateStep } from "./WizardRollingUpdateStep";
 export { WizardRackConfigStep } from "./WizardRackConfigStep";
 export { WizardAdvancedStep } from "./WizardAdvancedStep";
+export { WizardSidecarsStep } from "./WizardSidecarsStep";
 export { WizardTemplateNameStep } from "./WizardTemplateNameStep";
 export { WizardReviewStep } from "./WizardReviewStep";

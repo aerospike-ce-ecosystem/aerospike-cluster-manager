@@ -29,6 +29,8 @@ class AerospikeNamespaceConfig(BaseModel):
 
 
 class StorageVolumeConfig(BaseModel):
+    """Legacy single-volume storage config. Kept for backward compatibility."""
+
     model_config = {"populate_by_name": True}
 
     storage_class: str = Field(default="standard", alias="storageClass")
@@ -54,16 +56,92 @@ class StorageVolumeConfig(BaseModel):
         alias="blockVolumePolicy",
         description="Policy for block volume initialization (e.g. initMethod, wipeMethod defaults)",
     )
-    local_storage_classes: list[str] | None = Field(
-        default=None,
-        alias="localStorageClasses",
-        description="Storage class names that use local storage (PVCs deleted on pod migration)",
+
+
+# ---------------------------------------------------------------------------
+# Multi-volume storage models (matching the operator CRD)
+# ---------------------------------------------------------------------------
+
+
+class VolumeAttachment(BaseModel):
+    """Volume mount for sidecar or init containers."""
+
+    model_config = {"populate_by_name": True}
+
+    container_name: str = Field(alias="containerName")
+    path: str
+    read_only: bool = Field(default=False, alias="readOnly")
+    sub_path: str | None = Field(default=None, alias="subPath")
+    sub_path_expr: str | None = Field(default=None, alias="subPathExpr")
+    mount_propagation: str | None = Field(default=None, alias="mountPropagation")
+
+
+class AerospikeVolumeAttachment(BaseModel):
+    """Volume mount config for the main Aerospike container."""
+
+    model_config = {"populate_by_name": True}
+
+    path: str
+    read_only: bool = Field(default=False, alias="readOnly")
+    sub_path: str | None = Field(default=None, alias="subPath")
+    sub_path_expr: str | None = Field(default=None, alias="subPathExpr")
+    mount_propagation: str | None = Field(default=None, alias="mountPropagation")
+
+
+class PersistentVolumeClaimSource(BaseModel):
+    """PVC source fields for a volume."""
+
+    model_config = {"populate_by_name": True}
+
+    storage_class: str | None = Field(default=None, alias="storageClass")
+    size: str = Field(default="1Gi", pattern=r"^[0-9]+[KMGTPE]i$")
+    access_modes: list[str] = Field(default_factory=lambda: ["ReadWriteOnce"], alias="accessModes")
+    volume_mode: Literal["Filesystem", "Block"] = Field(default="Filesystem", alias="volumeMode")
+    labels: dict[str, str] | None = None
+    annotations: dict[str, str] | None = None
+    selector: dict | None = None
+
+
+class VolumeSpec(BaseModel):
+    """A single named volume definition matching the operator CRD VolumeSpec."""
+
+    model_config = {"populate_by_name": True}
+
+    name: str = Field(min_length=1, max_length=63)
+    source: Literal["persistentVolume", "emptyDir", "secret", "configMap", "hostPath"] = Field(
+        default="persistentVolume", description="Volume source type"
     )
-    delete_local_storage_on_restart: bool | None = Field(
-        default=None,
-        alias="deleteLocalStorageOnRestart",
-        description="Delete PVCs backed by local storage on pod restart",
+    # Source-specific fields
+    persistent_volume: PersistentVolumeClaimSource | None = Field(default=None, alias="persistentVolume")
+    empty_dir: dict | None = Field(default=None, alias="emptyDir")
+    secret: dict | None = None
+    config_map: dict | None = Field(default=None, alias="configMap")
+    host_path: dict | None = Field(default=None, alias="hostPath")
+    # Mount config
+    aerospike: AerospikeVolumeAttachment | None = None
+    sidecars: list[VolumeAttachment] | None = None
+    init_containers: list[VolumeAttachment] | None = Field(default=None, alias="initContainers")
+    # Lifecycle
+    init_method: Literal["none", "deleteFiles", "dd", "blkdiscard", "headerCleanup"] | None = Field(
+        default=None, alias="initMethod"
     )
+    wipe_method: (
+        Literal["none", "deleteFiles", "dd", "blkdiscard", "headerCleanup", "blkdiscardWithHeaderCleanup"] | None
+    ) = Field(default=None, alias="wipeMethod")
+    cascade_delete: bool = Field(default=False, alias="cascadeDelete")
+
+
+class StorageSpec(BaseModel):
+    """Full multi-volume storage specification matching the operator CRD."""
+
+    model_config = {"populate_by_name": True}
+
+    volumes: list[VolumeSpec] = Field(default_factory=list)
+    filesystem_volume_policy: dict | None = Field(default=None, alias="filesystemVolumePolicy")
+    block_volume_policy: dict | None = Field(default=None, alias="blockVolumePolicy")
+    cleanup_threads: int | None = Field(default=None, ge=1, alias="cleanupThreads")
+    local_storage_classes: list[str] | None = Field(default=None, alias="localStorageClasses")
+    delete_local_storage_on_restart: bool = Field(default=False, alias="deleteLocalStorageOnRestart")
 
 
 class NetworkAccessConfig(BaseModel):
@@ -550,7 +628,7 @@ class CreateK8sClusterRequest(BaseModel):
         default_factory=lambda: [AerospikeNamespaceConfig()],
         max_length=5,
     )
-    storage: StorageVolumeConfig | None = None
+    storage: StorageVolumeConfig | StorageSpec | None = None
     resources: ResourceConfig | None = None
     monitoring: MonitoringConfig | None = None
     template_ref: TemplateRefConfig | None = Field(
@@ -565,6 +643,18 @@ class CreateK8sClusterRequest(BaseModel):
         """Accept a plain string for backward compatibility."""
         if isinstance(v, str):
             return TemplateRefConfig(name=v)
+        return v
+
+    @field_validator("storage", mode="before")
+    @classmethod
+    def _normalize_storage(cls, v: Any) -> Any:
+        """Accept both legacy StorageVolumeConfig and new StorageSpec formats."""
+        if isinstance(v, dict):
+            # If it has 'volumes' key, treat as StorageSpec
+            if "volumes" in v:
+                return StorageSpec(**v)
+            # Otherwise treat as legacy StorageVolumeConfig
+            return StorageVolumeConfig(**v)
         return v
 
     template_overrides: TemplateOverrides | None = Field(
@@ -628,6 +718,7 @@ class UpdateK8sClusterRequest(BaseModel):
         default=None,
         pattern=r"^[a-z0-9]([a-z0-9._/-]*[a-z0-9])?:[a-zA-Z0-9._-]+$",
     )
+    storage: StorageSpec | None = None
     resources: ResourceConfig | None = None
     monitoring: MonitoringConfig | None = None
     paused: bool | None = None
