@@ -46,6 +46,7 @@ from aerospike_cluster_manager_api.services.k8s_service import (
     extract_detail,
     extract_health,
     extract_hpa_response,
+    extract_migration_status,
     extract_reconciliation_status,
     extract_summary,
     extract_template_summary,
@@ -189,6 +190,21 @@ async def get_cluster_reconciliation_status(
     cr = await k8s_client.get_cluster(namespace, name)
     result = extract_reconciliation_status(cr)
     return ReconciliationStatus(**result)
+
+
+@router.get("/clusters/{namespace}/{name}/migration-status", summary="Get cluster migration status")
+@_k8s_endpoint("get cluster migration status")
+async def get_migration_status(
+    namespace: str = _K8S_NAMESPACE,
+    name: str = _K8S_NAME,
+):
+    """Get migration status including per-pod migration info."""
+    from ..models.k8s_cluster import MigrationStatusResponse
+
+    _require_k8s()
+    cr = await k8s_client.get_cluster(namespace, name)
+    result = extract_migration_status(cr)
+    return MigrationStatusResponse(**result)
 
 
 @router.get("/clusters/{namespace}/{name}/pods/{pod}/logs", summary="Get pod logs")

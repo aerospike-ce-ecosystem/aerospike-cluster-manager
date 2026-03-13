@@ -1040,6 +1040,19 @@ export interface BinEntry {
   type: "string" | "integer" | "float" | "bool" | "list" | "map" | "bytes" | "geojson";
 }
 
+// === Migration Status ===
+export interface MigrationStatus {
+  inProgress: boolean;
+  remainingRecords: number;
+  lastChecked: string | null;
+  pods: PodMigrationStatus[];
+}
+
+export interface PodMigrationStatus {
+  podName: string;
+  migratingRecords: number;
+}
+
 // === Config Drift ===
 export interface PodHashGroup {
   configHash: string | null;

@@ -7,12 +7,20 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { STATUS_COLORS } from "@/lib/status-colors";
-import { FileText, Database, CheckCircle2, XCircle, AlertTriangle, Network } from "lucide-react";
+import {
+  ArrowRightLeft,
+  FileText,
+  Database,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Network,
+} from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { K8sPodLogsDialog } from "@/components/k8s/k8s-pod-logs-dialog";
 import { DataTable } from "@/components/common/data-table";
 import { EmptyState } from "@/components/common/empty-state";
-import type { K8sPodStatus } from "@/lib/api/types";
+import type { K8sPodStatus, MigrationStatus } from "@/lib/api/types";
 
 interface K8sPodTableProps {
   pods: K8sPodStatus[];
@@ -21,6 +29,7 @@ interface K8sPodTableProps {
   onSelectionChange?: (selected: string[]) => void;
   namespace?: string;
   clusterName?: string;
+  migrationStatus?: MigrationStatus | null;
 }
 
 export function K8sPodTable({
@@ -30,6 +39,7 @@ export function K8sPodTable({
   onSelectionChange,
   namespace,
   clusterName,
+  migrationStatus,
 }: K8sPodTableProps) {
   const [logsPodName, setLogsPodName] = useState<string | null>(null);
 
@@ -46,6 +56,16 @@ export function K8sPodTable({
     },
     [rowSelection, onSelectionChange],
   );
+
+  const migrationByPod = useMemo(() => {
+    const map = new Map<string, number>();
+    if (migrationStatus?.pods) {
+      for (const pod of migrationStatus.pods) {
+        map.set(pod.podName, pod.migratingRecords);
+      }
+    }
+    return map;
+  }, [migrationStatus]);
 
   const showActions = !!(namespace && clusterName);
 
@@ -187,6 +207,24 @@ export function K8sPodTable({
         },
       },
       {
+        id: "migration",
+        header: "Migration",
+        size: 110,
+        meta: { hideOn: ["mobile"], mobileSlot: "meta", mobileLabel: "Migration" },
+        cell: ({ row }) => {
+          const count = migrationByPod.get(row.original.name);
+          if (!count || count === 0) {
+            return <span className="text-base-content/60 text-xs">-</span>;
+          }
+          return (
+            <Badge variant="outline" className={cn("text-[11px]", STATUS_COLORS.warning)}>
+              <ArrowRightLeft className="mr-1 h-3 w-3" />
+              {count >= 1000 ? `${(count / 1000).toFixed(1)}K` : count}
+            </Badge>
+          );
+        },
+      },
+      {
         accessorKey: "readinessGateSatisfied",
         header: "Readiness Gate",
         size: 110,
@@ -310,7 +348,7 @@ export function K8sPodTable({
     }
 
     return cols;
-  }, [selectable, showActions]);
+  }, [selectable, showActions, migrationByPod]);
 
   if (pods.length === 0) {
     return (

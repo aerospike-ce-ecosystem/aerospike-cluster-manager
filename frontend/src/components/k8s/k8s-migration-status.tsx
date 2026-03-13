@@ -1,0 +1,166 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { ArrowRightLeft, Clock } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { api } from "@/lib/api/client";
+import type { MigrationStatus } from "@/lib/api/types";
+
+interface K8sMigrationStatusProps {
+  namespace: string;
+  name: string;
+  className?: string;
+}
+
+function formatNumber(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
+function formatTimestamp(iso: string | null): string {
+  if (!iso) return "-";
+  try {
+    const date = new Date(iso);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    if (diffMs < 0) return "just now";
+    const diffSec = Math.floor(diffMs / 1000);
+    if (diffSec < 60) return `${diffSec}s ago`;
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHr = Math.floor(diffMin / 60);
+    return `${diffHr}h ago`;
+  } catch {
+    return iso;
+  }
+}
+
+export function K8sMigrationStatus({ namespace, name, className }: K8sMigrationStatusProps) {
+  const [status, setStatus] = useState<MigrationStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchStatus = () => {
+    api
+      .getK8sMigrationStatus(namespace, name)
+      .then((data) => setStatus(data))
+      .catch(() => setStatus(null))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchStatus();
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [namespace, name]);
+
+  // Auto-refresh every 5 seconds when migration is in progress
+  useEffect(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    if (status?.inProgress) {
+      intervalRef.current = setInterval(fetchStatus, 5000);
+    }
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status?.inProgress, namespace, name]);
+
+  if (loading) {
+    return (
+      <Card className={className}>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base-content/60 text-sm font-normal">
+            Migration Status
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="bg-base-200 h-8 animate-pulse rounded" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!status) return null;
+
+  const inProgress = status.inProgress;
+
+  return (
+    <Card className={cn(inProgress ? "border-warning/50" : "border-success/30", className)}>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-sm font-normal">
+          <ArrowRightLeft className={cn("h-4 w-4", inProgress ? "text-warning" : "text-success")} />
+          <span className={inProgress ? "text-warning" : "text-success"}>Migration Status</span>
+          <Badge
+            variant="outline"
+            className={cn(
+              "ml-auto text-[11px]",
+              inProgress
+                ? "bg-warning/10 text-warning border-warning/20"
+                : "bg-success/10 text-success border-success/20",
+            )}
+          >
+            {inProgress ? "Migrating" : "No Migration"}
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {/* Remaining records */}
+        {inProgress && (
+          <div>
+            <div className="text-base-content/60 mb-1 flex items-center justify-between text-xs">
+              <span>Remaining records</span>
+              <span className="font-mono font-medium">{formatNumber(status.remainingRecords)}</span>
+            </div>
+            <div className="bg-base-200 h-2 w-full overflow-hidden rounded-full">
+              <div
+                className="bg-warning h-full animate-pulse rounded-full transition-all"
+                style={{ width: status.remainingRecords > 0 ? "100%" : "0%" }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Per-pod breakdown */}
+        {inProgress && status.pods.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-base-content/60 text-xs font-medium">Per-pod breakdown</p>
+            <div className="space-y-1">
+              {status.pods.map((pod) => (
+                <div
+                  key={pod.podName}
+                  className="flex items-center justify-between rounded border px-2 py-1 text-xs"
+                >
+                  <span className="font-mono">{pod.podName}</span>
+                  <Badge
+                    variant="outline"
+                    className="bg-warning/10 text-warning border-warning/20 text-[10px]"
+                  >
+                    {formatNumber(pod.migratingRecords)} records
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Last checked */}
+        <div className="text-base-content/60 flex items-center gap-1.5 text-xs">
+          <Clock className="h-3 w-3" />
+          <span>Last checked: {formatTimestamp(status.lastChecked)}</span>
+          {inProgress && (
+            <span className="text-base-content/40 ml-auto">Auto-refreshing every 5s</span>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

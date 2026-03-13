@@ -471,6 +471,12 @@ export const api = {
       `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/config-drift`,
     ),
 
+  // K8s Migration Status
+  getK8sMigrationStatus: (namespace: string, name: string) =>
+    request<import("./types").MigrationStatus>(
+      `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/migration-status`,
+    ),
+
   // K8s Reconciliation Status
   getK8sReconciliationStatus: (namespace: string, name: string) =>
     request<import("./types").ReconciliationStatus>(

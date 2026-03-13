@@ -96,6 +96,22 @@ class ConfigDriftResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class PodMigrationStatus(BaseModel):
+    pod_name: str = Field(alias="podName")
+    migrating_partitions: int = Field(0, alias="migratingPartitions")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class MigrationStatusResponse(BaseModel):
+    in_progress: bool = Field(False, alias="inProgress")
+    remaining_partitions: int = Field(0, alias="remainingPartitions")
+    last_checked: str | None = Field(None, alias="lastChecked")
+    pods: list[PodMigrationStatus] = Field(default_factory=list)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class ReconciliationStatus(BaseModel):
     circuit_breaker_active: bool = Field(False, alias="circuitBreakerActive")
     failed_reconcile_count: int = Field(0, alias="failedReconcileCount")

@@ -31,12 +31,17 @@ import { K8sEventTimeline } from "@/components/k8s/k8s-event-timeline";
 import { K8sEditDialog } from "@/components/k8s/k8s-edit-dialog";
 import { K8sHPADialog } from "@/components/k8s/k8s-hpa-dialog";
 import { K8sReconciliationHealth } from "@/components/k8s/k8s-reconciliation-health";
+import { K8sMigrationStatus } from "@/components/k8s/k8s-migration-status";
 import { K8sOperationStatus } from "@/components/k8s/k8s-operation-status";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { useK8sClusterStore } from "@/stores/k8s-cluster-store";
 import { useToastStore } from "@/stores/toast-store";
 import { cn, getErrorMessage } from "@/lib/utils";
-import { TRANSITIONAL_PHASES, type UpdateK8sClusterRequest } from "@/lib/api/types";
+import {
+  TRANSITIONAL_PHASES,
+  type MigrationStatus,
+  type UpdateK8sClusterRequest,
+} from "@/lib/api/types";
 import { api } from "@/lib/api/client";
 
 function formatRelativeTime(isoString: string): string {
@@ -89,6 +94,7 @@ export default function K8sClusterDetailPage() {
   const [warmRestartConfirmOpen, setWarmRestartConfirmOpen] = useState(false);
   const [podRestartConfirmOpen, setPodRestartConfirmOpen] = useState(false);
   const [pendingPodsExpanded, setPendingPodsExpanded] = useState(false);
+  const [migrationStatus, setMigrationStatus] = useState<MigrationStatus | null>(null);
 
   const namespace = params?.namespace || "";
   const name = params?.name || "";
@@ -107,6 +113,12 @@ export default function K8sClusterDetailPage() {
         .then((h) => useK8sClusterStore.setState({ detailHealth: h }))
         .catch((err) => {
           console.error("Failed to fetch cluster health:", err);
+        });
+      api
+        .getK8sMigrationStatus(namespace, name)
+        .then((m) => setMigrationStatus(m))
+        .catch((err) => {
+          console.error("Failed to fetch migration status:", err);
         });
     }
   }, [namespace, name, fetchCluster]);
@@ -286,6 +298,8 @@ export default function K8sClusterDetailPage() {
           }
         }}
       />
+
+      <K8sMigrationStatus namespace={namespace} name={name} />
 
       {/* Overview */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -624,6 +638,7 @@ export default function K8sClusterDetailPage() {
             onSelectionChange={setSelectedPods}
             namespace={namespace}
             clusterName={name}
+            migrationStatus={migrationStatus}
           />
         </CardContent>
       </Card>
