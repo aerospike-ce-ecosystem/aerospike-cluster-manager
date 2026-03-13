@@ -41,6 +41,8 @@ import type {
   VolumeSourceType,
   VolumeInitMethod,
   VolumeWipeMethod,
+  TopologySpreadConstraintConfig,
+  PodSecurityContextConfig,
 } from "@/lib/api/types";
 
 interface K8sEditDialogProps {
@@ -3272,8 +3274,7 @@ function EditSupGroupInput({
         onClick={add}
         disabled={disabled || !val.trim() || isNaN(parseInt(val, 10))}
       >
-        <Plus className="mr-0.5 h-3 w-3" />
-        Add
+        <Plus className="mr-0.5 h-3 w-3" /> Add
       </Button>
     </div>
   );

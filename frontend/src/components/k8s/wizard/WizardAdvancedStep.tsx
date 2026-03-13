@@ -526,6 +526,7 @@ function WizardPodSettingsStep({
         </div>
       </div>
 
+
       {/* Topology Spread Constraints */}
       <div className="grid gap-2">
         <Label className="text-sm font-semibold">Topology Spread Constraints</Label>
@@ -1467,6 +1468,10 @@ export function WizardAdvancedStep({
 
       <CollapsibleSection title="Sidecars & Init Containers" summary={sidecarsSummary}>
         <WizardSidecarsStep form={form} updateForm={updateForm} />
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Pod Security Context" summary={securityContextSummary}>
+        <WizardPodSecurityContextStep form={form} updateForm={updateForm} />
       </CollapsibleSection>
 
       <CollapsibleSection title="Node Block List" summary={nodeBlockListSummary}>

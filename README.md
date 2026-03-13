@@ -130,6 +130,8 @@ npm run dev                        # http://localhost:3000
   - Service metadata for headless and pod services
   - Extended wizard fields: nodeSelector, tolerations, hostNetwork, multiPodPerHost, imagePullSecrets, serviceAccountName, terminationGracePeriod, validationPolicy
   - Extended backend API fields: sidecars, initContainers, securityContext, topologySpreadConstraints
+  - Topology spread constraints UI: distribute pods across zones/nodes via wizard and edit dialog
+  - Pod security context UI: configure runAsUser, runAsNonRoot, fsGroup via edit dialog
   - Enhanced pod table: readiness gate status, access endpoints, stability indicators (unstableSince)
   - Accessibility: aria-labels, keyboard navigation, screen-reader support across all K8s components
 - **Light/Dark Mode** — System theme integration
@@ -469,6 +471,30 @@ The Advanced wizard step and cluster edit dialog support custom metadata for Kub
 - **Headless Service Metadata** -- Add custom annotations and labels to the headless service (`<cluster-name>-headless`) used for DNS-based pod discovery. Useful for External DNS integration, Prometheus scrape annotations, and service mesh configuration.
 - **Per-Pod Service Metadata** -- When pod services are enabled, each pod gets an individual ClusterIP Service. Custom annotations and labels can be added for External DNS, load balancer configuration, or service mesh integration.
 - **Pod Metadata** -- Add custom labels and annotations directly to Aerospike pods for service mesh sidecar injection (e.g., Istio), monitoring label selectors, cost allocation tags, or external tool integration.
+
+### Topology Spread Constraints
+
+The cluster creation wizard (Advanced step) and the cluster edit dialog support Kubernetes `topologySpreadConstraints` for distributing Aerospike pods evenly across failure domains (zones, regions, nodes). Each constraint can be configured with:
+
+- **maxSkew** -- Maximum allowed difference in pod count between topology domains
+- **topologyKey** -- The node label key that defines the topology domain (e.g., `topology.kubernetes.io/zone`, `kubernetes.io/hostname`)
+- **whenUnsatisfiable** -- Scheduling behavior when the constraint cannot be satisfied: `DoNotSchedule` (hard) or `ScheduleAnyway` (soft)
+- **labelSelector** -- Label selector to identify which pods are subject to this constraint. The UI provides a key-value pair editor for matchLabels
+
+Multiple constraints can be added to enforce distribution across both zones and individual nodes simultaneously. For example, you can ensure pods are evenly spread across availability zones while also preventing too many pods on a single node.
+
+Topology spread constraints are available in both the cluster creation wizard and edit dialog.
+
+### Pod Security Context
+
+Both the cluster creation wizard (Advanced step) and the cluster edit dialog support configuring a pod-level `securityContext`. This allows operators to enforce security policies such as:
+
+- **runAsUser / runAsGroup** -- Run all containers as a specific UID/GID
+- **runAsNonRoot** -- Enforce non-root execution
+- **fsGroup** -- Set the group ownership of mounted volumes
+- **supplementalGroups** -- Additional GIDs for the pod's processes
+
+The security context is applied at the pod level and affects all containers (Aerospike, exporter sidecar, and any custom sidecars/init containers).
 
 ### K8s API Endpoints
 

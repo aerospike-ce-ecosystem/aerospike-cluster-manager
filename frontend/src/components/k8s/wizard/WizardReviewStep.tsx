@@ -407,11 +407,24 @@ export function WizardReviewStep({
             <span className="text-base-content/60">Racks</span>
             <div className="space-y-1">
               {form.rackConfig!.racks.map((rack) => (
-                <span key={rack.id} className="block font-mono text-xs">
-                  Rack #{rack.id}
-                  {rack.zone ? ` (zone: ${rack.zone})` : ""}
-                  {rack.rackLabel ? ` label: ${rack.rackLabel}` : ""}
-                </span>
+                <div key={rack.id} className="font-mono text-xs">
+                  <span className="block">
+                    Rack #{rack.id}
+                    {rack.zone ? ` (zone: ${rack.zone})` : ""}
+                    {rack.rackLabel ? ` label: ${rack.rackLabel}` : ""}
+                  </span>
+                  {(rack.podSpec?.tolerations ?? []).length > 0 && (
+                    <span className="text-base-content/50 block pl-3">
+                      {rack.podSpec!.tolerations!.length} toleration
+                      {rack.podSpec!.tolerations!.length !== 1 ? "s" : ""}
+                    </span>
+                  )}
+                  {rack.podSpec?.affinity && (
+                    <span className="text-base-content/50 block pl-3">
+                      node affinity configured
+                    </span>
+                  )}
+                </div>
               ))}
             </div>
           </>
