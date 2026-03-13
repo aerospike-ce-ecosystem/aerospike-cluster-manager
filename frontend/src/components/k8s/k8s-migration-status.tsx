@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowRightLeft, Clock } from "lucide-react";
@@ -12,6 +12,7 @@ interface K8sMigrationStatusProps {
   namespace: string;
   name: string;
   className?: string;
+  onUpdate?: (status: MigrationStatus | null) => void;
 }
 
 function formatNumber(n: number): string {
@@ -38,26 +39,33 @@ function formatTimestamp(iso: string | null): string {
   }
 }
 
-export function K8sMigrationStatus({ namespace, name, className }: K8sMigrationStatusProps) {
+export function K8sMigrationStatus({ namespace, name, className, onUpdate }: K8sMigrationStatusProps) {
   const [status, setStatus] = useState<MigrationStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const onUpdateRef = useRef(onUpdate);
+  onUpdateRef.current = onUpdate;
 
-  const fetchStatus = () => {
+  const fetchStatus = useCallback(() => {
     api
       .getK8sMigrationStatus(namespace, name)
-      .then((data) => setStatus(data))
-      .catch(() => setStatus(null))
+      .then((data) => {
+        setStatus(data);
+        onUpdateRef.current?.(data);
+      })
+      .catch(() => {
+        setStatus(null);
+        onUpdateRef.current?.(null);
+      })
       .finally(() => setLoading(false));
-  };
+  }, [namespace, name]);
 
   useEffect(() => {
     fetchStatus();
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [namespace, name]);
+  }, [fetchStatus]);
 
   // Auto-refresh every 5 seconds when migration is in progress
   useEffect(() => {
@@ -71,8 +79,7 @@ export function K8sMigrationStatus({ namespace, name, className }: K8sMigrationS
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status?.inProgress, namespace, name]);
+  }, [status?.inProgress, fetchStatus]);
 
   if (loading) {
     return (
@@ -120,11 +127,12 @@ export function K8sMigrationStatus({ namespace, name, className }: K8sMigrationS
               <span>Remaining records</span>
               <span className="font-mono font-medium">{formatNumber(status.remainingRecords)}</span>
             </div>
-            <div className="bg-base-200 h-2 w-full overflow-hidden rounded-full">
-              <div
-                className="bg-warning h-full animate-pulse rounded-full transition-all"
-                style={{ width: status.remainingRecords > 0 ? "100%" : "0%" }}
-              />
+            <div className="bg-base-200 relative h-2 w-full overflow-hidden rounded-full">
+              {status.remainingRecords > 0 ? (
+                <div className="bg-warning absolute inset-0 h-full w-1/3 animate-[migrationSlide_1.5s_ease-in-out_infinite] rounded-full" />
+              ) : (
+                <div className="bg-success h-full w-full rounded-full" />
+              )}
             </div>
           </div>
         )}

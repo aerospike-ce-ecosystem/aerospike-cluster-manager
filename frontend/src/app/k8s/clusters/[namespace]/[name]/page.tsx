@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -99,6 +99,10 @@ export default function K8sClusterDetailPage() {
   const namespace = params?.namespace || "";
   const name = params?.name || "";
 
+  const handleMigrationUpdate = useCallback((status: MigrationStatus | null) => {
+    setMigrationStatus(status);
+  }, []);
+
   useEffect(() => {
     if (namespace && name) {
       fetchCluster(namespace, name);
@@ -113,12 +117,6 @@ export default function K8sClusterDetailPage() {
         .then((h) => useK8sClusterStore.setState({ detailHealth: h }))
         .catch((err) => {
           console.error("Failed to fetch cluster health:", err);
-        });
-      api
-        .getK8sMigrationStatus(namespace, name)
-        .then((m) => setMigrationStatus(m))
-        .catch((err) => {
-          console.error("Failed to fetch migration status:", err);
         });
     }
   }, [namespace, name, fetchCluster]);
@@ -299,7 +297,7 @@ export default function K8sClusterDetailPage() {
         }}
       />
 
-      <K8sMigrationStatus namespace={namespace} name={name} />
+      <K8sMigrationStatus namespace={namespace} name={name} onUpdate={handleMigrationUpdate} />
 
       {/* Overview */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">

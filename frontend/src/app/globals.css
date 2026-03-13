@@ -399,6 +399,18 @@ kbd {
   }
 }
 
+@keyframes migrationSlide {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(200%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
 .record-grid-row {
   animation: grid-row-enter 0.25s ease-out both;
   transition: background-color 0.15s ease;
