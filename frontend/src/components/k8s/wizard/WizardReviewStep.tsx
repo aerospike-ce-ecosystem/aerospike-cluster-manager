@@ -666,6 +666,21 @@ export function WizardReviewStep({
           </>
         )}
 
+        {form.seedsFinderServices?.loadBalancer && (
+          <>
+            <span className="text-base-content/60">Seeds Finder LB</span>
+            <span className="font-medium">
+              Port {form.seedsFinderServices.loadBalancer.port}
+              {" / "}
+              {form.seedsFinderServices.loadBalancer.targetPort}
+              {form.seedsFinderServices.loadBalancer.externalTrafficPolicy &&
+              form.seedsFinderServices.loadBalancer.externalTrafficPolicy !== "Cluster"
+                ? ` (${form.seedsFinderServices.loadBalancer.externalTrafficPolicy})`
+                : ""}
+            </span>
+          </>
+        )}
+
         {(form.storage?.localStorageClasses ?? []).length > 0 && (
           <>
             <span className="text-muted-foreground">Local Storage Classes</span>

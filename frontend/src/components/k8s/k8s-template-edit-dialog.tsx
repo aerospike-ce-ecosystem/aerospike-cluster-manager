@@ -21,7 +21,12 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import type { K8sTemplateDetail, UpdateK8sTemplateRequest } from "@/lib/api/types";
+import { Plus, X } from "lucide-react";
+import type {
+  K8sTemplateDetail,
+  UpdateK8sTemplateRequest,
+  TopologySpreadConstraintConfig,
+} from "@/lib/api/types";
 
 interface K8sTemplateEditDialogProps {
   open: boolean;
@@ -56,6 +61,10 @@ export function K8sTemplateEditDialog({
   const [heartbeatTimeout, setHeartbeatTimeout] = useState<number | undefined>(undefined);
   // Rack config
   const [maxRacksPerNode, setMaxRacksPerNode] = useState<number | undefined>(undefined);
+  // Topology Spread Constraints
+  const [topologySpreadConstraints, setTopologySpreadConstraints] = useState<
+    TopologySpreadConstraintConfig[]
+  >([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,6 +93,8 @@ export function K8sTemplateEditDialog({
     networkConfig?.heartbeatTimeout != null ? Number(networkConfig.heartbeatTimeout) : undefined;
   const initialMaxRacksPerNode =
     rackConfigSpec?.maxRacksPerNode != null ? Number(rackConfigSpec.maxRacksPerNode) : undefined;
+  const initialTopologySpreadConstraints: TopologySpreadConstraintConfig[] =
+    (scheduling?.topologySpreadConstraints as TopologySpreadConstraintConfig[] | undefined) ?? [];
 
   // Reset form on open
   useEffect(() => {
@@ -103,6 +114,7 @@ export function K8sTemplateEditDialog({
       setHeartbeatInterval(initialHeartbeatInterval);
       setHeartbeatTimeout(initialHeartbeatTimeout);
       setMaxRacksPerNode(initialMaxRacksPerNode);
+      setTopologySpreadConstraints(initialTopologySpreadConstraints.map((t) => ({ ...t })));
       setError(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -124,7 +136,9 @@ export function K8sTemplateEditDialog({
       heartbeatMode !== initialHeartbeatMode ||
       heartbeatInterval !== initialHeartbeatInterval ||
       heartbeatTimeout !== initialHeartbeatTimeout ||
-      maxRacksPerNode !== initialMaxRacksPerNode
+      maxRacksPerNode !== initialMaxRacksPerNode ||
+      JSON.stringify(topologySpreadConstraints) !==
+        JSON.stringify(initialTopologySpreadConstraints)
     );
   }, [
     description,
@@ -157,6 +171,8 @@ export function K8sTemplateEditDialog({
     initialHeartbeatInterval,
     initialHeartbeatTimeout,
     initialMaxRacksPerNode,
+    topologySpreadConstraints,
+    initialTopologySpreadConstraints,
   ]);
 
   const handleSave = async () => {
@@ -170,16 +186,22 @@ export function K8sTemplateEditDialog({
       if (size !== initialSize) data.size = size;
 
       // Scheduling
-      if (
+      const schedulingChanged =
         antiAffinity !== initialAntiAffinity ||
-        podManagementPolicy !== initialPodManagementPolicy
-      ) {
+        podManagementPolicy !== initialPodManagementPolicy ||
+        JSON.stringify(topologySpreadConstraints) !==
+          JSON.stringify(initialTopologySpreadConstraints);
+      if (schedulingChanged) {
         data.scheduling = {};
         if (antiAffinity) {
           data.scheduling.podAntiAffinityLevel = antiAffinity as "none" | "preferred" | "required";
         }
         if (podManagementPolicy) {
           data.scheduling.podManagementPolicy = podManagementPolicy as "OrderedReady" | "Parallel";
+        }
+        if (topologySpreadConstraints.length > 0) {
+          data.scheduling.topologySpreadConstraints =
+            topologySpreadConstraints as unknown as Record<string, unknown>[];
         }
       }
 
@@ -453,6 +475,132 @@ export function K8sTemplateEditDialog({
             <p className="text-muted-foreground text-xs">
               Maximum number of racks per Kubernetes node. Leave empty for no limit.
             </p>
+          </div>
+
+          {/* Topology Spread Constraints */}
+          <div className="space-y-2">
+            <Label className="font-semibold">Topology Spread Constraints</Label>
+            <p className="text-muted-foreground text-xs">
+              Control how pods are spread across topology domains (zones, nodes, etc.).
+            </p>
+            {topologySpreadConstraints.map((tsc, idx) => (
+              <div key={idx} className="space-y-2 rounded border p-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium">Constraint #{idx + 1}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTopologySpreadConstraints(
+                        topologySpreadConstraints.filter((_, i) => i !== idx),
+                      );
+                    }}
+                    className="text-muted-foreground hover:text-destructive p-1"
+                    title="Remove constraint"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="grid gap-1">
+                    <Label className="text-xs">Max Skew</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={tsc.maxSkew}
+                      onChange={(e) => {
+                        const next = [...topologySpreadConstraints];
+                        next[idx] = { ...next[idx], maxSkew: parseInt(e.target.value) || 1 };
+                        setTopologySpreadConstraints(next);
+                      }}
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label className="text-xs">Topology Key</Label>
+                    <Select
+                      value={tsc.topologyKey}
+                      onChange={(e) => {
+                        const next = [...topologySpreadConstraints];
+                        next[idx] = { ...next[idx], topologyKey: e.target.value };
+                        setTopologySpreadConstraints(next);
+                      }}
+                    >
+                      <option value="topology.kubernetes.io/zone">
+                        topology.kubernetes.io/zone
+                      </option>
+                      <option value="kubernetes.io/hostname">kubernetes.io/hostname</option>
+                      <option value="topology.kubernetes.io/region">
+                        topology.kubernetes.io/region
+                      </option>
+                    </Select>
+                  </div>
+                  <div className="grid gap-1">
+                    <Label className="text-xs">When Unsatisfiable</Label>
+                    <Select
+                      value={tsc.whenUnsatisfiable}
+                      onChange={(e) => {
+                        const next = [...topologySpreadConstraints];
+                        next[idx] = {
+                          ...next[idx],
+                          whenUnsatisfiable: e.target.value as "DoNotSchedule" | "ScheduleAnyway",
+                        };
+                        setTopologySpreadConstraints(next);
+                      }}
+                    >
+                      <option value="DoNotSchedule">DoNotSchedule</option>
+                      <option value="ScheduleAnyway">ScheduleAnyway</option>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid gap-1">
+                  <Label className="text-xs">
+                    Label Selector (optional, key=value comma-separated)
+                  </Label>
+                  <Input
+                    value={
+                      tsc.labelSelector
+                        ? Object.entries(tsc.labelSelector)
+                            .map(([k, v]) => `${k}=${v}`)
+                            .join(", ")
+                        : ""
+                    }
+                    onChange={(e) => {
+                      const entries = e.target.value
+                        .split(",")
+                        .map((s) => s.trim())
+                        .filter(Boolean);
+                      const labels: Record<string, string> = {};
+                      for (const entry of entries) {
+                        const [k, v] = entry.split("=").map((s) => s.trim());
+                        if (k && v) labels[k] = v;
+                      }
+                      const next = [...topologySpreadConstraints];
+                      next[idx] = {
+                        ...next[idx],
+                        labelSelector: Object.keys(labels).length > 0 ? labels : undefined,
+                      };
+                      setTopologySpreadConstraints(next);
+                    }}
+                    placeholder="e.g. app=aerospike, env=prod"
+                  />
+                </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                setTopologySpreadConstraints([
+                  ...topologySpreadConstraints,
+                  {
+                    maxSkew: 1,
+                    topologyKey: "topology.kubernetes.io/zone",
+                    whenUnsatisfiable: "DoNotSchedule",
+                  },
+                ]);
+              }}
+              className="text-primary hover:text-primary/80 flex items-center gap-1 text-xs font-medium"
+            >
+              <Plus className="h-3.5 w-3.5" /> Add Topology Spread Constraint
+            </button>
           </div>
         </div>
 
