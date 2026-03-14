@@ -1338,9 +1338,6 @@ def extract_migration_status(cluster_cr: dict) -> dict:
     if phase == "WaitingForMigration" and not in_progress:
         in_progress = True
 
-    if not last_checked:
-        last_checked = datetime.now(UTC).isoformat()
-
     return {
         "inProgress": in_progress,
         "remainingRecords": remaining_records,

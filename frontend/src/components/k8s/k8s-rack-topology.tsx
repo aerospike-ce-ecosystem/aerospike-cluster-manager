@@ -5,12 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ChevronDown, ChevronRight, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type {
-  K8sPodStatus,
-  RackAwareConfig,
-  RackConfig,
-  MigrationStatus,
-} from "@/lib/api/types";
+import type { K8sPodStatus, RackAwareConfig, RackConfig, MigrationStatus } from "@/lib/api/types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -53,13 +48,7 @@ const STATUS_STYLES: Record<PodVisualStatus, { dot: string; label: string }> = {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function PodIcon({
-  pod,
-  status,
-}: {
-  pod: K8sPodStatus;
-  status: PodVisualStatus;
-}) {
+function PodIcon({ pod, status }: { pod: K8sPodStatus; status: PodVisualStatus }) {
   const style = STATUS_STYLES[status];
   // Extract short name: take last segment after the last dash-group
   const shortName = pod.name.split("-").slice(-2).join("-");
@@ -223,6 +212,7 @@ export function K8sRackTopology({
 
   // Determine the expected pod count per rack (evenly split by cluster size / rack count)
   const rackCount = rackConfig?.racks?.length ?? 1;
+  const expectedSizePerRack = rackCount > 0 ? Math.ceil(pods.length / rackCount) : null;
 
   return (
     <Card className={className}>
@@ -233,11 +223,7 @@ export function K8sRackTopology({
             className="flex items-center gap-2"
             onClick={() => setExpanded(!expanded)}
           >
-            {expanded ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronRight className="h-4 w-4" />
-            )}
+            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
             <LayoutGrid className="h-4 w-4" />
             Rack Topology
           </button>
@@ -288,19 +274,13 @@ export function K8sRackTopology({
                 >
                   {/* Zone header */}
                   <div className="mb-3 flex items-center gap-2">
-                    <Badge
-                      variant="outline"
-                      className="bg-base-100 text-[11px] font-medium"
-                    >
+                    <Badge variant="outline" className="bg-base-100 text-[11px] font-medium">
                       {zoneLabel}
                     </Badge>
                     <span className="text-base-content/40 text-[10px]">
-                      {rackGroups.length} rack{rackGroups.length !== 1 ? "s" : ""},
-                      {" "}
+                      {rackGroups.length} rack{rackGroups.length !== 1 ? "s" : ""},{" "}
                       {rackGroups.reduce((sum, rg) => sum + rg.pods.length, 0)} pod
-                      {rackGroups.reduce((sum, rg) => sum + rg.pods.length, 0) !== 1
-                        ? "s"
-                        : ""}
+                      {rackGroups.reduce((sum, rg) => sum + rg.pods.length, 0) !== 1 ? "s" : ""}
                     </span>
                   </div>
 
@@ -311,7 +291,7 @@ export function K8sRackTopology({
                         key={rg.rack.id}
                         rackGroup={rg}
                         migratingPods={migratingPods}
-                        expectedSize={null}
+                        expectedSize={expectedSizePerRack}
                       />
                     ))}
                   </div>

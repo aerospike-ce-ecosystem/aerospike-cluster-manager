@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowRightLeft, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatNumber } from "@/lib/formatters";
 import { api } from "@/lib/api/client";
 import type { MigrationStatus } from "@/lib/api/types";
 
@@ -15,14 +16,8 @@ interface K8sMigrationStatusProps {
   onUpdate?: (status: MigrationStatus | null) => void;
 }
 
-function formatNumber(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
-
 function formatTimestamp(iso: string | null): string {
-  if (!iso) return "-";
+  if (!iso) return "N/A";
   try {
     const date = new Date(iso);
     const now = new Date();
@@ -39,12 +34,19 @@ function formatTimestamp(iso: string | null): string {
   }
 }
 
-export function K8sMigrationStatus({ namespace, name, className, onUpdate }: K8sMigrationStatusProps) {
+export function K8sMigrationStatus({
+  namespace,
+  name,
+  className,
+  onUpdate,
+}: K8sMigrationStatusProps) {
   const [status, setStatus] = useState<MigrationStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onUpdateRef = useRef(onUpdate);
-  onUpdateRef.current = onUpdate;
+  useEffect(() => {
+    onUpdateRef.current = onUpdate;
+  }, [onUpdate]);
 
   const fetchStatus = useCallback(() => {
     api
@@ -54,8 +56,7 @@ export function K8sMigrationStatus({ namespace, name, className, onUpdate }: K8s
         onUpdateRef.current?.(data);
       })
       .catch(() => {
-        setStatus(null);
-        onUpdateRef.current?.(null);
+        // Keep previous status to avoid UI flickering on transient errors
       })
       .finally(() => setLoading(false));
   }, [namespace, name]);

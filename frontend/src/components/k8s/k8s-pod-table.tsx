@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { formatNumber } from "@/lib/formatters";
 import { STATUS_COLORS } from "@/lib/status-colors";
 import {
   ArrowRightLeft,
@@ -219,7 +220,7 @@ export function K8sPodTable({
           return (
             <Badge variant="outline" className={cn("text-[11px]", STATUS_COLORS.warning)}>
               <ArrowRightLeft className="mr-1 h-3 w-3" />
-              {count >= 1000 ? `${(count / 1000).toFixed(1)}K` : count}
+              {formatNumber(count)}
             </Badge>
           );
         },
