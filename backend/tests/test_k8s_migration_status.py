@@ -14,12 +14,12 @@ class TestExtractMigrationStatus:
             "status": {
                 "migrationStatus": {
                     "inProgress": True,
-                    "remainingRecords": 5000,
+                    "remainingPartitions": 5000,
                     "lastChecked": "2025-01-01T00:00:00Z",
                 },
                 "pods": {
-                    "pod-0": {"migratingRecords": 3000},
-                    "pod-1": {"migratingRecords": 2000},
+                    "pod-0": {"migratingPartitions": 3000},
+                    "pod-1": {"migratingPartitions": 2000},
                 },
             }
         }
@@ -27,7 +27,7 @@ class TestExtractMigrationStatus:
         result = extract_migration_status(cluster_cr)
 
         assert result["inProgress"] is True
-        assert result["remainingRecords"] == 5000
+        assert result["remainingPartitions"] == 5000
         assert result["lastChecked"] == "2025-01-01T00:00:00Z"
         assert len(result["pods"]) == 2
         pod_names = {p["podName"] for p in result["pods"]}
@@ -38,8 +38,8 @@ class TestExtractMigrationStatus:
         cluster_cr = {
             "status": {
                 "pods": {
-                    "pod-0": {"migratingRecords": 1000},
-                    "pod-1": {"migratingRecords": 500},
+                    "pod-0": {"migratingPartitions": 1000},
+                    "pod-1": {"migratingPartitions": 500},
                 },
             }
         }
@@ -47,7 +47,7 @@ class TestExtractMigrationStatus:
         result = extract_migration_status(cluster_cr)
 
         assert result["inProgress"] is True
-        assert result["remainingRecords"] == 1500
+        assert result["remainingPartitions"] == 1500
         assert len(result["pods"]) == 2
 
     def test_migration_status_absent_no_migrating_pods(self):
@@ -55,8 +55,8 @@ class TestExtractMigrationStatus:
         cluster_cr = {
             "status": {
                 "pods": {
-                    "pod-0": {"migratingRecords": 0},
-                    "pod-1": {"migratingRecords": 0},
+                    "pod-0": {"migratingPartitions": 0},
+                    "pod-1": {"migratingPartitions": 0},
                 },
             }
         }
@@ -64,7 +64,7 @@ class TestExtractMigrationStatus:
         result = extract_migration_status(cluster_cr)
 
         assert result["inProgress"] is False
-        assert result["remainingRecords"] == 0
+        assert result["remainingPartitions"] == 0
         assert len(result["pods"]) == 0
 
     def test_pods_as_list(self):
@@ -72,8 +72,8 @@ class TestExtractMigrationStatus:
         cluster_cr = {
             "status": {
                 "pods": [
-                    {"name": "pod-0", "migratingRecords": 200},
-                    {"podName": "pod-1", "migratingRecords": 300},
+                    {"name": "pod-0", "migratingPartitions": 200},
+                    {"podName": "pod-1", "migratingPartitions": 300},
                 ],
             }
         }
@@ -81,7 +81,7 @@ class TestExtractMigrationStatus:
         result = extract_migration_status(cluster_cr)
 
         assert result["inProgress"] is True
-        assert result["remainingRecords"] == 500
+        assert result["remainingPartitions"] == 500
         assert len(result["pods"]) == 2
         pod_names = {p["podName"] for p in result["pods"]}
         assert pod_names == {"pod-0", "pod-1"}
@@ -91,7 +91,7 @@ class TestExtractMigrationStatus:
         cluster_cr = {
             "status": {
                 "pods": [
-                    {"name": "pod-0", "migratingRecords": 0},
+                    {"name": "pod-0", "migratingPartitions": 0},
                 ],
             }
         }
@@ -99,7 +99,7 @@ class TestExtractMigrationStatus:
         result = extract_migration_status(cluster_cr)
 
         assert result["inProgress"] is False
-        assert result["remainingRecords"] == 0
+        assert result["remainingPartitions"] == 0
         assert len(result["pods"]) == 0
 
     def test_waiting_for_migration_phase_but_not_in_progress(self):
@@ -109,7 +109,7 @@ class TestExtractMigrationStatus:
                 "phase": "WaitingForMigration",
                 "migrationStatus": {
                     "inProgress": False,
-                    "remainingRecords": 0,
+                    "remainingPartitions": 0,
                 },
                 "pods": {},
             }
@@ -118,7 +118,7 @@ class TestExtractMigrationStatus:
         result = extract_migration_status(cluster_cr)
 
         assert result["inProgress"] is True
-        assert result["remainingRecords"] == 0
+        assert result["remainingPartitions"] == 0
 
     def test_waiting_for_migration_already_in_progress(self):
         """phase == 'WaitingForMigration' with inProgress already True stays True."""
@@ -127,7 +127,7 @@ class TestExtractMigrationStatus:
                 "phase": "WaitingForMigration",
                 "migrationStatus": {
                     "inProgress": True,
-                    "remainingRecords": 100,
+                    "remainingPartitions": 100,
                 },
                 "pods": {},
             }
@@ -136,7 +136,7 @@ class TestExtractMigrationStatus:
         result = extract_migration_status(cluster_cr)
 
         assert result["inProgress"] is True
-        assert result["remainingRecords"] == 100
+        assert result["remainingPartitions"] == 100
 
     def test_empty_status(self):
         """Completely empty status section."""
@@ -145,7 +145,7 @@ class TestExtractMigrationStatus:
         result = extract_migration_status(cluster_cr)
 
         assert result["inProgress"] is False
-        assert result["remainingRecords"] == 0
+        assert result["remainingPartitions"] == 0
         assert result["lastChecked"] is None
         assert result["pods"] == []
 
@@ -156,7 +156,7 @@ class TestExtractMigrationStatus:
         result = extract_migration_status(cluster_cr)
 
         assert result["inProgress"] is False
-        assert result["remainingRecords"] == 0
+        assert result["remainingPartitions"] == 0
         assert result["pods"] == []
 
     def test_last_checked_null_when_not_provided(self):
@@ -165,7 +165,7 @@ class TestExtractMigrationStatus:
             "status": {
                 "migrationStatus": {
                     "inProgress": True,
-                    "remainingRecords": 100,
+                    "remainingPartitions": 100,
                 },
             }
         }
@@ -179,7 +179,7 @@ class TestExtractMigrationStatus:
         cluster_cr = {
             "status": {
                 "pods": {
-                    "pod-0": {"migratingRecords": 100},
+                    "pod-0": {"migratingPartitions": 100},
                     "pod-1": "invalid",
                     "pod-2": None,
                 },
@@ -189,7 +189,7 @@ class TestExtractMigrationStatus:
         result = extract_migration_status(cluster_cr)
 
         assert result["inProgress"] is True
-        assert result["remainingRecords"] == 100
+        assert result["remainingPartitions"] == 100
         assert len(result["pods"]) == 1
 
     def test_pods_list_with_non_dict_entries_skipped(self):
@@ -197,7 +197,7 @@ class TestExtractMigrationStatus:
         cluster_cr = {
             "status": {
                 "pods": [
-                    {"name": "pod-0", "migratingRecords": 50},
+                    {"name": "pod-0", "migratingPartitions": 50},
                     "invalid",
                     None,
                 ],
@@ -207,4 +207,4 @@ class TestExtractMigrationStatus:
         result = extract_migration_status(cluster_cr)
 
         assert len(result["pods"]) == 1
-        assert result["pods"][0]["migratingRecords"] == 50
+        assert result["pods"][0]["migratingPartitions"] == 50

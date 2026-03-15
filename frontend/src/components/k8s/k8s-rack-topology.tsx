@@ -134,7 +134,7 @@ export function K8sRackTopology({
     const set = new Set<string>();
     if (migrationStatus?.inProgress && migrationStatus.pods) {
       for (const p of migrationStatus.pods) {
-        if (p.migratingRecords > 0) set.add(p.podName);
+        if (p.migratingPartitions > 0) set.add(p.podName);
       }
     }
     return set;

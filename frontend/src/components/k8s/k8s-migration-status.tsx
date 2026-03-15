@@ -121,15 +121,17 @@ export function K8sMigrationStatus({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {/* Remaining records */}
+        {/* Remaining partitions */}
         {inProgress && (
           <div>
             <div className="text-base-content/60 mb-1 flex items-center justify-between text-xs">
-              <span>Remaining records</span>
-              <span className="font-mono font-medium">{formatNumber(status.remainingRecords)}</span>
+              <span>Remaining partitions</span>
+              <span className="font-mono font-medium">
+                {formatNumber(status.remainingPartitions)}
+              </span>
             </div>
             <div className="bg-base-200 relative h-2 w-full overflow-hidden rounded-full">
-              {status.remainingRecords > 0 ? (
+              {status.remainingPartitions > 0 ? (
                 <div className="bg-warning absolute inset-0 h-full w-1/3 animate-[migrationSlide_1.5s_ease-in-out_infinite] rounded-full" />
               ) : (
                 <div className="bg-success h-full w-full rounded-full" />
@@ -153,7 +155,7 @@ export function K8sMigrationStatus({
                     variant="outline"
                     className="bg-warning/10 text-warning border-warning/20 text-[10px]"
                   >
-                    {formatNumber(pod.migratingRecords)} records
+                    {formatNumber(pod.migratingPartitions)} partitions
                   </Badge>
                 </div>
               ))}

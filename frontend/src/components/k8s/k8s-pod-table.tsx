@@ -62,7 +62,7 @@ export function K8sPodTable({
     const map = new Map<string, number>();
     if (migrationStatus?.pods) {
       for (const pod of migrationStatus.pods) {
-        map.set(pod.podName, pod.migratingRecords);
+        map.set(pod.podName, pod.migratingPartitions);
       }
     }
     return map;

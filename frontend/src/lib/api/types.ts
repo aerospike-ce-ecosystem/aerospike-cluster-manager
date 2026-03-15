@@ -1043,14 +1043,14 @@ export interface BinEntry {
 // === Migration Status ===
 export interface MigrationStatus {
   inProgress: boolean;
-  remainingRecords: number;
+  remainingPartitions: number;
   lastChecked: string | null;
   pods: PodMigrationStatus[];
 }
 
 export interface PodMigrationStatus {
   podName: string;
-  migratingRecords: number;
+  migratingPartitions: number;
 }
 
 // === Config Drift ===
