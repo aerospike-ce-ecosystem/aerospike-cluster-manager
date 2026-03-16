@@ -1,6 +1,6 @@
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { FormField } from "@/components/common/form-field";
 import { validateK8sName } from "@/lib/validations/k8s";
 import type { CreateK8sClusterRequest } from "@/lib/api/types";
 
@@ -23,25 +23,21 @@ export function WizardTemplateNameStep({
         All other settings are pre-filled from the template. Just provide a name and namespace.
       </p>
 
-      <div className="grid gap-2">
-        <Label htmlFor="cluster-name">Cluster Name</Label>
+      <FormField
+        id="cluster-name"
+        label="Cluster Name"
+        error={form.name.length > 0 ? validateK8sName(form.name) : null}
+        hint="Lowercase letters, numbers, and hyphens only (K8s DNS name)."
+      >
         <Input
           id="cluster-name"
           placeholder="my-aerospike"
           value={form.name}
           onChange={(e) => updateForm({ name: e.target.value.toLowerCase() })}
         />
-        {form.name.length > 0 && validateK8sName(form.name) ? (
-          <p className="text-error text-xs">{validateK8sName(form.name)}</p>
-        ) : (
-          <p className="text-base-content/60 text-xs">
-            Lowercase letters, numbers, and hyphens only (K8s DNS name).
-          </p>
-        )}
-      </div>
+      </FormField>
 
-      <div className="grid gap-2">
-        <Label htmlFor="k8s-namespace">Namespace</Label>
+      <FormField id="k8s-namespace" label="Namespace">
         <Select
           value={form.namespace}
           onChange={(e) => updateForm({ namespace: e.target.value })}
@@ -57,7 +53,7 @@ export function WizardTemplateNameStep({
             </option>
           ))}
         </Select>
-      </div>
+      </FormField>
     </div>
   );
 }
