@@ -32,7 +32,6 @@ from aerospike_cluster_manager_api.models.k8s_cluster import (
     K8sTemplateSummary,
     NodeBlocklistRequest,
     OperationRequest,
-    ReconciliationHealthResponse,
     ScaleK8sClusterRequest,
     UpdateK8sClusterRequest,
     UpdateK8sTemplateRequest,

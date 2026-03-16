@@ -104,7 +104,7 @@ export function K8sConfigDriftCard({
   const fieldDiffs: FieldDiff[] =
     clusterDetail && drift.changedFields.length > 0
       ? computeFieldDiffs(
-          drift.desiredConfig ?? ((clusterDetail.spec as Record<string, unknown>) ?? {}),
+          drift.desiredConfig ?? (clusterDetail.spec as Record<string, unknown>) ?? {},
           drift.appliedConfig ?? {},
           drift.changedFields,
         )
