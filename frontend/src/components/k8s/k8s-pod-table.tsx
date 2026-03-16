@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   Network,
   Clock,
+  HardDrive,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { K8sPodLogsDialog } from "@/components/k8s/k8s-pod-logs-dialog";
@@ -309,6 +310,100 @@ export function K8sPodTable({
                     <li key={ep}>{ep}</li>
                   ))}
                 </ul>
+              </TooltipContent>
+            </Tooltip>
+          );
+        },
+      },
+      {
+        id: "ports",
+        header: "Ports",
+        size: 110,
+        meta: { hideOn: ["mobile", "tablet"], mobileSlot: "meta", mobileLabel: "Ports" },
+        cell: ({ row }) => {
+          const { podPort, servicePort } = row.original;
+          if (podPort == null && servicePort == null) {
+            return <span className="text-base-content/60 text-xs">-</span>;
+          }
+          return (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="font-mono text-xs">
+                  {podPort ?? "-"}/{servicePort ?? "-"}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Pod port: {podPort ?? "N/A"}</p>
+                <p>Service port: {servicePort ?? "N/A"}</p>
+              </TooltipContent>
+            </Tooltip>
+          );
+        },
+      },
+      {
+        accessorKey: "clusterName",
+        header: "Cluster",
+        size: 120,
+        meta: { hideOn: ["mobile", "tablet"], mobileSlot: "meta", mobileLabel: "Cluster" },
+        cell: ({ getValue }) => {
+          const name = getValue<string | undefined>();
+          return name ? (
+            <span className="font-mono text-xs">{name}</span>
+          ) : (
+            <span className="text-base-content/60 text-xs">-</span>
+          );
+        },
+      },
+      {
+        id: "volumes",
+        header: "Volumes",
+        size: 110,
+        meta: { hideOn: ["mobile", "tablet"], mobileSlot: "meta", mobileLabel: "Volumes" },
+        cell: ({ row }) => {
+          const { dirtyVolumes, initializedVolumes } = row.original;
+          const dirtyCount = dirtyVolumes?.length ?? 0;
+          const initCount = initializedVolumes?.length ?? 0;
+          if (dirtyCount === 0 && initCount === 0) {
+            return <span className="text-base-content/60 text-xs">-</span>;
+          }
+          return (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex items-center gap-1">
+                  {dirtyCount > 0 ? (
+                    <Badge variant="outline" className={cn("text-[11px]", STATUS_COLORS.warning)}>
+                      <HardDrive className="mr-1 h-3 w-3" />
+                      {dirtyCount} dirty
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className={cn("text-[11px]", STATUS_COLORS.success)}>
+                      <HardDrive className="mr-1 h-3 w-3" />
+                      {initCount} init
+                    </Badge>
+                  )}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs">
+                {dirtyCount > 0 && (
+                  <div className="mb-1">
+                    <p className="font-semibold text-amber-500">Dirty volumes:</p>
+                    <ul className="list-inside list-disc font-mono text-xs">
+                      {dirtyVolumes!.map((v) => (
+                        <li key={v}>{v}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {initCount > 0 && (
+                  <div>
+                    <p className="font-semibold text-green-500">Initialized volumes:</p>
+                    <ul className="list-inside list-disc font-mono text-xs">
+                      {initializedVolumes!.map((v) => (
+                        <li key={v}>{v}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </TooltipContent>
             </Tooltip>
           );

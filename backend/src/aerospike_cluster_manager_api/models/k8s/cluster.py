@@ -246,6 +246,11 @@ class K8sPodStatus(BaseModel):
     accessEndpoints: list[str] | None = None
     readinessGateSatisfied: bool | None = None
     unstableSince: str | None = None
+    servicePort: int | None = None
+    podPort: int | None = None
+    clusterName: str | None = None
+    dirtyVolumes: list[str] | None = None
+    initializedVolumes: list[str] | None = None
 
 
 class K8sClusterSummary(BaseModel):

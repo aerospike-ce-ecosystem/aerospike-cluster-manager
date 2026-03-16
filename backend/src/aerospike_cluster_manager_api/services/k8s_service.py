@@ -887,6 +887,18 @@ def extract_detail(item: dict[str, Any], pods_raw: list[dict[str, Any]]) -> K8sC
         p["readinessGateSatisfied"] = readiness_gate if isinstance(readiness_gate, bool) else None
         unstable_since = cr_pod.get("unstableSince")
         p["unstableSince"] = unstable_since if isinstance(unstable_since, str) else None
+        # Port and cluster fields
+        service_port = cr_pod.get("servicePort")
+        p["servicePort"] = service_port if isinstance(service_port, int) else None
+        pod_port = cr_pod.get("podPort")
+        p["podPort"] = pod_port if isinstance(pod_port, int) else None
+        cluster_name = cr_pod.get("clusterName")
+        p["clusterName"] = cluster_name if isinstance(cluster_name, str) else None
+        # Volume status fields
+        dirty_volumes = cr_pod.get("dirtyVolumes")
+        p["dirtyVolumes"] = dirty_volumes if isinstance(dirty_volumes, list) else None
+        initialized_volumes = cr_pod.get("initializedVolumes")
+        p["initializedVolumes"] = initialized_volumes if isinstance(initialized_volumes, list) else None
         pods.append(K8sPodStatus(**p))
 
     # Extract operation status
