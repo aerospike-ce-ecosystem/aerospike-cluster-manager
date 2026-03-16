@@ -101,7 +101,7 @@ export function K8sOperationTriggerDialog({
     step === "configure" ? "Review" : step === "confirm" ? "Trigger Operation" : "Close";
   const dialogTitle = step === "result" ? "Operation Triggered" : "Trigger Cluster Operation";
 
-  const isDisabled = step === "configure" && kind === "PodRestart" && selectedPods.length === 0;
+  const isDisabled = false;
 
   return (
     <FormDialog
