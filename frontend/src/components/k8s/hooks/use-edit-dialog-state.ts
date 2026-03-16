@@ -314,7 +314,7 @@ export function useEditDialogState(open: boolean, cluster: K8sClusterDetail) {
   useEffect(() => {
     if (open && !prevOpenRef.current) {
       const snap = initialsSnapshotRef.current;
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: synchronize form state with dialog open/close
+
       setState({
         ...snap,
         // Deep-copy mutable collections
