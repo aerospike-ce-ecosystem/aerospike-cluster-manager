@@ -558,11 +558,11 @@ export interface K8sPodStatus {
   accessEndpoints?: string[] | null;
   readinessGateSatisfied?: boolean | null;
   unstableSince?: string | null;
-  servicePort?: number;
-  podPort?: number;
-  clusterName?: string;
-  dirtyVolumes?: string[];
-  initializedVolumes?: string[];
+  servicePort?: number | null;
+  podPort?: number | null;
+  clusterName?: string | null;
+  dirtyVolumes?: string[] | null;
+  initializedVolumes?: string[] | null;
 }
 
 export interface K8sClusterSummary {

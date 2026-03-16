@@ -31,7 +31,8 @@ K8S_MANAGEMENT_ENABLED: bool = os.getenv("K8S_MANAGEMENT_ENABLED", "false").lowe
 # Database connection pool
 DB_POOL_MIN_SIZE: int = _get_int("DB_POOL_MIN_SIZE", 2)
 DB_POOL_MAX_SIZE: int = _get_int("DB_POOL_MAX_SIZE", 10)
-DB_POOL_TIMEOUT: int = _get_int("DB_POOL_TIMEOUT", 30)  # connection acquire timeout in seconds
+DB_COMMAND_TIMEOUT: int = _get_int("DB_COMMAND_TIMEOUT", 30)  # SQL command execution timeout in seconds
 
 # Kubernetes API
 K8S_API_TIMEOUT: int = _get_int("K8S_API_TIMEOUT", 10)
+K8S_LOG_TIMEOUT: int = _get_int("K8S_LOG_TIMEOUT", 30)

@@ -47,7 +47,7 @@ async def init_db() -> None:
         config.DATABASE_URL,
         min_size=config.DB_POOL_MIN_SIZE,
         max_size=config.DB_POOL_MAX_SIZE,
-        command_timeout=config.DB_POOL_TIMEOUT,
+        command_timeout=config.DB_COMMAND_TIMEOUT,
     )
     try:
         async with pool.acquire() as conn:

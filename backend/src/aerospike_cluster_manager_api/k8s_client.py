@@ -23,7 +23,7 @@ TEMPLATE_PLURAL = "aerospikeclustertemplates"
 # Default timeout for K8s API calls (seconds) — read from K8S_API_TIMEOUT env var
 _K8S_API_TIMEOUT = config.K8S_API_TIMEOUT
 # Longer timeout for streaming operations (pod logs)
-_K8S_LOG_TIMEOUT = 30
+_K8S_LOG_TIMEOUT = config.K8S_LOG_TIMEOUT
 
 
 class K8sApiError(Exception):

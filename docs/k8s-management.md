@@ -419,8 +419,9 @@ The following environment variables can be used to tune backend behavior. They c
 |----------|---------|-------------|
 | `DB_POOL_MIN_SIZE` | `2` | Minimum database connection pool size. Increase if the backend handles many concurrent requests. |
 | `DB_POOL_MAX_SIZE` | `10` | Maximum database connection pool size. Controls the upper bound of open database connections. |
-| `DB_POOL_TIMEOUT` | `30` | Database connection acquire timeout in seconds. Requests that cannot obtain a connection within this window will fail. |
+| `DB_COMMAND_TIMEOUT` | `30` | SQL command execution timeout in seconds. Commands that exceed this duration will be cancelled. |
 | `K8S_API_TIMEOUT` | `10` | Kubernetes API request timeout in seconds. Applies to all K8s API calls (list, get, patch, delete). Increase for high-latency clusters. |
+| `K8S_LOG_TIMEOUT` | `30` | Kubernetes pod log streaming timeout in seconds. Applies to `read_namespaced_pod_log` calls. Increase for large log payloads. |
 
 **Helm chart example:**
 
@@ -430,7 +431,7 @@ env:
     value: "5"
   - name: DB_POOL_MAX_SIZE
     value: "20"
-  - name: DB_POOL_TIMEOUT
+  - name: DB_COMMAND_TIMEOUT
     value: "60"
   - name: K8S_API_TIMEOUT
     value: "15"
