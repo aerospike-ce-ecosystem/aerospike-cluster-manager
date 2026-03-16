@@ -262,6 +262,15 @@ Migration status is particularly useful during:
 - Rolling restarts (tracking data rebalancing after each pod restart).
 - Initial cluster provisioning (watching data distribution across new pods).
 
+### Migration Status Monitoring
+
+The cluster detail page shows real-time migration progress when the cluster is in a `WaitingForMigration` phase (e.g., after scaling or a rolling restart):
+
+- **Remaining partition count** -- Aggregated across all nodes, showing how many partitions still need to migrate.
+- **Per-pod migration breakdown** -- Each pod's individual remaining partition count is displayed in the pod table, making it easy to identify which nodes are still migrating.
+- **Auto-refresh** -- The migration view refreshes automatically while migration is active (every 5 seconds), stopping once all partitions have settled.
+- **Integrated views** -- Migration progress is surfaced in both the pod table and the rack topology view, so you can correlate partition movement with rack placement.
+
 ### Pod Health Tracking
 
 The pod status table provides detailed per-pod health information:
@@ -401,6 +410,31 @@ Transitional phases: `InProgress`, `ScalingUp`, `ScalingDown`, `WaitingForMigrat
 ## K8s API Endpoint Reference
 
 See the [K8s API Endpoints](../README.md#k8s-api-endpoints) table in the README for the complete list of backend API endpoints.
+
+## Environment Variable Configuration
+
+The following environment variables can be used to tune backend behavior. They can be set directly as environment variables or via the operator Helm chart values.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DB_POOL_MIN_SIZE` | `2` | Minimum database connection pool size. Increase if the backend handles many concurrent requests. |
+| `DB_POOL_MAX_SIZE` | `10` | Maximum database connection pool size. Controls the upper bound of open database connections. |
+| `DB_POOL_TIMEOUT` | `30` | Database connection acquire timeout in seconds. Requests that cannot obtain a connection within this window will fail. |
+| `K8S_API_TIMEOUT` | `10` | Kubernetes API request timeout in seconds. Applies to all K8s API calls (list, get, patch, delete). Increase for high-latency clusters. |
+
+**Helm chart example:**
+
+```yaml
+env:
+  - name: DB_POOL_MIN_SIZE
+    value: "5"
+  - name: DB_POOL_MAX_SIZE
+    value: "20"
+  - name: DB_POOL_TIMEOUT
+    value: "60"
+  - name: K8S_API_TIMEOUT
+    value: "15"
+```
 
 ## See also
 
