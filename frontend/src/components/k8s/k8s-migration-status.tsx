@@ -61,10 +61,19 @@ export function K8sMigrationStatus({
       .finally(() => setLoading(false));
   }, [namespace, name]);
 
+  // Fetch on mount and when namespace/name change; clear any stale interval
   useEffect(() => {
+    // Clear stale interval from a previous cluster
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
     fetchStatus();
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     };
   }, [fetchStatus]);
 
@@ -78,7 +87,10 @@ export function K8sMigrationStatus({
       intervalRef.current = setInterval(fetchStatus, 5000);
     }
     return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     };
   }, [status?.inProgress, fetchStatus]);
 

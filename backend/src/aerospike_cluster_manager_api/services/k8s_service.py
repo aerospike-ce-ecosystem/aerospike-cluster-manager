@@ -1338,6 +1338,11 @@ def extract_migration_status(cluster_cr: dict) -> dict:
     if phase == "WaitingForMigration" and not in_progress:
         in_progress = True
 
+    # Ensure consistency: if not in progress, don't report migrating pods
+    if not in_progress:
+        pod_migration_list = []
+        remaining_partitions = 0
+
     return {
         "inProgress": in_progress,
         "remainingPartitions": remaining_partitions,
