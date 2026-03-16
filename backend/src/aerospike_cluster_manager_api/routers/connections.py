@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import aerospike_py
-from aerospike_py.exception import AerospikeError
+from aerospike_py.exception import AerospikeError, ClusterError
 from fastapi import APIRouter, Depends, HTTPException, Request
 from starlette.responses import Response
 
@@ -110,7 +110,7 @@ async def get_connection_health(conn_id: str = Depends(_get_verified_connection)
             build=build,
             edition=edition,
         )
-    except Exception:
+    except (AerospikeError, ClusterError, ConnectionRefusedError, OSError):
         logger.warning("Health check failed for connection '%s'", conn_id, exc_info=True)
         return ConnectionStatus(connected=False, nodeCount=0, namespaceCount=0)
 

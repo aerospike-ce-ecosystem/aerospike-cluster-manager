@@ -6,6 +6,7 @@ import logging
 from typing import Annotated
 
 import aerospike_py
+from aerospike_py.exception import AerospikeError, ClusterError
 from fastapi import Depends, HTTPException, Path
 
 from aerospike_cluster_manager_api import db
@@ -26,7 +27,7 @@ async def _get_client(conn_id: str = Depends(_get_verified_connection)) -> aeros
     """Resolve *conn_id* and return a cached Aerospike async client."""
     try:
         return await client_manager.get_client(conn_id)
-    except Exception as e:
+    except (AerospikeError, ClusterError, ConnectionRefusedError, OSError) as e:
         logger.warning("Failed to connect to Aerospike for connection '%s': %s", conn_id, e)
         raise HTTPException(
             status_code=503,
