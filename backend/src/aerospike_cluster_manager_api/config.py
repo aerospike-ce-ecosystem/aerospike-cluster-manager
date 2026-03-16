@@ -27,3 +27,11 @@ LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
 LOG_FORMAT: str = os.getenv("LOG_FORMAT", "text")  # "text" or "json"
 
 K8S_MANAGEMENT_ENABLED: bool = os.getenv("K8S_MANAGEMENT_ENABLED", "false").lower() in ("true", "1", "yes")
+
+# Database connection pool
+DB_POOL_MIN_SIZE: int = _get_int("DB_POOL_MIN_SIZE", 2)
+DB_POOL_MAX_SIZE: int = _get_int("DB_POOL_MAX_SIZE", 10)
+DB_POOL_TIMEOUT: int = _get_int("DB_POOL_TIMEOUT", 30)  # connection acquire timeout in seconds
+
+# Kubernetes API
+K8S_API_TIMEOUT: int = _get_int("K8S_API_TIMEOUT", 10)

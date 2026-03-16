@@ -11,6 +11,8 @@ import logging
 import threading
 from typing import Any
 
+from aerospike_cluster_manager_api import config
+
 logger = logging.getLogger(__name__)
 
 # CRD constants
@@ -18,8 +20,8 @@ GROUP = "acko.io"
 VERSION = "v1alpha1"
 PLURAL = "aerospikeclusters"
 TEMPLATE_PLURAL = "aerospikeclustertemplates"
-# Default timeout for K8s API calls (seconds)
-_K8S_API_TIMEOUT = 10
+# Default timeout for K8s API calls (seconds) — read from K8S_API_TIMEOUT env var
+_K8S_API_TIMEOUT = config.K8S_API_TIMEOUT
 # Longer timeout for streaming operations (pod logs)
 _K8S_LOG_TIMEOUT = 30
 

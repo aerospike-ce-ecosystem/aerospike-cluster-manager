@@ -43,7 +43,12 @@ async def init_db() -> None:
     global _pool
     logger.info("Connecting to PostgreSQL …")
     old_pool = _pool
-    pool = await asyncpg.create_pool(config.DATABASE_URL, min_size=2, max_size=10)
+    pool = await asyncpg.create_pool(
+        config.DATABASE_URL,
+        min_size=config.DB_POOL_MIN_SIZE,
+        max_size=config.DB_POOL_MAX_SIZE,
+        command_timeout=config.DB_POOL_TIMEOUT,
+    )
     try:
         async with pool.acquire() as conn:
             await conn.execute(CREATE_TABLE_SQL)
