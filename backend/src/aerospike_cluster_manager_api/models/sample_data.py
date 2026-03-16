@@ -8,7 +8,6 @@ class CreateSampleDataRequest(BaseModel):
     set_name: str = Field(default="sample_set", min_length=1, max_length=63, alias="setName")
     record_count: int = Field(default=1234, ge=1, le=10000, alias="recordCount")
     create_indexes: bool = Field(default=True, alias="createIndexes")
-    register_udfs: bool = Field(default=True, alias="registerUdfs")
 
     model_config = {"populate_by_name": True}
 
@@ -17,7 +16,6 @@ class CreateSampleDataResponse(BaseModel):
     records_created: int = Field(alias="recordsCreated")
     indexes_created: list[str] = Field(default_factory=list, alias="indexesCreated")
     indexes_skipped: list[str] = Field(default_factory=list, alias="indexesSkipped")
-    udfs_registered: list[str] = Field(default_factory=list, alias="udfsRegistered")
     elapsed_ms: int = Field(alias="elapsedMs")
 
     model_config = {"populate_by_name": True}

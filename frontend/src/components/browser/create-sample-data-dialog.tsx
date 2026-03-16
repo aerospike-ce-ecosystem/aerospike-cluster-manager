@@ -38,7 +38,6 @@ export function CreateSampleDataDialog({
   const [setName, setSetName] = useState("sample_set");
   const [recordCount, setRecordCount] = useState("1234");
   const [createIndexes, setCreateIndexes] = useState(true);
-  const [registerUdfs, setRegisterUdfs] = useState(true);
   const [loading, setLoading] = useState(false);
 
   // Sync namespace when namespaces prop changes
@@ -70,7 +69,6 @@ export function CreateSampleDataDialog({
         setName: setName.trim(),
         recordCount: count,
         createIndexes,
-        registerUdfs,
       });
 
       const parts: string[] = [`${result.recordsCreated} records`];
@@ -79,9 +77,6 @@ export function CreateSampleDataDialog({
       }
       if (result.indexesSkipped.length > 0) {
         parts.push(`${result.indexesSkipped.length} indexes skipped`);
-      }
-      if (result.udfsRegistered.length > 0) {
-        parts.push(`${result.udfsRegistered.length} UDFs`);
       }
       const elapsed = (result.elapsedMs / 1000).toFixed(1);
       useToastStore.getState().addToast("success", `Created ${parts.join(", ")} in ${elapsed}s`);
@@ -146,16 +141,6 @@ export function CreateSampleDataDialog({
               />
               <Label htmlFor="create-indexes" className="cursor-pointer text-sm font-normal">
                 Create secondary indexes (5 indexes on int/str/double/bool/geojson bins)
-              </Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="register-udfs"
-                checked={registerUdfs}
-                onCheckedChange={setRegisterUdfs}
-              />
-              <Label htmlFor="register-udfs" className="cursor-pointer text-sm font-normal">
-                Register Lua UDFs (record_utils, aggregation, filter_utils, string_ops, math_ops)
               </Label>
             </div>
           </div>

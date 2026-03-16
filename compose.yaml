@@ -55,14 +55,13 @@ services:
     tty: true
     restart: unless-stopped
 
-  # ── Seed Data (runs once: 1234 records + indexes + UDFs) ───────────
+  # ── Seed Data (runs once: 1234 records + indexes) ─────────────────
   aerospike-seed:
     container_name: aerospike-seed
     image: aerospike/aerospike-tools:latest
     entrypoint: []
     volumes:
       - ./aerospike/seed-data.sh:/seed-data.sh:ro
-      - ./aerospike/lua:/lua:ro
     command: ["/usr/bin/bash", "/seed-data.sh"]
     environment:
       - AEROSPIKE_HOST=aerospike-node-1

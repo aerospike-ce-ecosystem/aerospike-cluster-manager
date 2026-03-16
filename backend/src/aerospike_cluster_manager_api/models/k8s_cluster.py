@@ -927,7 +927,9 @@ class TemplateServiceConfig(BaseModel):
     model_config = {"populate_by_name": True}
 
     feature_key_file: str | None = Field(default=None, alias="featureKeyFile", description="Path to feature key file")
-    proto_fd_max: int | None = Field(default=None, alias="protoFdMax", description="Maximum number of client connections (proto-fd-max)")
+    proto_fd_max: int | None = Field(
+        default=None, alias="protoFdMax", description="Maximum number of client connections (proto-fd-max)"
+    )
     extra_params: dict[str, Any] | None = Field(
         default=None,
         alias="extraParams",
