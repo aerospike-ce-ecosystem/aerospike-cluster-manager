@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import type {
   K8sClusterDetail,
   NetworkAccessType,
@@ -298,29 +298,44 @@ export function useEditDialogState(open: boolean, cluster: K8sClusterDetail) {
     setState((prev) => ({ ...prev, ...updates }));
   }, []);
 
-  // Reset form state when dialog opens
+  // Capture a stable snapshot of initials when dialog opens, so auto-polling
+  // doesn't reset the form while the user is editing.
+  const initialsSnapshotRef = useRef(initials);
   useEffect(() => {
     if (open) {
+      initialsSnapshotRef.current = initials;
+    }
+    // Only update snapshot when dialog opens, not when initials change during editing
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Reset form state only on open transition (false -> true)
+  const prevOpenRef = useRef(false);
+  useEffect(() => {
+    if (open && !prevOpenRef.current) {
+      const snap = initialsSnapshotRef.current;
       // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: synchronize form state with dialog open/close
       setState({
-        ...initials,
+        ...snap,
         // Deep-copy mutable collections
-        nodeSelector: { ...initials.nodeSelector },
-        tolerations: initials.tolerations.map((t) => ({ ...t })),
-        imagePullSecrets: [...initials.imagePullSecrets],
-        topologySpreadConstraints: initials.topologySpreadConstraints.map((t) => ({ ...t })),
-        podSecuritySupGroups: [...initials.podSecuritySupGroups],
-        sidecars: initials.sidecars.map((s) => ({ ...s })),
-        initContainers: initials.initContainers.map((c) => ({ ...c })),
-        podServiceConfig: initials.podServiceConfig ? { ...initials.podServiceConfig } : null,
-        headlessServiceConfig: initials.headlessServiceConfig
-          ? { ...initials.headlessServiceConfig }
+        nodeSelector: { ...snap.nodeSelector },
+        tolerations: snap.tolerations.map((t) => ({ ...t })),
+        imagePullSecrets: [...snap.imagePullSecrets],
+        topologySpreadConstraints: snap.topologySpreadConstraints.map((t) => ({ ...t })),
+        podSecuritySupGroups: [...snap.podSecuritySupGroups],
+        sidecars: snap.sidecars.map((s) => ({ ...s })),
+        initContainers: snap.initContainers.map((c) => ({ ...c })),
+        podServiceConfig: snap.podServiceConfig ? { ...snap.podServiceConfig } : null,
+        headlessServiceConfig: snap.headlessServiceConfig
+          ? { ...snap.headlessServiceConfig }
           : null,
-        storageVolumes: initials.storageVolumes.map((v) => ({ ...v })),
-        seedsFinderServices: initials.seedsFinderServices
+        storageVolumes: snap.storageVolumes.map((v) =>
+          JSON.parse(JSON.stringify(v)),
+        ),
+        seedsFinderServices: snap.seedsFinderServices
           ? {
-              loadBalancer: initials.seedsFinderServices.loadBalancer
-                ? { ...initials.seedsFinderServices.loadBalancer }
+              loadBalancer: snap.seedsFinderServices.loadBalancer
+                ? { ...snap.seedsFinderServices.loadBalancer }
                 : undefined,
             }
           : null,
@@ -328,7 +343,8 @@ export function useEditDialogState(open: boolean, cluster: K8sClusterDetail) {
         error: null,
       });
     }
-  }, [open, initials]);
+    prevOpenRef.current = open;
+  }, [open]);
 
   // Derive config error from current text (no effect needed)
   const configError = useMemo(() => {

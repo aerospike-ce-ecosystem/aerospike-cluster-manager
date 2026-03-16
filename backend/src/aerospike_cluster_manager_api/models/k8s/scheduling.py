@@ -268,6 +268,8 @@ class SidecarConfig(BaseModel):
 
     name: str
     image: str
+    command: list[str] | None = None
+    args: list[str] | None = None
     ports: list[dict[str, Any]] | None = None
     env: list[dict[str, Any]] | None = None
     volume_mounts: list[dict[str, Any]] | None = Field(default=None, alias="volumeMounts")

@@ -193,10 +193,10 @@ function RackConfigJsonEditor({
         value={rawText}
         onChange={(e) => handleChange(e.target.value)}
         rows={3}
-        className={`font-mono text-xs ${parseError ? "border-red-500" : ""}`}
+        className={`font-mono text-xs ${parseError ? "border-error" : ""}`}
         placeholder='{"namespaces": [...]}'
       />
-      {parseError && <p className="text-xs text-red-500">{parseError}</p>}
+      {parseError && <p className="text-xs text-error">{parseError}</p>}
     </div>
   );
 }

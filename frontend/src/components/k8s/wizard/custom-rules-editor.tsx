@@ -50,7 +50,7 @@ export function CustomRulesEditor({ value, onChange }: CustomRulesEditorProps) {
         className="font-mono text-xs"
         placeholder={`[\n  {\n    "name": "aerospike-alerts",\n    "rules": [\n      {\n        "alert": "AerospikeHighMemory",\n        "expr": "aerospike_namespace_memory_used_bytes > 0.8",\n        "for": "5m",\n        "labels": { "severity": "warning" },\n        "annotations": { "summary": "High memory usage" }\n      }\n    ]\n  }\n]`}
       />
-      {parseError && <p className="text-xs text-red-500">{parseError}</p>}
+      {parseError && <p className="text-xs text-error">{parseError}</p>}
     </div>
   );
 }

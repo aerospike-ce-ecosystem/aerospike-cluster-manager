@@ -56,7 +56,7 @@ function EditCustomRulesEditor({
         disabled={disabled}
         placeholder={`[\n  {\n    "name": "aerospike-alerts",\n    "rules": [...]\n  }\n]`}
       />
-      {parseError && <p className="text-xs text-red-500">{parseError}</p>}
+      {parseError && <p className="text-xs text-error">{parseError}</p>}
     </div>
   );
 }
