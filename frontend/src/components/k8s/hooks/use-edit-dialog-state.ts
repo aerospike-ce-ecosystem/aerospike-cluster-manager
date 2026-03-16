@@ -357,55 +357,58 @@ export function useEditDialogState(open: boolean, cluster: K8sClusterDetail) {
     }
   }, [state.aerospikeConfigText]);
 
+  // Compare against the snapshot captured at dialog open time, not the live
+  // initials (which update on every auto-poll cycle).
+  const snap = initialsSnapshotRef.current;
   const hasChanges =
-    state.image !== initials.image ||
-    state.size !== initials.size ||
-    state.enableDynamicConfig !== initials.enableDynamicConfig ||
-    state.aerospikeConfigText !== initials.aerospikeConfigText ||
-    state.batchSize !== initials.batchSize ||
-    state.maxUnavailable !== initials.maxUnavailable ||
-    state.disablePDB !== initials.disablePDB ||
-    state.accessType !== initials.accessType ||
-    state.fabricType !== initials.fabricType ||
-    state.alternateAccessType !== initials.alternateAccessType ||
-    state.customAccessNames !== initials.customAccessNames ||
-    state.customAltAccessNames !== initials.customAltAccessNames ||
-    state.customFabricNames !== initials.customFabricNames ||
-    JSON.stringify(state.networkPolicyConfig) !== JSON.stringify(initials.networkPolicyConfig) ||
-    state.nodeBlockList !== initials.nodeBlockList ||
-    state.bandwidthIngress !== initials.bandwidthIngress ||
-    state.bandwidthEgress !== initials.bandwidthEgress ||
-    state.readinessGateEnabled !== initials.readinessGateEnabled ||
-    state.podMetadataLabels !== initials.podMetadataLabels ||
-    state.podMetadataAnnotations !== initials.podMetadataAnnotations ||
-    state.podManagementPolicy !== initials.podManagementPolicy ||
-    state.dnsPolicy !== initials.dnsPolicy ||
-    JSON.stringify(state.monitoringConfig) !== JSON.stringify(initials.monitoringConfig) ||
-    JSON.stringify(state.nodeSelector) !== JSON.stringify(initials.nodeSelector) ||
-    JSON.stringify(state.tolerations) !== JSON.stringify(initials.tolerations) ||
-    state.multiPodPerHost !== initials.multiPodPerHost ||
-    state.hostNetwork !== initials.hostNetwork ||
-    state.serviceAccountName !== initials.serviceAccountName ||
-    state.terminationGracePeriod !== initials.terminationGracePeriod ||
-    JSON.stringify(state.imagePullSecrets) !== JSON.stringify(initials.imagePullSecrets) ||
+    state.image !== snap.image ||
+    state.size !== snap.size ||
+    state.enableDynamicConfig !== snap.enableDynamicConfig ||
+    state.aerospikeConfigText !== snap.aerospikeConfigText ||
+    state.batchSize !== snap.batchSize ||
+    state.maxUnavailable !== snap.maxUnavailable ||
+    state.disablePDB !== snap.disablePDB ||
+    state.accessType !== snap.accessType ||
+    state.fabricType !== snap.fabricType ||
+    state.alternateAccessType !== snap.alternateAccessType ||
+    state.customAccessNames !== snap.customAccessNames ||
+    state.customAltAccessNames !== snap.customAltAccessNames ||
+    state.customFabricNames !== snap.customFabricNames ||
+    JSON.stringify(state.networkPolicyConfig) !== JSON.stringify(snap.networkPolicyConfig) ||
+    state.nodeBlockList !== snap.nodeBlockList ||
+    state.bandwidthIngress !== snap.bandwidthIngress ||
+    state.bandwidthEgress !== snap.bandwidthEgress ||
+    state.readinessGateEnabled !== snap.readinessGateEnabled ||
+    state.podMetadataLabels !== snap.podMetadataLabels ||
+    state.podMetadataAnnotations !== snap.podMetadataAnnotations ||
+    state.podManagementPolicy !== snap.podManagementPolicy ||
+    state.dnsPolicy !== snap.dnsPolicy ||
+    JSON.stringify(state.monitoringConfig) !== JSON.stringify(snap.monitoringConfig) ||
+    JSON.stringify(state.nodeSelector) !== JSON.stringify(snap.nodeSelector) ||
+    JSON.stringify(state.tolerations) !== JSON.stringify(snap.tolerations) ||
+    state.multiPodPerHost !== snap.multiPodPerHost ||
+    state.hostNetwork !== snap.hostNetwork ||
+    state.serviceAccountName !== snap.serviceAccountName ||
+    state.terminationGracePeriod !== snap.terminationGracePeriod ||
+    JSON.stringify(state.imagePullSecrets) !== JSON.stringify(snap.imagePullSecrets) ||
     JSON.stringify(state.topologySpreadConstraints) !==
-      JSON.stringify(initials.topologySpreadConstraints) ||
-    state.podSecurityRunAsUser !== initials.podSecurityRunAsUser ||
-    state.podSecurityRunAsGroup !== initials.podSecurityRunAsGroup ||
-    state.podSecurityRunAsNonRoot !== initials.podSecurityRunAsNonRoot ||
-    state.podSecurityFsGroup !== initials.podSecurityFsGroup ||
-    JSON.stringify(state.podSecuritySupGroups) !== JSON.stringify(initials.podSecuritySupGroups) ||
-    state.skipWorkDirValidate !== initials.skipWorkDirValidate ||
-    JSON.stringify(state.sidecars) !== JSON.stringify(initials.sidecars) ||
-    JSON.stringify(state.initContainers) !== JSON.stringify(initials.initContainers) ||
-    JSON.stringify(state.podServiceConfig) !== JSON.stringify(initials.podServiceConfig) ||
+      JSON.stringify(snap.topologySpreadConstraints) ||
+    state.podSecurityRunAsUser !== snap.podSecurityRunAsUser ||
+    state.podSecurityRunAsGroup !== snap.podSecurityRunAsGroup ||
+    state.podSecurityRunAsNonRoot !== snap.podSecurityRunAsNonRoot ||
+    state.podSecurityFsGroup !== snap.podSecurityFsGroup ||
+    JSON.stringify(state.podSecuritySupGroups) !== JSON.stringify(snap.podSecuritySupGroups) ||
+    state.skipWorkDirValidate !== snap.skipWorkDirValidate ||
+    JSON.stringify(state.sidecars) !== JSON.stringify(snap.sidecars) ||
+    JSON.stringify(state.initContainers) !== JSON.stringify(snap.initContainers) ||
+    JSON.stringify(state.podServiceConfig) !== JSON.stringify(snap.podServiceConfig) ||
     JSON.stringify(state.headlessServiceConfig) !==
-      JSON.stringify(initials.headlessServiceConfig) ||
-    state.enableRackIDOverride !== initials.enableRackIDOverride ||
-    JSON.stringify(state.storageVolumes) !== JSON.stringify(initials.storageVolumes) ||
-    state.storageCleanupThreads !== initials.storageCleanupThreads ||
-    state.storageDeleteLocalOnRestart !== initials.storageDeleteLocalOnRestart ||
-    JSON.stringify(state.seedsFinderServices) !== JSON.stringify(initials.seedsFinderServices);
+      JSON.stringify(snap.headlessServiceConfig) ||
+    state.enableRackIDOverride !== snap.enableRackIDOverride ||
+    JSON.stringify(state.storageVolumes) !== JSON.stringify(snap.storageVolumes) ||
+    state.storageCleanupThreads !== snap.storageCleanupThreads ||
+    state.storageDeleteLocalOnRestart !== snap.storageDeleteLocalOnRestart ||
+    JSON.stringify(state.seedsFinderServices) !== JSON.stringify(snap.seedsFinderServices);
 
   return { state, patchState, initials, hasChanges, configError };
 }
