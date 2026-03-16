@@ -155,6 +155,8 @@ Create, view, and delete HPAs targeting the AerospikeCluster resource for automa
 - Both support **pod selection** via checkboxes to target specific pods.
 - Operation progress is tracked in real-time with a progress bar showing completed/failed pods.
 
+Operations are triggered from the cluster detail page UI and dispatched through the backend's `POST /api/k8s/clusters/{namespace}/{name}/operations` endpoint, which patches the CR's `spec.operations` field. The operator then picks up the operation during its next reconciliation loop.
+
 ### Pause / Resume
 
 Pause reconciliation for maintenance windows. While paused, the operator will not make changes. Resume to re-enable reconciliation.
@@ -169,109 +171,41 @@ Delete the cluster with a confirmation dialog. Associated connection profiles ar
 
 Displays rack distribution and data migration status across the cluster.
 
-### Migration Status
+### Pod Health Tracking
 
-The cluster detail page includes a dedicated **Migration Status** card that shows real-time data migration progress. This is useful when scaling, rebalancing, or performing rolling restarts that trigger data redistribution.
+The pod status table provides detailed per-pod health information:
 
-- **Idle state** -- When no migration is active, a green "No Active Migration" badge is displayed.
-- **Active migration** -- Shows overall remaining partitions count and a progress indicator. Each pod's migration state is displayed in the pod table with per-pod remaining partition counts.
-- **Auto-refresh** -- During active migration, the migration status automatically refreshes every **5 seconds** so you can monitor progress without manual page reloads.
-- **Graceful fallback** -- If the operator's CR does not include a `status.migrationStatus` field (e.g., older operator versions), the UI gracefully falls back to an "Unknown" state instead of erroring.
+- **Phase** -- Current pod phase (Running, Pending, etc.).
+- **Ready status** -- Whether the pod's readiness probe is passing.
+- **Access endpoints** -- IP addresses or DNS entries for reaching the pod.
+- **Readiness gate satisfaction** -- Whether the operator's custom readiness gate (`acko.io/aerospike-ready`) is satisfied.
+- **Stability tracking** -- The `unstableSince` timestamp indicates when a pod entered an unstable state. Pods that have been running without restarts for an extended period show no stability flag, while recently restarted or flapping pods display the timestamp and duration since instability began.
+- **Restart history** -- `lastRestartReason` (e.g., OOMKilled, CrashLoopBackOff, operator-initiated) and `lastRestartTime` are displayed per pod, making it easy to identify problematic nodes.
+- **Config hash and pod spec hash** -- Each pod reports its current `configHash` and `podSpecHash`. These are used by the Config Drift Detection card to group pods and highlight which ones are running stale configurations versus the desired state.
 
-The backend exposes `GET /api/k8s/clusters/{namespace}/{name}/migration-status` which extracts migration information from the AerospikeCluster CR status. See the [K8s API Endpoints](../README.md#k8s-api-endpoints) table for details.
+### Node Blocklist Management
 
-### Migration Status Monitoring
+The node blocklist feature allows you to exclude specific Kubernetes nodes from hosting Aerospike pods. This is useful for:
 
-The migration status monitoring system provides comprehensive visibility into Aerospike data migrations across the cluster. Migrations occur whenever the data distribution across nodes needs to change -- for example, during scale-down, scale-up, rolling restarts, or rack rebalancing.
+- Draining a node before maintenance.
+- Excluding nodes with known hardware issues.
+- Restricting scheduling to a subset of the cluster.
 
-#### Migration Status Card
+**How it works:**
 
-The migration status card on the cluster detail page displays the following information:
+1. Send a `PATCH /api/k8s/clusters/{namespace}/{name}/node-blocklist` request with the list of node names to exclude.
+2. The backend patches `spec.k8sNodeBlockList` on the AerospikeCluster CR.
+3. The operator respects the blocklist during scheduling and will migrate pods away from blocked nodes during the next reconciliation.
 
-| Element | Description |
-|---------|-------------|
-| **Remaining Partitions** | Total number of partitions still being migrated across the cluster. This count decreases as migrations complete. |
-| **Activity Indicator** | A visual indicator (spinner or progress animation) that shows whether migration is actively in progress. |
-| **Status Badge** | Color-coded badge: green for "No Active Migration", yellow/orange for "Migrating", gray for "Unknown". |
-| **Auto-Refresh** | The card automatically refreshes every 5 seconds while migration is active, stopping once the migration completes. |
+The request body is a JSON object with a `nodeNames` array:
 
-#### Per-Pod Migration Column
+```json
+{
+  "nodeNames": ["node-1", "node-3"]
+}
+```
 
-The pod status table includes a **Migration** column that shows per-pod remaining partition counts during active migration. This helps identify which specific pods are still sending or receiving data, making it easier to pinpoint bottlenecks or stalled migrations.
-
-#### How Migration Data Is Fetched
-
-The UI retrieves migration data from the AerospikeCluster custom resource's `status.migrationStatus` field, which is populated by the Aerospike CE Kubernetes Operator. The data flow is:
-
-1. The operator queries each Aerospike node for migration statistics via the Aerospike info protocol.
-2. The operator writes aggregated migration status into the CR's `status.migrationStatus` field.
-3. The backend reads the CR status via the Kubernetes API and exposes it at `GET /api/k8s/clusters/{namespace}/{name}/migration-status`.
-4. The frontend polls this endpoint every 5 seconds during active migration.
-
-#### When Migration Status Appears
-
-Migration status becomes active during the following operations:
-
-- **Scale-down** -- Records from removed nodes are redistributed to remaining nodes.
-- **Scale-up** -- Existing data is rebalanced to include the new nodes.
-- **Rolling restart** -- As pods restart one by one, data temporarily migrates to maintain replication factor.
-- **Rack rebalancing** -- When rack configuration changes, data redistributes to satisfy rack-aware placement rules.
-- **Replication factor changes** -- Increasing or decreasing the replication factor triggers data redistribution.
-
-Once all remaining partitions reach zero across all pods, the status returns to idle and auto-refresh stops.
-
-### Rack Topology Visualization
-
-The rack topology view provides a visual diagram of how Aerospike pods are distributed across racks and availability zones. This is accessible from the cluster detail page when rack configuration is enabled.
-
-#### Topology Diagram
-
-The diagram presents a hierarchical layout:
-
-- **Zones** -- Top-level grouping by Kubernetes availability zone (e.g., `us-east-1a`, `us-east-1b`). Each zone is displayed as a labeled container.
-- **Racks** -- Within each zone, racks are shown with their rack ID. Each rack groups the pods assigned to it.
-- **Pods** -- Individual pods are displayed within their assigned rack, showing the pod name and current status.
-
-#### Pod Color-Coding by Status
-
-Pods in the topology view are color-coded to provide at-a-glance health information:
-
-| Color | Status | Description |
-|-------|--------|-------------|
-| **Green** | Ready | Pod is fully running and the readiness gate is satisfied. |
-| **Yellow** | Not Ready | Pod exists but is not yet ready (e.g., starting up, failing readiness checks). |
-| **Orange** | Migrating | Pod is involved in active data migration (sending or receiving records). |
-| **Red** | Unstable | Pod has been not-ready for an extended period (has an `unstableSince` timestamp). |
-
-#### Rack-Level Statistics
-
-Each rack in the topology view displays summary statistics:
-
-- **Pod count** -- Number of pods assigned to the rack (e.g., "3/3 Ready").
-- **Zone label** -- The availability zone the rack is mapped to.
-- **Rack ID** -- The numeric rack identifier used by Aerospike for data placement.
-
-#### Interpreting the Topology View
-
-The topology visualization helps operators:
-
-- **Verify even distribution** -- Confirm that pods are spread evenly across racks and zones as expected by the rack configuration.
-- **Identify zone imbalances** -- Spot situations where one zone has more pods than others, which could affect fault tolerance.
-- **Locate unhealthy pods** -- Quickly find pods that are not ready, unstable, or actively migrating by scanning for non-green colors.
-- **Validate rack assignments** -- Ensure that rack-to-zone mappings match the intended topology, especially after scaling or configuration changes.
-- **Monitor rolling operations** -- During rolling restarts or scale operations, watch how pod states change across racks in real time.
-
-### Pod Status Table
-
-Per-pod details including:
-- Phase (Running, Pending, etc.)
-- Ready status
-- Access endpoints
-- Readiness gate satisfaction
-- Stability indicator (unstableSince timestamp)
-- Config hash and pod spec hash for drift detection
-- Last restart reason and timestamp
-- Migration status (remaining partitions per pod during active migration)
+To clear the blocklist, send an empty array. The endpoint returns the updated cluster summary.
 
 ### Events Timeline
 
@@ -282,15 +216,35 @@ Events auto-refresh during transitional phases and support category filtering.
 
 ### Configuration Drift Detection
 
-Compares desired spec vs applied spec and detects configuration drift. Per-pod config hash groups show which pods are running identical configurations and which have diverged.
+Compares the desired spec (what you declared) against the applied spec (what the operator last reconciled) and detects configuration drift. The UI presents:
+
+- **Sync status badge** -- "In Sync" (green) or "Drift Detected" (amber) at the top of the card.
+- **Changed fields list** -- Each field that differs is listed with its path.
+- **Visual diff view** -- For every changed field the card shows the desired value (marked with `+`) and the applied value (marked with `-`) side-by-side, using color-coded formatting (`added`, `removed`, `changed`).
+- **Pod hash groups** -- Pods are grouped by their `configHash` and `podSpecHash`. The group matching the current desired hash is marked as "current"; pods in other groups have diverged and need a rolling restart.
+- **Desired & applied config snapshots** -- The full desired and applied config objects are available for inspection when the backend returns them.
+
+The drift data is fetched from `GET /api/k8s/clusters/{namespace}/{name}/config-drift`.
 
 ### Reconciliation Health Dashboard
 
-Shows the operator's reconciliation circuit breaker state:
-- Visual progress bar toward the circuit breaker threshold
-- Current backoff timer
-- Detailed error information
-- Manual reset button to clear the circuit breaker
+Shows the operator's reconciliation circuit breaker state with a severity-based health card. The card uses three severity levels determined by the failed reconcile count:
+
+| Severity | Condition | Visual Indicator |
+|----------|-----------|-----------------|
+| **Healthy** (green) | 0 failed reconciles | Green border, checkmark icon |
+| **Warning** (amber) | 1-5 failed reconciles | Amber border, warning icon |
+| **Critical** (red) | 6+ failed reconciles | Red border, error icon |
+
+The card displays:
+- **Visual progress bar** toward the circuit breaker threshold with severity-colored fill.
+- **Current backoff timer** -- Estimated seconds remaining before the next reconcile attempt.
+- **Failed reconcile count** -- Current count vs. the circuit breaker threshold.
+- **Last reconcile error** -- Detailed error message from the most recent failure.
+- **Phase and phase reason** -- The current cluster reconciliation phase.
+- **Operator version** -- The version of the operator managing this cluster.
+- **Manual reset button** -- Clears the circuit breaker state to force an immediate reconcile.
+- **Auto-refresh** -- The card polls every 10 seconds to keep the health status current.
 
 ### Template Sync Status
 
@@ -342,7 +296,6 @@ Templates serve as comprehensive baseline configurations with override fields fo
 |------|--------------|-----------|
 | Cluster list | 10 seconds | Any cluster in transitional phase |
 | Cluster detail | 5 seconds | Cluster in transitional phase or active operation |
-| Migration status | 5 seconds | Active data migration detected |
 
 Transitional phases: `InProgress`, `ScalingUp`, `ScalingDown`, `WaitingForMigration`, `RollingRestart`, `ACLSync`, `Deleting`.
 

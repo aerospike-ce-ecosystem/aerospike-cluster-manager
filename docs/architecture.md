@@ -204,6 +204,73 @@ This deploys the Cluster Manager as a Deployment with:
 | Migration Status Monitoring | No | Yes |
 | Events Timeline | No | Yes |
 
+## New Operator Integration API Endpoints
+
+The following endpoints were added to support deeper operator integration:
+
+### Reconciliation Health
+
+```
+GET /api/k8s/clusters/{namespace}/{name}/reconciliation-health
+```
+
+Returns the reconciliation health for a cluster, including:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `failedReconcileCount` | `int` | Number of consecutive failed reconcile attempts |
+| `lastReconcileError` | `string?` | Error message from the last failed reconcile |
+| `phase` | `string` | Current reconciliation phase (e.g., `Completed`, `InProgress`, `Error`) |
+| `phaseReason` | `string?` | Human-readable reason for the current phase |
+| `operatorVersion` | `string?` | Version of the operator managing this cluster |
+| `healthStatus` | `string` | Computed health: `healthy`, `warning`, or `critical` |
+
+This endpoint is used by the Reconciliation Health card in the UI, which auto-refreshes every 10 seconds.
+
+### Node Blocklist
+
+```
+PATCH /api/k8s/clusters/{namespace}/{name}/node-blocklist
+```
+
+Updates `spec.k8sNodeBlockList` on the AerospikeCluster CR to exclude specific Kubernetes nodes from pod scheduling.
+
+**Request body:**
+
+```json
+{
+  "nodeNames": ["node-1", "node-3"]
+}
+```
+
+**Response:** `K8sClusterSummary` -- the updated cluster summary after patching.
+
+Send an empty `nodeNames` array to clear the blocklist.
+
+### Enhanced Config Drift Response
+
+```
+GET /api/k8s/clusters/{namespace}/{name}/config-drift
+```
+
+The config drift endpoint now returns an enriched response:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `hasDrift` | `bool` | Whether any configuration drift was detected |
+| `inSync` | `bool` | Inverse of `hasDrift` for convenience |
+| `changedFields` | `list[str]` | Top-level spec fields that differ between desired and applied |
+| `podHashGroups` | `list[PodHashGroup]` | Pods grouped by `configHash` + `podSpecHash`, with `isCurrent` flag |
+| `desiredConfigHash` | `string?` | Hash of the desired configuration |
+| `desiredConfig` | `dict?` | Full desired configuration object |
+| `appliedConfig` | `dict?` | Full applied (last-reconciled) configuration object |
+
+Each `PodHashGroup` contains:
+- `configHash` -- Aerospike config hash for pods in this group.
+- `podSpecHash` -- Pod spec hash for pods in this group.
+- `pods` -- List of pod names in this group.
+- `isCurrent` -- `true` if this group matches the desired config hash.
+
 ## See also
 
 - [Data Management Guide](./data-management.md)

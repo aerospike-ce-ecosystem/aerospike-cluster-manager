@@ -122,3 +122,20 @@ class ReconciliationStatus(BaseModel):
     phase: str = "Unknown"
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+class ReconciliationHealthResponse(BaseModel):
+    failed_reconcile_count: int = Field(0, alias="failedReconcileCount")
+    last_reconcile_error: str | None = Field(None, alias="lastReconcileError")
+    phase: str = "Unknown"
+    phase_reason: str | None = Field(None, alias="phaseReason")
+    operator_version: str | None = Field(None, alias="operatorVersion")
+    health_status: str = Field("healthy", alias="healthStatus")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class NodeBlocklistRequest(BaseModel):
+    node_names: list[str] = Field(default_factory=list, alias="nodeNames")
+
+    model_config = ConfigDict(populate_by_name=True)

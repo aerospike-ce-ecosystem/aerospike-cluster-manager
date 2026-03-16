@@ -1275,11 +1275,18 @@ def compute_config_drift(cr: dict) -> dict:
     if len(hash_groups) > 1:
         has_drift = True
 
+    # Extract aerospikeConfig for desired vs applied comparison
+    desired_config = spec.get("aerospikeConfig")
+    applied_config = applied_spec.get("aerospikeConfig") if applied_spec else None
+
     return {
         "hasDrift": has_drift,
+        "inSync": not has_drift,
         "changedFields": changed_fields,
         "podHashGroups": list(hash_groups.values()),
         "desiredConfigHash": desired_config_hash,
+        "desiredConfig": desired_config,
+        "appliedConfig": applied_config,
     }
 
 
@@ -1375,6 +1382,40 @@ def extract_reconciliation_status(cr: dict) -> dict:
         "lastReconcileTime": last_time,
         "estimatedBackoffSeconds": backoff_seconds,
         "phase": phase,
+    }
+
+
+def extract_reconciliation_health(cr: dict) -> dict:
+    """Extract reconciliation health summary from the CR status fields."""
+    status = cr.get("status", {})
+    phase = status.get("phase", "Unknown")
+    phase_reason = status.get("phaseReason")
+    failed_count = status.get("failedReconcileCount", 0)
+    last_error = status.get("lastReconcileError")
+    operator_version = status.get("operatorVersion")
+
+    # Determine health_status based on phase and failed count
+    if phase in ("Running", "Completed"):
+        if failed_count == 0:
+            health_status = "healthy"
+        elif failed_count < 5:
+            health_status = "warning"
+        else:
+            health_status = "critical"
+    elif phase in ("Error", "Failed"):
+        health_status = "critical"
+    elif phase in ("Pending", "Initializing", "ScalingUp", "ScalingDown", "RollingRestart"):
+        health_status = "warning" if failed_count > 0 else "healthy"
+    else:
+        health_status = "warning" if failed_count > 0 else "healthy"
+
+    return {
+        "failedReconcileCount": failed_count,
+        "lastReconcileError": last_error,
+        "phase": phase,
+        "phaseReason": phase_reason,
+        "operatorVersion": operator_version,
+        "healthStatus": health_status,
     }
 
 

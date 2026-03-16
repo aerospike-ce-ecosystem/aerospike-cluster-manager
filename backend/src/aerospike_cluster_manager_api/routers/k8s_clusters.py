@@ -30,6 +30,7 @@ from aerospike_cluster_manager_api.models.k8s_cluster import (
     K8sClusterSummary,
     K8sTemplateDetail,
     K8sTemplateSummary,
+    NodeBlocklistRequest,
     OperationRequest,
     ScaleK8sClusterRequest,
     UpdateK8sClusterRequest,
@@ -47,6 +48,7 @@ from aerospike_cluster_manager_api.services.k8s_service import (
     extract_health,
     extract_hpa_response,
     extract_migration_status,
+    extract_reconciliation_health,
     extract_reconciliation_status,
     extract_summary,
     extract_template_summary,
@@ -207,6 +209,24 @@ async def get_migration_status(
     return MigrationStatusResponse(**result)
 
 
+@router.get(
+    "/clusters/{namespace}/{name}/reconciliation-health",
+    summary="Get reconciliation health",
+)
+@_k8s_endpoint("get reconciliation health")
+async def get_cluster_reconciliation_health(
+    namespace: str = _K8S_NAMESPACE,
+    name: str = _K8S_NAME,
+):
+    """Get reconciliation health including phase, error info, and health status."""
+    from ..models.k8s_cluster import ReconciliationHealthResponse
+
+    _require_k8s()
+    cr = await k8s_client.get_cluster(namespace, name)
+    result = extract_reconciliation_health(cr)
+    return ReconciliationHealthResponse(**result)
+
+
 @router.get("/clusters/{namespace}/{name}/pods/{pod}/logs", summary="Get pod logs")
 @_k8s_endpoint("get pod logs")
 async def get_k8s_pod_logs(
@@ -334,6 +354,23 @@ async def scale_k8s_cluster(
 ) -> K8sClusterSummary:
     _require_k8s()
     patch = {"spec": {"size": body.size}}
+    result = await k8s_client.patch_cluster(namespace, name, patch)
+    return extract_summary(result)
+
+
+@router.patch(
+    "/clusters/{namespace}/{name}/node-blocklist",
+    summary="Update node blocklist for K8s Aerospike cluster",
+)
+@_k8s_endpoint("update node blocklist")
+async def update_node_blocklist(
+    body: NodeBlocklistRequest,
+    namespace: str = _K8S_NAMESPACE,
+    name: str = _K8S_NAME,
+) -> K8sClusterSummary:
+    """Patch spec.k8sNodeBlockList on the AerospikeCluster CR."""
+    _require_k8s()
+    patch: dict[str, Any] = {"spec": {"k8sNodeBlockList": body.node_names}}
     result = await k8s_client.patch_cluster(namespace, name, patch)
     return extract_summary(result)
 

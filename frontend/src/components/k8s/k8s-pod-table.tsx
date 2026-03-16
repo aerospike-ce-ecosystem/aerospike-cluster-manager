@@ -16,12 +16,42 @@ import {
   XCircle,
   AlertTriangle,
   Network,
+  Clock,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { K8sPodLogsDialog } from "@/components/k8s/k8s-pod-logs-dialog";
 import { DataTable } from "@/components/common/data-table";
 import { EmptyState } from "@/components/common/empty-state";
 import type { K8sPodStatus, MigrationStatus } from "@/lib/api/types";
+
+/**
+ * Calculate a human-readable duration string from an ISO timestamp to now.
+ * Returns e.g. "2h 15m", "3d 4h", "45m".
+ */
+function formatDurationSince(isoTimestamp: string): string {
+  try {
+    const since = new Date(isoTimestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - since.getTime();
+    if (diffMs < 0) return "just now";
+
+    const totalMinutes = Math.floor(diffMs / 60_000);
+    const totalHours = Math.floor(totalMinutes / 60);
+    const totalDays = Math.floor(totalHours / 24);
+
+    if (totalDays > 0) {
+      const remainingHours = totalHours % 24;
+      return remainingHours > 0 ? `${totalDays}d ${remainingHours}h` : `${totalDays}d`;
+    }
+    if (totalHours > 0) {
+      const remainingMinutes = totalMinutes % 60;
+      return remainingMinutes > 0 ? `${totalHours}h ${remainingMinutes}m` : `${totalHours}h`;
+    }
+    return totalMinutes > 0 ? `${totalMinutes}m` : "<1m";
+  } catch {
+    return "unknown";
+  }
+}
 
 interface K8sPodTableProps {
   pods: K8sPodStatus[];
@@ -287,22 +317,30 @@ export function K8sPodTable({
       {
         accessorKey: "unstableSince",
         header: "Stability",
-        size: 120,
+        size: 140,
         meta: { hideOn: ["mobile", "tablet"], mobileSlot: "meta", mobileLabel: "Stability" },
         cell: ({ getValue }) => {
           const unstableSince = getValue<string | null | undefined>();
           if (!unstableSince) {
-            return <span className="text-base-content/60 text-xs">-</span>;
+            return (
+              <span className="inline-flex items-center gap-1 text-xs text-green-500">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Stable
+              </span>
+            );
           }
+          const duration = formatDurationSince(unstableSince);
           return (
             <Tooltip>
               <TooltipTrigger asChild>
                 <span className="inline-flex cursor-default items-center gap-1 text-amber-500">
                   <AlertTriangle className="h-3.5 w-3.5" />
-                  <span className="text-[11px]">Unstable</span>
+                  <span className="text-[11px]">Unstable ({duration})</span>
                 </span>
               </TooltipTrigger>
-              <TooltipContent>Unstable since {unstableSince}</TooltipContent>
+              <TooltipContent>
+                Unstable since {unstableSince} ({duration})
+              </TooltipContent>
             </Tooltip>
           );
         },
@@ -310,18 +348,46 @@ export function K8sPodTable({
       {
         id: "lastRestart",
         header: "Last Restart",
+        size: 180,
         meta: { hideOn: ["mobile", "tablet"], mobileSlot: "content", mobileLabel: "Last Restart" },
-        cell: ({ row }) =>
-          row.original.lastRestartReason ? (
-            <div className="space-y-0.5">
-              <p className="text-xs font-medium">{row.original.lastRestartReason}</p>
-              {row.original.lastRestartTime && (
-                <p className="text-base-content/60 text-[10px]">{row.original.lastRestartTime}</p>
-              )}
-            </div>
-          ) : (
-            <span className="text-base-content/60 text-xs">-</span>
-          ),
+        cell: ({ row }) => {
+          const { lastRestartReason, lastRestartTime } = row.original;
+          if (!lastRestartReason && !lastRestartTime) {
+            return <span className="text-base-content/60 text-xs">-</span>;
+          }
+          const timeDuration = lastRestartTime ? formatDurationSince(lastRestartTime) : null;
+          return (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="cursor-default space-y-0.5">
+                  {lastRestartReason && (
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-[10px]",
+                        lastRestartReason === "OOMKilled" || lastRestartReason === "Error"
+                          ? STATUS_COLORS.error
+                          : STATUS_COLORS.warning,
+                      )}
+                    >
+                      {lastRestartReason}
+                    </Badge>
+                  )}
+                  {lastRestartTime && (
+                    <p className="text-base-content/60 flex items-center gap-1 text-[10px]">
+                      <Clock className="h-2.5 w-2.5" />
+                      {timeDuration} ago
+                    </p>
+                  )}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                {lastRestartReason && <p>Reason: {lastRestartReason}</p>}
+                {lastRestartTime && <p>Time: {lastRestartTime}</p>}
+              </TooltipContent>
+            </Tooltip>
+          );
+        },
       },
     );
 

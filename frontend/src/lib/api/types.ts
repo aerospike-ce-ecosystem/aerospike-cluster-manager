@@ -1063,9 +1063,21 @@ export interface PodHashGroup {
 
 export interface ConfigDriftResponse {
   hasDrift: boolean;
+  inSync: boolean;
   changedFields: string[];
   podHashGroups: PodHashGroup[];
   desiredConfigHash: string | null;
+  desiredConfig: Record<string, unknown> | null;
+  appliedConfig: Record<string, unknown> | null;
+}
+
+export interface ReconciliationHealthResponse {
+  failedReconcileCount: number;
+  lastReconcileError: string | null;
+  phase: string;
+  phaseReason: string | null;
+  operatorVersion: string | null;
+  healthStatus: string;
 }
 
 // === HPA (HorizontalPodAutoscaler) ===
