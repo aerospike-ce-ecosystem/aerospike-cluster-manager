@@ -410,8 +410,9 @@ export default function CreateTemplatePage() {
                 <Select
                   value={heartbeatMode}
                   onValueChange={(v) => setHeartbeatMode(v as "mesh" | "multicast")}
+                  disabled={loading}
                 >
-                  <SelectTrigger disabled={loading}>
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
