@@ -434,7 +434,7 @@ export function DataTable<TData, TValue>({
           className="border-base-300 bg-base-100 overflow-hidden rounded-lg border"
           data-testid={`${testId}-skeleton`}
         >
-          <table className="table w-full table-fixed">
+          <table className="table table-pin-rows w-full table-fixed">
             <thead className="grid-header sticky top-0 z-20">
               <tr>
                 {responsiveColumns.map((_, i) => (
@@ -515,7 +515,7 @@ export function DataTable<TData, TValue>({
         <div className="border-base-300 bg-base-100 min-w-0 overflow-hidden rounded-lg border">
           <div ref={parentRef} className="w-full overflow-auto" style={{ maxHeight }}>
             <table
-              className={cn("table table-fixed", !tableMinWidth && "w-full")}
+              className={cn("table table-fixed table-pin-rows", !tableMinWidth && "w-full")}
               style={tableMinWidth ? { minWidth: tableMinWidth } : undefined}
             >
               <thead className="grid-header sticky top-0 z-20" data-testid={`${testId}-head`}>
@@ -563,7 +563,7 @@ export function DataTable<TData, TValue>({
       <div className="border-base-300 bg-base-100 min-w-0 overflow-hidden rounded-lg border">
         <div className="w-full overflow-auto">
           <table
-            className={cn("table table-fixed", !tableMinWidth && "w-full")}
+            className={cn("table table-fixed table-pin-rows", !tableMinWidth && "w-full")}
             style={tableMinWidth ? { minWidth: tableMinWidth } : undefined}
           >
             <thead className="grid-header sticky top-0 z-20" data-testid={`${testId}-head`}>

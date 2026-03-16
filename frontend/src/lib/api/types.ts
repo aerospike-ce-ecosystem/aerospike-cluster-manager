@@ -376,14 +376,12 @@ export interface CreateSampleDataRequest {
   setName?: string;
   recordCount?: number;
   createIndexes?: boolean;
-  registerUdfs?: boolean;
 }
 
 export interface CreateSampleDataResponse {
   recordsCreated: number;
   indexesCreated: string[];
   indexesSkipped: string[];
-  udfsRegistered: string[];
   elapsedMs: number;
 }
 

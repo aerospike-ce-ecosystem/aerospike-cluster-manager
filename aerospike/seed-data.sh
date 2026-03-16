@@ -18,12 +18,12 @@ last_names=(Kim Lee Park Choi Jung Kang Cho Yoon Jang Lim)
 echo "========================================="
 echo "  Aerospike Seed Data"
 echo "  ${NS}.${SET} - ${TOTAL} records"
-echo "  + Secondary Indexes + Lua UDFs"
+echo "  + Secondary Indexes"
 echo "========================================="
 
-# [1/5] Wait for Aerospike cluster
+# [1/4] Wait for Aerospike cluster
 echo ""
-echo "[1/5] Waiting for Aerospike cluster..."
+echo "[1/4] Waiting for Aerospike cluster..."
 for attempt in $(seq 1 30); do
   if aql -h "$HOST" -p "$PORT" -c "SHOW NAMESPACES" >/dev/null 2>&1; then
     echo "  Aerospike is ready."
@@ -36,9 +36,9 @@ for attempt in $(seq 1 30); do
   sleep 2
 done
 
-# [2/5] Generate INSERT statements
+# [2/4] Generate INSERT statements
 echo ""
-echo "[2/5] Generating ${TOTAL} records..."
+echo "[2/4] Generating ${TOTAL} records..."
 BATCH="/tmp/seed.aql"
 > "$BATCH"
 
@@ -89,15 +89,15 @@ for i in $(seq 1 $TOTAL); do
 done
 echo "  ${TOTAL}/${TOTAL} generated."
 
-# [3/5] Execute batch insert
+# [3/4] Execute batch insert
 echo ""
-echo "[3/5] Inserting records into Aerospike..."
+echo "[3/4] Inserting records into Aerospike..."
 aql -h "$HOST" -p "$PORT" -f "$BATCH" > /dev/null 2>&1
 echo "  Records inserted."
 
-# [4/5] Create secondary indexes (via asinfo since aql 9.x removed CREATE INDEX)
+# [4/4] Create secondary indexes (via asinfo since aql 9.x removed CREATE INDEX)
 echo ""
-echo "[4/5] Creating secondary indexes..."
+echo "[4/4] Creating secondary indexes..."
 
 asinfo -h "$HOST" -p "$PORT" -v "sindex-create:ns=${NS};set=${SET};indexname=idx_bin_int;indexdata=bin_int,numeric" 2>&1 || true
 echo "  idx_bin_int      (NUMERIC on bin_int)"
@@ -115,21 +115,6 @@ asinfo -h "$HOST" -p "$PORT" -v "sindex-create:ns=${NS};set=${SET};indexname=idx
 echo "  idx_bin_geojson  (GEO2DSPHERE on bin_geojson)"
 
 echo "  5 secondary indexes created."
-
-# [5/5] Register Lua UDFs
-echo ""
-echo "[5/5] Registering Lua UDF modules..."
-
-LUA_DIR="/lua"
-for lua_file in "$LUA_DIR"/*.lua; do
-  if [ -f "$lua_file" ]; then
-    filename=$(basename "$lua_file")
-    aql -h "$HOST" -p "$PORT" -c "REGISTER MODULE '${lua_file}'" 2>&1 | grep -v "^$" || true
-    echo "  ${filename}"
-  fi
-done
-
-echo "  Lua UDFs registered."
 
 echo ""
 echo "========================================="
@@ -151,11 +136,4 @@ echo "    idx_bin_str     STRING"
 echo "    idx_bin_double  NUMERIC"
 echo "    idx_bin_bool    NUMERIC"
 echo "    idx_bin_geojson GEO2DSPHERE"
-echo ""
-echo "  Lua UDFs:"
-echo "    record_utils.lua  (get_full_name, update_score, toggle_bool, ...)"
-echo "    aggregation.lua   (sum_int, sum_double, count_by_category, avg_int)"
-echo "    filter_utils.lua  (in_range, has_city, filter_above, ...)"
-echo "    string_ops.lua    (to_upper, to_lower, str_contains, ...)"
-echo "    math_ops.lua      (calc_percentage, normalize, statistics, ...)"
 echo "========================================="

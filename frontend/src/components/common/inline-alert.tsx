@@ -10,9 +10,9 @@ interface InlineAlertProps {
 }
 
 const variantStyles: Record<AlertVariant, string> = {
-  error: "border-error/30 bg-error/5 text-error",
-  warning: "border-warning/30 bg-warning/5 text-warning",
-  info: "border-accent/30 bg-accent/5 text-accent",
+  error: "alert-error",
+  warning: "alert-warning",
+  info: "alert-info",
 };
 
 const variantIcons: Record<AlertVariant, React.ElementType> = {
@@ -30,13 +30,9 @@ export function InlineAlert({ message, variant = "error", className }: InlineAle
     <div
       role="alert"
       aria-live="polite"
-      className={cn(
-        "animate-fade-in flex items-start gap-2 rounded-lg border p-3 text-sm",
-        variantStyles[variant],
-        className,
-      )}
+      className={cn("alert animate-fade-in text-sm", variantStyles[variant], className)}
     >
-      <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
       <span>{message}</span>
     </div>
   );

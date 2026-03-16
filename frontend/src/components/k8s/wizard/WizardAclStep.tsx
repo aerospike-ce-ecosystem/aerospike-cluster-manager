@@ -3,6 +3,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { FormField } from "@/components/common/form-field";
 import { AEROSPIKE_PRIVILEGES } from "@/lib/validations/k8s-acl";
 import type { WizardAclStepProps } from "./types";
 
@@ -35,8 +36,7 @@ export function WizardAclStep({ form, updateForm, k8sSecrets }: WizardAclStepPro
 
       {form.acl?.enabled && (
         <div className="space-y-6 pt-2">
-          <div className="grid gap-2">
-            <Label htmlFor="admin-timeout">Admin Policy Timeout (ms)</Label>
+          <FormField id="admin-timeout" label="Admin Policy Timeout (ms)">
             <Input
               id="admin-timeout"
               type="number"
@@ -52,7 +52,7 @@ export function WizardAclStep({ form, updateForm, k8sSecrets }: WizardAclStepPro
                 })
               }
             />
-          </div>
+          </FormField>
 
           {/* Roles Section */}
           <div className="space-y-3">

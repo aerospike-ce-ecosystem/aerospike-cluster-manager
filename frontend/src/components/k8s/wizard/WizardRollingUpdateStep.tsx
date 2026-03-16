@@ -1,13 +1,17 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { FormField } from "@/components/common/form-field";
 import type { WizardRollingUpdateStepProps } from "./types";
 
 export function WizardRollingUpdateStep({ form, updateForm }: WizardRollingUpdateStepProps) {
   return (
     <>
-      <div className="grid gap-2">
-        <Label htmlFor="batch-size">Batch Size (optional)</Label>
+      <FormField
+        id="batch-size"
+        label="Batch Size (optional)"
+        hint="Number of pods to update at a time during rolling restarts."
+      >
         <Input
           id="batch-size"
           type="number"
@@ -25,13 +29,13 @@ export function WizardRollingUpdateStep({ form, updateForm }: WizardRollingUpdat
             });
           }}
         />
-        <p className="text-base-content/60 text-xs">
-          Number of pods to update at a time during rolling restarts.
-        </p>
-      </div>
+      </FormField>
 
-      <div className="grid gap-2">
-        <Label htmlFor="max-unavailable">Max Unavailable (optional)</Label>
+      <FormField
+        id="max-unavailable"
+        label="Max Unavailable (optional)"
+        hint="Maximum number or percentage of pods that can be unavailable during update."
+      >
         <Input
           id="max-unavailable"
           placeholder='e.g. "1" or "25%"'
@@ -46,10 +50,7 @@ export function WizardRollingUpdateStep({ form, updateForm }: WizardRollingUpdat
             })
           }
         />
-        <p className="text-base-content/60 text-xs">
-          Maximum number or percentage of pods that can be unavailable during update.
-        </p>
-      </div>
+      </FormField>
 
       <div className="flex items-center space-x-2">
         <Checkbox

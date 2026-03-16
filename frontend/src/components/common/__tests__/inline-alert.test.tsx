@@ -26,19 +26,19 @@ describe("InlineAlert", () => {
   it("applies error variant by default", () => {
     render(<InlineAlert message="Error" />);
     const el = screen.getByRole("alert");
-    expect(el.className).toContain("border-error");
+    expect(el.className).toContain("alert-error");
   });
 
   it("applies warning variant", () => {
     render(<InlineAlert message="Warning" variant="warning" />);
     const el = screen.getByRole("alert");
-    expect(el.className).toContain("border-warning");
+    expect(el.className).toContain("alert-warning");
   });
 
   it("applies info variant", () => {
     render(<InlineAlert message="Info" variant="info" />);
     const el = screen.getByRole("alert");
-    expect(el.className).toContain("border-accent");
+    expect(el.className).toContain("alert-info");
   });
 
   it("applies custom className", () => {
@@ -51,5 +51,11 @@ describe("InlineAlert", () => {
     render(<InlineAlert message="Test" />);
     const el = screen.getByRole("alert");
     expect(el).toHaveAttribute("aria-live", "polite");
+  });
+
+  it("uses DaisyUI alert base class", () => {
+    render(<InlineAlert message="Test" />);
+    const el = screen.getByRole("alert");
+    expect(el.className).toContain("alert");
   });
 });

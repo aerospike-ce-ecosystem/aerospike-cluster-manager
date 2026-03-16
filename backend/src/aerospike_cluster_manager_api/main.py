@@ -157,6 +157,7 @@ try:
     @app.exception_handler(ServerError)
     async def _server_error(_req: Request, exc: ServerError) -> JSONResponse:
         msg = str(exc)
+        # TODO: Replace string check with proper error code when aerospike-py exposes result_code
         if "FailForbidden" in msg:
             return JSONResponse(
                 status_code=403,

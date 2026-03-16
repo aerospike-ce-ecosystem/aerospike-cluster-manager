@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { LoadingButton } from "@/components/common/loading-button";
 import { InlineAlert } from "@/components/common/inline-alert";
+import { FormField } from "@/components/common/form-field";
 import { LazyCodeEditor as CodeEditor } from "@/components/common/code-editor-lazy";
 import { useQueryStore } from "@/stores/query-store";
 import type { PredicateOperator } from "@/lib/api/types";
@@ -259,9 +260,12 @@ export function QueryToolbar({
       {viewMode === "query" && advancedOpen && (
         <div className="mt-3 space-y-3">
           {/* Expression Filter */}
-          <div>
-            <Label className="text-xs">Expression Filter</Label>
-            <div className="mt-1 h-[120px] overflow-hidden rounded-md border">
+          <FormField
+            id="expression-filter"
+            label="Expression Filter"
+            hint="Raw JSON filter expression"
+          >
+            <div className="h-[120px] overflow-hidden rounded-md border">
               <CodeEditor
                 value={store.expression}
                 onChange={(v) => store.setExpression(v)}
@@ -269,19 +273,17 @@ export function QueryToolbar({
                 height="120px"
               />
             </div>
-            <p className="text-muted-foreground mt-1 text-xs">Raw JSON filter expression</p>
-          </div>
+          </FormField>
 
           {/* Max Records */}
-          <div className="max-w-[200px]">
-            <Label className="text-xs">Max Records</Label>
+          <FormField id="max-records" label="Max Records" className="max-w-[200px]">
             <Input
+              id="max-records"
               type="number"
               value={store.maxRecords}
               onChange={(e) => store.setMaxRecords(parseInt(e.target.value, 10) || 100)}
-              className="mt-1"
             />
-          </div>
+          </FormField>
 
           {/* Bin Selection */}
           {knownBins.length > 0 && (

@@ -1,6 +1,7 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { FormField } from "@/components/common/form-field";
 import {
   validateK8sCpu,
   validateK8sMemory,
@@ -33,60 +34,52 @@ export function WizardResourcesStep({
   return (
     <>
       <div className="grid grid-cols-2 gap-4">
-        <div className="grid gap-2">
-          <Label htmlFor="cpu-request">CPU Request</Label>
+        <FormField
+          id="cpu-request"
+          label="CPU Request"
+          error={validateK8sCpu(form.resources?.requests.cpu || "500m") || null}
+        >
           <Input
             id="cpu-request"
             value={form.resources?.requests.cpu || "500m"}
             onChange={(e) => updateResource("requests", "cpu", e.target.value)}
           />
-          {validateK8sCpu(form.resources?.requests.cpu || "500m") && (
-            <p className="text-error text-xs">
-              {validateK8sCpu(form.resources?.requests.cpu || "500m")}
-            </p>
-          )}
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="cpu-limit">CPU Limit</Label>
+        </FormField>
+        <FormField
+          id="cpu-limit"
+          label="CPU Limit"
+          error={validateK8sCpu(form.resources?.limits.cpu || "2") || null}
+        >
           <Input
             id="cpu-limit"
             value={form.resources?.limits.cpu || "2"}
             onChange={(e) => updateResource("limits", "cpu", e.target.value)}
           />
-          {validateK8sCpu(form.resources?.limits.cpu || "2") && (
-            <p className="text-error text-xs">
-              {validateK8sCpu(form.resources?.limits.cpu || "2")}
-            </p>
-          )}
-        </div>
+        </FormField>
       </div>
       <div className="grid grid-cols-2 gap-4">
-        <div className="grid gap-2">
-          <Label htmlFor="mem-request">Memory Request</Label>
+        <FormField
+          id="mem-request"
+          label="Memory Request"
+          error={validateK8sMemory(form.resources?.requests.memory || "1Gi") || null}
+        >
           <Input
             id="mem-request"
             value={form.resources?.requests.memory || "1Gi"}
             onChange={(e) => updateResource("requests", "memory", e.target.value)}
           />
-          {validateK8sMemory(form.resources?.requests.memory || "1Gi") && (
-            <p className="text-error text-xs">
-              {validateK8sMemory(form.resources?.requests.memory || "1Gi")}
-            </p>
-          )}
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="mem-limit">Memory Limit</Label>
+        </FormField>
+        <FormField
+          id="mem-limit"
+          label="Memory Limit"
+          error={validateK8sMemory(form.resources?.limits.memory || "4Gi") || null}
+        >
           <Input
             id="mem-limit"
             value={form.resources?.limits.memory || "4Gi"}
             onChange={(e) => updateResource("limits", "memory", e.target.value)}
           />
-          {validateK8sMemory(form.resources?.limits.memory || "4Gi") && (
-            <p className="text-error text-xs">
-              {validateK8sMemory(form.resources?.limits.memory || "4Gi")}
-            </p>
-          )}
-        </div>
+        </FormField>
       </div>
 
       {(() => {

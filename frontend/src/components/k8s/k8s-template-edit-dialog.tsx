@@ -21,6 +21,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
+import { KeyValueEditor } from "@/components/common/key-value-editor";
 import { Plus, X } from "lucide-react";
 import type {
   K8sTemplateDetail,
@@ -112,7 +113,12 @@ export function K8sTemplateEditDialog({
       : serviceSection?.protoFdMax != null
         ? Number(serviceSection.protoFdMax)
         : undefined;
-  const knownServiceKeys = new Set(["proto-fd-max", "protoFdMax", "feature-key-file", "featureKeyFile"]);
+  const knownServiceKeys = new Set([
+    "proto-fd-max",
+    "protoFdMax",
+    "feature-key-file",
+    "featureKeyFile",
+  ]);
   const initialServiceExtraParams: { key: string; value: string }[] = serviceSection
     ? Object.entries(serviceSection)
         .filter(([k]) => !knownServiceKeys.has(k))
@@ -553,49 +559,29 @@ export function K8sTemplateEditDialog({
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Additional Service Parameters</Label>
-                {serviceExtraParams.map((param, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <Input
-                      value={param.key}
-                      onChange={(e) => {
-                        const next = [...serviceExtraParams];
-                        next[idx] = { ...next[idx], key: e.target.value };
-                        setServiceExtraParams(next);
-                      }}
-                      placeholder="Key (e.g. migrate-threads)"
-                      className="flex-1"
-                    />
-                    <Input
-                      value={param.value}
-                      onChange={(e) => {
-                        const next = [...serviceExtraParams];
-                        next[idx] = { ...next[idx], value: e.target.value };
-                        setServiceExtraParams(next);
-                      }}
-                      placeholder="Value"
-                      className="flex-1"
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setServiceExtraParams(serviceExtraParams.filter((_, i) => i !== idx))
-                      }
-                      className="text-muted-foreground hover:text-destructive p-1"
-                      title="Remove parameter"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={() =>
-                    setServiceExtraParams([...serviceExtraParams, { key: "", value: "" }])
+                <KeyValueEditor
+                  value={
+                    serviceExtraParams.length > 0
+                      ? Object.fromEntries(
+                          serviceExtraParams
+                            .filter((p) => p.key.trim())
+                            .map((p) => [p.key, p.value]),
+                        )
+                      : undefined
                   }
-                  className="text-primary hover:text-primary/80 flex items-center gap-1 text-xs font-medium"
-                >
-                  <Plus className="h-3.5 w-3.5" /> Add Service Parameter
-                </button>
+                  onChange={(v) => {
+                    if (!v) {
+                      setServiceExtraParams([]);
+                    } else {
+                      setServiceExtraParams(
+                        Object.entries(v).map(([key, value]) => ({ key, value })),
+                      );
+                    }
+                  }}
+                  keyPlaceholder="Key (e.g. migrate-threads)"
+                  valuePlaceholder="Value"
+                  addLabel="Add"
+                />
               </div>
             </div>
           </div>

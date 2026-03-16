@@ -56,6 +56,7 @@ aerospike-cluster-manager/
 │       ├── store.py       # in-memory mock data store (for development)
 │       ├── models/        # Pydantic models (connection, cluster, record, index, admin, udf, metrics, query, terminal, k8s_cluster incl. ACLRoleSpec, ACLUserSpec, ACLConfig, RollingUpdateConfig, OperationStatusResponse)
 │       ├── routers/       # REST endpoints (/api/* prefix, incl. k8s_clusters.py)
+│       ├── services/      # Business logic services (k8s_service.py)
 │       ├── k8s_client.py  # Kubernetes API client (clusters, templates, pods, events, namespaces, storage classes, secrets)
 │       └── mock_data/     # Mock data generators for development
 ├── frontend/          # Next.js 16 App Router (React 19, TypeScript)
@@ -77,13 +78,7 @@ aerospike-cluster-manager/
 │           └── utils.ts      # cn() (clsx + tailwind-merge)
 ├── aerospike/         # Aerospike configuration & seed data
 │   ├── aerospike.conf     # 3-node mesh cluster config (namespace: test)
-│   ├── seed-data.sh       # Seed script: 1234 records + 5 indexes + 5 UDFs
-│   └── lua/               # Lua UDF modules (mounted into seed container)
-│       ├── record_utils.lua   # Record ops (get_full_name, update_score, toggle_bool, ...)
-│       ├── aggregation.lua    # Stream aggregation (sum_int, count_by_category, avg_int, ...)
-│       ├── filter_utils.lua   # Filters (in_range, has_city, filter_above, ...)
-│       ├── string_ops.lua     # String ops (to_upper, str_contains, format_summary, ...)
-│       └── math_ops.lua       # Math ops (calc_percentage, normalize, statistics, ...)
+│   └── seed-data.sh       # Seed script: 1234 records + 5 indexes
 ├── compose.yaml       # Full stack (Aerospike + Backend + Frontend + Seed)
 └── compose.dev.yaml   # Aerospike only (for local dev)
 ```
@@ -105,7 +100,6 @@ podman exec -it aerospike-tools bash
 `compose.yaml` includes `aerospike-seed` container that runs once on startup (`restart: "no"`):
 - Inserts **1234 records** into `test.sample_set` with 7 bin types (Integer, String, Double, Boolean/Int, List, Map, GeoJSON)
 - Creates **5 secondary indexes** (idx_bin_int, idx_bin_str, idx_bin_double, idx_bin_bool, idx_bin_geojson) via `asinfo sindex-create`
-- Registers **5 Lua UDF modules** (record_utils, aggregation, filter_utils, string_ops, math_ops) via `aql REGISTER MODULE`
 
 > **Note**: The `aerospike/aerospike-tools` image has a `wrapper` entrypoint that only accepts known commands (aql, asadm, etc.). Both `aerospike-tools` and `aerospike-seed` services use `entrypoint: []` to override it.
 
@@ -118,6 +112,10 @@ Local dev with `compose.dev.yaml` requires setting `AEROSPIKE_HOST=localhost AER
 - **Type Mirroring**: Backend Pydantic models and frontend TypeScript types (`lib/api/types.ts`) are manually synchronized. Both sides must be updated when models change.
 - **Styling**: Tailwind CSS 4 + DaisyUI 5. Light/dark mode themes via CSS custom properties. Custom animations defined in `globals.css`.
 - **Path Alias**: `@/` points to `frontend/src/` (configured in both tsconfig and vitest).
+
+### Backend Policies
+
+- **No Lua UDFs**: Do not bundle or register Lua UDF scripts in the backend. The `routers/udfs.py` endpoint exists for users to manage their own UDFs, but the backend itself must not ship Lua files. Use aerospike-py expressions, CDT operations, and client-side Python for server-side filtering or data manipulation.
 
 ### Frontend Route Structure
 | Route | Description |

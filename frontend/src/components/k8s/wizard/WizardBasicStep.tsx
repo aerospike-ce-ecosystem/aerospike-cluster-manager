@@ -2,6 +2,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select } from "@/components/ui/select";
+import { FormField } from "@/components/common/form-field";
 import {
   validateK8sName,
   validateK8sCpu,
@@ -39,26 +40,22 @@ export function WizardBasicStep({
     <div className="space-y-6">
       {/* Cluster identity */}
       <div className="space-y-4">
-        <div className="grid gap-2">
-          <Label htmlFor="cluster-name">Cluster Name</Label>
+        <FormField
+          id="cluster-name"
+          label="Cluster Name"
+          error={form.name.length > 0 ? validateK8sName(form.name) : null}
+          hint="Lowercase letters, numbers, and hyphens only (K8s DNS name)."
+        >
           <Input
             id="cluster-name"
             placeholder="my-aerospike"
             value={form.name}
             onChange={(e) => updateForm({ name: e.target.value.toLowerCase() })}
           />
-          {form.name.length > 0 && validateK8sName(form.name) ? (
-            <p className="text-error text-xs">{validateK8sName(form.name)}</p>
-          ) : (
-            <p className="text-base-content/60 text-xs">
-              Lowercase letters, numbers, and hyphens only (K8s DNS name).
-            </p>
-          )}
-        </div>
+        </FormField>
 
         <div className="grid grid-cols-2 gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="k8s-namespace">Namespace</Label>
+          <FormField id="k8s-namespace" label="Namespace">
             <Select
               value={form.namespace}
               onChange={(e) => updateForm({ namespace: e.target.value })}
@@ -74,10 +71,9 @@ export function WizardBasicStep({
                 </option>
               ))}
             </Select>
-          </div>
+          </FormField>
 
-          <div className="grid gap-2">
-            <Label htmlFor="cluster-size">Size (1-8 nodes)</Label>
+          <FormField id="cluster-size" label="Size (1-8 nodes)">
             <Input
               id="cluster-size"
               type="number"
@@ -90,11 +86,10 @@ export function WizardBasicStep({
                 })
               }
             />
-          </div>
+          </FormField>
         </div>
 
-        <div className="grid gap-2">
-          <Label>Aerospike Image</Label>
+        <FormField id="aerospike-image" label="Aerospike Image">
           <Select value={form.image} onChange={(e) => updateForm({ image: e.target.value })}>
             {AEROSPIKE_IMAGES.map((img) => (
               <option key={img} value={img}>
@@ -102,75 +97,59 @@ export function WizardBasicStep({
               </option>
             ))}
           </Select>
-        </div>
+        </FormField>
       </div>
 
       {/* Resources */}
       <div className="space-y-3 rounded-lg border p-4">
         <span className="text-sm font-medium">Resources</span>
         <div className="grid grid-cols-2 gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="cpu-request" className="text-xs">
-              CPU Request
-            </Label>
+          <FormField
+            id="cpu-request"
+            label="CPU Request"
+            error={validateK8sCpu(form.resources?.requests.cpu || "500m") || null}
+          >
             <Input
               id="cpu-request"
               value={form.resources?.requests.cpu || "500m"}
               onChange={(e) => updateResource("requests", "cpu", e.target.value)}
             />
-            {validateK8sCpu(form.resources?.requests.cpu || "500m") && (
-              <p className="text-error text-xs">
-                {validateK8sCpu(form.resources?.requests.cpu || "500m")}
-              </p>
-            )}
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="cpu-limit" className="text-xs">
-              CPU Limit
-            </Label>
+          </FormField>
+          <FormField
+            id="cpu-limit"
+            label="CPU Limit"
+            error={validateK8sCpu(form.resources?.limits.cpu || "2") || null}
+          >
             <Input
               id="cpu-limit"
               value={form.resources?.limits.cpu || "2"}
               onChange={(e) => updateResource("limits", "cpu", e.target.value)}
             />
-            {validateK8sCpu(form.resources?.limits.cpu || "2") && (
-              <p className="text-error text-xs">
-                {validateK8sCpu(form.resources?.limits.cpu || "2")}
-              </p>
-            )}
-          </div>
+          </FormField>
         </div>
         <div className="grid grid-cols-2 gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="mem-request" className="text-xs">
-              Memory Request
-            </Label>
+          <FormField
+            id="mem-request"
+            label="Memory Request"
+            error={validateK8sMemory(form.resources?.requests.memory || "1Gi") || null}
+          >
             <Input
               id="mem-request"
               value={form.resources?.requests.memory || "1Gi"}
               onChange={(e) => updateResource("requests", "memory", e.target.value)}
             />
-            {validateK8sMemory(form.resources?.requests.memory || "1Gi") && (
-              <p className="text-error text-xs">
-                {validateK8sMemory(form.resources?.requests.memory || "1Gi")}
-              </p>
-            )}
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="mem-limit" className="text-xs">
-              Memory Limit
-            </Label>
+          </FormField>
+          <FormField
+            id="mem-limit"
+            label="Memory Limit"
+            error={validateK8sMemory(form.resources?.limits.memory || "4Gi") || null}
+          >
             <Input
               id="mem-limit"
               value={form.resources?.limits.memory || "4Gi"}
               onChange={(e) => updateResource("limits", "memory", e.target.value)}
             />
-            {validateK8sMemory(form.resources?.limits.memory || "4Gi") && (
-              <p className="text-error text-xs">
-                {validateK8sMemory(form.resources?.limits.memory || "4Gi")}
-              </p>
-            )}
-          </div>
+          </FormField>
         </div>
 
         {(() => {

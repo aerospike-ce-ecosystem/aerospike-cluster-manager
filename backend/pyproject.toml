@@ -8,7 +8,7 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "aerospike-py>=0.0.1", # 안정 버전 이상 사용
+    "aerospike-py>=0.0.3", # 안정 버전 이상 사용
     "asyncpg>=0.30.0",
     "fastapi>=0.115.0",
     "kubernetes>=31.0.0",

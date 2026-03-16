@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { FormField } from "@/components/common/form-field";
 import { LoadingButton } from "@/components/common/loading-button";
 import { api } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/utils";
@@ -38,7 +39,6 @@ export function CreateSampleDataDialog({
   const [setName, setSetName] = useState("sample_set");
   const [recordCount, setRecordCount] = useState("1234");
   const [createIndexes, setCreateIndexes] = useState(true);
-  const [registerUdfs, setRegisterUdfs] = useState(true);
   const [loading, setLoading] = useState(false);
 
   // Sync namespace when namespaces prop changes
@@ -70,7 +70,6 @@ export function CreateSampleDataDialog({
         setName: setName.trim(),
         recordCount: count,
         createIndexes,
-        registerUdfs,
       });
 
       const parts: string[] = [`${result.recordsCreated} records`];
@@ -79,9 +78,6 @@ export function CreateSampleDataDialog({
       }
       if (result.indexesSkipped.length > 0) {
         parts.push(`${result.indexesSkipped.length} indexes skipped`);
-      }
-      if (result.udfsRegistered.length > 0) {
-        parts.push(`${result.udfsRegistered.length} UDFs`);
       }
       const elapsed = (result.elapsedMs / 1000).toFixed(1);
       useToastStore.getState().addToast("success", `Created ${parts.join(", ")} in ${elapsed}s`);
@@ -106,8 +102,7 @@ export function CreateSampleDataDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-2">
-          <div className="grid gap-2">
-            <Label>Namespace</Label>
+          <FormField id="sample-namespace" label="Namespace">
             <Select value={namespace} onChange={(e) => setNamespace(e.target.value)}>
               <option value="">Select namespace</option>
               {namespaces.map((ns) => (
@@ -116,17 +111,15 @@ export function CreateSampleDataDialog({
                 </option>
               ))}
             </Select>
-          </div>
-          <div className="grid gap-2">
-            <Label>Set Name</Label>
+          </FormField>
+          <FormField id="sample-set-name" label="Set Name">
             <Input
               placeholder="sample_set"
               value={setName}
               onChange={(e) => setSetName(e.target.value)}
             />
-          </div>
-          <div className="grid gap-2">
-            <Label>Record Count</Label>
+          </FormField>
+          <FormField id="sample-record-count" label="Record Count" hint="1 ~ 10,000 records">
             <Input
               type="number"
               placeholder="1234"
@@ -135,8 +128,7 @@ export function CreateSampleDataDialog({
               value={recordCount}
               onChange={(e) => setRecordCount(e.target.value)}
             />
-            <p className="text-muted-foreground text-xs">1 ~ 10,000 records</p>
-          </div>
+          </FormField>
           <div className="space-y-3 pt-1">
             <div className="flex items-center gap-2">
               <Checkbox
@@ -146,16 +138,6 @@ export function CreateSampleDataDialog({
               />
               <Label htmlFor="create-indexes" className="cursor-pointer text-sm font-normal">
                 Create secondary indexes (5 indexes on int/str/double/bool/geojson bins)
-              </Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="register-udfs"
-                checked={registerUdfs}
-                onCheckedChange={setRegisterUdfs}
-              />
-              <Label htmlFor="register-udfs" className="cursor-pointer text-sm font-normal">
-                Register Lua UDFs (record_utils, aggregation, filter_utils, string_ops, math_ops)
               </Label>
             </div>
           </div>
