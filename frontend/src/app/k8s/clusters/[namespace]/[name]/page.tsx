@@ -34,7 +34,7 @@ import { K8sReconciliationHealth } from "@/components/k8s/k8s-reconciliation-hea
 import { K8sMigrationStatus } from "@/components/k8s/k8s-migration-status";
 import { K8sOperationStatus } from "@/components/k8s/k8s-operation-status";
 import { K8sRackTopology } from "@/components/k8s/k8s-rack-topology";
-import { ConfirmDialog } from "@/components/common/confirm-dialog";
+import { K8sOperationTriggerDialog } from "@/components/k8s/k8s-operation-trigger-dialog";
 import { useK8sClusterStore } from "@/stores/k8s-cluster-store";
 import { useToastStore } from "@/stores/toast-store";
 import { cn, getErrorMessage } from "@/lib/utils";
@@ -75,7 +75,6 @@ export default function K8sClusterDetailPage() {
     scaleCluster,
     deleteCluster,
     updateCluster,
-    triggerOperation,
     resyncTemplate,
     pauseCluster,
     resumeCluster,
@@ -92,8 +91,10 @@ export default function K8sClusterDetailPage() {
   const [resyncing, setResyncing] = useState(false);
   const [selectedPods, setSelectedPods] = useState<string[]>([]);
   const [templateSpecOpen, setTemplateSpecOpen] = useState(false);
-  const [warmRestartConfirmOpen, setWarmRestartConfirmOpen] = useState(false);
-  const [podRestartConfirmOpen, setPodRestartConfirmOpen] = useState(false);
+  const [operationDialogOpen, setOperationDialogOpen] = useState(false);
+  const [operationDialogKind, setOperationDialogKind] = useState<"WarmRestart" | "PodRestart">(
+    "WarmRestart",
+  );
   const [pendingPodsExpanded, setPendingPodsExpanded] = useState(false);
   const [migrationStatus, setMigrationStatus] = useState<MigrationStatus | null>(null);
 
@@ -215,7 +216,10 @@ export default function K8sClusterDetailPage() {
               variant="warning"
               size="sm"
               disabled={loading}
-              onClick={() => setWarmRestartConfirmOpen(true)}
+              onClick={() => {
+                setOperationDialogKind("WarmRestart");
+                setOperationDialogOpen(true);
+              }}
             >
               Warm Restart
             </Button>
@@ -223,7 +227,10 @@ export default function K8sClusterDetailPage() {
               variant="warning"
               size="sm"
               disabled={loading}
-              onClick={() => setPodRestartConfirmOpen(true)}
+              onClick={() => {
+                setOperationDialogKind("PodRestart");
+                setOperationDialogOpen(true);
+              }}
             >
               Pod Restart
             </Button>
@@ -818,62 +825,17 @@ export default function K8sClusterDetailPage() {
         clusterName={name}
       />
 
-      <ConfirmDialog
-        open={warmRestartConfirmOpen}
-        onOpenChange={setWarmRestartConfirmOpen}
-        title="Confirm Warm Restart"
-        description={
-          selectedPods.length > 0
-            ? `This will warm-restart ${selectedPods.length} selected pod(s). The operation applies configuration changes without a full pod restart but may briefly affect ongoing requests.`
-            : "This will warm-restart all pods in the cluster. The operation applies configuration changes without a full pod restart but may briefly affect ongoing requests."
-        }
-        confirmLabel="Warm Restart"
-        onConfirm={async () => {
-          try {
-            const pods = selectedPods.length > 0 ? selectedPods : undefined;
-            await triggerOperation(namespace, name, "WarmRestart", pods);
-            useToastStore
-              .getState()
-              .addToast(
-                "success",
-                pods
-                  ? `Warm restart initiated for ${pods.length} pod(s)`
-                  : "Warm restart initiated",
-              );
-            setSelectedPods([]);
-          } catch (err) {
-            useToastStore.getState().addToast("error", getErrorMessage(err));
-          }
-        }}
-      />
-
-      <ConfirmDialog
-        open={podRestartConfirmOpen}
-        onOpenChange={setPodRestartConfirmOpen}
-        title="Confirm Pod Restart"
-        description={
-          selectedPods.length > 0
-            ? `This will restart ${selectedPods.length} selected pod(s). Pods will be deleted and recreated, which is disruptive and will temporarily reduce cluster capacity.`
-            : "This will restart all pods in the cluster. Pods will be deleted and recreated one by one, which is disruptive and will temporarily reduce cluster capacity."
-        }
-        confirmLabel="Pod Restart"
-        variant="destructive"
-        onConfirm={async () => {
-          try {
-            const pods = selectedPods.length > 0 ? selectedPods : undefined;
-            await triggerOperation(namespace, name, "PodRestart", pods);
-            useToastStore
-              .getState()
-              .addToast(
-                "success",
-                pods
-                  ? `Pod restart initiated for ${pods.length} pod(s)`
-                  : "Pod restart initiated for all pods",
-              );
-            setSelectedPods([]);
-          } catch (err) {
-            useToastStore.getState().addToast("error", getErrorMessage(err));
-          }
+      <K8sOperationTriggerDialog
+        open={operationDialogOpen}
+        onOpenChange={setOperationDialogOpen}
+        namespace={namespace}
+        clusterName={name}
+        pods={selectedCluster.pods}
+        initialSelectedPods={selectedPods}
+        initialKind={operationDialogKind}
+        onSuccess={() => {
+          setSelectedPods([]);
+          fetchCluster(namespace, name);
         }}
       />
     </div>
