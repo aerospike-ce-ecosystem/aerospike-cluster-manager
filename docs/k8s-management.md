@@ -146,16 +146,87 @@ Modify running cluster settings with diff-based patching. The edit dialog suppor
 
 ### HPA (Horizontal Pod Autoscaler)
 
-Create, view, and delete HPAs targeting the AerospikeCluster resource for automatic scaling based on CPU and/or memory utilization. Configure min/max replicas and target utilization percentages.
+The HPA dialog provides full lifecycle management for Kubernetes HorizontalPodAutoscaler resources targeting the AerospikeCluster:
+
+**Creating an HPA:**
+
+1. Click the **HPA** button on the cluster detail page.
+2. Configure the autoscaler:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| Min Replicas | Yes | Minimum number of Aerospike pods (1-8 for CE) |
+| Max Replicas | Yes | Maximum number of Aerospike pods (must be >= min) |
+| CPU Target % | At least one | Target CPU utilization percentage (1-100%) |
+| Memory Target % | At least one | Target memory utilization percentage (1-100%) |
+
+3. At least one metric target (CPU or memory) must be specified.
+4. The HPA is created with `app.kubernetes.io/managed-by: aerospike-cluster-manager` labels.
+
+**Viewing HPA status:**
+
+The dialog shows the current HPA state including current/desired replicas and scaling conditions (ScalingActive, AbleToScale, ScalingLimited).
+
+**Updating and deleting:**
+
+- Use the same dialog to update an existing HPA configuration. The backend automatically detects whether to create or replace.
+- The delete button removes the HPA, reverting to manual scaling.
+
+**API endpoints:**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/k8s/clusters/{namespace}/{name}/hpa` | Get HPA config and status |
+| `POST` | `/api/k8s/clusters/{namespace}/{name}/hpa` | Create or update HPA |
+| `DELETE` | `/api/k8s/clusters/{namespace}/{name}/hpa` | Delete HPA |
 
 ### Operations (Warm Restart / Pod Restart)
 
-- **Warm Restart** -- Restart Aerospike process without killing the pod (preserves in-flight connections).
-- **Pod Restart** -- Full pod restart (kills and recreates the container).
-- Both support **pod selection** via checkboxes to target specific pods.
-- Operation progress is tracked in real-time with a progress bar showing completed/failed pods.
+- **Warm Restart** -- Applies configuration changes without a full pod restart. Pods are restarted one at a time in a rolling manner. Does not cause data loss.
+- **Pod Restart** -- Deletes and recreates pods. More disruptive than warm restart and temporarily reduces cluster capacity while pods are being recreated.
 
-Operations are triggered from the cluster detail page UI and dispatched through the backend's `POST /api/k8s/clusters/{namespace}/{name}/operations` endpoint, which patches the CR's `spec.operations` field. The operator then picks up the operation during its next reconciliation loop.
+**Pod-level operation selection:**
+
+Both operation types support targeting specific pods via a dedicated operation trigger dialog:
+
+1. Click **Warm Restart** or **Pod Restart** from the cluster detail page toolbar.
+2. The operation dialog opens with a **pod selection checklist** showing all pods with their Ready/NotReady status.
+3. Use the **Select All / Deselect All** toggle or check individual pods.
+4. If no pods are selected, the operation applies to all pods (cluster-wide).
+5. Optionally set a custom **Operation ID** (1-20 characters) for tracking; auto-generated if omitted.
+6. Review the confirmation step showing operation type, target pod count, and selected pod names.
+7. Submit to trigger the operation.
+
+Alternatively, you can pre-select pods from the pod status table on the cluster detail page using the checkbox column, then click an operation button. The pre-selected pods carry over into the operation dialog.
+
+**Operation progress tracking:**
+
+When an operation is active, the cluster detail page displays real-time progress:
+
+- A visual progress bar showing the percentage of pods that have completed.
+- Counts of completed and failed pods.
+- The operation type indicator (WarmRestart or PodRestart).
+- The target pod list when specific pods were selected.
+
+The progress display appears automatically during active operations and the detail page polls every 5 seconds.
+
+**API endpoint:**
+
+```
+POST /api/k8s/clusters/{namespace}/{name}/operations
+```
+
+Request body:
+
+```json
+{
+  "kind": "WarmRestart",
+  "id": "optional-tracking-id",
+  "podList": ["pod-0", "pod-1"]
+}
+```
+
+The `podList` field is optional. When omitted or empty, all pods are targeted. The backend patches the CR's `spec.operations` field and the operator picks up the operation during its next reconciliation loop.
 
 ### Pause / Resume
 
@@ -169,19 +240,47 @@ Delete the cluster with a confirmation dialog. Associated connection profiles ar
 
 ### Cluster Health Dashboard
 
-Displays rack distribution and data migration status across the cluster.
+Displays rack distribution and data migration status across the cluster. The health summary includes:
+
+- **Phase** -- Current cluster phase with color-coded badge.
+- **Pod counts** -- Total, ready, and desired pod counts.
+- **Conditions** -- Available, ConfigApplied, ACLSynced, and Migrating indicators.
+- **Rack distribution** -- Per-rack pod breakdown showing total and ready counts per rack ID.
+
+### Migration Status Monitoring
+
+The migration status card provides real-time visibility into Aerospike data migration:
+
+- **Overall status** -- Whether migration is in progress, and total remaining partitions across the cluster.
+- **Per-pod breakdown** -- Each pod shows its individual migrating partition count, making it easy to identify which pods still have data in transit.
+- **Last checked** -- Timestamp of when the migration status was last polled.
+
+The migration status is fetched from the `GET /api/k8s/clusters/{namespace}/{name}/migration-status` endpoint, which reads the `status.migrationStatus` field from the AerospikeCluster CR.
+
+Migration status is particularly useful during:
+- Scale-down operations (waiting for data to migrate off departing pods).
+- Rolling restarts (tracking data rebalancing after each pod restart).
+- Initial cluster provisioning (watching data distribution across new pods).
 
 ### Pod Health Tracking
 
 The pod status table provides detailed per-pod health information:
 
-- **Phase** -- Current pod phase (Running, Pending, etc.).
-- **Ready status** -- Whether the pod's readiness probe is passing.
-- **Access endpoints** -- IP addresses or DNS entries for reaching the pod.
-- **Readiness gate satisfaction** -- Whether the operator's custom readiness gate (`acko.io/aerospike-ready`) is satisfied.
-- **Stability tracking** -- The `unstableSince` timestamp indicates when a pod entered an unstable state. Pods that have been running without restarts for an extended period show no stability flag, while recently restarted or flapping pods display the timestamp and duration since instability began.
-- **Restart history** -- `lastRestartReason` (e.g., OOMKilled, CrashLoopBackOff, operator-initiated) and `lastRestartTime` are displayed per pod, making it easy to identify problematic nodes.
-- **Config hash and pod spec hash** -- Each pod reports its current `configHash` and `podSpecHash`. These are used by the Config Drift Detection card to group pods and highlight which ones are running stale configurations versus the desired state.
+| Column | Description |
+|--------|-------------|
+| **Phase** | Current pod phase (Running, Pending, etc.) |
+| **Ready** | Whether the pod's readiness probe is passing |
+| **Access Endpoints** | IP addresses or DNS entries for reaching the pod |
+| **Readiness Gate** | Whether the operator's custom readiness gate (`acko.io/aerospike-ready`) is satisfied |
+| **Ports** | Pod port and service port displayed as `podPort/servicePort` |
+| **Cluster** | The Aerospike cluster name reported by the pod |
+| **Volumes** | Volume health status showing dirty volumes (needing initialization) and initialized volumes |
+| **Stability** | The `unstableSince` timestamp indicates when a pod entered an unstable state; stable pods show no flag |
+| **Restart History** | `lastRestartReason` (e.g., OOMKilled, CrashLoopBackOff) and `lastRestartTime` per pod |
+| **Config Hash** | Current `configHash` and `podSpecHash` used by Config Drift Detection to group pods |
+| **Rack ID** | Rack assignment for topology-aware deployments |
+
+The table supports row selection via checkboxes. Selected pods can be used directly with the Warm Restart or Pod Restart operations (see [Operations](#operations-warm-restart--pod-restart)).
 
 ### Node Blocklist Management
 

@@ -185,10 +185,86 @@ See the [Architecture Guide](./architecture.md) for a complete RBAC configuratio
    kubectl describe pvc <pvc-name> -n <namespace>
    ```
 
+## CORS Configuration Issues
+
+### Frontend cannot reach the backend API
+
+**Symptoms:** Browser console shows CORS errors, API requests fail with `No 'Access-Control-Allow-Origin' header` messages.
+
+**Possible causes and solutions:**
+
+1. **CORS_ORIGINS not configured** -- The `CORS_ORIGINS` environment variable must include the frontend URL. For local development, this is typically `http://localhost:3000,http://localhost:3100`.
+   ```bash
+   CORS_ORIGINS=http://localhost:3100,https://your-domain.example.com
+   ```
+
+2. **Protocol mismatch** -- Ensure the origin includes the correct protocol (`http` vs `https`). `http://example.com` and `https://example.com` are treated as different origins.
+
+3. **Port mismatch** -- If the frontend is served on a non-standard port, include the full `host:port` in `CORS_ORIGINS`.
+
+4. **Behind a reverse proxy** -- When deployed behind a reverse proxy (e.g., Nginx, Traefik), the proxy's forwarded origin must match one of the `CORS_ORIGINS` entries.
+
+## Pod Log Streaming Issues
+
+### Pod logs return empty or timeout
+
+**Symptoms:** The pod logs viewer shows no content, or the request times out.
+
+**Possible causes and solutions:**
+
+1. **Container not started** -- If the pod is in `Pending` or `ContainerCreating` phase, no logs are available yet. Wait for the pod to reach `Running` state.
+
+2. **Wrong container name** -- Multi-container pods (e.g., with sidecar exporters) require specifying the correct container name. The logs viewer defaults to the first container if none is specified.
+
+3. **Timeout too short** -- Pod log streaming uses the `K8S_LOG_TIMEOUT` setting (default: 30 seconds). For large log volumes, increase this value:
+   ```bash
+   K8S_LOG_TIMEOUT=60
+   ```
+
+4. **RBAC missing** -- The service account needs `get` permission on `pods/log` resources. Verify:
+   ```bash
+   kubectl auth can-i get pods/log -n <namespace> --as=system:serviceaccount:<sa-namespace>:<sa-name>
+   ```
+
+## K8s API Timeout Errors
+
+### Operations fail with timeout errors
+
+**Symptoms:** K8s operations (list, create, patch) fail intermittently with timeout messages.
+
+**Possible causes and solutions:**
+
+1. **Slow API server** -- In large clusters, the Kubernetes API server may take longer to respond. Increase `K8S_API_TIMEOUT`:
+   ```bash
+   K8S_API_TIMEOUT=30
+   ```
+
+2. **Network latency** -- When the backend runs outside the cluster (e.g., via kubeconfig), network latency adds to API call duration. Consider deploying the backend inside the cluster.
+
+3. **Too many resources** -- Listing all clusters or templates across many namespaces can be slow. Check the Kubernetes API server performance and consider namespace-scoped queries.
+
+## Database Connection Pool Exhaustion
+
+### Backend becomes unresponsive under load
+
+**Symptoms:** API requests hang or return 500 errors. Backend logs show "connection pool exhausted" messages.
+
+**Possible causes and solutions:**
+
+1. **Pool too small** -- The default pool max size is 10 connections. Under high concurrency, this may be insufficient. Increase `DB_POOL_MAX_SIZE`:
+   ```bash
+   DB_POOL_MAX_SIZE=20
+   ```
+
+2. **Long-running queries** -- Queries that exceed `DB_COMMAND_TIMEOUT` (default: 30 seconds) are cancelled but may hold connections. Investigate slow queries in PostgreSQL.
+
+3. **Connection leaks** -- If the backend is crashing and restarting, stale connections may accumulate. Restart PostgreSQL or configure idle connection cleanup in `pg_hba.conf`.
+
 ## General Tips
 
 - **Check backend logs** -- The backend logs detailed error information. Set `LOG_LEVEL=DEBUG` for verbose output.
 - **Use the health endpoint** -- `GET /api/health?detail=true` returns component-level health status including database connectivity.
-- **Verify environment variables** -- Many issues stem from misconfigured environment variables. Double-check `K8S_MANAGEMENT_ENABLED`, `DATABASE_URL`, and `CORS_ORIGINS`.
+- **Verify environment variables** -- Many issues stem from misconfigured environment variables. Double-check `K8S_MANAGEMENT_ENABLED`, `DATABASE_URL`, and `CORS_ORIGINS`. See the [Architecture Guide](./architecture.md#environment-configuration) for the full variable reference.
 - **Inspect Kubernetes events** -- The events timeline in the UI (or `kubectl get events`) provides operator-level diagnostic information.
 - **Check operator logs** -- For K8s management issues, the operator logs often contain the root cause. Look at the operator pod logs in the operator's namespace.
+- **Tune timeouts** -- For slow environments, adjust `K8S_API_TIMEOUT`, `K8S_LOG_TIMEOUT`, and `DB_COMMAND_TIMEOUT` as needed.

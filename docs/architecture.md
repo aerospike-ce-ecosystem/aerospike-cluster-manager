@@ -162,24 +162,48 @@ ui:
     K8S_MANAGEMENT_ENABLED: "true"
     DATABASE_URL: "postgresql://user:pass@postgres:5432/aerospike_manager"
     LOG_FORMAT: "json"
+    # Optional: tune database pool and K8s API timeouts
+    DB_POOL_MIN_SIZE: "2"
+    DB_POOL_MAX_SIZE: "10"
+    DB_COMMAND_TIMEOUT: "30"
+    K8S_API_TIMEOUT: "10"
+    K8S_LOG_TIMEOUT: "30"
 ```
 
 This deploys the Cluster Manager as a Deployment with:
 - A ServiceAccount with the required RBAC permissions
 - An Ingress or Service for external access
 - Environment variables preconfigured for in-cluster operation
+- Configurable database pool and Kubernetes API timeout settings
 
 ## Environment Configuration
+
+### Core Settings
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `K8S_MANAGEMENT_ENABLED` | `false` | Master switch for all K8s management features. Set to `true` when running inside a Kubernetes cluster. |
 | `DATABASE_URL` | `postgresql://...@localhost:5432/aerospike_manager` | PostgreSQL connection string for persisting connection profiles. |
-| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:3100` | Comma-separated allowed CORS origins. |
+| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:3100` | Comma-separated allowed CORS origins. Must include the frontend URL. |
 | `LOG_LEVEL` | `INFO` | Backend log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`). |
 | `LOG_FORMAT` | `text` | Log format: `text` for local dev, `json` for structured container logging. |
 | `HOST` | `0.0.0.0` | Backend bind address. |
 | `PORT` | `8000` | Backend bind port. |
+
+### Database Connection Pool
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DB_POOL_MIN_SIZE` | `2` | Minimum number of connections in the PostgreSQL connection pool. |
+| `DB_POOL_MAX_SIZE` | `10` | Maximum number of connections in the PostgreSQL connection pool. |
+| `DB_COMMAND_TIMEOUT` | `30` | SQL command execution timeout in seconds. Controls how long a single database query can run before being cancelled. |
+
+### Kubernetes API
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `K8S_API_TIMEOUT` | `10` | Timeout in seconds for standard Kubernetes API calls (CRUD operations on CRDs, listing pods, nodes, etc.). |
+| `K8S_LOG_TIMEOUT` | `30` | Timeout in seconds for streaming operations such as pod log retrieval. Set higher than `K8S_API_TIMEOUT` because log streaming can take longer. |
 
 ## Feature Availability by Deployment Mode
 
