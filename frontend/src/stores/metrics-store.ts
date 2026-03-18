@@ -10,6 +10,17 @@ let _visibilityCleanup: (() => void) | null = null;
 
 const MAX_BACKOFF_MS = 60_000;
 
+// Resets the polling interval without triggering an immediate fetchMetrics call.
+// Used when recovering from errors so we don't create a re-entrant call chain.
+function _resetInterval(delayMs: number, getState: () => MetricsState) {
+  if (_intervalId) clearInterval(_intervalId);
+  _intervalId = setInterval(() => {
+    if (!getState()._isTabVisible) return;
+    const currentConnId = getState()._pollingConnId;
+    if (currentConnId) getState().fetchMetrics(currentConnId);
+  }, delayMs);
+}
+
 interface MetricsState {
   metrics: ClusterMetrics | null;
   loading: boolean;
@@ -43,26 +54,20 @@ export const useMetricsStore = create<MetricsState>()((set, get) => ({
       const metrics = await api.getMetrics(connId);
       const hadErrors = get().consecutiveErrors > 0;
       set({ metrics, loading: false, _isFetching: false, consecutiveErrors: 0 });
-      // Reset interval back to base when recovering from errors
+      // Reset interval back to base when recovering from errors (no immediate fetchMetrics call)
       if (hadErrors && _intervalId) {
-        const currentConnId = get()._pollingConnId;
-        if (currentConnId) get().startPolling(currentConnId);
+        _resetInterval(METRIC_INTERVAL_MS, get);
       }
     } catch (error) {
       const consecutiveErrors = get().consecutiveErrors + 1;
       set({ error: getErrorMessage(error), loading: false, _isFetching: false, consecutiveErrors });
       // Restart interval with backed-off delay
       if (_intervalId) {
-        clearInterval(_intervalId);
         const backoff = Math.min(
           METRIC_INTERVAL_MS * Math.pow(2, consecutiveErrors),
           MAX_BACKOFF_MS,
         );
-        _intervalId = setInterval(() => {
-          if (!get()._isTabVisible) return;
-          const currentConnId = get()._pollingConnId;
-          if (currentConnId) get().fetchMetrics(currentConnId);
-        }, backoff);
+        _resetInterval(backoff, get);
       }
     }
   },

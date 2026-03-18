@@ -131,7 +131,7 @@ export function K8sEventTimeline({ events, className }: K8sEventTimelineProps) {
               const isWarning = event.type === "Warning";
               return (
                 <div
-                  key={`${event.reason}-${event.lastTimestamp}-${i}`}
+                  key={`${event.source ?? ""}-${event.reason ?? ""}-${event.firstTimestamp ?? ""}-${event.lastTimestamp ?? ""}-${event.message?.slice(0, 20) ?? ""}-${i}`}
                   className={cn(
                     "flex items-start gap-2 rounded-md px-2 py-1.5 text-sm",
                     isWarning ? "bg-error/5" : "hover:bg-base-200/50",

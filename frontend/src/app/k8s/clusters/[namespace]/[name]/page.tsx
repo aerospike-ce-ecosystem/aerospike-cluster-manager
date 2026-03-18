@@ -82,6 +82,7 @@ export default function K8sClusterDetailPage() {
     detailHealth: health,
     startDetailPolling,
     stopDetailPolling,
+    clearDetailData,
   } = useK8sClusterStore();
   const [scaleOpen, setScaleOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -108,31 +109,44 @@ export default function K8sClusterDetailPage() {
   useEffect(() => {
     if (namespace && name) {
       fetchCluster(namespace, name);
-      api
-        .getK8sClusterEvents(namespace, name)
-        .then((e) => useK8sClusterStore.setState({ detailEvents: e }))
-        .catch((err) => {
-          console.error("Failed to fetch cluster events:", err);
-        });
-      api
-        .getK8sClusterHealth(namespace, name)
-        .then((h) => useK8sClusterStore.setState({ detailHealth: h }))
-        .catch((err) => {
-          console.error("Failed to fetch cluster health:", err);
-        });
     }
   }, [namespace, name, fetchCluster]);
 
-  // Auto-refresh polling when cluster is in a transitional phase
+  // Fetch events and health once after initial cluster load, then keep polling when in a transitional phase.
+  // startDetailPolling already fetches events and health on each tick (including the first immediate call),
+  // so we delegate entirely to it when polling is active to avoid duplicate in-flight requests.
   useEffect(() => {
-    if (
-      !selectedCluster?.phase ||
-      !(TRANSITIONAL_PHASES as string[]).includes(selectedCluster.phase)
-    )
-      return;
-    startDetailPolling(namespace, name);
-    return () => stopDetailPolling();
+    if (!selectedCluster?.phase) return;
+
+    const isTransitional = (TRANSITIONAL_PHASES as string[]).includes(selectedCluster.phase);
+
+    if (isTransitional) {
+      startDetailPolling(namespace, name);
+      return () => stopDetailPolling();
+    }
+
+    // Non-transitional phase: fetch once without starting a polling interval.
+    Promise.all([
+      api.getK8sClusterEvents(namespace, name).catch((err) => {
+        console.error("Failed to fetch cluster events:", err);
+        return useK8sClusterStore.getState().detailEvents;
+      }),
+      api.getK8sClusterHealth(namespace, name).catch((err) => {
+        console.error("Failed to fetch cluster health:", err);
+        return useK8sClusterStore.getState().detailHealth;
+      }),
+    ]).then(([events, health]) => {
+      useK8sClusterStore.setState({ detailEvents: events, detailHealth: health });
+    });
   }, [selectedCluster?.phase, namespace, name, startDetailPolling, stopDetailPolling]);
+
+  // Clear detail data when navigating away from this page entirely
+  useEffect(() => {
+    return () => {
+      stopDetailPolling();
+      clearDetailData();
+    };
+  }, [stopDetailPolling, clearDetailData]);
 
   const handleEdit = async (data: UpdateK8sClusterRequest) => {
     try {

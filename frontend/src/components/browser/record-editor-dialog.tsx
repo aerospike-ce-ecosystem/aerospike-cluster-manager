@@ -23,10 +23,14 @@ import { cn } from "@/lib/utils";
 
 export function parseBinValue(value: string, type: BinType): BinValue {
   switch (type) {
-    case "integer":
-      return parseInt(value, 10) || 0;
-    case "float":
-      return parseFloat(value) || 0;
+    case "integer": {
+      const n = parseInt(value, 10);
+      return isNaN(n) ? 0 : n;
+    }
+    case "float": {
+      const f = parseFloat(value);
+      return isNaN(f) ? 0 : f;
+    }
     case "bool":
       return value.toLowerCase() === "true";
     case "list":

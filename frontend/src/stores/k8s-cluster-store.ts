@@ -55,6 +55,7 @@ interface K8sClusterState {
   resumeCluster: (namespace: string, name: string) => Promise<void>;
   startDetailPolling: (namespace: string, name: string) => void;
   stopDetailPolling: () => void;
+  clearDetailData: () => void;
 }
 
 export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
@@ -301,9 +302,9 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
         }
       };
 
-      // Call poll() immediately, then start the interval
-      poll();
+      // Set the interval first so the catch block can see it, then call poll() immediately
       _k8sDetailIntervalId = setInterval(poll, K8S_DETAIL_POLL_INTERVAL_MS);
+      poll();
     },
 
     stopDetailPolling: () => {
@@ -311,7 +312,13 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
         clearInterval(_k8sDetailIntervalId);
         _k8sDetailIntervalId = null;
       }
-      set({ consecutiveErrors: 0, detailEvents: [], detailHealth: null, _pollingTarget: null });
+      // Keep detailEvents and detailHealth so the UI doesn't flash empty
+      // during phase transitions. Use clearDetailData() when navigating away.
+      set({ consecutiveErrors: 0, _pollingTarget: null });
+    },
+
+    clearDetailData: () => {
+      set({ detailEvents: [], detailHealth: null, selectedCluster: null });
     },
   };
 });

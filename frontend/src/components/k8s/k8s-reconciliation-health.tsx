@@ -64,6 +64,7 @@ export function K8sReconciliationHealth({
   const [status, setStatus] = useState<ReconciliationStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const cancelFetchRef = useRef<(() => void) | null>(null);
 
   const fetchStatus = useCallback(() => {
     let cancelled = false;
@@ -97,7 +98,8 @@ export function K8sReconciliationHealth({
 
     if (status && status.failedReconcileCount > 0) {
       intervalRef.current = setInterval(() => {
-        fetchStatus();
+        cancelFetchRef.current?.();
+        cancelFetchRef.current = fetchStatus();
       }, AUTO_REFRESH_INTERVAL);
     }
 
@@ -106,6 +108,8 @@ export function K8sReconciliationHealth({
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
+      cancelFetchRef.current?.();
+      cancelFetchRef.current = null;
     };
   }, [status?.failedReconcileCount, fetchStatus]);
 
@@ -149,10 +153,10 @@ export function K8sReconciliationHealth({
     );
   }
 
-  const progressPct = Math.min(
-    (status.failedReconcileCount / status.circuitBreakerThreshold) * 100,
-    100,
-  );
+  const progressPct =
+    status.circuitBreakerThreshold > 0
+      ? Math.min((status.failedReconcileCount / status.circuitBreakerThreshold) * 100, 100)
+      : 0;
 
   return (
     <Card className={cn(colors.border, className)}>

@@ -12,7 +12,7 @@ interface BreakpointResult {
 }
 
 export function useBreakpoint(): BreakpointResult {
-  const [breakpoint, setBreakpoint] = useState<Breakpoint>("desktop");
+  const [breakpoint, setBreakpoint] = useState<Breakpoint | null>(null);
 
   useEffect(() => {
     const mqMobile = window.matchMedia("(max-width: 767px)");
@@ -33,10 +33,14 @@ export function useBreakpoint(): BreakpointResult {
     };
   }, []);
 
+  // Before the client-side effect runs (SSR / first paint), treat as desktop
+  // so that booleans are stable and consumers need no null-checks.
+  const resolved: Breakpoint = breakpoint ?? "desktop";
+
   return {
-    isMobile: breakpoint === "mobile",
-    isTablet: breakpoint === "tablet",
-    isDesktop: breakpoint === "desktop",
-    breakpoint,
+    isMobile: resolved === "mobile",
+    isTablet: resolved === "tablet",
+    isDesktop: resolved === "desktop",
+    breakpoint: resolved,
   };
 }

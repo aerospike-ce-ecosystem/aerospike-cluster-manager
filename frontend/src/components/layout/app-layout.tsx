@@ -17,20 +17,23 @@ function ThemeHandler() {
 
   useEffect(() => {
     const root = document.documentElement;
+    let mq: MediaQueryList | null = null;
+    let listener: ((e: MediaQueryListEvent) => void) | null = null;
 
     if (theme === "system") {
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      root.setAttribute("data-theme", prefersDark ? "bumblebee-dark" : "bumblebee");
-
-      const listener = (e: MediaQueryListEvent) => {
+      mq = window.matchMedia("(prefers-color-scheme: dark)");
+      listener = (e: MediaQueryListEvent) => {
         root.setAttribute("data-theme", e.matches ? "bumblebee-dark" : "bumblebee");
       };
-      const mq = window.matchMedia("(prefers-color-scheme: dark)");
+      root.setAttribute("data-theme", mq.matches ? "bumblebee-dark" : "bumblebee");
       mq.addEventListener("change", listener);
-      return () => mq.removeEventListener("change", listener);
     } else {
       root.setAttribute("data-theme", theme === "dark" ? "bumblebee-dark" : "bumblebee");
     }
+
+    return () => {
+      if (mq && listener) mq.removeEventListener("change", listener);
+    };
   }, [theme]);
 
   return null;

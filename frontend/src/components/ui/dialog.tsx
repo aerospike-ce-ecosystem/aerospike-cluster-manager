@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 
 interface DialogContextValue {
   onClose: () => void;
+  preventClose?: boolean;
 }
 
 const DialogContext = React.createContext<DialogContextValue>({
@@ -50,7 +51,9 @@ const Dialog: React.FC<DialogProps> = ({ open, onOpenChange, preventClose, child
         if (e.target === dialogRef.current && !preventClose) handleClose();
       }}
     >
-      <DialogContext.Provider value={{ onClose: handleClose }}>{children}</DialogContext.Provider>
+      <DialogContext.Provider value={{ onClose: handleClose, preventClose }}>
+        {children}
+      </DialogContext.Provider>
     </dialog>
   );
 };
@@ -70,10 +73,11 @@ const DialogClose = React.forwardRef<
   HTMLButtonElement,
   React.ButtonHTMLAttributes<HTMLButtonElement>
 >(({ onClick, ...props }, ref) => {
-  const { onClose } = React.useContext(DialogContext);
+  const { onClose, preventClose } = React.useContext(DialogContext);
   return (
     <button
       ref={ref}
+      disabled={preventClose}
       onClick={(e) => {
         onClick?.(e);
         onClose();
@@ -86,7 +90,7 @@ DialogClose.displayName = "DialogClose";
 
 const DialogContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, children, ...props }, ref) => {
-    const { onClose } = React.useContext(DialogContext);
+    const { onClose, preventClose } = React.useContext(DialogContext);
     return (
       <div
         ref={ref}
@@ -96,6 +100,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTML
         {children}
         <button
           onClick={onClose}
+          disabled={preventClose}
           className="btn btn-sm btn-circle btn-ghost absolute top-4 right-4 h-10 w-10 sm:h-8 sm:w-8"
           aria-label="Close"
         >

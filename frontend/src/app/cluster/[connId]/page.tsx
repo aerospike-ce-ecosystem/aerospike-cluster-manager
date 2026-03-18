@@ -52,6 +52,7 @@ export default function ClusterPage({ params }: { params: Promise<{ connId: stri
   const resumeCluster = useK8sClusterStore((s) => s.resumeCluster);
   const startDetailPolling = useK8sClusterStore((s) => s.startDetailPolling);
   const stopDetailPolling = useK8sClusterStore((s) => s.stopDetailPolling);
+  const clearDetailData = useK8sClusterStore((s) => s.clearDetailData);
   const storeEvents = useK8sClusterStore((s) => s.detailEvents);
   const storeHealth = useK8sClusterStore((s) => s.detailHealth);
 
@@ -90,6 +91,14 @@ export default function ClusterPage({ params }: { params: Promise<{ connId: stri
     startDetailPolling(k8sNamespace, k8sName);
     return () => stopDetailPolling();
   }, [isK8s, k8sNamespace, k8sName, startDetailPolling, stopDetailPolling]);
+
+  // Clear detail data when navigating away from this page entirely
+  useEffect(() => {
+    return () => {
+      stopDetailPolling();
+      clearDetailData();
+    };
+  }, [stopDetailPolling, clearDetailData]);
 
   const handleRefresh = () => {
     refetchCluster();
