@@ -53,7 +53,10 @@ aerospike-cluster-manager/
 │   └── src/aerospike_cluster_manager_api/
 │       ├── main.py        # FastAPI app, CORS, router registration, /api/health
 │       ├── config.py      # Environment variable based configuration
-│       ├── store.py       # in-memory mock data store (for development)
+│       ├── db/            # Database persistence layer (SQLite default / PostgreSQL optional)
+│       │   ├── __init__.py    # Dispatch layer: selects backend at init_db() time
+│       │   ├── _sqlite.py     # SQLite backend (aiosqlite, WAL mode, default)
+│       │   └── _postgres.py   # PostgreSQL backend (asyncpg, used when ENABLE_POSTGRES=true)
 │       ├── models/        # Pydantic models (connection, cluster, record, index, admin, udf, metrics, query, terminal, k8s_cluster incl. ACLRoleSpec, ACLUserSpec, ACLConfig, RollingUpdateConfig, OperationStatusResponse)
 │       ├── routers/       # REST endpoints (/api/* prefix, incl. k8s_clusters.py)
 │       ├── services/      # Business logic services (k8s_service.py)
@@ -144,7 +147,9 @@ Local dev with `compose.dev.yaml` requires setting `AEROSPIKE_HOST=localhost AER
 ## Environment Variables
 
 See `.env.example`. Used in podman Compose:
-- `DATABASE_URL` — PostgreSQL connection string (default: `postgresql://aerospike:aerospike@localhost:5432/aerospike_manager`)
+- `SQLITE_PATH` — SQLite database file path (default: `/app/data/connections.db` in container, `./data/connections.db` locally)
+- `ENABLE_POSTGRES` — Use PostgreSQL instead of SQLite (default: `false`)
+- `DATABASE_URL` — PostgreSQL connection string; only used when `ENABLE_POSTGRES=true` (default: `postgresql://aerospike:aerospike@localhost:5432/aerospike_manager`)
 - `AEROSPIKE_HOST`, `AEROSPIKE_PORT` — Aerospike server connection info
 - `BACKEND_PORT` (default 8000), `FRONTEND_PORT` (default 3100)
 - `CORS_ORIGINS` — Backend CORS allowed origins

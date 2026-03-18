@@ -1,0 +1,35 @@
+# PostgreSQL override for compose.yaml
+#
+# Use when you need persistent storage backed by PostgreSQL instead of SQLite.
+#
+# Usage:
+#   podman compose -f compose.yaml -f compose-pg.yaml up --build
+#
+services:
+  postgres:
+    container_name: postgres
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: aerospike
+      POSTGRES_PASSWORD: aerospike
+      POSTGRES_DB: aerospike_manager
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aerospike -d aerospike_manager"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  aerospike-cluster-manager:
+    environment:
+      - ENABLE_POSTGRES=true
+      - DATABASE_URL=postgresql://aerospike:aerospike@postgres:5432/aerospike_manager
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:

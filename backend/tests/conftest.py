@@ -6,18 +6,8 @@ from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
-from testcontainers.postgres import PostgresContainer
 
 from aerospike_cluster_manager_api.models.connection import ConnectionProfile
-
-
-@pytest.fixture(scope="session")
-def postgres_url() -> str:
-    """Start a PostgreSQL container once per test session and return its URL."""
-    with PostgresContainer("postgres:17-alpine") as pg:
-        url = pg.get_connection_url()
-        # testcontainers returns psycopg2-style URL; convert to asyncpg format
-        yield url.replace("postgresql+psycopg2://", "postgresql://")
 
 
 @pytest.fixture()
@@ -39,18 +29,15 @@ def sample_connection() -> ConnectionProfile:
 
 
 @pytest.fixture()
-async def init_test_db(postgres_url: str):
-    """Initialize a temporary database for testing and clean up after.
-
-    Patches config.DATABASE_URL so that init_db() connects to the
-    testcontainers PostgreSQL instance.
-    """
+async def init_test_db(tmp_path):
+    """Initialize a temporary SQLite database for testing and clean up after."""
     from aerospike_cluster_manager_api import db
 
-    with patch("aerospike_cluster_manager_api.config.DATABASE_URL", postgres_url):
+    db_path = str(tmp_path / "test_connections.db")
+    with (
+        patch("aerospike_cluster_manager_api.config.ENABLE_POSTGRES", False),
+        patch("aerospike_cluster_manager_api.config.SQLITE_PATH", db_path),
+    ):
         await db.init_db()
-        yield postgres_url
-        # Clean up: drop all rows so each test starts fresh
-        if db._pool is not None:
-            await db._pool.execute("DELETE FROM connections")
-            await db.close_db()
+        yield db_path
+        await db.close_db()

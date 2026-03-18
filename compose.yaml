@@ -115,24 +115,6 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # ── PostgreSQL ───────────────────────────────────────────────────────
-  postgres:
-    container_name: postgres
-    image: postgres:17-alpine
-    environment:
-      POSTGRES_USER: aerospike
-      POSTGRES_PASSWORD: aerospike
-      POSTGRES_DB: aerospike_manager
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U aerospike -d aerospike_manager"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    restart: unless-stopped
-
   # ── Backend + Frontend (single container) ──────────────────────────
   aerospike-cluster-manager:
     container_name: aerospike-cluster-manager
@@ -146,7 +128,9 @@ services:
       - PORT=8000
       - AEROSPIKE_HOST=${AEROSPIKE_HOST:-aerospike-node-1}
       - AEROSPIKE_PORT=${AEROSPIKE_PORT:-3000}
-      - DATABASE_URL=postgresql://aerospike:aerospike@postgres:5432/aerospike_manager
+      - SQLITE_PATH=/app/data/connections.db
+    volumes:
+      - app-data:/app/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 10s
@@ -154,8 +138,6 @@ services:
       retries: 5
       start_period: 15s
     depends_on:
-      postgres:
-        condition: service_healthy
       aerospike-node-1:
         condition: service_healthy
       aerospike-node-2:
@@ -165,4 +147,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  postgres-data:
+  app-data:

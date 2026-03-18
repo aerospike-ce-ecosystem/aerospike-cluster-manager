@@ -62,12 +62,14 @@ RUN chmod +x /app/entrypoint.sh
 RUN groupadd --gid 1001 appuser \
     && useradd --uid 1001 --gid appuser --shell /bin/false --create-home appuser \
     && mkdir -p /app/data \
-    && chown -R appuser:appuser /app
+    && chown -R appuser:appuser /app \
+    && chmod 777 /app/data
 
 USER appuser
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV SQLITE_PATH=/app/data/connections.db
 
 # Frontend: 3000, Backend: 8000
 EXPOSE 3000 8000

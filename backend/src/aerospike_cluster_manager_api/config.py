@@ -21,6 +21,8 @@ CORS_ORIGINS: list[str] = [
 HOST: str = os.getenv("HOST", "0.0.0.0")
 PORT: int = _get_int("PORT", 8000)
 
+ENABLE_POSTGRES: bool = os.getenv("ENABLE_POSTGRES", "false").lower() in ("true", "1", "yes")
+SQLITE_PATH: str = os.getenv("SQLITE_PATH", "./data/connections.db")
 DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://aerospike:aerospike@localhost:5432/aerospike_manager")
 
 LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")

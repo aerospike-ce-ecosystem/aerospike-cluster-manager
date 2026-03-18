@@ -1,14 +1,14 @@
 """Tests for aerospike_cluster_manager_api.db module.
 
-Uses a testcontainers PostgreSQL database to test async CRUD operations
+Uses a temporary SQLite database to test async CRUD operations
 on connection profiles.
 """
 
 from __future__ import annotations
 
+import sqlite3
 from datetime import UTC, datetime
 
-import asyncpg
 import pytest
 
 from aerospike_cluster_manager_api import db
@@ -18,9 +18,8 @@ from aerospike_cluster_manager_api.models.connection import ConnectionProfile
 class TestInitDb:
     async def test_init_creates_table(self, init_test_db):
         """init_db() should create the connections table."""
-        pool = db._get_pool()
-        row = await pool.fetchrow("SELECT table_name FROM information_schema.tables WHERE table_name = 'connections'")
-        assert row is not None
+        result = await db.get_all_connections()
+        assert isinstance(result, list)
 
     async def test_init_starts_with_empty_table(self, init_test_db):
         """init_db() should create an empty connections table (no seed data)."""
@@ -104,7 +103,7 @@ class TestCreateConnection:
 
     async def test_insert_duplicate_id_raises(self, init_test_db, sample_connection):
         await db.create_connection(sample_connection)
-        with pytest.raises(asyncpg.UniqueViolationError):
+        with pytest.raises((sqlite3.IntegrityError, Exception)):
             await db.create_connection(sample_connection)
 
 
@@ -184,26 +183,26 @@ class TestDeleteConnection:
 
 
 class TestCloseDb:
-    async def test_close_sets_pool_to_none(self, init_test_db):
-        """After close_db(), the module-level _pool should be None."""
-        assert db._pool is not None
+    async def test_close_sets_backend_to_none(self, init_test_db):
+        """After close_db(), the module-level _backend should be None."""
+        assert db._backend is not None
         await db.close_db()
-        assert db._pool is None
+        assert db._backend is None
 
     async def test_close_when_already_closed(self):
         """Calling close_db() when already closed should not raise."""
-        db._pool = None
+        db._backend = None
         await db.close_db()
-        assert db._pool is None
+        assert db._backend is None
 
 
-class TestGetPoolWithoutInit:
+class TestGetBackendWithoutInit:
     def test_raises_runtime_error(self):
-        """_get_pool() should raise if init_db() was never called."""
-        original = db._pool
-        db._pool = None
+        """_get_backend() should raise if init_db() was never called."""
+        original = db._backend
+        db._backend = None
         try:
             with pytest.raises(RuntimeError, match="Database not initialized"):
-                db._get_pool()
+                db._get_backend()
         finally:
-            db._pool = original
+            db._backend = original

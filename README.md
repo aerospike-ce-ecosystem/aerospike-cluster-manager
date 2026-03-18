@@ -52,6 +52,55 @@ Browse, create, edit, duplicate and delete records with full pagination support.
 
 ## Quick Start
 
+### Container Image (Quickest)
+
+Run Aerospike Cluster Manager as a single container. Connection profiles are stored in SQLite — no separate database required.
+
+**Step 1 — Start Aerospike CE (skip if you already have one running)**
+
+```bash
+podman network create aerospike-net
+podman run -d \
+  --name aerospike \
+  --network aerospike-net \
+  aerospike:ce-8.1.1.1_1
+
+# Docker
+docker network create aerospike-net
+docker run -d \
+  --name aerospike \
+  --network aerospike-net \
+  aerospike:ce-8.1.1.1_1
+```
+
+**Step 2 — Start Aerospike Cluster Manager**
+
+```bash
+# Podman
+podman run -d \
+  -p 3010:3000 \
+  --name aerospike-cluster-manager \
+  --network aerospike-net \
+  -v ~/.aerospike-cluster-manager:/app/data:U \
+  ghcr.io/aerospike-ce-ecosystem/aerospike-cluster-manager:latest
+
+# Docker
+docker run -d \
+  -p 3010:3000 \
+  --name aerospike-cluster-manager \
+  --network aerospike-net \
+  -v ~/.aerospike-cluster-manager:/app/data \
+  ghcr.io/aerospike-ce-ecosystem/aerospike-cluster-manager:latest
+```
+
+Open **http://localhost:3010** and add a connection with:
+- **Host**: `aerospike` (container name on the shared network)
+- **Port**: `3000`
+
+Connection profiles are persisted to `~/.aerospike-cluster-manager/connections.db` on your host via the volume mount. The `:U` flag (Podman only) remaps the directory ownership to the container's user.
+
+> **macOS / Windows — connecting to an external Aerospike** — if your Aerospike is running on the host (not in this network), use `host.containers.internal` (Podman) or `host.docker.internal` (Docker) as the host when adding the connection in the UI.
+
 ### Podman Compose (Recommended)
 
 ```bash
@@ -750,11 +799,11 @@ The project includes a multi-stage `Dockerfile` that bundles both the frontend (
 # Build the container image
 podman build -t aerospike-cluster-manager .
 
-# Run the container
+# Run with SQLite (default — no extra services needed)
 podman run -d \
   -p 3100:3000 \
   -p 8000:8000 \
-  -e DATABASE_URL=postgresql://user:pass@db-host:5432/aerospike_manager \
+  -v ~/.aerospike-cluster-manager:/app/data:U \
   aerospike-cluster-manager
 ```
 
@@ -764,7 +813,9 @@ A built-in health check (`/api/health`) is configured with a 10-second interval 
 
 | Variable | Default | Description |
 |---|---|---|
-| `DATABASE_URL` | `postgresql://aerospike:aerospike@localhost:5432/aerospike_manager` | PostgreSQL connection string for storing connection profiles and settings |
+| `SQLITE_PATH` | `/app/data/connections.db` | SQLite database file path (default backend) |
+| `ENABLE_POSTGRES` | `false` | Use PostgreSQL instead of SQLite |
+| `DATABASE_URL` | `postgresql://aerospike:aerospike@localhost:5432/aerospike_manager` | PostgreSQL connection string (only used when `ENABLE_POSTGRES=true`) |
 | `HOST` | `0.0.0.0` | Backend bind address |
 | `PORT` | `8000` | Backend bind port |
 | `CORS_ORIGINS` | `http://localhost:3000` | Comma-separated list of allowed CORS origins |
@@ -773,24 +824,37 @@ A built-in health check (`/api/health`) is configured with a 10-second interval 
 | `LOG_LEVEL` | `INFO` | Backend log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 | `LOG_FORMAT` | `text` | Log output format (`text` or `json` for structured logging) |
 
-### PostgreSQL Setup
+### Database Setup
 
-The backend requires a PostgreSQL database for persisting connection profiles and application state.
+Connection profiles are persisted in **SQLite by default** — no external database required. The SQLite file is written to `SQLITE_PATH` (defaults to `/app/data/connections.db` inside the container).
 
-**External PostgreSQL (recommended for production):**
+**SQLite (default):**
 
-Point `DATABASE_URL` to your existing PostgreSQL instance:
+Mount a host directory to persist the database across container restarts:
 
 ```bash
-export DATABASE_URL=postgresql://user:password@your-db-host:5432/aerospike_manager
+podman run -d \
+  -p 3100:3000 \
+  -v ~/.aerospike-cluster-manager:/app/data:U \
+  aerospike-cluster-manager
 ```
 
-**Sidecar PostgreSQL (development / single-node):**
+**PostgreSQL (optional — for high-availability or shared deployments):**
 
-Use `compose.yaml` which includes a PostgreSQL service alongside the application containers:
+Set `ENABLE_POSTGRES=true` and provide a `DATABASE_URL`:
 
 ```bash
-podman compose -f compose.yaml up --build
+podman run -d \
+  -p 3100:3000 \
+  -e ENABLE_POSTGRES=true \
+  -e DATABASE_URL=postgresql://user:password@your-db-host:5432/aerospike_manager \
+  aerospike-cluster-manager
+```
+
+Or use the PostgreSQL Compose override:
+
+```bash
+podman compose -f compose.yaml -f compose-pg.yaml up --build
 ```
 
 ### Reverse Proxy / Ingress Configuration
