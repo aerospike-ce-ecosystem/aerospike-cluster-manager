@@ -4,18 +4,13 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus,
-  Server,
-  Pencil,
-  Trash2,
-  Database,
+  Boxes,
   Loader2,
   Wifi,
   WifiOff,
   Check,
-  Boxes,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -26,26 +21,18 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { StatusBadge } from "@/components/common/status-badge";
+import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
-import { EmptyState } from "@/components/common/empty-state";
 import { InlineAlert } from "@/components/common/inline-alert";
 import { LoadingButton } from "@/components/common/loading-button";
 import { PageHeader } from "@/components/common/page-header";
-import { K8sClusterCard } from "@/components/k8s/k8s-cluster-card";
+import { ClusterListTable } from "@/components/cluster-list/cluster-list-table";
 import { useConnectionStore } from "@/stores/connection-store";
+import { useClusterListStore } from "@/stores/cluster-list-store";
 import { useK8sClusterStore } from "@/stores/k8s-cluster-store";
-import type { ConnectionProfile } from "@/lib/api/types";
+import type { ConnectionProfile, UnifiedClusterRow } from "@/lib/api/types";
 import { cn, getErrorMessage } from "@/lib/utils";
-import { PRESET_COLORS } from "@/lib/constants";
+import { PRESET_COLORS, LABEL_PRESETS, LABEL_COLORS } from "@/lib/constants";
 import { useToastStore } from "@/stores/toast-store";
 
 interface ConnectionFormData {
@@ -55,6 +42,9 @@ interface ConnectionFormData {
   username: string;
   password: string;
   color: string;
+  label: string;
+  labelColor: string;
+  description: string;
 }
 
 const emptyForm: ConnectionFormData = {
@@ -64,29 +54,31 @@ const emptyForm: ConnectionFormData = {
   username: "",
   password: "",
   color: PRESET_COLORS[0],
+  label: "",
+  labelColor: "",
+  description: "",
 };
 
 export default function ConnectionsPage() {
   const router = useRouter();
   const {
-    connections,
-    healthStatuses,
-    checkingHealth,
-    loading,
-    error,
-    fetchConnections,
-    fetchAllHealth,
     createConnection,
     updateConnection,
     deleteConnection,
     testConnection,
   } = useConnectionStore();
   const {
+    rows,
+    loading,
+    error,
+    healthStatuses,
+    fetchAll,
+    fetchAllHealth,
+    updateMetadata,
+  } = useClusterListStore();
+  const {
     k8sAvailable,
-    clusters: k8sClusters,
-    loading: k8sLoading,
     checkAvailability,
-    fetchClusters: fetchK8sClusters,
   } = useK8sClusterStore();
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -98,28 +90,20 @@ export default function ConnectionsPage() {
     success: boolean;
     message: string;
   } | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<ConnectionProfile | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<UnifiedClusterRow | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    fetchConnections()
+    fetchAll()
       .then(() => {
         fetchAllHealth();
       })
-      .catch((err) => console.error("Failed to load connections:", err));
-  }, [fetchConnections, fetchAllHealth]);
+      .catch(() => undefined);
+  }, [fetchAll, fetchAllHealth]);
 
   useEffect(() => {
-    checkAvailability().then(() => {
-      // Fetch clusters after availability is confirmed (store sets k8sAvailable in checkAvailability)
-    });
+    checkAvailability();
   }, [checkAvailability]);
-
-  useEffect(() => {
-    if (k8sAvailable) {
-      fetchK8sClusters();
-    }
-  }, [k8sAvailable, fetchK8sClusters]);
 
   const openCreateDialog = useCallback(() => {
     setEditingId(null);
@@ -128,16 +112,41 @@ export default function ConnectionsPage() {
     setDialogOpen(true);
   }, []);
 
-  const openEditDialog = useCallback((conn: ConnectionProfile) => {
-    setEditingId(conn.id);
-    setForm({
-      name: conn.name,
-      hosts: conn.hosts.join(", "),
-      port: String(conn.port),
-      username: conn.username ?? "",
-      password: "",
-      color: conn.color,
-    });
+  const openEditDialog = useCallback((id: string) => {
+    const row = useClusterListStore.getState().rows.find((r) => r.id === id);
+    if (!row || row.source === "k8s") return;
+
+    // Fetch connection details from the connection store
+    const connections = useConnectionStore.getState().connections;
+    const conn = connections.find((c) => c.id === id);
+    if (conn) {
+      setEditingId(conn.id);
+      setForm({
+        name: conn.name,
+        hosts: conn.hosts.join(", "),
+        port: String(conn.port),
+        username: conn.username ?? "",
+        password: "",
+        color: conn.color,
+        label: conn.label ?? "",
+        labelColor: conn.labelColor ?? "",
+        description: conn.description ?? "",
+      });
+    } else {
+      // Fallback: populate from row data
+      setEditingId(id);
+      setForm({
+        name: row.name,
+        hosts: row.hosts,
+        port: "3000",
+        username: "",
+        password: "",
+        color: row.color,
+        label: row.label ?? "",
+        labelColor: row.labelColor ?? "",
+        description: row.description ?? "",
+      });
+    }
     setTestResult(null);
     setDialogOpen(true);
   }, []);
@@ -156,6 +165,9 @@ export default function ConnectionsPage() {
         username: form.username || undefined,
         password: form.password || undefined,
         color: form.color,
+        label: form.label.trim() || undefined,
+        labelColor: form.labelColor || undefined,
+        description: form.description.trim() || undefined,
       };
       if (editingId) {
         await updateConnection(editingId, data);
@@ -165,7 +177,8 @@ export default function ConnectionsPage() {
         useToastStore.getState().addToast("success", "Connection created");
       }
       setDialogOpen(false);
-      // Refresh health after create/update
+      // Refresh the unified list and health data
+      await fetchAll();
       fetchAllHealth();
     } catch (err) {
       useToastStore.getState().addToast("error", getErrorMessage(err));
@@ -195,12 +208,15 @@ export default function ConnectionsPage() {
   };
 
   const handleDelete = async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || !deleteTarget.connectionId) return;
     setDeleting(true);
     try {
-      await deleteConnection(deleteTarget.id);
+      await deleteConnection(deleteTarget.connectionId);
       useToastStore.getState().addToast("success", "Connection deleted");
       setDeleteTarget(null);
+      // Refresh the unified list
+      await fetchAll();
+      fetchAllHealth();
     } catch (err) {
       useToastStore.getState().addToast("error", getErrorMessage(err));
     } finally {
@@ -208,39 +224,36 @@ export default function ConnectionsPage() {
     }
   };
 
-  const navigateToConnection = useCallback(
-    (conn: ConnectionProfile) => {
-      const status = healthStatuses[conn.id];
-      if (status?.connected) {
-        router.push(`/browser/${conn.id}`);
+  const handleRowClick = useCallback(
+    (row: UnifiedClusterRow) => {
+      if (row.source === "k8s") {
+        if (row.k8sNamespace && row.k8sClusterName) {
+          router.push(`/k8s/clusters/${row.k8sNamespace}/${row.k8sClusterName}`);
+        }
       } else {
-        router.push(`/cluster/${conn.id}`);
+        const status = healthStatuses[row.id];
+        if (status?.connected) {
+          router.push(`/browser/${row.connectionId}`);
+        } else {
+          router.push(`/cluster/${row.connectionId}`);
+        }
       }
     },
     [router, healthStatuses],
   );
 
-  if (loading && connections.length === 0) {
-    return (
-      <div className="p-6 lg:p-8">
-        <div className="mb-8 flex items-center justify-between">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-9 w-32" />
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-[180px] rounded-xl" />
-          ))}
-        </div>
-      </div>
-    );
-  }
+  const handleLabelChange = useCallback(
+    (id: string, label?: string, color?: string) => {
+      updateMetadata(id, { label, labelColor: color });
+    },
+    [updateMetadata],
+  );
 
   return (
     <div className="animate-fade-in space-y-6 p-6 lg:p-8">
       <PageHeader
-        title="Clusters"
-        description="Manage your Aerospike connections"
+        title="Connected Clusters"
+        description="Manage your Aerospike clusters and connections"
         actions={
           <>
             {k8sAvailable && (
@@ -259,188 +272,14 @@ export default function ConnectionsPage() {
 
       <InlineAlert message={error} />
 
-      {connections.length === 0 ? (
-        <EmptyState
-          icon={Server}
-          title="No connections yet"
-          description="Create your first connection to start managing Aerospike."
-          action={
-            <Button onClick={openCreateDialog}>
-              <Plus className="mr-2 h-4 w-4" />
-              New Connection
-            </Button>
-          }
-        />
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {connections.map((conn, idx) => {
-            const status = healthStatuses[conn.id];
-            const isChecking = checkingHealth[conn.id] && !status;
-            const badgeStatus = isChecking
-              ? "checking"
-              : status?.connected
-                ? "connected"
-                : "disconnected";
-
-            return (
-              <Card
-                key={conn.id}
-                className={cn(
-                  "group animate-fade-in-up cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg",
-                  "hover:border-accent/30",
-                )}
-                style={{ animationDelay: `${idx * 0.05}s`, animationFillMode: "backwards" }}
-                role="button"
-                tabIndex={0}
-                onClick={(e) => {
-                  const target = e.target as HTMLElement;
-                  if (
-                    target.closest('[role="menu"]') ||
-                    target.closest('[role="menuitem"]') ||
-                    target.closest(".dropdown")
-                  )
-                    return;
-                  navigateToConnection(conn);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    navigateToConnection(conn);
-                  }
-                }}
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div
-                        className="h-3 w-3 shrink-0 rounded-full shadow-sm"
-                        style={{
-                          backgroundColor: conn.color,
-                          boxShadow: `0 0 0 2px var(--color-card), 0 0 0 4px ${conn.color}30`,
-                        }}
-                      />
-                      <CardTitle className="text-base">{conn.name}</CardTitle>
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <span className="sr-only">Actions</span>
-                          <svg
-                            width="15"
-                            height="15"
-                            viewBox="0 0 15 15"
-                            fill="none"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              d="M3.625 7.5C3.625 8.12132 3.12132 8.625 2.5 8.625C1.87868 8.625 1.375 8.12132 1.375 7.5C1.375 6.87868 1.87868 6.375 2.5 6.375C3.12132 6.375 3.625 6.87868 3.625 7.5ZM8.625 7.5C8.625 8.12132 8.12132 8.625 7.5 8.625C6.87868 8.625 6.375 8.12132 6.375 7.5C6.375 6.87868 6.87868 6.375 7.5 6.375C8.12132 6.375 8.625 6.87868 8.625 7.5ZM13.625 7.5C13.625 8.12132 13.1213 8.625 12.5 8.625C11.8787 8.625 11.375 8.12132 11.375 7.5C11.375 6.87868 11.8787 6.375 12.5 6.375C13.1213 6.375 13.625 6.87868 13.625 7.5Z"
-                              fill="currentColor"
-                            />
-                          </svg>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEditDialog(conn);
-                          }}
-                        >
-                          <Pencil className="mr-2 h-4 w-4" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-error focus:text-error"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteTarget(conn);
-                          }}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                  <CardDescription className="font-mono text-xs tracking-wide">
-                    {conn.hosts.every((h) => h.includes(":"))
-                      ? conn.hosts.join(", ")
-                      : `${conn.hosts.join(", ")}:${conn.port}`}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pb-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <StatusBadge status={badgeStatus} />
-                    {status?.connected && (
-                      <>
-                        <Badge variant="secondary" className="gap-1 text-[11px]">
-                          <Server className="h-3 w-3" />
-                          {status.nodeCount} node
-                          {status.nodeCount !== 1 ? "s" : ""}
-                        </Badge>
-                        <Badge variant="secondary" className="gap-1 text-[11px]">
-                          <Database className="h-3 w-3" />
-                          {status.namespaceCount} ns
-                        </Badge>
-                      </>
-                    )}
-                  </div>
-                  {status?.connected && status.build && (
-                    <p className="text-muted-foreground mt-2.5 font-mono text-xs">
-                      {status.edition} {status.build}
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-
-      {/* K8s Clusters Section */}
-      {k8sAvailable && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Boxes className="text-muted-foreground h-5 w-5" />
-            <h2 className="text-lg font-semibold">Kubernetes Clusters</h2>
-          </div>
-          {k8sLoading && k8sClusters.length === 0 ? (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {Array.from({ length: 2 }).map((_, i) => (
-                <Skeleton key={i} className="h-[140px] rounded-xl" />
-              ))}
-            </div>
-          ) : k8sClusters.length === 0 ? (
-            <EmptyState
-              icon={Boxes}
-              title="No Kubernetes clusters"
-              description="Deploy an Aerospike cluster on Kubernetes to manage it here."
-              action={
-                <Button onClick={() => router.push("/k8s/clusters/new")}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Cluster
-                </Button>
-              }
-            />
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {k8sClusters.map((cluster, idx) => (
-                <K8sClusterCard
-                  key={`${cluster.namespace}/${cluster.name}`}
-                  cluster={cluster}
-                  index={idx}
-                  onClick={() => router.push(`/k8s/clusters/${cluster.namespace}/${cluster.name}`)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      <ClusterListTable
+        rows={rows}
+        loading={loading}
+        onRowClick={handleRowClick}
+        onEdit={openEditDialog}
+        onDelete={setDeleteTarget}
+        onLabelChange={handleLabelChange}
+      />
 
       {/* Connection Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -531,6 +370,77 @@ export default function ConnectionsPage() {
                   />
                 ))}
               </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label>Label</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {LABEL_PRESETS.map((preset) => (
+                  <button
+                    key={preset.name}
+                    type="button"
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors",
+                      form.label === preset.name
+                        ? "border-accent bg-accent/10 text-accent"
+                        : "border-base-300 hover:border-accent/40 hover:bg-base-200",
+                    )}
+                    onClick={() =>
+                      setForm({ ...form, label: preset.name, labelColor: preset.color })
+                    }
+                  >
+                    <span
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: preset.color }}
+                    />
+                    {preset.name}
+                  </button>
+                ))}
+              </div>
+              <Input
+                placeholder="Custom label name"
+                value={
+                  LABEL_PRESETS.some((p) => p.name === form.label) ? "" : form.label
+                }
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setForm({
+                    ...form,
+                    label: val,
+                    labelColor: form.labelColor || LABEL_COLORS[0],
+                  });
+                }}
+                className="mt-1"
+              />
+              {form.label && !LABEL_PRESETS.some((p) => p.name === form.label) && (
+                <div className="flex items-center gap-1.5">
+                  {LABEL_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      className={cn(
+                        "h-5 w-5 rounded-full transition-transform",
+                        form.labelColor === color &&
+                          "ring-base-content/50 scale-110 ring-2 ring-offset-1 ring-offset-base-100",
+                      )}
+                      style={{ backgroundColor: color }}
+                      onClick={() => setForm({ ...form, labelColor: color })}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="conn-desc">Description</Label>
+              <Textarea
+                id="conn-desc"
+                placeholder="Optional description for this connection"
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                rows={2}
+                className="resize-none"
+              />
             </div>
 
             {testResult && (

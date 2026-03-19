@@ -123,3 +123,17 @@ export const NO_VALUE_OPERATORS: FilterOperator[] = ["exists", "not_exists", "is
 export const DUAL_VALUE_OPERATORS: FilterOperator[] = ["between"];
 
 export const AEROSPIKE_IMAGES = ["aerospike:ce-8.1.1.1"] as const;
+
+// === Cluster Label Presets ===
+export const LABEL_PRESETS = [
+  { name: "Production", color: "#EF4444" },
+  { name: "Staging", color: "#F59E0B" },
+  { name: "Development", color: "#22C55E" },
+  { name: "Testing", color: "#3B82F6" },
+  { name: "Archive", color: "#6B7280" },
+  { name: "Analytics", color: "#8B5CF6" },
+] as const;
+
+export const LABEL_COLORS = [
+  "#EF4444", "#F59E0B", "#22C55E", "#3B82F6", "#6B7280", "#8B5CF6", "#EC4899",
+] as const;

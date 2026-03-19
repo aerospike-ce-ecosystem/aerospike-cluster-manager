@@ -9,6 +9,11 @@ class ConnectionStatus(BaseModel):
     namespaceCount: int
     build: str | None = None
     edition: str | None = None
+    totalOps: int = 0
+    memoryUsed: int = 0
+    memoryTotal: int = 0
+    diskUsed: int = 0
+    diskTotal: int = 0
 
 
 class ConnectionProfile(BaseModel):
@@ -20,6 +25,9 @@ class ConnectionProfile(BaseModel):
     username: str | None = None
     password: str | None = None
     color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
+    label: str | None = None
+    label_color: str | None = None
+    description: str | None = None
     createdAt: str
     updatedAt: str
 
@@ -32,6 +40,9 @@ class CreateConnectionRequest(BaseModel):
     username: str | None = None
     password: str | None = None
     color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$", default="#0097D3")
+    label: str | None = None
+    label_color: str | None = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
+    description: str | None = None
 
 
 class UpdateConnectionRequest(BaseModel):
@@ -42,6 +53,9 @@ class UpdateConnectionRequest(BaseModel):
     username: str | None = None
     password: str | None = None
     color: str | None = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
+    label: str | None = None
+    label_color: str | None = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
+    description: str | None = None
 
 
 class TestConnectionRequest(BaseModel):
@@ -61,12 +75,17 @@ class ConnectionProfileResponse(BaseModel):
     clusterName: str | None = None
     username: str | None = None
     color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
+    label: str | None = None
+    labelColor: str | None = None
+    description: str | None = None
     createdAt: str
     updatedAt: str
 
     @classmethod
     def from_profile(cls, profile: ConnectionProfile) -> ConnectionProfileResponse:
-        return cls(**profile.model_dump(exclude={"password"}))
+        data = profile.model_dump(exclude={"password", "label_color"})
+        data["labelColor"] = profile.label_color
+        return cls(**data)
 
 
 class ConnectionWithStatus(ConnectionProfileResponse):

@@ -30,6 +30,9 @@ CREATE TABLE IF NOT EXISTS connections (
     username     TEXT,
     password     TEXT,
     color        TEXT NOT NULL DEFAULT '#0097D3',
+    label        TEXT,
+    label_color  TEXT,
+    description  TEXT,
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL
 );
@@ -40,6 +43,19 @@ def _get_conn() -> aiosqlite.Connection:
     if _conn is None:
         raise RuntimeError("Database not initialized. Call init_db() first.")
     return _conn
+
+
+async def _apply_migrations(conn: aiosqlite.Connection) -> None:
+    """Add columns introduced after the initial schema."""
+    async with conn.execute("PRAGMA table_info(connections)") as cursor:
+        columns = {row[1] for row in await cursor.fetchall()}
+
+    if "label" not in columns:
+        logger.info("Migrating SQLite: adding label, label_color, description columns")
+        await conn.execute("ALTER TABLE connections ADD COLUMN label TEXT")
+        await conn.execute("ALTER TABLE connections ADD COLUMN label_color TEXT")
+        await conn.execute("ALTER TABLE connections ADD COLUMN description TEXT")
+        await conn.commit()
 
 
 async def init_db() -> None:
@@ -56,6 +72,7 @@ async def init_db() -> None:
         await conn.execute("PRAGMA foreign_keys=ON")
         await conn.execute(CREATE_TABLE_SQL)
         await conn.commit()
+        await _apply_migrations(conn)
         _conn = conn
     except Exception:
         await conn.close()
@@ -105,6 +122,9 @@ def _row_to_profile(row: sqlite3.Row) -> ConnectionProfile:
         username=row["username"],
         password=row["password"],
         color=row["color"],
+        label=row["label"],
+        label_color=row["label_color"],
+        description=row["description"],
         createdAt=row["created_at"],
         updatedAt=row["updated_at"],
     )
@@ -133,8 +153,8 @@ async def create_connection(conn: ConnectionProfile) -> None:
     db_conn = _get_conn()
     try:
         await db_conn.execute(
-            """INSERT INTO connections (id, name, hosts, port, cluster_name, username, password, color, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO connections (id, name, hosts, port, cluster_name, username, password, color, label, label_color, description, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 conn.id,
                 conn.name,
@@ -144,6 +164,9 @@ async def create_connection(conn: ConnectionProfile) -> None:
                 conn.username,
                 conn.password,
                 conn.color,
+                conn.label,
+                conn.label_color,
+                conn.description,
                 conn.createdAt,
                 conn.updatedAt,
             ),
@@ -170,7 +193,9 @@ async def update_connection(conn_id: str, data: dict) -> ConnectionProfile | Non
         await db_conn.execute(
             """UPDATE connections
                    SET name = ?, hosts = ?, port = ?, cluster_name = ?,
-                       username = ?, password = ?, color = ?, updated_at = ?
+                       username = ?, password = ?, color = ?,
+                       label = ?, label_color = ?, description = ?,
+                       updated_at = ?
                    WHERE id = ?""",
             (
                 merged["name"],
@@ -180,6 +205,9 @@ async def update_connection(conn_id: str, data: dict) -> ConnectionProfile | Non
                 merged.get("username"),
                 merged.get("password"),
                 merged["color"],
+                merged.get("label"),
+                merged.get("label_color"),
+                merged.get("description"),
                 merged["updatedAt"],
                 conn_id,
             ),
@@ -198,6 +226,9 @@ async def update_connection(conn_id: str, data: dict) -> ConnectionProfile | Non
         username=merged.get("username"),
         password=merged.get("password"),
         color=merged["color"],
+        label=merged.get("label"),
+        label_color=merged.get("label_color"),
+        description=merged.get("description"),
         createdAt=existing.createdAt,
         updatedAt=merged["updatedAt"],
     )

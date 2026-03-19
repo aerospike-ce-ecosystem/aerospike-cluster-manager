@@ -26,6 +26,9 @@ export interface ConnectionProfile {
   color: string;
   createdAt: string;
   updatedAt: string;
+  label?: string;
+  labelColor?: string;
+  description?: string;
 }
 
 export interface ConnectionStatus {
@@ -34,6 +37,11 @@ export interface ConnectionStatus {
   namespaceCount: number;
   build?: string;
   edition?: string;
+  totalOps?: number;
+  memoryUsed?: number;
+  memoryTotal?: number;
+  diskUsed?: number;
+  diskTotal?: number;
 }
 
 export interface ConnectionWithStatus extends ConnectionProfile {
@@ -1154,4 +1162,54 @@ export interface AerospikeClusterSpec {
   enableRackIDOverride?: boolean;
   templateRef?: { name: string };
   [key: string]: unknown;
+}
+
+// === Unified Cluster List ===
+export type ClusterSource = "connection" | "k8s" | "both";
+
+export interface UnifiedClusterRow {
+  /** Unique ID: connection ID or "k8s:{namespace}/{name}" for standalone K8s clusters */
+  id: string;
+  /** Display name */
+  name: string;
+  /** Optional description text */
+  description?: string;
+  /** Label text (e.g., "Production") */
+  label?: string;
+  /** Label color hex */
+  labelColor?: string;
+  /** Where this row comes from */
+  source: ClusterSource;
+  /** Connection status */
+  status: "connected" | "disconnected" | "checking" | "unknown";
+  /** Number of nodes */
+  nodeCount: number;
+  /** Host address(es) */
+  hosts: string;
+  /** Ops/sec (from health summary) */
+  opsPerSec?: number;
+  /** Memory usage bytes */
+  memoryUsed?: number;
+  /** Memory total bytes */
+  memoryTotal?: number;
+  /** Disk usage bytes */
+  diskUsed?: number;
+  /** Disk total bytes */
+  diskTotal?: number;
+  /** Connection color */
+  color: string;
+  /** Whether managed by ACKO (has K8s cluster) */
+  isAckoManaged: boolean;
+  /** K8s cluster phase if applicable */
+  k8sPhase?: K8sClusterPhase;
+  /** K8s namespace (if managed) */
+  k8sNamespace?: string;
+  /** K8s cluster name (if managed) */
+  k8sClusterName?: string;
+  /** Connection ID (if has connection) */
+  connectionId?: string;
+  /** Build version string */
+  build?: string;
+  /** Edition string */
+  edition?: string;
 }
