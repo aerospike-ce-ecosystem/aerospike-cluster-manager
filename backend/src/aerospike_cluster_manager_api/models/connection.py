@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ConnectionStatus(BaseModel):
@@ -33,6 +33,8 @@ class ConnectionProfile(BaseModel):
 
 
 class CreateConnectionRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str = Field(min_length=1, max_length=255, default="New Connection")
     hosts: list[str] = Field(min_length=1, default=["localhost"])
     port: int = Field(ge=1, le=65535, default=3000)
@@ -41,11 +43,13 @@ class CreateConnectionRequest(BaseModel):
     password: str | None = None
     color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$", default="#0097D3")
     label: str | None = None
-    label_color: str | None = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
+    label_color: str | None = Field(None, alias="labelColor", pattern=r"^#[0-9a-fA-F]{6}$")
     description: str | None = None
 
 
 class UpdateConnectionRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str | None = Field(None, min_length=1, max_length=255)
     hosts: list[str] | None = Field(None, min_length=1)
     port: int | None = Field(None, ge=1, le=65535)
@@ -54,7 +58,7 @@ class UpdateConnectionRequest(BaseModel):
     password: str | None = None
     color: str | None = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
     label: str | None = None
-    label_color: str | None = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
+    label_color: str | None = Field(None, alias="labelColor", pattern=r"^#[0-9a-fA-F]{6}$")
     description: str | None = None
 
 

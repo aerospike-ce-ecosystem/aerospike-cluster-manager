@@ -1186,8 +1186,8 @@ export interface UnifiedClusterRow {
   nodeCount: number;
   /** Host address(es) */
   hosts: string;
-  /** Ops/sec (from health summary) */
-  opsPerSec?: number;
+  /** Total ops (cumulative counter from health summary) */
+  totalOps?: number;
   /** Memory usage bytes */
   memoryUsed?: number;
   /** Memory total bytes */

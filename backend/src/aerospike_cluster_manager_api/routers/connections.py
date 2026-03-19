@@ -80,7 +80,7 @@ async def update_connection(
     conn_id: str = Depends(_get_verified_connection),
 ) -> ConnectionProfileResponse:
     """Update an existing connection profile with new settings."""
-    update_data = body.model_dump(exclude_none=True)
+    update_data = body.model_dump(exclude_unset=True, by_alias=False)
     conn = await db.update_connection(conn_id, update_data)
     if not conn:
         raise HTTPException(status_code=404, detail=f"Connection '{conn_id}' not found")

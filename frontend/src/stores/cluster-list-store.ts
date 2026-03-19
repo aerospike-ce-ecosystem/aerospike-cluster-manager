@@ -20,7 +20,7 @@ interface ClusterListState {
   fetchAllHealth: () => void;
   updateMetadata: (
     connectionId: string,
-    data: { label?: string; labelColor?: string; description?: string },
+    data: { label?: string | null; labelColor?: string | null; description?: string | null },
   ) => Promise<void>;
 }
 
@@ -143,7 +143,7 @@ export const useClusterListStore = create<ClusterListState>()((set, get) => ({
             ...row,
             status: (health.connected ? "connected" : "disconnected") as UnifiedClusterRow["status"],
             nodeCount: health.nodeCount,
-            opsPerSec: health.totalOps,
+            totalOps: health.totalOps,
             memoryUsed: health.memoryUsed,
             memoryTotal: health.memoryTotal,
             diskUsed: health.diskUsed,
@@ -180,15 +180,18 @@ export const useClusterListStore = create<ClusterListState>()((set, get) => ({
 
   updateMetadata: async (connectionId, data) => {
     try {
-      await api.updateConnection(connectionId, data);
+      // Send null values to the API so the backend can clear fields;
+      // api.updateConnection drops undefined but preserves null via JSON.stringify.
+      await api.updateConnection(connectionId, data as Partial<ConnectionProfile>);
       set((state) => ({
         rows: state.rows.map((row) => {
           if (row.connectionId !== connectionId) return row;
           return {
             ...row,
-            ...(data.label !== undefined && { label: data.label }),
-            ...(data.labelColor !== undefined && { labelColor: data.labelColor }),
-            ...(data.description !== undefined && { description: data.description }),
+            // Convert null → undefined for the local row type
+            ...(data.label !== undefined && { label: data.label ?? undefined }),
+            ...(data.labelColor !== undefined && { labelColor: data.labelColor ?? undefined }),
+            ...(data.description !== undefined && { description: data.description ?? undefined }),
           };
         }),
       }));

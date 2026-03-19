@@ -137,17 +137,17 @@ export function getClusterListColumns(
       },
     },
     {
-      id: "opsPerSec",
-      accessorKey: "opsPerSec",
-      header: "Ops/sec",
+      id: "totalOps",
+      accessorKey: "totalOps",
+      header: "Total Ops",
       size: 100,
       enableSorting: true,
       meta: { hideOn: ["mobile"]  },
       cell: ({ row }) => {
-        const { opsPerSec } = row.original;
+        const { totalOps } = row.original;
         return (
-          <span className={opsPerSec === undefined ? "text-muted-foreground" : ""}>
-            {opsPerSec !== undefined ? formatNumber(opsPerSec) : "--"}
+          <span className={totalOps === undefined ? "text-muted-foreground" : ""}>
+            {totalOps !== undefined ? formatNumber(totalOps) : "--"}
           </span>
         );
       },

@@ -94,6 +94,8 @@ export default function ConnectionsPage() {
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
+    // Populate connection-store so openEditDialog can access full connection data
+    useConnectionStore.getState().fetchConnections();
     fetchAll()
       .then(() => {
         fetchAllHealth();
@@ -244,7 +246,10 @@ export default function ConnectionsPage() {
 
   const handleLabelChange = useCallback(
     (id: string, label?: string, color?: string) => {
-      updateMetadata(id, { label, labelColor: color });
+      updateMetadata(id, {
+        label: label ?? null,
+        labelColor: color ?? null,
+      });
     },
     [updateMetadata],
   );
