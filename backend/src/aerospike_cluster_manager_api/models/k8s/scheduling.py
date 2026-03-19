@@ -22,14 +22,14 @@ def _parse_cpu_millis(cpu: str) -> float:
 _MEMORY_UNITS: dict[str, int] = {"Ki": 1, "Mi": 2, "Gi": 3, "Ti": 4, "Pi": 5, "Ei": 6}
 
 
-def _parse_memory_bytes(mem: str) -> float:
+def parse_memory_bytes(mem: str) -> int:
     """Convert K8s memory string to bytes for comparison."""
     m = re.match(r"^([0-9]+(?:\.[0-9]+)?)([KMGTPE]i)$", mem)
     if not m:
         return 0
     value = float(m.group(1))
     unit = m.group(2)
-    return value * (1024 ** _MEMORY_UNITS.get(unit, 0))
+    return int(value * (1024 ** _MEMORY_UNITS.get(unit, 0)))
 
 
 # Minimum recommended resource thresholds for Aerospike pods.
@@ -58,7 +58,7 @@ class ResourceSpec(BaseModel):
     @field_validator("memory")
     @classmethod
     def warn_memory_minimum(cls, v: str) -> str:
-        mem_bytes = _parse_memory_bytes(v)
+        mem_bytes = parse_memory_bytes(v)
         if mem_bytes < _MIN_MEMORY_BYTES:
             warnings.warn(
                 f"Memory value '{v}' is below the recommended minimum of 256Mi. "
@@ -78,7 +78,7 @@ class ResourceConfig(BaseModel):
     def limits_gte_requests(self) -> ResourceConfig:
         if _parse_cpu_millis(self.limits.cpu) < _parse_cpu_millis(self.requests.cpu):
             raise ValueError(f"CPU limit ({self.limits.cpu}) must be >= request ({self.requests.cpu})")
-        if _parse_memory_bytes(self.limits.memory) < _parse_memory_bytes(self.requests.memory):
+        if parse_memory_bytes(self.limits.memory) < parse_memory_bytes(self.requests.memory):
             raise ValueError(f"Memory limit ({self.limits.memory}) must be >= request ({self.requests.memory})")
         return self
 

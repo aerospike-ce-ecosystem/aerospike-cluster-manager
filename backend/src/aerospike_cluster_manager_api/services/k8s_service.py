@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from aerospike_cluster_manager_api.models.k8s.scheduling import ResourceConfig, ResourceSpec, _parse_memory_bytes
+from aerospike_cluster_manager_api.models.k8s.scheduling import ResourceConfig, ResourceSpec, parse_memory_bytes
 from aerospike_cluster_manager_api.models.k8s_cluster import (
     ClusterHealthResponse,
     CreateK8sClusterRequest,
@@ -432,7 +432,7 @@ def build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
 
     # Pod resources — auto-size memory based on namespace data-size totals
     total_ns_bytes = sum(
-        (ns.storage_engine.data_size or 1073741824)
+        (ns.storage_engine.data_size if ns.storage_engine.data_size is not None else 1073741824)
         for ns in req.namespaces
         if ns.storage_engine.type == "memory"
     )
@@ -440,19 +440,23 @@ def build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
         # Aerospike needs ~30% overhead for primary index, buffers, and internal structures
         min_memory_bytes = int(total_ns_bytes * 1.3)
         min_memory_gi = max(1, -(-min_memory_bytes // (1024 ** 3)))  # ceil division to GiB
+        new_limit_mem = f"{min_memory_gi}Gi"
 
         if req.resources:
-            # Ensure user-specified limits are sufficient
-            limit_bytes = _parse_memory_bytes(req.resources.limits.memory)
+            # Ensure user-specified limits are sufficient; reconstruct to re-run Pydantic validators
+            limit_bytes = parse_memory_bytes(req.resources.limits.memory)
             if limit_bytes < min_memory_bytes:
-                req.resources.limits.memory = f"{min_memory_gi}Gi"
-            request_bytes = _parse_memory_bytes(req.resources.requests.memory)
-            if request_bytes > _parse_memory_bytes(req.resources.limits.memory):
-                req.resources.requests.memory = req.resources.limits.memory
+                new_requests_mem = req.resources.requests.memory
+                if parse_memory_bytes(new_requests_mem) > parse_memory_bytes(new_limit_mem):
+                    new_requests_mem = new_limit_mem
+                req.resources = ResourceConfig(
+                    requests=ResourceSpec(cpu=req.resources.requests.cpu, memory=new_requests_mem),
+                    limits=ResourceSpec(cpu=req.resources.limits.cpu, memory=new_limit_mem),
+                )
         else:
             req.resources = ResourceConfig(
-                requests=ResourceSpec(cpu="500m", memory=f"{min_memory_gi}Gi"),
-                limits=ResourceSpec(cpu="2", memory=f"{min_memory_gi}Gi"),
+                requests=ResourceSpec(cpu="500m", memory=new_limit_mem),
+                limits=ResourceSpec(cpu="2", memory=new_limit_mem),
             )
 
     if req.resources:

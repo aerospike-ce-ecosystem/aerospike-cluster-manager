@@ -321,7 +321,15 @@ export function WizardReviewStep({
                     type="button"
                     className="text-warning mt-1 underline"
                     onClick={() => {
-                      if (!form.resources) return;
+                      if (!form.resources) {
+                        updateForm({
+                          resources: {
+                            requests: { cpu: "500m", memory: recommended },
+                            limits: { cpu: "2", memory: recommended },
+                          },
+                        });
+                        return;
+                      }
                       const updated = {
                         ...form.resources,
                         limits: { ...form.resources.limits, memory: recommended },
