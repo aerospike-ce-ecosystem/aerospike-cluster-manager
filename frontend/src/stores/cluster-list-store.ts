@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import type {
   ConnectionProfile,
-  ConnectionStatus,
   K8sClusterSummary,
   UnifiedClusterRow,
   ClusterSource,
@@ -11,7 +10,6 @@ import { getErrorMessage } from "@/lib/utils";
 
 interface ClusterListState {
   rows: UnifiedClusterRow[];
-  healthStatuses: Record<string, ConnectionStatus>;
   loading: boolean;
   error: string | null;
 
@@ -53,7 +51,6 @@ function sortRows(rows: UnifiedClusterRow[]): UnifiedClusterRow[] {
 
 export const useClusterListStore = create<ClusterListState>()((set, get) => ({
   rows: [],
-  healthStatuses: {},
   loading: false,
   error: null,
 
@@ -135,37 +132,34 @@ export const useClusterListStore = create<ClusterListState>()((set, get) => ({
   fetchHealth: async (connectionId: string) => {
     try {
       const health = await api.getConnectionHealth(connectionId);
-      set((state) => {
-        const healthStatuses = { ...state.healthStatuses, [connectionId]: health };
-        const rows = state.rows.map((row) => {
-          if (row.connectionId !== connectionId) return row;
-          return {
-            ...row,
-            status: (health.connected ? "connected" : "disconnected") as UnifiedClusterRow["status"],
-            nodeCount: health.nodeCount,
-            totalOps: health.totalOps,
-            memoryUsed: health.memoryUsed,
-            memoryTotal: health.memoryTotal,
-            diskUsed: health.diskUsed,
-            diskTotal: health.diskTotal,
-            build: health.build,
-            edition: health.edition,
-          };
-        });
-        return { healthStatuses, rows: sortRows(rows) };
-      });
+      set((state) => ({
+        rows: sortRows(
+          state.rows.map((row) => {
+            if (row.connectionId !== connectionId) return row;
+            return {
+              ...row,
+              status: (health.connected ? "connected" : "disconnected") as UnifiedClusterRow["status"],
+              nodeCount: health.nodeCount,
+              totalOps: health.totalOps,
+              memoryUsed: health.memoryUsed || undefined,
+              memoryTotal: health.memoryTotal || undefined,
+              diskUsed: health.diskUsed || undefined,
+              diskTotal: health.diskTotal || undefined,
+              build: health.build,
+              edition: health.edition,
+            };
+          }),
+        ),
+      }));
     } catch {
-      set((state) => {
-        const healthStatuses = {
-          ...state.healthStatuses,
-          [connectionId]: { connected: false, nodeCount: 0, namespaceCount: 0 },
-        };
-        const rows = state.rows.map((row) => {
-          if (row.connectionId !== connectionId) return row;
-          return { ...row, status: "disconnected" as const };
-        });
-        return { healthStatuses, rows: sortRows(rows) };
-      });
+      set((state) => ({
+        rows: sortRows(
+          state.rows.map((row) => {
+            if (row.connectionId !== connectionId) return row;
+            return { ...row, status: "disconnected" as const };
+          }),
+        ),
+      }));
     }
   },
 

@@ -118,9 +118,13 @@ async def get_connection_health(conn_id: str = Depends(_get_verified_connection)
             for ns_name in namespaces:
                 ns_info = await client.info_random_node(f"namespace/{ns_name}")
                 kv = parse_kv_pairs(ns_info)
+                # CE 8 uses unified data_used_bytes/data_total_bytes for both memory and device.
+                # Fall back to legacy memory_used_bytes/memory-size for older versions.
+                ns_data_used = safe_int(kv.get("data_used_bytes")) or safe_int(kv.get("memory_used_bytes"))
+                ns_data_total = safe_int(kv.get("data_total_bytes")) or safe_int(kv.get("memory-size"))
                 # Multiply per-node values by node count for cluster-wide estimate
-                memory_used += safe_int(kv.get("memory_used_bytes")) * node_count
-                memory_total += safe_int(kv.get("memory-size")) * node_count
+                memory_used += ns_data_used * node_count
+                memory_total += ns_data_total * node_count
                 disk_used += safe_int(kv.get("device_used_bytes")) * node_count
                 disk_total += safe_int(kv.get("device-total-bytes")) * node_count
                 total_ops += (

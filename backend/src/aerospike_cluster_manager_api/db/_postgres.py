@@ -7,11 +7,11 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, datetime
 
 import asyncpg
 
 from aerospike_cluster_manager_api import config
+from aerospike_cluster_manager_api.db._base import build_merged_profile, row_to_profile
 from aerospike_cluster_manager_api.models.connection import ConnectionProfile
 
 logger = logging.getLogger(__name__)
@@ -95,32 +95,10 @@ async def close_db() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Row -> Model helper
+# Row -> Model helper (delegated to _base.py)
 # ---------------------------------------------------------------------------
 
-
-def _row_to_profile(row: asyncpg.Record) -> ConnectionProfile:
-    hosts = row["hosts"]
-    if isinstance(hosts, str):
-        try:
-            hosts = json.loads(hosts)
-        except json.JSONDecodeError:
-            hosts = [hosts]
-    return ConnectionProfile(
-        id=row["id"],
-        name=row["name"],
-        hosts=hosts,
-        port=row["port"],
-        clusterName=row["cluster_name"],
-        username=row["username"],
-        password=row["password"],
-        color=row["color"],
-        label=row["label"],
-        label_color=row["label_color"],
-        description=row["description"],
-        createdAt=row["created_at"],
-        updatedAt=row["updated_at"],
-    )
+_row_to_profile = row_to_profile
 
 
 # ---------------------------------------------------------------------------
@@ -169,9 +147,7 @@ async def update_connection(conn_id: str, data: dict) -> ConnectionProfile | Non
             return None
 
         existing = _row_to_profile(row)
-        merged = existing.model_dump()
-        merged.update(data)
-        merged["updatedAt"] = datetime.now(UTC).isoformat()
+        updated = build_merged_profile(existing, data, conn_id)
 
         await conn.execute(
             """UPDATE connections
@@ -180,37 +156,20 @@ async def update_connection(conn_id: str, data: dict) -> ConnectionProfile | Non
                        label = $8, label_color = $9, description = $10,
                        updated_at = $11
                    WHERE id = $12""",
-            merged["name"],
-            json.dumps(merged["hosts"]),
-            merged["port"],
-            merged.get("clusterName"),
-            merged.get("username"),
-            merged.get("password"),
-            merged["color"],
-            merged.get("label"),
-            merged.get("label_color"),
-            merged.get("description"),
-            merged["updatedAt"],
+            updated.name,
+            json.dumps(updated.hosts),
+            updated.port,
+            updated.clusterName,
+            updated.username,
+            updated.password,
+            updated.color,
+            updated.label,
+            updated.label_color,
+            updated.description,
+            updated.updatedAt,
             conn_id,
         )
-        merged["id"] = conn_id
-        return ConnectionProfile(
-            **{
-                "id": conn_id,
-                "name": merged["name"],
-                "hosts": merged["hosts"],
-                "port": merged["port"],
-                "clusterName": merged.get("clusterName"),
-                "username": merged.get("username"),
-                "password": merged.get("password"),
-                "color": merged["color"],
-                "label": merged.get("label"),
-                "label_color": merged.get("label_color"),
-                "description": merged.get("description"),
-                "createdAt": existing.createdAt,
-                "updatedAt": merged["updatedAt"],
-            }
-        )
+        return updated
 
 
 async def delete_connection(conn_id: str) -> bool:

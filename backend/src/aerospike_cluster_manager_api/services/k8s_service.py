@@ -91,20 +91,7 @@ def build_rack_list(racks: list[RackConfig]) -> list[dict[str, Any]]:
             if rack.pod_spec.affinity:
                 pod_spec["affinity"] = rack.pod_spec.affinity
             if rack.pod_spec.tolerations:
-                tols = []
-                for t in rack.pod_spec.tolerations:
-                    tol: dict[str, Any] = {}
-                    if t.key is not None:
-                        tol["key"] = t.key
-                    tol["operator"] = t.operator
-                    if t.value is not None:
-                        tol["value"] = t.value
-                    if t.effect is not None:
-                        tol["effect"] = t.effect
-                    if t.toleration_seconds is not None:
-                        tol["tolerationSeconds"] = t.toleration_seconds
-                    tols.append(tol)
-                pod_spec["tolerations"] = tols
+                pod_spec["tolerations"] = _build_toleration_list(rack.pod_spec.tolerations)
             if rack.pod_spec.node_selector:
                 pod_spec["nodeSelector"] = rack.pod_spec.node_selector
             if pod_spec:
@@ -119,20 +106,7 @@ def build_pod_scheduling(sched: Any) -> dict[str, Any]:
     if sched.node_selector:
         result["nodeSelector"] = sched.node_selector
     if sched.tolerations:
-        tols = []
-        for t in sched.tolerations:
-            tol: dict[str, Any] = {}
-            if t.key is not None:
-                tol["key"] = t.key
-            tol["operator"] = t.operator
-            if t.value is not None:
-                tol["value"] = t.value
-            if t.effect is not None:
-                tol["effect"] = t.effect
-            if t.toleration_seconds is not None:
-                tol["tolerationSeconds"] = t.toleration_seconds
-            tols.append(tol)
-        result["tolerations"] = tols
+        result["tolerations"] = _build_toleration_list(sched.tolerations)
     if sched.multi_pod_per_host is not None:
         result["multiPodPerHost"] = sched.multi_pod_per_host
     if sched.host_network is not None:
@@ -236,6 +210,119 @@ def build_seeds_finder_services(sfs) -> dict[str, Any]:
         if sfs.load_balancer.load_balancer_source_ranges:
             lb["loadBalancerSourceRanges"] = sfs.load_balancer.load_balancer_source_ranges
         result["loadBalancer"] = lb
+    return result
+
+
+def _build_toleration_list(tolerations: list) -> list[dict[str, Any]]:
+    """Convert toleration models to CR-compatible dicts."""
+    result = []
+    for t in tolerations:
+        tol: dict[str, Any] = {}
+        if t.key is not None:
+            tol["key"] = t.key
+        tol["operator"] = t.operator
+        if t.value is not None:
+            tol["value"] = t.value
+        if t.effect is not None:
+            tol["effect"] = t.effect
+        if t.toleration_seconds is not None:
+            tol["tolerationSeconds"] = t.toleration_seconds
+        result.append(tol)
+    return result
+
+
+def _build_acl_dict(acl: Any) -> dict[str, Any]:
+    """Convert an ACL config model to a CR-compatible aerospikeAccessControl dict."""
+    return {
+        "roles": [
+            {"name": r.name, "privileges": r.privileges, **({"whitelist": r.whitelist} if r.whitelist else {})}
+            for r in (acl.roles or [])
+        ],
+        "users": [
+            {"name": u.name, "secretName": u.secret_name, "roles": u.roles}
+            for u in (acl.users or [])
+        ],
+        "adminPolicy": {"timeout": acl.admin_policy_timeout},
+    }
+
+
+def _build_bandwidth_dict(bw_config: Any) -> dict[str, str]:
+    """Convert a bandwidth config model to a CR-compatible dict."""
+    bw: dict[str, str] = {}
+    if bw_config.ingress:
+        bw["ingress"] = bw_config.ingress
+    if bw_config.egress:
+        bw["egress"] = bw_config.egress
+    return bw
+
+
+def _build_rack_config_dict(rack_config: Any) -> dict[str, Any]:
+    """Convert a rack config model to a CR-compatible rackConfig dict."""
+    rc: dict[str, Any] = {"racks": build_rack_list(rack_config.racks)}
+    if rack_config.namespaces:
+        rc["namespaces"] = rack_config.namespaces
+    if rack_config.scale_down_batch_size:
+        rc["scaleDownBatchSize"] = rack_config.scale_down_batch_size
+    if rack_config.max_ignorable_pods:
+        rc["maxIgnorablePods"] = rack_config.max_ignorable_pods
+    if rack_config.rolling_update_batch_size:
+        rc["rollingUpdateBatchSize"] = rack_config.rolling_update_batch_size
+    return rc
+
+
+def _build_service_metadata_dict(service_meta: Any) -> dict[str, Any]:
+    """Convert a service metadata config to a CR-compatible dict with metadata sub-key."""
+    meta: dict[str, Any] = {}
+    if service_meta.annotations:
+        meta["annotations"] = service_meta.annotations
+    if service_meta.labels:
+        meta["labels"] = service_meta.labels
+    return {"metadata": meta}
+
+
+def _build_template_scheduling_dict(scheduling: Any) -> dict[str, Any]:
+    """Convert a template scheduling config to a CR-compatible dict."""
+    result: dict[str, Any] = {}
+    if scheduling.pod_anti_affinity_level:
+        result["podAntiAffinityLevel"] = scheduling.pod_anti_affinity_level
+    if scheduling.pod_management_policy:
+        result["podManagementPolicy"] = scheduling.pod_management_policy
+    if scheduling.tolerations:
+        result["tolerations"] = scheduling.tolerations
+    if scheduling.node_affinity:
+        result["nodeAffinity"] = scheduling.node_affinity
+    if scheduling.topology_spread_constraints:
+        result["topologySpreadConstraints"] = scheduling.topology_spread_constraints
+    return result
+
+
+def _build_template_storage_dict(storage: Any) -> dict[str, Any]:
+    """Convert a template storage config to a CR-compatible dict."""
+    result: dict[str, Any] = {}
+    if storage.storage_class_name:
+        result["storageClassName"] = storage.storage_class_name
+    if storage.volume_mode:
+        result["volumeMode"] = storage.volume_mode
+    if storage.access_modes:
+        result["accessModes"] = storage.access_modes
+    if storage.size:
+        result["resources"] = {"requests": {"storage": storage.size}}
+    if storage.local_pv_required is not None:
+        result["localPVRequired"] = storage.local_pv_required
+    return result
+
+
+def _build_template_network_config_dict(network_config: Any) -> dict[str, Any]:
+    """Convert a template network config to a CR-compatible dict."""
+    result: dict[str, Any] = {}
+    if network_config.heartbeat_mode:
+        result["heartbeatMode"] = network_config.heartbeat_mode
+    if network_config.heartbeat_port is not None:
+        result["heartbeatPort"] = network_config.heartbeat_port
+    if network_config.heartbeat_interval is not None:
+        result["heartbeatInterval"] = network_config.heartbeat_interval
+    if network_config.heartbeat_timeout is not None:
+        result["heartbeatTimeout"] = network_config.heartbeat_timeout
     return result
 
 
@@ -566,16 +653,7 @@ def build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
 
     # ACL / Access Control
     if req.acl and req.acl.enabled:
-        acl_config = {
-            "roles": [
-                {"name": r.name, "privileges": r.privileges, **({"whitelist": r.whitelist} if r.whitelist else {})}
-                for r in req.acl.roles
-            ],
-            "users": [{"name": u.name, "secretName": u.secret_name, "roles": u.roles} for u in req.acl.users],
-            "adminPolicy": {"timeout": req.acl.admin_policy_timeout},
-        }
-        cr["spec"]["aerospikeAccessControl"] = acl_config
-        # Enable security in aerospike config
+        cr["spec"]["aerospikeAccessControl"] = _build_acl_dict(req.acl)
         cr["spec"]["aerospikeConfig"]["security"] = {}
 
     # Rolling update strategy
@@ -589,16 +667,7 @@ def build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
 
     # Rack config
     if req.rack_config and req.rack_config.racks:
-        rack_config: dict[str, Any] = {"racks": build_rack_list(req.rack_config.racks)}
-        if req.rack_config.namespaces:
-            rack_config["namespaces"] = req.rack_config.namespaces
-        if req.rack_config.scale_down_batch_size:
-            rack_config["scaleDownBatchSize"] = req.rack_config.scale_down_batch_size
-        if req.rack_config.max_ignorable_pods:
-            rack_config["maxIgnorablePods"] = req.rack_config.max_ignorable_pods
-        if req.rack_config.rolling_update_batch_size:
-            rack_config["rollingUpdateBatchSize"] = req.rack_config.rolling_update_batch_size
-        cr["spec"]["rackConfig"] = rack_config
+        cr["spec"]["rackConfig"] = _build_rack_config_dict(req.rack_config)
 
     # Network access policy
     if req.network_policy:
@@ -621,11 +690,7 @@ def build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
 
     # Bandwidth shaping
     if req.bandwidth_config:
-        bw: dict[str, str] = {}
-        if req.bandwidth_config.ingress:
-            bw["ingress"] = req.bandwidth_config.ingress
-        if req.bandwidth_config.egress:
-            bw["egress"] = req.bandwidth_config.egress
+        bw = _build_bandwidth_dict(req.bandwidth_config)
         if bw:
             cr["spec"]["bandwidthConfig"] = bw
 
@@ -637,23 +702,15 @@ def build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
 
     # Headless service metadata
     if req.headless_service:
-        svc_meta: dict[str, Any] = {}
-        if req.headless_service.annotations:
-            svc_meta["metadata"] = {"annotations": req.headless_service.annotations}
-        if req.headless_service.labels:
-            svc_meta.setdefault("metadata", {})["labels"] = req.headless_service.labels
-        if svc_meta:
-            cr["spec"]["headlessService"] = svc_meta
+        svc_dict = _build_service_metadata_dict(req.headless_service)
+        if svc_dict["metadata"]:
+            cr["spec"]["headlessService"] = svc_dict
 
     # Pod service metadata
     if req.pod_service:
-        pod_svc_meta: dict[str, Any] = {}
-        if req.pod_service.annotations:
-            pod_svc_meta["metadata"] = {"annotations": req.pod_service.annotations}
-        if req.pod_service.labels:
-            pod_svc_meta.setdefault("metadata", {})["labels"] = req.pod_service.labels
-        if pod_svc_meta:
-            cr["spec"]["podService"] = pod_svc_meta
+        pod_svc_dict = _build_service_metadata_dict(req.pod_service)
+        if pod_svc_dict["metadata"]:
+            cr["spec"]["podService"] = pod_svc_dict
 
     # Enable rack ID override
     if req.enable_rack_id_override is not None:
@@ -756,31 +813,11 @@ def build_template_cr(req: CreateK8sTemplateRequest) -> dict[str, Any]:
     if req.monitoring:
         cr["spec"]["monitoring"] = build_monitoring(req.monitoring)
     if req.scheduling:
-        scheduling: dict[str, Any] = {}
-        if req.scheduling.pod_anti_affinity_level:
-            scheduling["podAntiAffinityLevel"] = req.scheduling.pod_anti_affinity_level
-        if req.scheduling.pod_management_policy:
-            scheduling["podManagementPolicy"] = req.scheduling.pod_management_policy
-        if req.scheduling.tolerations:
-            scheduling["tolerations"] = req.scheduling.tolerations
-        if req.scheduling.node_affinity:
-            scheduling["nodeAffinity"] = req.scheduling.node_affinity
-        if req.scheduling.topology_spread_constraints:
-            scheduling["topologySpreadConstraints"] = req.scheduling.topology_spread_constraints
+        scheduling = _build_template_scheduling_dict(req.scheduling)
         if scheduling:
             cr["spec"]["scheduling"] = scheduling
     if req.storage:
-        storage: dict[str, Any] = {}
-        if req.storage.storage_class_name:
-            storage["storageClassName"] = req.storage.storage_class_name
-        if req.storage.volume_mode:
-            storage["volumeMode"] = req.storage.volume_mode
-        if req.storage.access_modes:
-            storage["accessModes"] = req.storage.access_modes
-        if req.storage.size:
-            storage["resources"] = {"requests": {"storage": req.storage.size}}
-        if req.storage.local_pv_required is not None:
-            storage["localPVRequired"] = req.storage.local_pv_required
+        storage = _build_template_storage_dict(req.storage)
         if storage:
             cr["spec"]["storage"] = storage
     if req.network_policy:
@@ -790,15 +827,7 @@ def build_template_cr(req: CreateK8sTemplateRequest) -> dict[str, Any]:
     if aerospike_cfg:
         cr["spec"]["aerospikeConfig"] = aerospike_cfg
     if req.network_config:
-        net_cfg: dict[str, Any] = {}
-        if req.network_config.heartbeat_mode:
-            net_cfg["heartbeatMode"] = req.network_config.heartbeat_mode
-        if req.network_config.heartbeat_port is not None:
-            net_cfg["heartbeatPort"] = req.network_config.heartbeat_port
-        if req.network_config.heartbeat_interval is not None:
-            net_cfg["heartbeatInterval"] = req.network_config.heartbeat_interval
-        if req.network_config.heartbeat_timeout is not None:
-            net_cfg["heartbeatTimeout"] = req.network_config.heartbeat_timeout
+        net_cfg = _build_template_network_config_dict(req.network_config)
         if net_cfg:
             cr["spec"]["networkConfig"] = net_cfg
     if req.rack_config:
@@ -828,31 +857,11 @@ def build_template_update_patch(body: UpdateK8sTemplateRequest) -> dict[str, Any
     if body.monitoring is not None:
         patch["spec"]["monitoring"] = build_monitoring(body.monitoring)
     if body.scheduling is not None:
-        scheduling: dict[str, Any] = {}
-        if body.scheduling.pod_anti_affinity_level:
-            scheduling["podAntiAffinityLevel"] = body.scheduling.pod_anti_affinity_level
-        if body.scheduling.pod_management_policy:
-            scheduling["podManagementPolicy"] = body.scheduling.pod_management_policy
-        if body.scheduling.tolerations:
-            scheduling["tolerations"] = body.scheduling.tolerations
-        if body.scheduling.node_affinity:
-            scheduling["nodeAffinity"] = body.scheduling.node_affinity
-        if body.scheduling.topology_spread_constraints:
-            scheduling["topologySpreadConstraints"] = body.scheduling.topology_spread_constraints
+        scheduling = _build_template_scheduling_dict(body.scheduling)
         if scheduling:
             patch["spec"]["scheduling"] = scheduling
     if body.storage is not None:
-        storage: dict[str, Any] = {}
-        if body.storage.storage_class_name:
-            storage["storageClassName"] = body.storage.storage_class_name
-        if body.storage.volume_mode:
-            storage["volumeMode"] = body.storage.volume_mode
-        if body.storage.access_modes:
-            storage["accessModes"] = body.storage.access_modes
-        if body.storage.size:
-            storage["resources"] = {"requests": {"storage": body.storage.size}}
-        if body.storage.local_pv_required is not None:
-            storage["localPVRequired"] = body.storage.local_pv_required
+        storage = _build_template_storage_dict(body.storage)
         if storage:
             patch["spec"]["storage"] = storage
     if body.network_policy is not None:
@@ -862,15 +871,7 @@ def build_template_update_patch(body: UpdateK8sTemplateRequest) -> dict[str, Any
     if aerospike_cfg:
         patch["spec"]["aerospikeConfig"] = aerospike_cfg
     if body.network_config is not None:
-        net_cfg: dict[str, Any] = {}
-        if body.network_config.heartbeat_mode:
-            net_cfg["heartbeatMode"] = body.network_config.heartbeat_mode
-        if body.network_config.heartbeat_port is not None:
-            net_cfg["heartbeatPort"] = body.network_config.heartbeat_port
-        if body.network_config.heartbeat_interval is not None:
-            net_cfg["heartbeatInterval"] = body.network_config.heartbeat_interval
-        if body.network_config.heartbeat_timeout is not None:
-            net_cfg["heartbeatTimeout"] = body.network_config.heartbeat_timeout
+        net_cfg = _build_template_network_config_dict(body.network_config)
         if net_cfg:
             patch["spec"]["networkConfig"] = net_cfg
     if body.rack_config is not None:
@@ -1093,16 +1094,7 @@ def build_update_patch(body: UpdateK8sClusterRequest) -> dict[str, Any]:
         patch["spec"]["disablePDB"] = body.disable_pdb
     if body.rack_config is not None:
         if body.rack_config.racks:
-            rc: dict[str, Any] = {"racks": build_rack_list(body.rack_config.racks)}
-            if body.rack_config.namespaces:
-                rc["namespaces"] = body.rack_config.namespaces
-            if body.rack_config.scale_down_batch_size:
-                rc["scaleDownBatchSize"] = body.rack_config.scale_down_batch_size
-            if body.rack_config.max_ignorable_pods:
-                rc["maxIgnorablePods"] = body.rack_config.max_ignorable_pods
-            if body.rack_config.rolling_update_batch_size:
-                rc["rollingUpdateBatchSize"] = body.rack_config.rolling_update_batch_size
-            patch["spec"]["rackConfig"] = rc
+            patch["spec"]["rackConfig"] = _build_rack_config_dict(body.rack_config)
         else:
             patch["spec"]["rackConfig"] = {"racks": []}
     if body.network_policy is not None:
@@ -1122,44 +1114,21 @@ def build_update_patch(body: UpdateK8sClusterRequest) -> dict[str, Any]:
         }
     if body.acl is not None:
         if body.acl.enabled:
-            patch["spec"]["aerospikeAccessControl"] = {
-                "roles": [
-                    {"name": r.name, "privileges": r.privileges, **({"whitelist": r.whitelist} if r.whitelist else {})}
-                    for r in (body.acl.roles or [])
-                ],
-                "users": [
-                    {"name": u.name, "secretName": u.secret_name, "roles": u.roles} for u in (body.acl.users or [])
-                ],
-                "adminPolicy": {"timeout": body.acl.admin_policy_timeout},
-            }
+            patch["spec"]["aerospikeAccessControl"] = _build_acl_dict(body.acl)
             patch["spec"].setdefault("aerospikeConfig", {})["security"] = {}
         else:
             patch["spec"]["aerospikeAccessControl"] = None
     if body.bandwidth_config is not None:
-        bw: dict[str, str] = {}
-        if body.bandwidth_config.ingress:
-            bw["ingress"] = body.bandwidth_config.ingress
-        if body.bandwidth_config.egress:
-            bw["egress"] = body.bandwidth_config.egress
+        bw = _build_bandwidth_dict(body.bandwidth_config)
         patch["spec"]["bandwidthConfig"] = bw if bw else None
     if body.validation_policy is not None:
         patch["spec"]["validationPolicy"] = {
             "skipWorkDirValidate": body.validation_policy.skip_work_dir_validate,
         }
     if body.headless_service is not None:
-        svc_meta: dict[str, Any] = {"metadata": {}}
-        if body.headless_service.annotations:
-            svc_meta["metadata"]["annotations"] = body.headless_service.annotations
-        if body.headless_service.labels:
-            svc_meta["metadata"]["labels"] = body.headless_service.labels
-        patch["spec"]["headlessService"] = svc_meta
+        patch["spec"]["headlessService"] = _build_service_metadata_dict(body.headless_service)
     if body.pod_service is not None:
-        pod_svc: dict[str, Any] = {"metadata": {}}
-        if body.pod_service.annotations:
-            pod_svc["metadata"]["annotations"] = body.pod_service.annotations
-        if body.pod_service.labels:
-            pod_svc["metadata"]["labels"] = body.pod_service.labels
-        patch["spec"]["podService"] = pod_svc
+        patch["spec"]["podService"] = _build_service_metadata_dict(body.pod_service)
     if body.enable_rack_id_override is not None:
         patch["spec"]["enableRackIDOverride"] = body.enable_rack_id_override
     if body.pod_metadata is not None:

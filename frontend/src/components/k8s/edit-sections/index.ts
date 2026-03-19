@@ -1,5 +1,9 @@
 export { EditMonitoringSection } from "./edit-monitoring-section";
+export { EditNetworkSection } from "./edit-network-section";
 export { EditPodSchedulingSection } from "./edit-pod-scheduling-section";
+export { EditPodSecuritySection } from "./edit-pod-security-section";
+export { EditServiceMetadataSection } from "./edit-service-metadata-section";
 export { EditSidecarsSection } from "./edit-sidecars-section";
 export { EditStorageSection } from "./edit-storage-section";
 export { EditSeedsFinderLBSection } from "./edit-seeds-finder-section";
+export { EditTopologySpreadSection } from "./edit-topology-spread-section";

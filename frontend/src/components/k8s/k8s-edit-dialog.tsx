@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -19,8 +18,6 @@ import { getErrorMessage } from "@/lib/utils";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { CollapsibleSection } from "@/components/common/collapsible-section";
-import { KeyValueEditor } from "@/components/common/key-value-editor";
-import { Plus, X } from "lucide-react";
 import type {
   K8sClusterDetail,
   UpdateK8sClusterRequest,
@@ -30,10 +27,14 @@ import type {
 import { useEditDialogState } from "./hooks/use-edit-dialog-state";
 import {
   EditMonitoringSection,
+  EditNetworkSection,
   EditPodSchedulingSection,
+  EditPodSecuritySection,
+  EditServiceMetadataSection,
   EditSidecarsSection,
   EditStorageSection,
   EditSeedsFinderLBSection,
+  EditTopologySpreadSection,
 } from "./edit-sections";
 
 interface K8sEditDialogProps {
@@ -409,170 +410,44 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
           </div>
 
           {/* Network Policy */}
-          <div className="grid gap-3">
-            <Label className="text-sm font-semibold">Network Policy</Label>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="grid gap-1">
-                <Label htmlFor="edit-access-type" className="text-xs">
-                  Access Type
-                </Label>
-                <Select
-                  value={state.accessType}
-                  onChange={(e) => {
-                    patchState({ accessType: e.target.value as NetworkAccessType });
-                    clearError();
-                  }}
-                  id="edit-access-type"
-                  disabled={state.loading}
-                >
-                  <option value="pod">Pod IP</option>
-                  <option value="hostInternal">Host Internal</option>
-                  <option value="hostExternal">Host External</option>
-                  <option value="configuredIP">Configured IP</option>
-                </Select>
-              </div>
-              <div className="grid gap-1">
-                <Label htmlFor="edit-fabric-type" className="text-xs">
-                  Fabric Type
-                </Label>
-                <Select
-                  value={state.fabricType || "default"}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    patchState({
-                      fabricType: v === "default" ? "" : (v as NetworkAccessType),
-                    });
-                    clearError();
-                  }}
-                  id="edit-fabric-type"
-                  disabled={state.loading}
-                >
-                  <option value="default">Default (same as access)</option>
-                  <option value="pod">Pod IP</option>
-                  <option value="hostInternal">Host Internal</option>
-                  <option value="hostExternal">Host External</option>
-                </Select>
-              </div>
-              <div className="grid gap-1">
-                <Label htmlFor="edit-alt-access" className="text-xs">
-                  Alternate Access
-                </Label>
-                <Select
-                  value={state.alternateAccessType || "default"}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    patchState({
-                      alternateAccessType: v === "default" ? "" : (v as NetworkAccessType),
-                    });
-                    clearError();
-                  }}
-                  id="edit-alt-access"
-                  disabled={state.loading}
-                >
-                  <option value="default">None</option>
-                  <option value="pod">Pod IP</option>
-                  <option value="hostInternal">Host Internal</option>
-                  <option value="hostExternal">Host External</option>
-                  <option value="configuredIP">Configured IP</option>
-                </Select>
-              </div>
-            </div>
-          </div>
-
-          {/* Custom Network Names (shown when configuredIP is selected) */}
-          {(state.accessType === "configuredIP" ||
-            state.alternateAccessType === "configuredIP" ||
-            state.fabricType === "configuredIP") && (
-            <div className="grid gap-2 rounded border border-amber-200 p-3 dark:border-amber-800">
-              <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
-                Custom network names required for configuredIP
-              </span>
-              {state.accessType === "configuredIP" && (
-                <div className="grid gap-1">
-                  <Label htmlFor="edit-custom-access" className="text-xs">
-                    Access Network Names
-                  </Label>
-                  <Input
-                    id="edit-custom-access"
-                    value={state.customAccessNames}
-                    onChange={(e) => patchState({ customAccessNames: e.target.value })}
-                    placeholder="networkName1, networkName2"
-                    disabled={state.loading}
-                  />
-                </div>
-              )}
-              {state.alternateAccessType === "configuredIP" && (
-                <div className="grid gap-1">
-                  <Label htmlFor="edit-custom-alt-access" className="text-xs">
-                    Alternate Access Network Names
-                  </Label>
-                  <Input
-                    id="edit-custom-alt-access"
-                    value={state.customAltAccessNames}
-                    onChange={(e) => patchState({ customAltAccessNames: e.target.value })}
-                    placeholder="networkName1, networkName2"
-                    disabled={state.loading}
-                  />
-                </div>
-              )}
-              {state.fabricType === "configuredIP" && (
-                <div className="grid gap-1">
-                  <Label htmlFor="edit-custom-fabric" className="text-xs">
-                    Fabric Network Names
-                  </Label>
-                  <Input
-                    id="edit-custom-fabric"
-                    value={state.customFabricNames}
-                    onChange={(e) => patchState({ customFabricNames: e.target.value })}
-                    placeholder="networkName1, networkName2"
-                    disabled={state.loading}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* NetworkPolicy Auto-generation */}
-          <div className="grid gap-2">
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="edit-netpol-auto"
-                checked={state.networkPolicyConfig?.enabled ?? false}
-                onCheckedChange={(checked) => {
-                  if (checked === true) {
-                    patchState({
-                      networkPolicyConfig: { enabled: true, type: "kubernetes" },
-                    });
-                  } else {
-                    patchState({ networkPolicyConfig: null });
-                  }
-                  clearError();
-                }}
-                disabled={state.loading}
-              />
-              <Label htmlFor="edit-netpol-auto" className="cursor-pointer text-xs">
-                Auto-generate K8s NetworkPolicy
-              </Label>
-            </div>
-            {state.networkPolicyConfig?.enabled && (
-              <Select
-                value={state.networkPolicyConfig.type}
-                onChange={(e) => {
-                  patchState({
-                    networkPolicyConfig: {
-                      enabled: true,
-                      type: e.target.value as "kubernetes" | "cilium",
-                    },
-                  });
-                  clearError();
-                }}
-                disabled={state.loading}
-              >
-                <option value="kubernetes">Kubernetes (standard)</option>
-                <option value="cilium">Cilium</option>
-              </Select>
-            )}
-          </div>
+          <EditNetworkSection
+            accessType={state.accessType}
+            fabricType={state.fabricType}
+            alternateAccessType={state.alternateAccessType}
+            customAccessNames={state.customAccessNames}
+            customAltAccessNames={state.customAltAccessNames}
+            customFabricNames={state.customFabricNames}
+            networkPolicyConfig={state.networkPolicyConfig}
+            disabled={state.loading}
+            onAccessTypeChange={(v) => {
+              patchState({ accessType: v });
+              clearError();
+            }}
+            onFabricTypeChange={(v) => {
+              patchState({ fabricType: v });
+              clearError();
+            }}
+            onAlternateAccessTypeChange={(v) => {
+              patchState({ alternateAccessType: v });
+              clearError();
+            }}
+            onCustomAccessNamesChange={(v) => {
+              patchState({ customAccessNames: v });
+              clearError();
+            }}
+            onCustomAltAccessNamesChange={(v) => {
+              patchState({ customAltAccessNames: v });
+              clearError();
+            }}
+            onCustomFabricNamesChange={(v) => {
+              patchState({ customFabricNames: v });
+              clearError();
+            }}
+            onNetworkPolicyConfigChange={(v) => {
+              patchState({ networkPolicyConfig: v });
+              clearError();
+            }}
+          />
 
           {/* Node Block List */}
           <div className="grid gap-1">
@@ -793,150 +668,14 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
             }
             size="sm"
           >
-            <div className="space-y-3">
-              <p className="text-base-content/60 text-[10px]">
-                Control how pods are spread across topology domains.
-              </p>
-              {state.topologySpreadConstraints.map((tsc, idx) => (
-                <div key={idx} className="space-y-2 rounded border p-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-medium">Constraint #{idx + 1}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        patchState({
-                          topologySpreadConstraints: state.topologySpreadConstraints.filter(
-                            (_, i) => i !== idx,
-                          ),
-                        });
-                        clearError();
-                      }}
-                      className="text-base-content/60 hover:text-error p-0.5"
-                      disabled={state.loading}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="grid gap-1">
-                      <Label className="text-[10px]">Max Skew</Label>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={tsc.maxSkew}
-                        onChange={(e) => {
-                          const next = [...state.topologySpreadConstraints];
-                          next[idx] = { ...next[idx], maxSkew: parseInt(e.target.value) || 1 };
-                          patchState({ topologySpreadConstraints: next });
-                          clearError();
-                        }}
-                        className="h-7 text-[10px]"
-                        disabled={state.loading}
-                      />
-                    </div>
-                    <div className="grid gap-1">
-                      <Label className="text-[10px]">Topology Key</Label>
-                      <Select
-                        value={tsc.topologyKey}
-                        onChange={(e) => {
-                          const next = [...state.topologySpreadConstraints];
-                          next[idx] = { ...next[idx], topologyKey: e.target.value };
-                          patchState({ topologySpreadConstraints: next });
-                          clearError();
-                        }}
-                        className="h-7 text-[10px]"
-                        disabled={state.loading}
-                      >
-                        <option value="topology.kubernetes.io/zone">
-                          topology.kubernetes.io/zone
-                        </option>
-                        <option value="kubernetes.io/hostname">kubernetes.io/hostname</option>
-                        <option value="topology.kubernetes.io/region">
-                          topology.kubernetes.io/region
-                        </option>
-                      </Select>
-                    </div>
-                    <div className="grid gap-1">
-                      <Label className="text-[10px]">When Unsatisfiable</Label>
-                      <Select
-                        value={tsc.whenUnsatisfiable}
-                        onChange={(e) => {
-                          const next = [...state.topologySpreadConstraints];
-                          next[idx] = {
-                            ...next[idx],
-                            whenUnsatisfiable: e.target.value as "DoNotSchedule" | "ScheduleAnyway",
-                          };
-                          patchState({ topologySpreadConstraints: next });
-                          clearError();
-                        }}
-                        className="h-7 text-[10px]"
-                        disabled={state.loading}
-                      >
-                        <option value="DoNotSchedule">DoNotSchedule</option>
-                        <option value="ScheduleAnyway">ScheduleAnyway</option>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="grid gap-1">
-                    <Label className="text-[10px]">
-                      Label Selector (key=value, comma-separated)
-                    </Label>
-                    <Input
-                      value={
-                        tsc.labelSelector
-                          ? Object.entries(tsc.labelSelector)
-                              .map(([k, v]) => `${k}=${v}`)
-                              .join(", ")
-                          : ""
-                      }
-                      onChange={(e) => {
-                        const entries = e.target.value
-                          .split(",")
-                          .map((s) => s.trim())
-                          .filter(Boolean);
-                        const labels: Record<string, string> = {};
-                        for (const entry of entries) {
-                          const eqIdx = entry.indexOf("=");
-                          if (eqIdx > 0) {
-                            labels[entry.slice(0, eqIdx).trim()] = entry.slice(eqIdx + 1).trim();
-                          }
-                        }
-                        const next = [...state.topologySpreadConstraints];
-                        next[idx] = {
-                          ...next[idx],
-                          labelSelector: Object.keys(labels).length > 0 ? labels : undefined,
-                        };
-                        patchState({ topologySpreadConstraints: next });
-                        clearError();
-                      }}
-                      placeholder="e.g. app=aerospike"
-                      className="h-7 text-[10px]"
-                      disabled={state.loading}
-                    />
-                  </div>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() => {
-                  patchState({
-                    topologySpreadConstraints: [
-                      ...state.topologySpreadConstraints,
-                      {
-                        maxSkew: 1,
-                        topologyKey: "topology.kubernetes.io/zone",
-                        whenUnsatisfiable: "DoNotSchedule",
-                      },
-                    ],
-                  });
-                  clearError();
-                }}
-                className="text-accent hover:text-accent/80 flex items-center gap-1 text-[10px] font-medium"
-                disabled={state.loading}
-              >
-                <Plus className="h-3 w-3" /> Add Constraint
-              </button>
-            </div>
+            <EditTopologySpreadSection
+              constraints={state.topologySpreadConstraints}
+              disabled={state.loading}
+              onChange={(v) => {
+                patchState({ topologySpreadConstraints: v });
+                clearError();
+              }}
+            />
           </CollapsibleSection>
 
           {/* Pod Security Context */}
@@ -954,133 +693,34 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
             }
             size="sm"
           >
-            <div className="space-y-3">
-              <p className="text-base-content/60 text-[10px]">
-                Configure the pod-level security context.
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-1">
-                  <Label htmlFor="edit-run-as-user" className="text-[10px]">
-                    Run As User
-                  </Label>
-                  <Input
-                    id="edit-run-as-user"
-                    type="number"
-                    min={0}
-                    value={state.podSecurityRunAsUser ?? ""}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      patchState({
-                        podSecurityRunAsUser: val ? parseInt(val, 10) : undefined,
-                      });
-                      clearError();
-                    }}
-                    placeholder="e.g. 1000"
-                    className="h-7 text-[10px]"
-                    disabled={state.loading}
-                  />
-                </div>
-                <div className="grid gap-1">
-                  <Label htmlFor="edit-run-as-group" className="text-[10px]">
-                    Run As Group
-                  </Label>
-                  <Input
-                    id="edit-run-as-group"
-                    type="number"
-                    min={0}
-                    value={state.podSecurityRunAsGroup ?? ""}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      patchState({
-                        podSecurityRunAsGroup: val ? parseInt(val, 10) : undefined,
-                      });
-                      clearError();
-                    }}
-                    placeholder="e.g. 1000"
-                    className="h-7 text-[10px]"
-                    disabled={state.loading}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-1">
-                  <Label htmlFor="edit-fs-group" className="text-[10px]">
-                    FS Group
-                  </Label>
-                  <Input
-                    id="edit-fs-group"
-                    type="number"
-                    min={0}
-                    value={state.podSecurityFsGroup ?? ""}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      patchState({
-                        podSecurityFsGroup: val ? parseInt(val, 10) : undefined,
-                      });
-                      clearError();
-                    }}
-                    placeholder="e.g. 1000"
-                    className="h-7 text-[10px]"
-                    disabled={state.loading}
-                  />
-                </div>
-                <div className="flex items-center gap-2 self-end pb-1">
-                  <Switch
-                    id="edit-run-as-non-root"
-                    checked={state.podSecurityRunAsNonRoot}
-                    onCheckedChange={(checked) => {
-                      patchState({ podSecurityRunAsNonRoot: checked });
-                      clearError();
-                    }}
-                    disabled={state.loading}
-                  />
-                  <Label htmlFor="edit-run-as-non-root" className="cursor-pointer text-[10px]">
-                    Run As Non-Root
-                  </Label>
-                </div>
-              </div>
-              <div className="grid gap-1">
-                <Label className="text-[10px] font-semibold">Supplemental Groups</Label>
-                {state.podSecuritySupGroups.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {state.podSecuritySupGroups.map((gid) => (
-                      <span
-                        key={gid}
-                        className="bg-accent/10 text-accent inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
-                      >
-                        {gid}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            patchState({
-                              podSecuritySupGroups: state.podSecuritySupGroups.filter(
-                                (g) => g !== gid,
-                              ),
-                            });
-                            clearError();
-                          }}
-                          className="hover:bg-accent/20 ml-0.5 inline-flex h-3 w-3 items-center justify-center rounded-full"
-                          disabled={state.loading}
-                        >
-                          <X className="h-2 w-2" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <EditSupGroupInput
-                  onAdd={(gid) => {
-                    if (!state.podSecuritySupGroups.includes(gid)) {
-                      patchState({
-                        podSecuritySupGroups: [...state.podSecuritySupGroups, gid],
-                      });
-                      clearError();
-                    }
-                  }}
-                  disabled={state.loading}
-                />
-              </div>
-            </div>
+            <EditPodSecuritySection
+              runAsUser={state.podSecurityRunAsUser}
+              runAsGroup={state.podSecurityRunAsGroup}
+              runAsNonRoot={state.podSecurityRunAsNonRoot}
+              fsGroup={state.podSecurityFsGroup}
+              supplementalGroups={state.podSecuritySupGroups}
+              disabled={state.loading}
+              onRunAsUserChange={(v) => {
+                patchState({ podSecurityRunAsUser: v });
+                clearError();
+              }}
+              onRunAsGroupChange={(v) => {
+                patchState({ podSecurityRunAsGroup: v });
+                clearError();
+              }}
+              onRunAsNonRootChange={(v) => {
+                patchState({ podSecurityRunAsNonRoot: v });
+                clearError();
+              }}
+              onFsGroupChange={(v) => {
+                patchState({ podSecurityFsGroup: v });
+                clearError();
+              }}
+              onSupplementalGroupsChange={(v) => {
+                patchState({ podSecuritySupGroups: v });
+                clearError();
+              }}
+            />
           </CollapsibleSection>
 
           {/* Validation Policy */}
@@ -1134,108 +774,19 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
             }
             size="sm"
           >
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label htmlFor="edit-pod-service" className="cursor-pointer text-xs">
-                    Enable per-pod Service
-                  </Label>
-                  <p className="text-muted-foreground text-[10px]">
-                    Create a dedicated K8s Service for each Aerospike pod.
-                  </p>
-                </div>
-                <Switch
-                  id="edit-pod-service"
-                  checked={state.podServiceConfig != null}
-                  onCheckedChange={(checked) => {
-                    patchState({ podServiceConfig: checked ? {} : null });
-                    clearError();
-                  }}
-                  disabled={state.loading}
-                />
-              </div>
-              {state.podServiceConfig != null && (
-                <div className="space-y-3">
-                  <div className="grid gap-1.5">
-                    <Label className="text-[10px] font-semibold">Pod Service Annotations</Label>
-                    <KeyValueEditor
-                      value={state.podServiceConfig.annotations}
-                      onChange={(v) =>
-                        patchState({
-                          podServiceConfig: { ...state.podServiceConfig!, annotations: v },
-                        })
-                      }
-                      keyPlaceholder="annotation key"
-                      valuePlaceholder="value"
-                      disabled={state.loading}
-                      size="sm"
-                    />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label className="text-[10px] font-semibold">Pod Service Labels</Label>
-                    <KeyValueEditor
-                      value={state.podServiceConfig.labels}
-                      onChange={(v) =>
-                        patchState({
-                          podServiceConfig: { ...state.podServiceConfig!, labels: v },
-                        })
-                      }
-                      keyPlaceholder="label key"
-                      valuePlaceholder="value"
-                      disabled={state.loading}
-                      size="sm"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div className="border-t pt-3">
-                <Label className="text-xs font-semibold">Headless Service Metadata</Label>
-                <p className="text-muted-foreground mb-2 text-[10px]">
-                  Custom annotations and labels for the headless Service.
-                </p>
-                <div className="space-y-3">
-                  <div className="grid gap-1.5">
-                    <Label className="text-[10px] font-semibold">Annotations</Label>
-                    <KeyValueEditor
-                      value={state.headlessServiceConfig?.annotations}
-                      onChange={(v) => {
-                        const next = { ...state.headlessServiceConfig, annotations: v };
-                        if (!next.annotations && !next.labels) {
-                          patchState({ headlessServiceConfig: null });
-                        } else {
-                          patchState({ headlessServiceConfig: next });
-                        }
-                        clearError();
-                      }}
-                      keyPlaceholder="annotation key"
-                      valuePlaceholder="value"
-                      disabled={state.loading}
-                      size="sm"
-                    />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label className="text-[10px] font-semibold">Labels</Label>
-                    <KeyValueEditor
-                      value={state.headlessServiceConfig?.labels}
-                      onChange={(v) => {
-                        const next = { ...state.headlessServiceConfig, labels: v };
-                        if (!next.annotations && !next.labels) {
-                          patchState({ headlessServiceConfig: null });
-                        } else {
-                          patchState({ headlessServiceConfig: next });
-                        }
-                        clearError();
-                      }}
-                      keyPlaceholder="label key"
-                      valuePlaceholder="value"
-                      disabled={state.loading}
-                      size="sm"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
+            <EditServiceMetadataSection
+              podServiceConfig={state.podServiceConfig}
+              headlessServiceConfig={state.headlessServiceConfig}
+              disabled={state.loading}
+              onPodServiceConfigChange={(v) => {
+                patchState({ podServiceConfig: v });
+                clearError();
+              }}
+              onHeadlessServiceConfigChange={(v) => {
+                patchState({ headlessServiceConfig: v });
+                clearError();
+              }}
+            />
           </CollapsibleSection>
 
           {/* Rack ID Override */}
@@ -1353,52 +904,5 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-/** Small input for adding supplemental group GIDs. */
-function EditSupGroupInput({
-  onAdd,
-  disabled,
-}: {
-  onAdd: (gid: number) => void;
-  disabled?: boolean;
-}) {
-  const [val, setVal] = useState("");
-  const add = () => {
-    const n = parseInt(val, 10);
-    if (!isNaN(n) && n >= 0) {
-      onAdd(n);
-      setVal("");
-    }
-  };
-  return (
-    <div className="flex gap-1.5">
-      <Input
-        value={val}
-        onChange={(e) => setVal(e.target.value)}
-        type="number"
-        min={0}
-        placeholder="e.g. 1000"
-        className="h-7 w-24 text-[10px]"
-        disabled={disabled}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            add();
-          }
-        }}
-      />
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="h-7 shrink-0 text-[10px]"
-        onClick={add}
-        disabled={disabled || !val.trim() || isNaN(parseInt(val, 10))}
-      >
-        <Plus className="mr-0.5 h-3 w-3" /> Add
-      </Button>
-    </div>
   );
 }

@@ -71,7 +71,6 @@ export default function ConnectionsPage() {
     rows,
     loading,
     error,
-    healthStatuses,
     fetchAll,
     fetchAllHealth,
     updateMetadata,
@@ -233,15 +232,14 @@ export default function ConnectionsPage() {
           router.push(`/k8s/clusters/${row.k8sNamespace}/${row.k8sClusterName}`);
         }
       } else {
-        const status = healthStatuses[row.id];
-        if (status?.connected) {
+        if (row.status === "connected") {
           router.push(`/browser/${row.connectionId}`);
         } else {
           router.push(`/cluster/${row.connectionId}`);
         }
       }
     },
-    [router, healthStatuses],
+    [router],
   );
 
   const handleLabelChange = useCallback(

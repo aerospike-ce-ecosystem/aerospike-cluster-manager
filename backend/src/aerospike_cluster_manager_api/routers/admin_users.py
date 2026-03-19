@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import logging
 
-from aerospike_py.exception import AdminError, AerospikeError
 from fastapi import APIRouter, HTTPException, Query
 from starlette.responses import Response
 
-from aerospike_cluster_manager_api.constants import EE_MSG
 from aerospike_cluster_manager_api.dependencies import AerospikeClient
 from aerospike_cluster_manager_api.models.admin import AerospikeUser, ChangePasswordRequest, CreateUserRequest
 from aerospike_cluster_manager_api.models.common import MessageResponse
+from aerospike_cluster_manager_api.routers._admin_utils import admin_endpoint
 
 logger = logging.getLogger(__name__)
 
@@ -21,28 +20,22 @@ router = APIRouter(prefix="/admin", tags=["admin-users"])
     summary="List users",
     description="Retrieve all Aerospike users and their roles. Requires security to be enabled in aerospike.conf.",
 )
+@admin_endpoint
 async def get_users(client: AerospikeClient) -> list[AerospikeUser]:
     """Retrieve all Aerospike users and their roles. Requires security to be enabled in aerospike.conf."""
-    try:
-        raw_users = await client.admin_query_users_info()
-        users: list[AerospikeUser] = []
-        for info in raw_users:
-            users.append(
-                AerospikeUser(
-                    username=info.get("user", ""),
-                    roles=info.get("roles", []),
-                    readQuota=info.get("read_quota", 0),
-                    writeQuota=info.get("write_quota", 0),
-                    connections=info.get("connections", 0),
-                )
+    raw_users = await client.admin_query_users_info()
+    users: list[AerospikeUser] = []
+    for info in raw_users:
+        users.append(
+            AerospikeUser(
+                username=info.get("user", ""),
+                roles=info.get("roles", []),
+                readQuota=info.get("read_quota", 0),
+                writeQuota=info.get("write_quota", 0),
+                connections=info.get("connections", 0),
             )
-        return users
-    except AdminError:
-        raise HTTPException(status_code=403, detail=EE_MSG) from None
-    except AerospikeError as e:
-        if "security" in str(e).lower() or "not enabled" in str(e).lower() or "not supported" in str(e).lower():
-            raise HTTPException(status_code=403, detail=EE_MSG) from None
-        raise
+        )
+    return users
 
 
 @router.post(
@@ -51,15 +44,13 @@ async def get_users(client: AerospikeClient) -> list[AerospikeUser]:
     summary="Create user",
     description="Create a new Aerospike user with specified roles. Requires security to be enabled in aerospike.conf.",
 )
+@admin_endpoint
 async def create_user(body: CreateUserRequest, client: AerospikeClient) -> AerospikeUser:
     """Create a new Aerospike user with specified roles. Requires security to be enabled in aerospike.conf."""
     if not body.username or not body.password:
         raise HTTPException(status_code=400, detail="Missing required fields: username, password")
 
-    try:
-        await client.admin_create_user(body.username, body.password, body.roles or [])
-    except AdminError:
-        raise HTTPException(status_code=403, detail=EE_MSG) from None
+    await client.admin_create_user(body.username, body.password, body.roles or [])
 
     return AerospikeUser(
         username=body.username,
@@ -76,15 +67,13 @@ async def create_user(body: CreateUserRequest, client: AerospikeClient) -> Aeros
     summary="Change user password",
     description="Change the password for an existing Aerospike user. Requires security to be enabled in aerospike.conf.",
 )
+@admin_endpoint
 async def change_password(body: ChangePasswordRequest, client: AerospikeClient) -> MessageResponse:
     """Change the password for an existing Aerospike user. Requires security to be enabled in aerospike.conf."""
     if not body.username or not body.password:
         raise HTTPException(status_code=400, detail="Missing required fields: username, password")
 
-    try:
-        await client.admin_change_password(body.username, body.password)
-    except AdminError:
-        raise HTTPException(status_code=403, detail=EE_MSG) from None
+    await client.admin_change_password(body.username, body.password)
 
     return MessageResponse(message="Password updated")
 
@@ -95,14 +84,12 @@ async def change_password(body: ChangePasswordRequest, client: AerospikeClient) 
     summary="Delete user",
     description="Delete an Aerospike user by username. Requires security to be enabled in aerospike.conf.",
 )
+@admin_endpoint
 async def delete_user(
     client: AerospikeClient,
     username: str = Query(..., min_length=1),
 ) -> Response:
     """Delete an Aerospike user by username. Requires security to be enabled in aerospike.conf."""
-    try:
-        await client.admin_drop_user(username)
-    except AdminError:
-        raise HTTPException(status_code=403, detail=EE_MSG) from None
+    await client.admin_drop_user(username)
 
     return Response(status_code=204)
