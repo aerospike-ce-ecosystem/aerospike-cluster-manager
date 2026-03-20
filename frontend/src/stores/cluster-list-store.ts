@@ -135,7 +135,6 @@ export const useClusterListStore = create<ClusterListState>()((set, get) => ({
                 ? "connected"
                 : "disconnected") as UnifiedClusterRow["status"],
               nodeCount: health.nodeCount,
-              totalOps: health.totalOps,
               memoryUsed: health.memoryUsed ?? undefined,
               memoryTotal: health.memoryTotal ?? undefined,
               diskUsed: health.diskUsed ?? undefined,

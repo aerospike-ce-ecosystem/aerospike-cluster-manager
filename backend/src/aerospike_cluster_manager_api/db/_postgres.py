@@ -27,8 +27,6 @@ CREATE TABLE IF NOT EXISTS connections (
     username     TEXT,
     password     TEXT,
     color        TEXT NOT NULL DEFAULT '#0097D3',
-    label        TEXT,
-    label_color  TEXT,
     description  TEXT,
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL
@@ -46,12 +44,10 @@ async def _apply_migrations(conn: asyncpg.Connection | asyncpg.pool.PoolConnecti
     """Add columns introduced after the initial schema."""
     row = await conn.fetchrow(
         """SELECT column_name FROM information_schema.columns
-           WHERE table_name = 'connections' AND column_name = 'label'"""
+           WHERE table_name = 'connections' AND column_name = 'description'"""
     )
     if row is None:
-        logger.info("Migrating PostgreSQL: adding label, label_color, description columns")
-        await conn.execute("ALTER TABLE connections ADD COLUMN label TEXT")
-        await conn.execute("ALTER TABLE connections ADD COLUMN label_color TEXT")
+        logger.info("Migrating PostgreSQL: adding description column")
         await conn.execute("ALTER TABLE connections ADD COLUMN description TEXT")
 
 

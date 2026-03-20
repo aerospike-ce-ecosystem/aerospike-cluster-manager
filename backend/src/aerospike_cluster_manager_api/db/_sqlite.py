@@ -30,8 +30,6 @@ CREATE TABLE IF NOT EXISTS connections (
     username     TEXT,
     password     TEXT,
     color        TEXT NOT NULL DEFAULT '#0097D3',
-    label        TEXT,
-    label_color  TEXT,
     description  TEXT,
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL
@@ -50,10 +48,8 @@ async def _apply_migrations(conn: aiosqlite.Connection) -> None:
     async with conn.execute("PRAGMA table_info(connections)") as cursor:
         columns = {row[1] for row in await cursor.fetchall()}
 
-    if "label" not in columns:
-        logger.info("Migrating SQLite: adding label, label_color, description columns")
-        await conn.execute("ALTER TABLE connections ADD COLUMN label TEXT")
-        await conn.execute("ALTER TABLE connections ADD COLUMN label_color TEXT")
+    if "description" not in columns:
+        logger.info("Migrating SQLite: adding description column")
         await conn.execute("ALTER TABLE connections ADD COLUMN description TEXT")
         await conn.commit()
 

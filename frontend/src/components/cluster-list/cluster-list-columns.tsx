@@ -3,7 +3,6 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { MoreHorizontal, Pencil, Trash2, ExternalLink } from "lucide-react";
 import type { UnifiedClusterRow } from "@/lib/api/types";
-import { formatNumber } from "@/lib/formatters";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -102,22 +101,6 @@ export function getClusterListColumns(
       cell: ({ row }) => {
         const { hosts } = row.original;
         return <span className="truncate font-mono text-xs">{hosts || "--"}</span>;
-      },
-    },
-    {
-      id: "totalOps",
-      accessorKey: "totalOps",
-      header: "Total Ops",
-      size: 100,
-      enableSorting: true,
-      meta: { hideOn: ["mobile"] },
-      cell: ({ row }) => {
-        const { totalOps } = row.original;
-        return (
-          <span className={totalOps === undefined ? "text-muted-foreground" : ""}>
-            {totalOps !== undefined ? formatNumber(totalOps) : "--"}
-          </span>
-        );
       },
     },
     {

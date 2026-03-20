@@ -9,7 +9,6 @@ class ConnectionStatus(BaseModel):
     namespaceCount: int
     build: str | None = None
     edition: str | None = None
-    totalOps: int = 0
     memoryUsed: int = 0
     memoryTotal: int = 0
     diskUsed: int = 0

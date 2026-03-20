@@ -19,7 +19,6 @@ export interface ConnectionStatus {
   namespaceCount: number;
   build?: string;
   edition?: string;
-  totalOps?: number;
   memoryUsed?: number;
   memoryTotal?: number;
   diskUsed?: number;
