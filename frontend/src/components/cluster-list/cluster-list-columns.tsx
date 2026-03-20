@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { StatusBadge } from "@/components/common/status-badge";
 import { AckoBadge } from "@/components/cluster-list/acko-badge";
-import { MemoryDiskCell } from "@/components/cluster-list/memory-disk-cell";
 import { LabelEditorPopover } from "@/components/cluster-list/label-editor-popover";
 
 interface ClusterListColumnOptions {
@@ -34,16 +33,13 @@ export function getClusterListColumns(
       enableSorting: true,
       meta: { mobileSlot: "title" as const, cellClassName: "!overflow-visible" },
       cell: ({ row }) => {
-        const { name, description, isAckoManaged } = row.original;
+        const { name, isAckoManaged } = row.original;
         return (
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="truncate font-semibold">{name}</span>
               {isAckoManaged && <AckoBadge />}
             </div>
-            {description && (
-              <div className="text-muted-foreground mt-0.5 truncate text-xs">{description}</div>
-            )}
           </div>
         );
       },
@@ -87,6 +83,20 @@ export function getClusterListColumns(
               <Plus className="h-3.5 w-3.5" />
             </button>
           </LabelEditorPopover>
+        );
+      },
+    },
+    {
+      id: "description",
+      accessorKey: "description",
+      header: "Description",
+      size: 200,
+      enableSorting: false,
+      meta: { hideOn: ["mobile"] },
+      cell: ({ row }) => {
+        const { description } = row.original;
+        return (
+          <span className="text-muted-foreground truncate text-sm">{description || "--"}</span>
         );
       },
     },
@@ -151,32 +161,6 @@ export function getClusterListColumns(
           </span>
         );
       },
-    },
-    {
-      id: "memoryUsed",
-      accessorKey: "memoryUsed",
-      header: "Memory",
-      size: 160,
-      enableSorting: true,
-      meta: { hideOn: ["mobile"] },
-      cell: ({ row }) => (
-        <MemoryDiskCell
-          used={row.original.memoryUsed}
-          total={row.original.memoryTotal}
-          type="memory"
-        />
-      ),
-    },
-    {
-      id: "diskUsed",
-      accessorKey: "diskUsed",
-      header: "Disk",
-      size: 160,
-      enableSorting: false,
-      meta: { hideOn: ["mobile"] },
-      cell: ({ row }) => (
-        <MemoryDiskCell used={row.original.diskUsed} total={row.original.diskTotal} type="disk" />
-      ),
     },
     {
       id: "actions",

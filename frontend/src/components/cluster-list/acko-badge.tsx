@@ -10,10 +10,10 @@ export function AckoBadge() {
       <TooltipTrigger>
         <Badge
           variant="outline"
-          className="border-info/30 bg-info/10 text-info gap-1 px-1.5 py-0 text-[10px] font-medium"
+          className="gap-1 border-[#ffe600]/30 bg-[#ffe600]/10 px-1.5 py-0 text-[10px] font-medium text-[#b8a800]"
         >
           <Boxes className="h-3 w-3" />
-          K8s
+          ACKO
         </Badge>
       </TooltipTrigger>
       <TooltipContent side="top">Managed by ACKO</TooltipContent>
