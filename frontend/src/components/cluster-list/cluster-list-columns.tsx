@@ -33,12 +33,15 @@ export function getClusterListColumns(
       enableSorting: true,
       meta: { mobileSlot: "title" as const },
       cell: ({ row }) => {
-        const { name, isAckoManaged } = row.original;
+        const { name, isAckoManaged, color } = row.original;
         return (
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="truncate font-semibold">{name}</span>
-              {isAckoManaged && <AckoBadge />}
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="h-8 w-1 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="truncate font-semibold">{name}</span>
+                {isAckoManaged && <AckoBadge />}
+              </div>
             </div>
           </div>
         );
