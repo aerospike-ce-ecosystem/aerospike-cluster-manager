@@ -12,7 +12,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from pydantic import BaseModel
 
 from aerospike_cluster_manager_api import config, db
@@ -83,7 +83,7 @@ class DeleteResponse(BaseModel):
 
 def _map_k8s_error(e: K8sApiError) -> HTTPException:
     """Map K8sApiError status codes to appropriate HTTPException responses."""
-    status_map = {404: 404, 409: 409, 422: 422, 403: 403, 401: 401}
+    status_map = {400: 400, 401: 401, 403: 403, 404: 404, 408: 408, 409: 409, 422: 422, 429: 429, 503: 503}
     http_status = status_map.get(e.status, 500)
     return HTTPException(status_code=http_status, detail=e.message or e.reason)
 
@@ -463,16 +463,19 @@ async def get_k8s_cluster_hpa(
     return extract_hpa_response(raw)
 
 
-@router.post(
-    "/clusters/{namespace}/{name}/hpa", status_code=201, summary="Create or update HPA for K8s Aerospike cluster"
-)
+@router.post("/clusters/{namespace}/{name}/hpa", summary="Create or update HPA for K8s Aerospike cluster")
 @_k8s_endpoint("create/update HPA for Kubernetes cluster")
 async def create_or_update_k8s_cluster_hpa(
+    response: Response,
     body: HPAConfig,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ) -> HPAResponse:
 
+    if body.cpu_target_percent is None and body.memory_target_percent is None:
+        raise HTTPException(
+            status_code=400, detail="At least one of cpu_target_percent or memory_target_percent is required"
+        )
     # Check if HPA already exists — update if so, create if not
     try:
         await k8s_client.get_hpa(namespace, name)
@@ -484,6 +487,7 @@ async def create_or_update_k8s_cluster_hpa(
             body.cpu_target_percent,
             body.memory_target_percent,
         )
+        response.status_code = 200
     except K8sApiError as e:
         if e.status == 404:
             raw = await k8s_client.create_hpa(
@@ -494,6 +498,7 @@ async def create_or_update_k8s_cluster_hpa(
                 body.cpu_target_percent,
                 body.memory_target_percent,
             )
+            response.status_code = 201
         else:
             raise
     return extract_hpa_response(raw)

@@ -522,6 +522,22 @@ export const api = {
       { method: "DELETE" },
     ),
 
+  // K8s Reconciliation Health
+  getK8sReconciliationHealth: (namespace: string, name: string) =>
+    request<import("./types").ReconciliationHealthResponse>(
+      `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/reconciliation-health`,
+    ),
+
+  // K8s Node Blocklist
+  updateK8sClusterNodeBlocklist: (namespace: string, name: string, nodeNames: string[]) =>
+    request<import("./types").K8sClusterSummary>(
+      `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/node-blocklist`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ nodeNames }),
+      },
+    ),
+
   // K8s Cluster Operations
   triggerK8sClusterOperation: (
     namespace: string,

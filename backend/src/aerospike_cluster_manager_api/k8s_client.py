@@ -106,9 +106,13 @@ class K8sClient:
 
         if isinstance(e, ApiException):
             msg = (str(e.body) if e.body else "")[:2000]
-            return K8sApiError(
-                status=int(e.status) if e.status is not None else 500, reason=e.reason or "", message=msg
-            )
+            raw_status = int(e.status) if e.status is not None else 500
+            status = raw_status if raw_status else 500
+            if raw_status == 0 or "timeout" in (e.reason or "").lower():
+                status = 408
+            return K8sApiError(status=status, reason=e.reason or "", message=msg)
+        if isinstance(e, (TimeoutError, OSError)) and "timed out" in str(e).lower():
+            return K8sApiError(status=408, reason="RequestTimeout", message="Kubernetes API request timed out")
         logger.error("Unexpected error in K8s operation: %s", e, exc_info=True)
         return K8sApiError(status=500, reason="InternalError", message="Internal server error")
 

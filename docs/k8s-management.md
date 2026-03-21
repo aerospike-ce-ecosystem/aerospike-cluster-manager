@@ -257,27 +257,15 @@ Displays rack distribution and data migration status across the cluster. The hea
 
 ### Migration Status Monitoring
 
-The migration status card provides real-time visibility into Aerospike data migration:
+The migration status card provides real-time visibility into Aerospike data migration, particularly useful during scale-down operations, rolling restarts, and initial cluster provisioning.
 
-- **Overall status** -- Whether migration is in progress, and total remaining partitions across the cluster.
-- **Per-pod breakdown** -- Each pod shows its individual migrating partition count, making it easy to identify which pods still have data in transit.
+- **Overall status** -- Whether migration is in progress, and total remaining partitions aggregated across all nodes in the cluster.
+- **Per-pod breakdown** -- Each pod shows its individual migrating partition count in the pod table, making it easy to identify which nodes still have data in transit.
+- **Auto-refresh** -- The migration view refreshes automatically while migration is active (every 5 seconds), stopping once all partitions have settled.
+- **Integrated views** -- Migration progress is surfaced in both the pod table and the rack topology view, so you can correlate partition movement with rack placement.
 - **Last checked** -- Timestamp of when the migration status was last polled.
 
 The migration status is fetched from the `GET /api/k8s/clusters/{namespace}/{name}/migration-status` endpoint, which reads the `status.migrationStatus` field from the AerospikeCluster CR.
-
-Migration status is particularly useful during:
-- Scale-down operations (waiting for data to migrate off departing pods).
-- Rolling restarts (tracking data rebalancing after each pod restart).
-- Initial cluster provisioning (watching data distribution across new pods).
-
-### Migration Status Monitoring
-
-The cluster detail page shows real-time migration progress when the cluster is in a `WaitingForMigration` phase (e.g., after scaling or a rolling restart):
-
-- **Remaining partition count** -- Aggregated across all nodes, showing how many partitions still need to migrate.
-- **Per-pod migration breakdown** -- Each pod's individual remaining partition count is displayed in the pod table, making it easy to identify which nodes are still migrating.
-- **Auto-refresh** -- The migration view refreshes automatically while migration is active (every 5 seconds), stopping once all partitions have settled.
-- **Integrated views** -- Migration progress is surfaced in both the pod table and the rack topology view, so you can correlate partition movement with rack placement.
 
 ### Pod Health Tracking
 
@@ -332,12 +320,14 @@ Events auto-refresh during transitional phases and support category filtering.
 
 ### Configuration Drift Detection
 
-Compares the desired spec (what you declared) against the applied spec (what the operator last reconciled) and detects configuration drift. The UI presents:
+Compares the desired spec (what you declared) against the applied spec (what the operator last reconciled) and detects configuration drift. This is useful after editing a cluster to see whether the operator has fully applied the changes, or to identify partial rollout states where some pods are running the new config and others are still on the old one.
+
+The UI presents:
 
 - **Sync status badge** -- "In Sync" (green) or "Drift Detected" (amber) at the top of the card.
 - **Changed fields list** -- Each field that differs is listed with its path.
 - **Visual diff view** -- For every changed field the card shows the desired value (marked with `+`) and the applied value (marked with `-`) side-by-side, using color-coded formatting (`added`, `removed`, `changed`).
-- **Pod hash groups** -- Pods are grouped by their `configHash` and `podSpecHash`. The group matching the current desired hash is marked as "current"; pods in other groups have diverged and need a rolling restart.
+- **Pod hash groups** -- Pods are grouped by their `configHash` and `podSpecHash`. Each pod reports its current config hash in the pod status table. The group matching the current desired hash is marked as "current"; pods in other groups have diverged and need a rolling restart to pick up the new configuration.
 - **Desired & applied config snapshots** -- The full desired and applied config objects are available for inspection when the backend returns them.
 
 The drift data is fetched from `GET /api/k8s/clusters/{namespace}/{name}/config-drift`.
@@ -374,6 +364,8 @@ The card displays:
 - **Operator version** -- The version of the operator managing this cluster.
 - **Manual reset button** -- Clears the circuit breaker state to force an immediate reconcile.
 - **Auto-refresh** -- The card polls every 10 seconds to keep the health status current.
+
+The reconciliation health data is fetched from `GET /api/k8s/clusters/{namespace}/{name}/reconciliation-health`.
 
 ### Template Sync Status
 

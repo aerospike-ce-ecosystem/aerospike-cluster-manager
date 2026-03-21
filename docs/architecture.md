@@ -79,7 +79,7 @@ The Aerospike Cluster Manager is a web-based GUI that provides two primary capab
 - All K8s API calls are wrapped with `asyncio.to_thread()` to avoid blocking the FastAPI event loop.
 - The `K8sClient` singleton (`k8s_client.py`) manages the Kubernetes API connection, automatically loading either in-cluster config or kubeconfig.
 - The `k8s_service.py` module contains business logic for building CRD specs, extracting summaries, computing config drift, and categorizing events.
-- **PostgreSQL** stores connection profiles and application state.
+- **SQLite** (default) or **PostgreSQL** (opt-in) stores connection profiles and application state.
 
 ### Aerospike CE Kubernetes Operator
 
@@ -176,6 +176,39 @@ This deploys the Cluster Manager as a Deployment with:
 - Environment variables preconfigured for in-cluster operation
 - Configurable database pool and Kubernetes API timeout settings
 
+## Database Backend
+
+The Aerospike Cluster Manager supports two database backends for persisting connection profiles and application state.
+
+### SQLite (Default)
+
+SQLite is the default database backend. It requires no external service and works out of the box. The backend creates the database file automatically on first startup.
+
+- **WAL mode** is enabled for better read concurrency. Multiple readers can access the database simultaneously while a single writer holds a lock, making it suitable for typical single-instance deployments.
+- **File path** is configurable via the `SQLITE_PATH` environment variable (default: `./data/connections.db`).
+- No additional container or service is needed, simplifying deployment.
+
+### PostgreSQL (Opt-in)
+
+PostgreSQL can be enabled by setting `ENABLE_POSTGRES=true` and providing a `DATABASE_URL` connection string. This is recommended for high-availability or multi-instance deployments.
+
+```bash
+ENABLE_POSTGRES=true
+DATABASE_URL=postgresql://user:password@host:5432/aerospike_manager
+```
+
+The PostgreSQL connection pool is configurable via `DB_POOL_MIN_SIZE`, `DB_POOL_MAX_SIZE`, and `DB_COMMAND_TIMEOUT` environment variables (see [Environment Configuration](#environment-configuration) below).
+
+### Choosing Between SQLite and PostgreSQL
+
+| Scenario | Recommended Backend |
+|----------|-------------------|
+| Single-instance deployment (standalone container, local dev) | SQLite |
+| High-availability with multiple replicas | PostgreSQL |
+| Kubernetes deployment with a single backend pod | SQLite |
+| Kubernetes deployment with horizontal scaling | PostgreSQL |
+| Minimal infrastructure / quick start | SQLite |
+
 ## Environment Configuration
 
 ### Core Settings
@@ -183,7 +216,9 @@ This deploys the Cluster Manager as a Deployment with:
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `K8S_MANAGEMENT_ENABLED` | `false` | Master switch for all K8s management features. Set to `true` when running inside a Kubernetes cluster. |
-| `DATABASE_URL` | `postgresql://...@localhost:5432/aerospike_manager` | PostgreSQL connection string for persisting connection profiles. |
+| `SQLITE_PATH` | `./data/connections.db` | File path for the SQLite database (used when `ENABLE_POSTGRES` is `false`). |
+| `ENABLE_POSTGRES` | `false` | Set to `true` to use PostgreSQL instead of the default SQLite backend. |
+| `DATABASE_URL` | `postgresql://...@localhost:5432/aerospike_manager` | PostgreSQL connection string (only used when `ENABLE_POSTGRES=true`). |
 | `CORS_ORIGINS` | `http://localhost:3000,http://localhost:3100` | Comma-separated allowed CORS origins. Must include the frontend URL. |
 | `LOG_LEVEL` | `INFO` | Backend log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`). |
 | `LOG_FORMAT` | `text` | Log format: `text` for local dev, `json` for structured container logging. |

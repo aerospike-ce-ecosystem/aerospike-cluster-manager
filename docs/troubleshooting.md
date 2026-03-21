@@ -260,6 +260,91 @@ See the [Architecture Guide](./architecture.md) for a complete RBAC configuratio
 
 3. **Connection leaks** -- If the backend is crashing and restarting, stale connections may accumulate. Restart PostgreSQL or configure idle connection cleanup in `pg_hba.conf`.
 
+## SQLite Issues
+
+### SQLite file permission errors
+
+**Symptoms:** Backend fails to start with "unable to open database file" or "readonly database" errors.
+
+**Possible causes and solutions:**
+
+1. **Directory does not exist** -- The parent directory for the SQLite file must exist. The backend does not create parent directories automatically.
+   ```bash
+   mkdir -p ./data
+   ```
+
+2. **Incorrect ownership in container** -- When running in a container, the volume mount must be writable by the container user. For Podman, use the `:U` flag to remap ownership:
+   ```bash
+   podman run -v ~/.aerospike-cluster-manager:/app/data:U ...
+   ```
+
+3. **Read-only filesystem** -- Ensure the volume is not mounted as read-only. Check your compose file or `podman run` command for `:ro` flags on the data volume.
+
+### WAL mode lock issues
+
+**Symptoms:** Backend logs show "database is locked" errors under concurrent access.
+
+**Possible causes and solutions:**
+
+1. **Network filesystem** -- SQLite WAL mode does not work reliably on network filesystems (NFS, CIFS, SMB). Use a local filesystem for the SQLite database file, or switch to PostgreSQL for shared storage.
+
+2. **Multiple processes** -- SQLite supports a single writer at a time. If multiple backend processes are writing simultaneously (e.g., multiple Gunicorn workers), consider either reducing to a single worker or switching to PostgreSQL.
+
+3. **Stale lock file** -- If the backend crashed while holding a write lock, a `-wal` or `-shm` file may be left behind. These are normally cleaned up on the next connection. If the database remains locked, stop all backend processes and delete the `-wal` and `-shm` files alongside the database file, then restart.
+
+## PostgreSQL Connection Pool Exhaustion
+
+### Backend becomes unresponsive under load (PostgreSQL)
+
+**Symptoms:** API requests hang or return 500 errors. Backend logs show "connection pool exhausted" or "too many connections" messages.
+
+**Possible causes and solutions:**
+
+1. **Pool too small** -- The default pool max size is 10 connections. Under high concurrency, this may be insufficient. Increase `DB_POOL_MAX_SIZE`:
+   ```bash
+   DB_POOL_MAX_SIZE=20
+   ```
+
+2. **Long-running queries** -- Queries that exceed `DB_COMMAND_TIMEOUT` (default: 30 seconds) are cancelled but may hold connections briefly. Investigate slow queries in PostgreSQL logs.
+
+3. **Connection leaks** -- If the backend crashes and restarts repeatedly, stale connections may accumulate in PostgreSQL. Monitor active connections:
+   ```sql
+   SELECT count(*) FROM pg_stat_activity WHERE datname = 'aerospike_manager';
+   ```
+
+4. **PostgreSQL max_connections limit** -- The PostgreSQL server itself has a `max_connections` limit (default: 100). Ensure `DB_POOL_MAX_SIZE` multiplied by the number of backend replicas does not exceed this limit.
+
+## Database Migration (SQLite to PostgreSQL)
+
+### Migrating from SQLite to PostgreSQL
+
+When scaling from a single-instance deployment to a multi-replica setup, you may need to migrate data from SQLite to PostgreSQL.
+
+**Steps:**
+
+1. **Export data from SQLite** -- Use the SQLite CLI to dump connection profiles:
+   ```bash
+   sqlite3 ./data/connections.db ".dump connections" > connections_dump.sql
+   ```
+
+2. **Create the PostgreSQL database** -- Ensure the target database exists:
+   ```bash
+   psql -h <host> -U <user> -c "CREATE DATABASE aerospike_manager;"
+   ```
+
+3. **Start the backend with PostgreSQL** -- Set `ENABLE_POSTGRES=true` and `DATABASE_URL` to point to the new database. The backend will create the required tables on startup.
+
+4. **Re-create connection profiles** -- Connection profiles can be re-created via the UI or by importing a previously exported JSON backup. The SQLite and PostgreSQL schemas are identical, but SQL dialect differences (e.g., autoincrement syntax) make direct SQL import unreliable. Using the application-level import/export feature is the safest approach.
+
+### Migrating from PostgreSQL to SQLite
+
+To simplify a deployment by removing the PostgreSQL dependency:
+
+1. Export connection profiles from the UI using the export feature.
+2. Stop the backend and remove the `ENABLE_POSTGRES` and `DATABASE_URL` environment variables (or set `ENABLE_POSTGRES=false`).
+3. Restart the backend -- it will create a fresh SQLite database.
+4. Import the connection profiles via the UI.
+
 ## General Tips
 
 - **Check backend logs** -- The backend logs detailed error information. Set `LOG_LEVEL=DEBUG` for verbose output.

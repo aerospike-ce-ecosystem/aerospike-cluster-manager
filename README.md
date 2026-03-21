@@ -779,15 +779,51 @@ pre-commit run --all-files
 
 ## Environment Variables
 
+All environment variables with their defaults and descriptions. See `backend/src/aerospike_cluster_manager_api/config.py` for the backend source of truth.
+
+### Aerospike Connection
+
 | Variable | Default | Description |
 |---|---|---|
-| `AEROSPIKE_HOST` | `aerospike` | Aerospike server host |
+| `AEROSPIKE_HOST` | `aerospike` | Aerospike server host (used in compose files for default connection) |
 | `AEROSPIKE_PORT` | `3000` | Aerospike service port |
-| `BACKEND_PORT` | `8000` | Backend API port |
-| `FRONTEND_PORT` | `3100` | Frontend port |
-| `CORS_ORIGINS` | `http://localhost:3100` | Allowed CORS origins |
-| `BACKEND_URL` | `http://localhost:8000` | Backend URL (frontend proxy target) |
+
+### Database
+
+| Variable | Default | Description |
+|---|---|---|
+| `SQLITE_PATH` | `./data/connections.db` | SQLite database file path. SQLite is the default backend -- no external database required |
+| `ENABLE_POSTGRES` | `false` | Set to `true` to use PostgreSQL instead of the default SQLite backend |
+| `DATABASE_URL` | `postgresql://aerospike:aerospike@localhost:5432/aerospike_manager` | PostgreSQL connection string (only used when `ENABLE_POSTGRES=true`) |
+| `DB_POOL_MIN_SIZE` | `2` | Minimum number of connections in the database connection pool |
+| `DB_POOL_MAX_SIZE` | `10` | Maximum number of connections in the database connection pool |
+| `DB_COMMAND_TIMEOUT` | `30` | SQL command execution timeout in seconds |
+
+### Kubernetes Management
+
+| Variable | Default | Description |
+|---|---|---|
 | `K8S_MANAGEMENT_ENABLED` | `false` | Enable K8s cluster management endpoints (requires in-cluster or kubeconfig access) |
+| `K8S_API_TIMEOUT` | `10` | Kubernetes API request timeout in seconds (applies to CRUD on CRDs, listing pods, nodes, etc.) |
+| `K8S_LOG_TIMEOUT` | `30` | Kubernetes pod log streaming timeout in seconds |
+
+### Network / Server
+
+| Variable | Default | Description |
+|---|---|---|
+| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:3100` | Comma-separated list of allowed CORS origins (must include the frontend URL) |
+| `BACKEND_URL` | `http://localhost:8000` | Backend URL used by the frontend proxy |
+| `BACKEND_PORT` | `8000` | Backend API port (compose files) |
+| `FRONTEND_PORT` | `3100` | Frontend port (compose files) |
+| `HOST` | `0.0.0.0` | Backend bind address |
+| `PORT` | `8000` | Backend bind port |
+
+### Logging
+
+| Variable | Default | Description |
+|---|---|---|
+| `LOG_LEVEL` | `INFO` | Backend log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+| `LOG_FORMAT` | `text` | Log output format: `text` for local dev, `json` for structured container logging |
 
 ## Production Deployment
 
@@ -812,20 +848,11 @@ podman run -d \
 
 A built-in health check (`/api/health`) is configured with a 10-second interval and 15-second start period.
 
-### Environment Variables for Production
+### Production Environment
 
-| Variable | Default | Description |
-|---|---|---|
-| `SQLITE_PATH` | `/app/data/connections.db` | SQLite database file path (default backend) |
-| `ENABLE_POSTGRES` | `false` | Use PostgreSQL instead of SQLite |
-| `DATABASE_URL` | `postgresql://aerospike:aerospike@localhost:5432/aerospike_manager` | PostgreSQL connection string (only used when `ENABLE_POSTGRES=true`) |
-| `HOST` | `0.0.0.0` | Backend bind address |
-| `PORT` | `8000` | Backend bind port |
-| `CORS_ORIGINS` | `http://localhost:3000` | Comma-separated list of allowed CORS origins |
-| `BACKEND_URL` | `http://localhost:8000` | Backend URL used by the frontend proxy |
-| `K8S_MANAGEMENT_ENABLED` | `false` | Enable Kubernetes cluster management endpoints (requires in-cluster or kubeconfig access) |
-| `LOG_LEVEL` | `INFO` | Backend log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
-| `LOG_FORMAT` | `text` | Log output format (`text` or `json` for structured logging) |
+For production, configure the environment variables listed in the [Environment Variables](#environment-variables) section above. Key settings to review: `CORS_ORIGINS` (must match your domain), `LOG_FORMAT` (set to `json` for structured logging), and `K8S_MANAGEMENT_ENABLED` (set to `true` when deploying inside Kubernetes).
+
+Inside the container, `SQLITE_PATH` defaults to `/app/data/connections.db`. Mount a volume to `/app/data` to persist data across container restarts.
 
 ### Database Setup
 
