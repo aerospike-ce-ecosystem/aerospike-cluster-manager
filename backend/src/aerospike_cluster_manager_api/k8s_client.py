@@ -471,6 +471,45 @@ class K8sClient:
         except Exception as e:
             raise self._wrap_api_exception(e) from e
 
+    def _list_pvcs_sync(self, namespace: str, label_selector: str) -> list[dict[str, Any]]:
+        """List PersistentVolumeClaims filtered by label selector."""
+        logger.debug("_list_pvcs_sync(namespace=%s, label_selector=%s)", namespace, label_selector)
+        self._ensure_initialized()
+        try:
+            result = self._get_core_api().list_namespaced_persistent_volume_claim(
+                namespace=namespace,
+                label_selector=label_selector,
+                _request_timeout=_K8S_API_TIMEOUT,
+            )
+            pvcs = []
+            for pvc in result.items:
+                meta = pvc.metadata
+                spec = pvc.spec
+                status = pvc.status
+                capacity = status.capacity.get("storage", "") if status and status.capacity else ""
+                pvcs.append(
+                    {
+                        "name": meta.name if meta else "",
+                        "namespace": meta.namespace if meta else "",
+                        "storageClass": spec.storage_class_name if spec else "",
+                        "capacity": capacity,
+                        "requestedSize": (
+                            spec.resources.requests.get("storage", "")
+                            if spec and spec.resources and spec.resources.requests
+                            else ""
+                        ),
+                        "status": (status.phase or "Unknown") if status else "Unknown",
+                        "volumeName": spec.volume_name if spec else None,
+                        "accessModes": list(spec.access_modes or []) if spec else [],
+                        "volumeMode": spec.volume_mode if spec else None,
+                        "createdAt": meta.creation_timestamp.isoformat() if meta and meta.creation_timestamp else None,
+                        "labels": dict(meta.labels or {}) if meta else {},
+                    }
+                )
+            return pvcs
+        except Exception as e:
+            raise self._wrap_api_exception(e) from e
+
     def _read_pod_log_sync(
         self, namespace: str, pod_name: str, container: str | None = None, tail_lines: int = 500
     ) -> str:
@@ -545,6 +584,9 @@ class K8sClient:
 
     async def list_nodes(self) -> list[dict[str, Any]]:
         return await asyncio.to_thread(self._list_nodes_sync)
+
+    async def list_pvcs(self, namespace: str, label_selector: str) -> list[dict[str, Any]]:
+        return await asyncio.to_thread(self._list_pvcs_sync, namespace, label_selector)
 
     async def read_pod_log(
         self, namespace: str, pod_name: str, container: str | None = None, tail_lines: int = 500

@@ -138,6 +138,32 @@ class ReconciliationHealthResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class PVCInfo(BaseModel):
+    """PersistentVolumeClaim info for cluster storage display."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: str
+    namespace: str
+    storage_class: str | None = Field(None, alias="storageClass")
+    capacity: str = ""
+    requested_size: str = Field("", alias="requestedSize")
+    status: str = "Unknown"
+    volume_name: str | None = Field(None, alias="volumeName")
+    access_modes: list[str] = Field(default_factory=list, alias="accessModes")
+    volume_mode: str | None = Field(None, alias="volumeMode")
+    created_at: str | None = Field(None, alias="createdAt")
+
+
+class ImportClusterRequest(BaseModel):
+    """Request to import a cluster from raw CR YAML/JSON."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    cr: dict = Field(description="Raw AerospikeCluster CR as JSON object")
+    namespace: str | None = Field(None, description="Override namespace (uses CR metadata.namespace if omitted)")
+
+
 class NodeBlocklistRequest(BaseModel):
     node_names: list[str] = Field(default_factory=list, alias="nodeNames")
 

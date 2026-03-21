@@ -532,4 +532,24 @@ export const api = {
       `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/operations`,
       { method: "POST", body: JSON.stringify(data) },
     ),
+
+  // K8s Cluster PVCs
+  getK8sClusterPVCs: (namespace: string, name: string) =>
+    request<import("./types").PVCInfo[]>(
+      `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/pvcs`,
+    ),
+
+  // K8s Force Reconcile
+  forceReconcileK8sCluster: (namespace: string, name: string) =>
+    request<import("./types").K8sClusterSummary>(
+      `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/force-reconcile`,
+      { method: "POST" },
+    ),
+
+  // K8s Cluster Import
+  importK8sCluster: (data: import("./types").ImportClusterRequest) =>
+    request<import("./types").K8sClusterSummary>("/api/k8s/clusters/import", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };

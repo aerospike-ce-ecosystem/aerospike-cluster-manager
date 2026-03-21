@@ -26,6 +26,7 @@ from aerospike_cluster_manager_api.models.k8s_cluster import (
     CreateK8sTemplateRequest,
     HPAConfig,
     HPAResponse,
+    ImportClusterRequest,
     K8sClusterDetail,
     K8sClusterEvent,
     K8sClusterSummary,
@@ -34,6 +35,7 @@ from aerospike_cluster_manager_api.models.k8s_cluster import (
     MigrationStatusResponse,
     NodeBlocklistRequest,
     OperationRequest,
+    PVCInfo,
     ReconciliationHealthResponse,
     ReconciliationStatus,
     ScaleK8sClusterRequest,
@@ -251,6 +253,81 @@ async def get_k8s_cluster_yaml(
 
     item = await k8s_client.get_cluster(namespace, name)
     return {"yaml": clean_cr_for_export(item)}
+
+
+@router.get("/clusters/{namespace}/{name}/pvcs", summary="List PVCs for K8s Aerospike cluster")
+@_k8s_endpoint("list PVCs for Kubernetes cluster")
+async def list_k8s_cluster_pvcs(
+    namespace: str = _K8S_NAMESPACE,
+    name: str = _K8S_NAME,
+) -> list[PVCInfo]:
+    """List PersistentVolumeClaims associated with the cluster's StatefulSets."""
+
+    label_selector = f"app.kubernetes.io/instance={name}"
+    pvcs_raw = await k8s_client.list_pvcs(namespace, label_selector)
+    return [PVCInfo(**pvc) for pvc in pvcs_raw]
+
+
+@router.post(
+    "/clusters/{namespace}/{name}/force-reconcile",
+    summary="Force reconcile a drifted cluster",
+)
+@_k8s_endpoint("force reconcile Kubernetes cluster")
+async def force_reconcile_k8s_cluster(
+    namespace: str = _K8S_NAMESPACE,
+    name: str = _K8S_NAME,
+) -> K8sClusterSummary:
+    """Add a force-reconcile annotation to trigger the operator to re-reconcile."""
+
+    patch: dict[str, Any] = {
+        "metadata": {
+            "annotations": {
+                "acko.io/force-reconcile": datetime.now(UTC).isoformat(),
+            }
+        }
+    }
+    result = await k8s_client.patch_cluster(namespace, name, patch)
+    return extract_summary(result)
+
+
+@router.post("/clusters/import", status_code=201, summary="Import K8s Aerospike cluster from CR")
+@_k8s_endpoint("import Kubernetes cluster")
+async def import_k8s_cluster(body: ImportClusterRequest) -> K8sClusterSummary:
+    """Create a cluster from a raw AerospikeCluster CR (JSON/YAML)."""
+
+    cr = body.cr
+    metadata = cr.get("metadata", {})
+    cr_namespace = body.namespace or metadata.get("namespace")
+    if not cr_namespace:
+        raise HTTPException(status_code=400, detail="Namespace is required (set in CR metadata or request body)")
+
+    cr_name = metadata.get("name")
+    if not cr_name:
+        raise HTTPException(status_code=400, detail="CR metadata.name is required")
+
+    # Ensure correct apiVersion and kind
+    cr["apiVersion"] = "acko.io/v1alpha1"
+    cr["kind"] = "AerospikeCluster"
+    cr.setdefault("metadata", {})["namespace"] = cr_namespace
+
+    # Strip status and managed fields for clean import
+    cr.pop("status", None)
+    metadata = cr.get("metadata", {})
+    metadata.pop("resourceVersion", None)
+    metadata.pop("uid", None)
+    metadata.pop("creationTimestamp", None)
+    metadata.pop("generation", None)
+    metadata.pop("managedFields", None)
+
+    existing_namespaces = await k8s_client.list_namespaces()
+    if cr_namespace not in existing_namespaces:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Namespace '{cr_namespace}' does not exist. Available: {', '.join(sorted(existing_namespaces))}",
+        )
+
+    result = await k8s_client.create_cluster(cr_namespace, cr)
+    return extract_summary(result)
 
 
 @router.post("/clusters", status_code=201, summary="Create K8s Aerospike cluster")

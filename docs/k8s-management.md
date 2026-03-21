@@ -138,13 +138,19 @@ Change the cluster size (1-8 nodes for CE). The operator handles rolling scale-u
 ### Edit
 
 Modify running cluster settings with diff-based patching. The edit dialog supports all wizard fields plus:
-- **ACL (Access Control)** — Enable/disable ACL, manage roles with privileges and CIDR whitelists, manage users with K8s Secret-backed passwords
-- **Resources** — Configure CPU and memory requests/limits for Aerospike pods
+- **ACL (Access Control)** -- Enable/disable ACL, manage roles with privileges and CIDR whitelists, manage users with K8s Secret-backed passwords
+- **Resources** -- Configure CPU and memory requests/limits for Aerospike pods
 - Seeds Finder Services configuration
 - Sidecar and init container management
 - Security context configuration
 - Topology spread constraints
 - Service metadata
+
+### Export & Import
+
+**Export:** From the cluster detail page, click **Export** in the Spec section to download the cluster CR as a JSON file. The **Copy CR** button copies the YAML to clipboard.
+
+**Import:** From the cluster list page, click **Import CR** to create a cluster from an exported CR. Paste the JSON or upload a file. The import strips metadata fields (`uid`, `resourceVersion`, `managedFields`) for a clean import.
 
 ### HPA (Horizontal Pod Autoscaler)
 
@@ -335,6 +341,19 @@ Compares the desired spec (what you declared) against the applied spec (what the
 - **Desired & applied config snapshots** -- The full desired and applied config objects are available for inspection when the backend returns them.
 
 The drift data is fetched from `GET /api/k8s/clusters/{namespace}/{name}/config-drift`.
+
+When drift is detected, the **Force Reconcile** button triggers a re-reconciliation by annotating the CR with `acko.io/force-reconcile`. This is useful when the operator has applied a config but the status hasn't been updated yet.
+
+### PVC / Storage Status
+
+The PVC status panel lists all PersistentVolumeClaims associated with the cluster's StatefulSets. For each PVC:
+- **Status badge** -- Bound (green), Pending (amber), Released (blue), or Failed (red)
+- **Capacity** -- Provisioned storage capacity
+- **Storage Class** -- The Kubernetes StorageClass used
+- **Access Modes** -- ReadWriteOnce, ReadWriteMany, etc.
+- **Volume Name** -- The bound PersistentVolume name
+
+The data is fetched from `GET /api/k8s/clusters/{namespace}/{name}/pvcs`.
 
 ### Reconciliation Health Dashboard
 

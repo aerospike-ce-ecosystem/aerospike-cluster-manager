@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, AlertTriangle, FileCode, Hash, Minus, Plus } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { CheckCircle, AlertTriangle, FileCode, Hash, Minus, Plus, RotateCcw } from "lucide-react";
+import { cn, getErrorMessage } from "@/lib/utils";
 import { api } from "@/lib/api/client";
+import { useToastStore } from "@/stores/toast-store";
 import type { ConfigDriftResponse, K8sClusterDetail } from "@/lib/api/types";
 
 interface K8sConfigDriftCardProps {
@@ -66,6 +68,7 @@ export function K8sConfigDriftCard({
 }: K8sConfigDriftCardProps) {
   const [drift, setDrift] = useState<ConfigDriftResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reconciling, setReconciling] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -124,12 +127,29 @@ export function K8sConfigDriftCard({
             <>
               <AlertTriangle className="h-4 w-4 text-amber-500" />
               <span className="text-sm font-medium text-amber-600">Config Drift Detected</span>
-              <Badge
-                variant="outline"
-                className="ml-auto border-amber-500/30 text-[10px] text-amber-600"
-              >
+              <Badge variant="outline" className="border-amber-500/30 text-[10px] text-amber-600">
                 {drift.changedFields.length} field{drift.changedFields.length !== 1 ? "s" : ""}
               </Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto h-7 gap-1 text-xs"
+                disabled={reconciling}
+                onClick={async () => {
+                  setReconciling(true);
+                  try {
+                    await api.forceReconcileK8sCluster(namespace, name);
+                    useToastStore.getState().addToast("success", "Force reconcile triggered");
+                  } catch (err) {
+                    useToastStore.getState().addToast("error", getErrorMessage(err));
+                  } finally {
+                    setReconciling(false);
+                  }
+                }}
+              >
+                <RotateCcw className={cn("h-3 w-3", reconciling && "animate-spin")} />
+                Force Reconcile
+              </Button>
             </>
           ) : (
             <>

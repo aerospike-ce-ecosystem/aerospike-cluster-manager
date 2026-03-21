@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Boxes, Loader2, Wifi, WifiOff, Check } from "lucide-react";
+import { Plus, Boxes, Loader2, Wifi, WifiOff, Check, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,6 +20,7 @@ import { InlineAlert } from "@/components/common/inline-alert";
 import { LoadingButton } from "@/components/common/loading-button";
 import { PageHeader } from "@/components/common/page-header";
 import { ClusterListTable } from "@/components/cluster-list/cluster-list-table";
+import { K8sImportDialog } from "@/components/k8s/k8s-import-dialog";
 import { useConnectionStore } from "@/stores/connection-store";
 import { useClusterListStore } from "@/stores/cluster-list-store";
 import { useK8sClusterStore } from "@/stores/k8s-cluster-store";
@@ -66,6 +67,7 @@ export default function ConnectionsPage() {
   } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<UnifiedClusterRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   useEffect(() => {
     // Populate connection-store so openEditDialog can access full connection data
@@ -219,10 +221,16 @@ export default function ConnectionsPage() {
         actions={
           <>
             {k8sAvailable && (
-              <Button variant="info" onClick={() => router.push("/k8s/clusters/new")}>
-                <Boxes className="mr-2 h-4 w-4 sm:mr-2" />
-                <span className="hidden sm:inline">Create Cluster</span>
-              </Button>
+              <>
+                <Button variant="info" onClick={() => router.push("/k8s/clusters/new")}>
+                  <Boxes className="mr-2 h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Create Cluster</span>
+                </Button>
+                <Button variant="outline" onClick={() => setImportOpen(true)}>
+                  <Upload className="mr-2 h-4 w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Import CR</span>
+                </Button>
+              </>
             )}
             <Button variant="success" onClick={openCreateDialog}>
               <Plus className="mr-2 h-4 w-4 sm:mr-2" />
@@ -392,6 +400,16 @@ export default function ConnectionsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Import Dialog */}
+      <K8sImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onSuccess={async () => {
+          await fetchAll();
+          fetchAllHealth();
+        }}
+      />
 
       {/* Delete Confirmation */}
       <ConfirmDialog

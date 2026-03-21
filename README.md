@@ -623,6 +623,9 @@ Common use cases include:
 | `POST` | `/api/k8s/clusters/{namespace}/{name}/hpa` | Create or update HPA (minReplicas, maxReplicas, CPU/memory targets) |
 | `DELETE` | `/api/k8s/clusters/{namespace}/{name}/hpa` | Delete HPA for a cluster |
 | `POST` | `/api/k8s/clusters/{namespace}/{name}/resync-template` | Trigger template resync via annotation |
+| `GET` | `/api/k8s/clusters/{namespace}/{name}/pvcs` | List PVCs associated with the cluster |
+| `POST` | `/api/k8s/clusters/{namespace}/{name}/force-reconcile` | Force re-reconciliation via annotation |
+| `POST` | `/api/k8s/clusters/import` | Import cluster from raw CR JSON |
 | `GET` | `/api/k8s/templates` | List all AerospikeClusterTemplate resources (cluster-scoped) |
 | `POST` | `/api/k8s/templates` | Create a new AerospikeClusterTemplate |
 | `GET` | `/api/k8s/templates/{name}` | Get template detail (spec, status, usedBy) |

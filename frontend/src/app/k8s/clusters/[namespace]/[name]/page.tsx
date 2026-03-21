@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   Copy,
   Gauge,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +36,7 @@ import { K8sMigrationStatus } from "@/components/k8s/k8s-migration-status";
 import { K8sOperationStatus } from "@/components/k8s/k8s-operation-status";
 import { K8sRackTopology } from "@/components/k8s/k8s-rack-topology";
 import { K8sOperationTriggerDialog } from "@/components/k8s/k8s-operation-trigger-dialog";
+import { K8sPVCStatus } from "@/components/k8s/k8s-pvc-status";
 import { PauseResumeButton } from "@/components/k8s/pause-resume-button";
 import { useK8sClusterStore } from "@/stores/k8s-cluster-store";
 import { useToastStore } from "@/stores/toast-store";
@@ -433,6 +435,9 @@ export default function K8sClusterDetailPage() {
         migrationStatus={migrationStatus}
       />
 
+      {/* PVC / Storage Status */}
+      <K8sPVCStatus namespace={namespace} name={name} />
+
       {/* Status Dashboard: Pending Restart Pods, Last Reconcile, Operator Version */}
       {(selectedCluster.pendingRestartPods.length > 0 ||
         selectedCluster.lastReconcileTime ||
@@ -636,22 +641,47 @@ export default function K8sClusterDetailPage() {
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             Spec
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                try {
-                  const result = await api.getK8sClusterYaml(namespace, name);
-                  await navigator.clipboard.writeText(JSON.stringify(result.yaml, null, 2));
-                  useToastStore.getState().addToast("success", "CR YAML copied to clipboard");
-                } catch (err) {
-                  useToastStore.getState().addToast("error", getErrorMessage(err));
-                }
-              }}
-            >
-              <Copy className="mr-2 h-3 w-3" />
-              Copy CR
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    const result = await api.getK8sClusterYaml(namespace, name);
+                    await navigator.clipboard.writeText(JSON.stringify(result.yaml, null, 2));
+                    useToastStore.getState().addToast("success", "CR YAML copied to clipboard");
+                  } catch (err) {
+                    useToastStore.getState().addToast("error", getErrorMessage(err));
+                  }
+                }}
+              >
+                <Copy className="mr-2 h-3 w-3" />
+                Copy CR
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    const result = await api.getK8sClusterYaml(namespace, name);
+                    const json = JSON.stringify(result.yaml, null, 2);
+                    const blob = new Blob([json], { type: "application/json" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `${name}.${namespace}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    useToastStore.getState().addToast("success", "CR exported");
+                  } catch (err) {
+                    useToastStore.getState().addToast("error", getErrorMessage(err));
+                  }
+                }}
+              >
+                <Download className="mr-2 h-3 w-3" />
+                Export
+              </Button>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>

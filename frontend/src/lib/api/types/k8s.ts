@@ -720,6 +720,26 @@ export interface HPAResponse {
   status: HPAStatus;
 }
 
+// === PVC (PersistentVolumeClaim) Status ===
+export interface PVCInfo {
+  name: string;
+  namespace: string;
+  storageClass: string | null;
+  capacity: string;
+  requestedSize: string;
+  status: "Pending" | "Bound" | "Released" | "Failed" | string;
+  volumeName: string | null;
+  accessModes: string[];
+  volumeMode: string | null;
+  createdAt: string | null;
+}
+
+// === Import Cluster ===
+export interface ImportClusterRequest {
+  cr: Record<string, unknown>;
+  namespace?: string;
+}
+
 // === AerospikeCluster Spec (typed subset of the CRD spec) ===
 export interface AerospikeNetworkPolicySpec {
   accessType?: string;
