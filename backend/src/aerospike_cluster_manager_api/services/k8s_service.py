@@ -76,6 +76,10 @@ def extract_summary(item: dict[str, Any], connection_id: str | None = None) -> K
     metadata = item.get("metadata", {})
     spec = item.get("spec", {})
     status = item.get("status", {})
+    template_snapshot = status.get("templateSnapshot", {})
+    template_drifted = None
+    if template_snapshot:
+        template_drifted = not template_snapshot.get("synced", True)
     return K8sClusterSummary(
         name=metadata.get("name", ""),
         namespace=metadata.get("namespace", ""),
@@ -84,6 +88,8 @@ def extract_summary(item: dict[str, Any], connection_id: str | None = None) -> K
         phase=status.get("phase", "Unknown"),
         age=calculate_age(metadata.get("creationTimestamp")),
         connectionId=connection_id,
+        templateDrifted=template_drifted,
+        failedReconcileCount=status.get("failedReconcileCount", 0),
     )
 
 

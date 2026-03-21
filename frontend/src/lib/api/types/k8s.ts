@@ -187,6 +187,8 @@ export interface K8sClusterSummary {
   age: string | null;
   connectionId: string | null;
   autoConnectWarning: string | null;
+  templateDrifted: boolean | null;
+  failedReconcileCount: number;
 }
 
 export interface K8sClusterDetail {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Server, Clock, Container } from "lucide-react";
+import { Server, Clock, Container, AlertTriangle, RefreshCcw } from "lucide-react";
 import { CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { K8sClusterStatusBadge } from "./k8s-cluster-status-badge";
@@ -19,7 +19,21 @@ export function K8sClusterCard({ cluster, onClick, index = 0 }: K8sClusterCardPr
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <CardTitle className="text-base">{cluster.name}</CardTitle>
-          <K8sClusterStatusBadge phase={cluster.phase} />
+          <div className="flex items-center gap-1.5">
+            {cluster.failedReconcileCount > 0 && (
+              <Badge variant="destructive" className="gap-1 text-[10px]">
+                <AlertTriangle className="h-3 w-3" />
+                {cluster.failedReconcileCount}
+              </Badge>
+            )}
+            {cluster.templateDrifted && (
+              <Badge variant="outline" className="text-warning border-warning gap-1 text-[10px]">
+                <RefreshCcw className="h-3 w-3" />
+                Drift
+              </Badge>
+            )}
+            <K8sClusterStatusBadge phase={cluster.phase} />
+          </div>
         </div>
         <p className="text-base-content/60 font-mono text-xs">{cluster.namespace}</p>
       </CardHeader>

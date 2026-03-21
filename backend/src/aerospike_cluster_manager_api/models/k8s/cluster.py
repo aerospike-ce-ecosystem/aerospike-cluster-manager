@@ -262,6 +262,8 @@ class K8sClusterSummary(BaseModel):
     age: str | None = None
     connectionId: str | None = None
     autoConnectWarning: str | None = None
+    templateDrifted: bool | None = None
+    failedReconcileCount: int = 0
 
 
 class K8sClusterCondition(BaseModel):

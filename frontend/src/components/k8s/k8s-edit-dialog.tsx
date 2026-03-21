@@ -26,10 +26,12 @@ import type {
 } from "@/lib/api/types";
 import { useEditDialogState } from "./hooks/use-edit-dialog-state";
 import {
+  EditAclSection,
   EditMonitoringSection,
   EditNetworkSection,
   EditPodSchedulingSection,
   EditPodSecuritySection,
+  EditResourcesSection,
   EditServiceMetadataSection,
   EditSidecarsSection,
   EditStorageSection,
@@ -270,6 +272,16 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
         data.seedsFinderServices = state.seedsFinderServices ?? undefined;
       }
 
+      // ACL
+      if (JSON.stringify(state.aclConfig) !== JSON.stringify(initials.aclConfig)) {
+        data.acl = state.aclConfig ?? undefined;
+      }
+
+      // Resources
+      if (JSON.stringify(state.resources) !== JSON.stringify(initials.resources)) {
+        data.resources = state.resources ?? undefined;
+      }
+
       await onSave(data);
       onOpenChange(false);
     } catch (err) {
@@ -329,6 +341,26 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
             )}
           </div>
 
+          {/* Resources */}
+          <CollapsibleSection
+            title="Resources"
+            summary={
+              state.resources
+                ? `CPU: ${state.resources.requests.cpu || "-"}/${state.resources.limits.cpu || "-"}, Mem: ${state.resources.requests.memory || "-"}/${state.resources.limits.memory || "-"}`
+                : "Not configured"
+            }
+            size="sm"
+          >
+            <EditResourcesSection
+              resources={state.resources}
+              onChange={(r) => {
+                patchState({ resources: r });
+                clearError();
+              }}
+              disabled={state.loading}
+            />
+          </CollapsibleSection>
+
           {/* Enable Dynamic Config */}
           <div className="flex items-center gap-2">
             <Checkbox
@@ -344,6 +376,26 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
               Enable Dynamic Config Update
             </Label>
           </div>
+
+          {/* ACL (Access Control) */}
+          <CollapsibleSection
+            title="ACL (Access Control)"
+            summary={
+              state.aclConfig?.enabled
+                ? `${state.aclConfig.roles.length} role(s), ${state.aclConfig.users.length} user(s)`
+                : "Disabled"
+            }
+            size="sm"
+          >
+            <EditAclSection
+              acl={state.aclConfig}
+              onChange={(acl) => {
+                patchState({ aclConfig: acl });
+                clearError();
+              }}
+              disabled={state.loading}
+            />
+          </CollapsibleSection>
 
           {/* Monitoring */}
           <EditMonitoringSection

@@ -16,6 +16,8 @@ import type {
   PodSecurityContextConfig,
   PodMetadataConfig,
   SeedsFinderServicesConfig,
+  ACLConfig,
+  ResourceConfig,
 } from "@/lib/api/types";
 
 // ---------------------------------------------------------------------------
@@ -69,6 +71,8 @@ export interface EditDialogInitials {
   storageCleanupThreads: number | undefined;
   storageDeleteLocalOnRestart: boolean;
   seedsFinderServices: SeedsFinderServicesConfig | null;
+  aclConfig: ACLConfig | null;
+  resources: ResourceConfig | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -239,6 +243,8 @@ function deriveInitials(cluster: K8sClusterDetail): EditDialogInitials {
     storageCleanupThreads: specStorage?.cleanupThreads,
     storageDeleteLocalOnRestart: Boolean(specStorage?.deleteLocalStorageOnRestart),
     seedsFinderServices: cluster.spec?.seedsFinderServices ?? null,
+    aclConfig: cluster.spec?.acl ?? null,
+    resources: cluster.spec?.resources ?? null,
   };
 }
 
@@ -295,6 +301,8 @@ export function useEditDialogState(open: boolean, cluster: K8sClusterDetail) {
                 : undefined,
             }
           : null,
+        aclConfig: snap.aclConfig ? structuredClone(snap.aclConfig) : null,
+        resources: snap.resources ? structuredClone(snap.resources) : null,
         loading: false,
         error: null,
       });
@@ -364,7 +372,9 @@ export function useEditDialogState(open: boolean, cluster: K8sClusterDetail) {
       JSON.stringify(state.storageVolumes) !== JSON.stringify(snap.storageVolumes) ||
       state.storageCleanupThreads !== snap.storageCleanupThreads ||
       state.storageDeleteLocalOnRestart !== snap.storageDeleteLocalOnRestart ||
-      JSON.stringify(state.seedsFinderServices) !== JSON.stringify(snap.seedsFinderServices)
+      JSON.stringify(state.seedsFinderServices) !== JSON.stringify(snap.seedsFinderServices) ||
+      JSON.stringify(state.aclConfig) !== JSON.stringify(snap.aclConfig) ||
+      JSON.stringify(state.resources) !== JSON.stringify(snap.resources)
     );
   }, [state]);
 

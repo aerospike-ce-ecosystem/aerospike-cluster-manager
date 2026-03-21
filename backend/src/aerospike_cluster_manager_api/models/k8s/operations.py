@@ -89,9 +89,12 @@ class PodHashGroup(BaseModel):
 
 class ConfigDriftResponse(BaseModel):
     has_drift: bool = Field(False, alias="hasDrift")
+    in_sync: bool = Field(True, alias="inSync")
     changed_fields: list[str] = Field(default_factory=list, alias="changedFields")
     pod_hash_groups: list[PodHashGroup] = Field(default_factory=list, alias="podHashGroups")
     desired_config_hash: str | None = Field(None, alias="desiredConfigHash")
+    desired_config: dict | None = Field(None, alias="desiredConfig")
+    applied_config: dict | None = Field(None, alias="appliedConfig")
 
     model_config = ConfigDict(populate_by_name=True)
 
