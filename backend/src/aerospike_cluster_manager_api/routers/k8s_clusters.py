@@ -673,7 +673,7 @@ class CloneClusterRequest(BaseModel):
     )
     namespace: str | None = Field(
         default=None,
-        max_length=253,
+        max_length=63,
         pattern=r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
         description="Target namespace (defaults to source namespace)",
     )
@@ -711,6 +711,7 @@ async def clone_k8s_cluster(
     # Remove operation state that shouldn't carry over
     cr["spec"].pop("operations", None)
     cr["spec"].pop("paused", None)
+    cr["spec"].pop("templateRef", None)
 
     # Replace cluster-name with the new cluster name to prevent accidental
     # mesh merges between source and cloned clusters. The webhook defaulter

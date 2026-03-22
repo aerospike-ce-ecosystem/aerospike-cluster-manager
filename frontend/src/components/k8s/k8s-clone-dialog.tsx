@@ -15,6 +15,8 @@ interface K8sCloneDialogProps {
   onCloned?: (namespace: string, name: string) => void;
 }
 
+const DNS_LABEL_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
+
 export function K8sCloneDialog({
   open,
   onOpenChange,
@@ -34,10 +36,8 @@ export function K8sCloneDialog({
       setError(null);
     }
   }, [open, sourceName, sourceNamespace]);
-
-  const DNS_LABEL_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
   const nameValid = DNS_LABEL_RE.test(cloneName.trim()) && cloneName.trim().length <= 63;
-  const nsValid = DNS_LABEL_RE.test(cloneNamespace.trim()) && cloneNamespace.trim().length <= 253;
+  const nsValid = DNS_LABEL_RE.test(cloneNamespace.trim()) && cloneNamespace.trim().length <= 63;
   const isValid = nameValid && nsValid;
 
   const handleClone = async () => {
