@@ -38,6 +38,7 @@ import { K8sRackTopology } from "@/components/k8s/k8s-rack-topology";
 import { K8sOperationTriggerDialog } from "@/components/k8s/k8s-operation-trigger-dialog";
 import { K8sPVCStatus } from "@/components/k8s/k8s-pvc-status";
 import { PauseResumeButton } from "@/components/k8s/pause-resume-button";
+import { K8sCloneDialog } from "@/components/k8s/k8s-clone-dialog";
 import { useK8sClusterStore } from "@/stores/k8s-cluster-store";
 import { useToastStore } from "@/stores/toast-store";
 import { cn, getErrorMessage } from "@/lib/utils";
@@ -81,6 +82,7 @@ export default function K8sClusterDetailPage() {
   const [operationDialogKind, setOperationDialogKind] = useState<"WarmRestart" | "PodRestart">(
     "WarmRestart",
   );
+  const [cloneOpen, setCloneOpen] = useState(false);
   const [pendingPodsExpanded, setPendingPodsExpanded] = useState(false);
   const [migrationStatus, setMigrationStatus] = useState<MigrationStatus | null>(null);
 
@@ -257,6 +259,10 @@ export default function K8sClusterDetailPage() {
               pauseCluster={pauseCluster}
               resumeCluster={resumeCluster}
             />
+            <Button variant="outline" size="sm" onClick={() => setCloneOpen(true)}>
+              <Copy className="mr-2 h-4 w-4" />
+              Clone
+            </Button>
             <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
               <Trash2 className="mr-2 h-4 w-4" />
               Delete
@@ -811,6 +817,17 @@ export default function K8sClusterDetailPage() {
         clusterName={selectedCluster.name}
         onConfirm={handleDelete}
         loading={deleting}
+      />
+
+      <K8sCloneDialog
+        open={cloneOpen}
+        onOpenChange={setCloneOpen}
+        sourceNamespace={namespace}
+        sourceName={name}
+        onCloned={(ns, clonedName) => {
+          useToastStore.getState().addToast("success", `Cluster "${clonedName}" created`);
+          router.push(`/k8s/clusters/${ns}/${clonedName}`);
+        }}
       />
 
       <K8sEditDialog

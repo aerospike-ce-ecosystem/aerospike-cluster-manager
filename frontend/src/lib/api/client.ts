@@ -549,6 +549,17 @@ export const api = {
       { method: "POST", body: JSON.stringify(data) },
     ),
 
+  // K8s Cluster Clone
+  cloneK8sCluster: (
+    namespace: string,
+    name: string,
+    data: { name: string; namespace?: string },
+  ) =>
+    request<import("./types").K8sClusterSummary>(
+      `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/clone`,
+      { method: "POST", body: JSON.stringify(data) },
+    ),
+
   // K8s Cluster PVCs
   getK8sClusterPVCs: (namespace: string, name: string) =>
     request<import("./types").PVCInfo[]>(
