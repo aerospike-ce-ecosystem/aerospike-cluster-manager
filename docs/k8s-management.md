@@ -142,10 +142,11 @@ Modify running cluster settings with diff-based patching. The edit dialog suppor
 - **Resources** -- Configure CPU and memory requests/limits for Aerospike pods
 - Seeds Finder Services configuration
 - Sidecar and init container management
-- Security context configuration
+- Container security context (see [Container Security Context](#container-security-context-in-edit-dialog))
+- Security context configuration (pod-level)
 - Topology spread constraints
 - Service metadata
-- Rack configuration editing (see [Rack Config Edit](#rack-config-edit-in-edit-dialog))
+- Rack configuration editing with per-rack revision strings (see [Rack Config Edit](#rack-config-edit-in-edit-dialog))
 - Node blocklist picker (see [Node Blocklist Picker](#node-blocklist-picker))
 
 #### Rack Config Edit in Edit Dialog
@@ -168,6 +169,7 @@ Each rack can be configured with the following topology fields:
 | Region | Region label (`topology.kubernetes.io/region`) for this rack |
 | Node Name | Pin the rack to a specific Kubernetes node |
 | Rack Label | Custom label for identifying this rack |
+| Revision | An arbitrary string that triggers a rack-specific rolling restart when changed (see [Rack Revision](#rack-revision)) |
 
 **Per-rack overrides:**
 
@@ -213,6 +215,37 @@ If the node list cannot be fetched (e.g., due to RBAC restrictions or network is
 
 - Blocked nodes are displayed with a distinct visual style to clearly differentiate them from available nodes.
 - Node readiness status uses color-coded badges (green for Ready, red for NotReady) to help operators avoid blocking already-healthy nodes or identify problematic ones.
+
+#### Rack Revision
+
+Each rack has an optional **Revision** field (a free-form string, e.g., `rev-1`, `restart-20260322`). Changing the revision value for a rack signals the operator to perform a rolling restart of the pods in that rack, even when no other configuration has changed. This is useful when you need to force a restart of a specific rack -- for example, after an external dependency update or to pick up a new node image -- without affecting the rest of the cluster.
+
+To trigger a rack-specific rolling restart:
+
+1. Open the **Edit** dialog and navigate to the **Rack Configuration** section.
+2. Enter or update the **Revision** string for the target rack.
+3. Submit the edit. The operator detects the revision change and performs a rolling restart only for pods in that rack.
+
+Clearing the revision field (setting it back to empty) does not trigger another restart.
+
+#### Container Security Context in Edit Dialog
+
+The Edit dialog includes a **Container Security Context** section that configures security settings at the Aerospike container level. This is separate from the pod-level security context (which sets `fsGroup`, `seccompProfile`, etc. for the entire pod).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| Run As User (UID) | number | The UID to run the Aerospike container process as |
+| Run As Group (GID) | number | The primary GID to run the Aerospike container process as |
+| Privileged | boolean | Run the container in privileged mode (grants all host capabilities) |
+| Read-Only Root Filesystem | boolean | Mount the container root filesystem as read-only |
+| Allow Privilege Escalation | boolean | Whether the container process can gain more privileges than its parent |
+| Run As Non-Root | boolean | Require the container to run as a non-root user (UID != 0) |
+
+**Usage notes:**
+
+- Container-level security context fields override pod-level settings when both are specified. For example, setting `runAsUser` at the container level takes precedence over the pod-level `runAsUser`.
+- Aerospike CE official images run as root by default. Enable `runAsNonRoot` only if you are using a custom image that supports non-root execution.
+- Fields left empty are omitted from the CR patch, preserving existing values or falling back to pod-level defaults.
 
 ### Export & Import
 
