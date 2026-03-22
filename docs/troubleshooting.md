@@ -345,6 +345,59 @@ To simplify a deployment by removing the PostgreSQL dependency:
 3. Restart the backend -- it will create a fresh SQLite database.
 4. Import the connection profiles via the UI.
 
+## Split-Brain Detection
+
+### Cluster health reports split-brain detected
+
+**Symptoms:** The cluster health dashboard shows `splitBrainDetected: true` even though the cluster appears to be running normally.
+
+**Possible causes and solutions:**
+
+1. **Actual split-brain** -- Network partitions can cause Aerospike nodes to form separate sub-clusters. Each sub-cluster thinks it is the full cluster, leading to data inconsistency. Check Aerospike server logs for heartbeat timeout messages and verify network connectivity between all pods:
+   ```bash
+   kubectl exec -n <namespace> <pod-name> -- asinfo -v "cluster-stable:"
+   ```
+
+2. **Stale status** -- The operator may not have updated the `aerospikeClusterSize` field after a recent topology change. Wait for the next reconciliation cycle or trigger a force reconcile from the config drift card.
+
+3. **Node rejoining** -- If a node recently restarted or rejoined, the reported cluster size may temporarily lag behind the actual cluster state. The split-brain flag should clear on the next health poll once all nodes converge.
+
+**Note:** Split-brain detection is intentionally suppressed during transitional phases (`InProgress`, `ScalingUp`, `ScalingDown`, `RollingRestart`, etc.) and when not all expected pods are ready, to avoid false positives.
+
+## Circuit Breaker Stuck
+
+### Circuit breaker tripped and cluster is not reconciling
+
+**Symptoms:** The reconciliation health dashboard shows "Circuit Breaker Active" with a "TRIPPED" badge. The operator is not attempting to reconcile the cluster.
+
+**Possible causes and solutions:**
+
+1. **Repeated reconciliation failures** -- The operator trips the circuit breaker after reaching the failure threshold to prevent rapid retry loops. Check the "Last reconcile error" field in the health card for the root cause (e.g., invalid CR spec, missing secrets, storage provisioning errors).
+
+2. **Transient issue resolved** -- If the underlying issue has been fixed (e.g., a missing secret was created, a node came back online), click the **Reset Circuit Breaker** button on the reconciliation health card or call the API directly:
+   ```bash
+   curl -X POST http://<backend>/api/k8s/clusters/<namespace>/<name>/reset-circuit-breaker
+   ```
+
+3. **Persistent configuration error** -- If the circuit breaker keeps tripping after reset, the CR likely has a configuration that the operator cannot reconcile. Check the operator pod logs for detailed error messages and fix the CR spec.
+
+## Orphaned PVCs
+
+### PVC status shows orphaned volumes after scale-down
+
+**Symptoms:** The PVC status panel shows PVCs with an amber "(orphan)" indicator after scaling down the cluster.
+
+**Possible causes and solutions:**
+
+1. **Expected behavior** -- Kubernetes StatefulSet PVCs are intentionally retained after scale-down to preserve data. If you scale back up, the PVCs will be reattached to the new pods automatically.
+
+2. **Manual cleanup needed** -- If the scale-down is permanent and you want to reclaim storage, delete the orphaned PVCs manually:
+   ```bash
+   kubectl delete pvc <pvc-name> -n <namespace>
+   ```
+
+3. **Cascade delete enabled** -- If `cascadeDelete` is enabled on the storage volume configuration, PVCs should be cleaned up automatically when the cluster is deleted. However, scale-down does not trigger cascade deletion -- only full cluster deletion does.
+
 ## General Tips
 
 - **Check backend logs** -- The backend logs detailed error information. Set `LOG_LEVEL=DEBUG` for verbose output.
