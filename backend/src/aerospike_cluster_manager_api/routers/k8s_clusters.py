@@ -726,8 +726,18 @@ async def resync_k8s_cluster_template(
 class CloneClusterRequest(BaseModel):
     """Request to clone an existing cluster with a new name."""
 
-    name: str = Field(min_length=1, max_length=63, description="Name for the cloned cluster")
-    namespace: str | None = Field(default=None, description="Target namespace (defaults to source namespace)")
+    name: str = Field(
+        min_length=1,
+        max_length=63,
+        pattern=r"^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$",
+        description="Name for the cloned cluster",
+    )
+    namespace: str | None = Field(
+        default=None,
+        max_length=253,
+        pattern=r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+        description="Target namespace (defaults to source namespace)",
+    )
 
 
 @router.post(
@@ -757,7 +767,7 @@ async def clone_k8s_cluster(
         "apiVersion": "acko.io/v1alpha1",
         "kind": "AerospikeCluster",
         "metadata": {"name": body.name, "namespace": target_ns},
-        "spec": source.get("spec", {}),
+        "spec": copy.deepcopy(source.get("spec", {})),
     }
     # Remove operation state that shouldn't carry over
     cr["spec"].pop("operations", None)
