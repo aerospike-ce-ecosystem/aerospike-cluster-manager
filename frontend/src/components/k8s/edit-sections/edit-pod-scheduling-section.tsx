@@ -354,6 +354,26 @@ export function EditPodSchedulingSection({
           />
         </div>
 
+        {/* Priority Class Name */}
+        {onPriorityClassNameChange && (
+          <div className="grid gap-1">
+            <Label htmlFor="edit-priority-class" className="text-xs font-semibold">
+              Priority Class Name
+            </Label>
+            <p className="text-base-content/60 text-[10px]">
+              PriorityClass for pod scheduling priority and preemption.
+            </p>
+            <Input
+              id="edit-priority-class"
+              value={priorityClassName ?? ""}
+              onChange={(e) => onPriorityClassNameChange(e.target.value)}
+              placeholder="e.g. high-priority"
+              className="h-7 text-xs"
+              disabled={disabled}
+            />
+          </div>
+        )}
+
         {/* Image Pull Secrets */}
         <div className="grid gap-2">
           <Label className="text-xs font-semibold">Image Pull Secrets</Label>

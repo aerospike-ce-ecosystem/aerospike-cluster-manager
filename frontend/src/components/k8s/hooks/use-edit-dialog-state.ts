@@ -77,6 +77,7 @@ export interface EditDialogInitials {
   resources: ResourceConfig | null;
   rackConfig: RackAwareConfig | null;
   aerospikeContainerSecurityContext: Record<string, unknown> | null;
+  priorityClassName: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -108,6 +109,7 @@ type PodSpecShape = {
   sidecars?: SidecarConfig[];
   initContainers?: SidecarConfig[];
   aerospikeContainer?: { securityContext?: Record<string, unknown> };
+  priorityClassName?: string;
 };
 
 /** Narrowed shape of `cluster.spec.storage` for type-safe field access. */
@@ -254,6 +256,7 @@ function deriveInitials(cluster: K8sClusterDetail): EditDialogInitials {
     resources: cluster.spec?.resources ?? null,
     rackConfig: cluster.spec?.rackConfig ?? null,
     aerospikeContainerSecurityContext: podSpec?.aerospikeContainer?.securityContext ?? null,
+    priorityClassName: podSpec?.priorityClassName ?? "",
   };
 }
 
@@ -391,7 +394,8 @@ export function useEditDialogState(open: boolean, cluster: K8sClusterDetail) {
       JSON.stringify(state.resources) !== JSON.stringify(snap.resources) ||
       JSON.stringify(state.rackConfig) !== JSON.stringify(snap.rackConfig) ||
       JSON.stringify(state.aerospikeContainerSecurityContext) !==
-        JSON.stringify(snap.aerospikeContainerSecurityContext)
+        JSON.stringify(snap.aerospikeContainerSecurityContext) ||
+      state.priorityClassName !== snap.priorityClassName
     );
   }, [state]);
 
