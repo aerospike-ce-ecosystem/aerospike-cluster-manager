@@ -320,6 +320,8 @@ The clone copies the full `spec` from the source cluster but strips `operations`
 - Creating test/staging copies of production clusters.
 - Duplicating a known-good configuration to a different namespace.
 
+> **Note:** When cloning to a different namespace, ACL user secrets (referenced in `spec.acl.users[].secretName`) are not copied automatically. You must ensure the same Kubernetes Secrets exist in the target namespace before the cloned cluster can start successfully with ACL enabled.
+
 ### Delete
 
 Delete the cluster with a confirmation dialog. Associated connection profiles are automatically cleaned up.

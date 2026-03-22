@@ -35,7 +35,10 @@ export function K8sCloneDialog({
     }
   }, [open, sourceName, sourceNamespace]);
 
-  const isValid = cloneName.trim().length > 0 && cloneNamespace.trim().length > 0;
+  const DNS_LABEL_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
+  const nameValid = DNS_LABEL_RE.test(cloneName.trim()) && cloneName.trim().length <= 63;
+  const nsValid = DNS_LABEL_RE.test(cloneNamespace.trim()) && cloneNamespace.trim().length <= 253;
+  const isValid = nameValid && nsValid;
 
   const handleClone = async () => {
     setLoading(true);
@@ -77,6 +80,12 @@ export function K8sCloneDialog({
             placeholder="my-cluster-clone"
             autoFocus
           />
+          {cloneName.trim().length > 0 && !nameValid && (
+            <p className="text-error text-xs">
+              Must be 1-63 chars, lowercase alphanumeric and hyphens, cannot start/end with a
+              hyphen.
+            </p>
+          )}
         </div>
         <div className="grid gap-2">
           <Label htmlFor="clone-namespace">Namespace</Label>
@@ -86,6 +95,9 @@ export function K8sCloneDialog({
             onChange={(e) => setCloneNamespace(e.target.value)}
             placeholder={sourceNamespace}
           />
+          {cloneNamespace.trim().length > 0 && !nsValid && (
+            <p className="text-error text-xs">Must be a valid DNS-compatible namespace name.</p>
+          )}
         </div>
       </div>
     </FormDialog>
