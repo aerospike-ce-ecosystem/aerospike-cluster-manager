@@ -116,6 +116,7 @@ class TestBuildRackConfigDict:
             aerospike_config=None,
             storage=None,
             pod_spec=None,
+            revision=None,
         )
         rack_config = SimpleNamespace(
             racks=[rack],
@@ -138,6 +139,7 @@ class TestBuildRackConfigDict:
             aerospike_config=None,
             storage=None,
             pod_spec=None,
+            revision=None,
         )
         rack_config = SimpleNamespace(
             racks=[rack],
@@ -151,6 +153,28 @@ class TestBuildRackConfigDict:
         assert result["scaleDownBatchSize"] == 2
         assert result["maxIgnorablePods"] == 1
         assert result["rollingUpdateBatchSize"] == 3
+
+    def test_with_revision(self):
+        rack = SimpleNamespace(
+            id=1,
+            zone=None,
+            region=None,
+            rack_label=None,
+            node_name=None,
+            aerospike_config=None,
+            storage=None,
+            pod_spec=None,
+            revision="my-cluster-6b8f9c4d77",
+        )
+        rack_config = SimpleNamespace(
+            racks=[rack],
+            namespaces=None,
+            scale_down_batch_size=None,
+            max_ignorable_pods=None,
+            rolling_update_batch_size=None,
+        )
+        result = _build_rack_config_dict(rack_config)
+        assert result["racks"] == [{"id": 1, "revision": "my-cluster-6b8f9c4d77"}]
 
 
 class TestBuildServiceMetadataDict:
