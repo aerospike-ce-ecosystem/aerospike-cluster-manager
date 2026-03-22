@@ -6,8 +6,10 @@ When disabled, a 404 is returned so the frontend can hide K8s features.
 
 from __future__ import annotations
 
+import copy
 import functools
 import logging
+import re
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -79,6 +81,17 @@ _K8S_NAMESPACE = Path(..., min_length=1, max_length=253, pattern=r"^[a-z0-9]([a-
 
 class DeleteResponse(BaseModel):
     message: str
+
+
+# RFC 1123 DNS label: lowercase alphanumeric and hyphens, must start/end with alphanumeric, max 63 chars.
+_DNS_LABEL_RE = re.compile(r"^[a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?$")
+
+
+class CloneClusterRequest(BaseModel):
+    """Request body for cloning an existing K8s Aerospike cluster."""
+
+    new_name: str
+    target_namespace: str | None = None
 
 
 def _map_k8s_error(e: K8sApiError) -> HTTPException:
@@ -417,6 +430,55 @@ async def delete_k8s_cluster(
     return DeleteResponse(message=f"Cluster {namespace}/{name} deletion initiated")
 
 
+@router.post("/clusters/{namespace}/{name}/clone", status_code=201, summary="Clone K8s Aerospike cluster")
+@_k8s_endpoint("clone Kubernetes cluster")
+async def clone_k8s_cluster(
+    body: CloneClusterRequest,
+    namespace: str = _K8S_NAMESPACE,
+    name: str = _K8S_NAME,
+) -> K8sClusterSummary:
+    """Clone an existing cluster's spec into a new cluster with a different name/namespace.
+
+    The source CR spec is deep-copied, and ``operations`` and ``paused`` fields
+    are stripped so the clone starts fresh.
+    """
+
+    # Validate new_name is a valid DNS label
+    if not _DNS_LABEL_RE.match(body.new_name):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Invalid cluster name '{body.new_name}'. "
+                "Must be a valid DNS label: lowercase alphanumeric and hyphens, "
+                "1-63 characters, must start and end with an alphanumeric character."
+            ),
+        )
+
+    target_ns = body.target_namespace or namespace
+
+    # Fetch source cluster
+    source_cr = await k8s_client.get_cluster(namespace, name)
+
+    # Deep-copy the spec and strip operational state
+    cloned_spec = copy.deepcopy(source_cr.get("spec", {}))
+    cloned_spec.pop("operations", None)
+    cloned_spec.pop("paused", None)
+
+    # Build the new CR
+    new_cr: dict[str, Any] = {
+        "apiVersion": "acko.io/v1alpha1",
+        "kind": "AerospikeCluster",
+        "metadata": {
+            "name": body.new_name,
+            "namespace": target_ns,
+        },
+        "spec": cloned_spec,
+    }
+
+    result = await k8s_client.create_cluster(target_ns, new_cr)
+    return extract_summary(result)
+
+
 @router.post("/clusters/{namespace}/{name}/scale", summary="Scale K8s Aerospike cluster")
 @_k8s_endpoint("scale Kubernetes cluster")
 async def scale_k8s_cluster(
@@ -674,5 +736,20 @@ async def trigger_k8s_cluster_operation(
     if body.pod_list:
         operation["podList"] = body.pod_list
     patch: dict[str, Any] = {"spec": {"operations": [operation]}}
+    result = await k8s_client.patch_cluster(namespace, name, patch)
+    return extract_summary(result)
+
+
+@router.delete(
+    "/clusters/{namespace}/{name}/operations",
+    summary="Clear operations on K8s cluster",
+)
+@_k8s_endpoint("clear operations on Kubernetes cluster")
+async def clear_k8s_cluster_operations(
+    namespace: str = _K8S_NAMESPACE,
+    name: str = _K8S_NAME,
+) -> K8sClusterSummary:
+    """Clear spec.operations to unblock a stuck cluster."""
+    patch: dict[str, Any] = {"spec": {"operations": []}}
     result = await k8s_client.patch_cluster(namespace, name, patch)
     return extract_summary(result)

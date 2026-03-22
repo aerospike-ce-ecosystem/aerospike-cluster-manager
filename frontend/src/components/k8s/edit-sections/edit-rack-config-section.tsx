@@ -493,6 +493,22 @@ export function EditRackConfigSection({
                 />
               )}
             </div>
+            <div className="col-span-2 grid gap-1">
+              <Label className="text-xs">Revision</Label>
+              <Input
+                value={rack.revision ?? ""}
+                onChange={(e) => {
+                  const newRacks = [...racks];
+                  newRacks[idx] = { ...rack, revision: e.target.value || undefined };
+                  updateRacks(newRacks);
+                }}
+                placeholder="e.g. rev-1"
+                disabled={disabled}
+              />
+              <p className="text-muted-foreground text-[10px]">
+                Change to trigger rolling restart for this rack
+              </p>
+            </div>
           </div>
           <CollapsibleSection
             title="Rack Overrides (config, storage, scheduling)"

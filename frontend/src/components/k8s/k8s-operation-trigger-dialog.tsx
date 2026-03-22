@@ -31,6 +31,8 @@ interface K8sOperationTriggerDialogProps {
   initialSelectedPods?: string[];
   /** 다이얼로그를 열 때 기본 오퍼레이션 타입 */
   initialKind?: OperationKind;
+  /** Current operation phase — blocks new operations while InProgress */
+  operationPhase?: string;
   onSuccess?: () => void;
 }
 
@@ -42,6 +44,7 @@ export function K8sOperationTriggerDialog({
   pods,
   initialSelectedPods = [],
   initialKind = "WarmRestart",
+  operationPhase,
   onSuccess,
 }: K8sOperationTriggerDialogProps) {
   const [kind, setKind] = useState<OperationKind>(initialKind);
@@ -133,7 +136,8 @@ export function K8sOperationTriggerDialog({
     step === "configure" ? "Review" : step === "confirm" ? "Trigger Operation" : "Close";
   const dialogTitle = step === "result" ? "Operation Triggered" : "Trigger Cluster Operation";
 
-  const isDisabled = false;
+  const operationInProgress = operationPhase === "InProgress" || operationPhase === "Running";
+  const isDisabled = operationInProgress;
 
   return (
     <FormDialog
@@ -156,6 +160,15 @@ export function K8sOperationTriggerDialog({
     >
       {step === "configure" && (
         <div className="space-y-4">
+          {operationInProgress && (
+            <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>
+                An operation is already in progress. Wait for it to complete or clear it before
+                triggering a new one.
+              </span>
+            </div>
+          )}
           {/* Operation type 선택 */}
           <div className="grid gap-2">
             <Label htmlFor="op-kind">Operation Type</Label>

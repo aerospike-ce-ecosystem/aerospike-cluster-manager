@@ -61,6 +61,91 @@ function EditCustomRulesEditor({
   );
 }
 
+let nextEnvId = 0;
+
+/** Editor for exporter container environment variables. */
+function ExporterEnvEditor({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: Record<string, string>[] | undefined;
+  onChange: (v: Record<string, string>[] | undefined) => void;
+  disabled?: boolean;
+}) {
+  const items = (value ?? []).map((entry, i) => ({
+    _id: i,
+    name: Object.keys(entry).find((k) => k === "name")
+      ? (entry as Record<string, string>).name
+      : "",
+    value: Object.keys(entry).find((k) => k === "value")
+      ? (entry as Record<string, string>).value
+      : "",
+  }));
+
+  const sync = (updated: typeof items) => {
+    const clean = updated.filter((e) => e.name.trim());
+    onChange(clean.length > 0 ? clean.map((e) => ({ name: e.name, value: e.value })) : undefined);
+  };
+
+  return (
+    <div className="space-y-2">
+      {items.map((item, idx) => (
+        <div key={item._id} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
+          <div className="grid gap-1">
+            <Label className="text-[10px]">Name</Label>
+            <Input
+              className="h-7 text-xs"
+              value={item.name}
+              onChange={(e) => {
+                const next = [...items];
+                next[idx] = { ...item, name: e.target.value };
+                sync(next);
+              }}
+              placeholder="e.g. AS_EXPORTER_LOG_LEVEL"
+              disabled={disabled}
+            />
+          </div>
+          <div className="grid gap-1">
+            <Label className="text-[10px]">Value</Label>
+            <Input
+              className="h-7 text-xs"
+              value={item.value}
+              onChange={(e) => {
+                const next = [...items];
+                next[idx] = { ...item, value: e.target.value };
+                sync(next);
+              }}
+              placeholder="e.g. debug"
+              disabled={disabled}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => sync(items.filter((_, i) => i !== idx))}
+            className="text-muted-foreground hover:text-destructive mb-1 p-1"
+            disabled={disabled}
+          >
+            <span className="text-xs">✕</span>
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() => {
+          const next = [...items, { _id: ++nextEnvId, name: "", value: "" }];
+          // Don't sync yet — user needs to fill in the name first
+          onChange([...(value ?? []), { name: "", value: "" }]);
+        }}
+        className="text-accent hover:text-accent/80 text-xs font-medium"
+        disabled={disabled}
+      >
+        + Add Variable
+      </button>
+    </div>
+  );
+}
+
 export function EditMonitoringSection({
   config,
   onChange,
@@ -145,6 +230,23 @@ export function EditMonitoringSection({
               size="sm"
             />
           </div>
+
+          {/* Exporter Environment Variables */}
+          <CollapsibleSection
+            title="Exporter Environment Variables"
+            summary={
+              config.exporterEnv && config.exporterEnv.length > 0
+                ? `${config.exporterEnv.length} var(s)`
+                : "None"
+            }
+            size="sm"
+          >
+            <ExporterEnvEditor
+              value={config.exporterEnv}
+              onChange={(env) => patch({ exporterEnv: env })}
+              disabled={disabled}
+            />
+          </CollapsibleSection>
 
           {/* Exporter Resources */}
           <CollapsibleSection

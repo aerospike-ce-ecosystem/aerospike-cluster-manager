@@ -106,6 +106,8 @@ def build_rack_list(racks: list[RackConfig]) -> list[dict[str, Any]]:
             r["rackLabel"] = rack.rack_label
         if rack.node_name:
             r["nodeName"] = rack.node_name
+        if rack.revision:
+            r["revision"] = rack.revision
         if rack.aerospike_config:
             r["aerospikeConfig"] = rack.aerospike_config
         if rack.storage and rack.storage.volumes:
@@ -1054,6 +1056,7 @@ def has_update_fields(body: UpdateK8sClusterRequest) -> bool:
             body.pod_metadata,
             body.sidecars,
             body.init_containers,
+            body.aerospike_container_security_context,
         )
     )
 
@@ -1068,7 +1071,11 @@ def build_update_patch(body: UpdateK8sClusterRequest) -> dict[str, Any]:
     if body.storage is not None:
         patch["spec"]["storage"] = _build_storage_spec_cr(body.storage)
     if body.resources is not None:
-        patch["spec"]["podSpec"] = {"aerospikeContainer": {"resources": _build_resources_dict(body.resources)}}
+        pod_spec = patch["spec"].get("podSpec", {})
+        aero_container = pod_spec.get("aerospikeContainer", {})
+        aero_container["resources"] = _build_resources_dict(body.resources)
+        pod_spec["aerospikeContainer"] = aero_container
+        patch["spec"]["podSpec"] = pod_spec
     if body.monitoring is not None:
         patch["spec"]["monitoring"] = build_monitoring(body.monitoring)
     if body.paused is not None:
@@ -1135,6 +1142,7 @@ def build_update_patch(body: UpdateK8sClusterRequest) -> dict[str, Any]:
         pod_spec = patch["spec"].get("podSpec", {})
         pod_spec["initContainers"] = _build_sidecar_list(body.init_containers)
         patch["spec"]["podSpec"] = pod_spec
+    # Aerospike container security context
     if body.aerospike_container_security_context is not None:
         pod_spec = patch["spec"].get("podSpec", {})
         pod_spec.setdefault("aerospikeContainer", {})["securityContext"] = body.aerospike_container_security_context

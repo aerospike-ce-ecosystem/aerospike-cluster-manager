@@ -149,3 +149,68 @@ export function validateMemoryForNamespaces(
   }
   return null;
 }
+
+// ── CE image validation ──
+
+/** Minimum required Aerospike CE major version. */
+export const MIN_CE_MAJOR_VERSION = 8;
+
+const CE_IMAGE_RE = /^(?:.*\/)?aerospike:ce-(\d+)\.\d+\.\d+\.\d+$/;
+
+/**
+ * Parse the major version from an Aerospike CE image tag.
+ * Returns null if the image doesn't match the expected pattern.
+ */
+export function parseCEMajorVersion(image: string): number | null {
+  const m = CE_IMAGE_RE.exec(image);
+  return m ? parseInt(m[1], 10) : null;
+}
+
+/**
+ * Validate that the image is a supported CE version (>= 8).
+ * Returns an error string or null if valid.
+ */
+export function validateCEImage(image: string): string | null {
+  if (!image.trim()) return "Image is required";
+  const major = parseCEMajorVersion(image);
+  if (major === null) return null; // allow non-standard images without blocking
+  if (major < MIN_CE_MAJOR_VERSION) {
+    return `Aerospike CE ${major}.x is not supported. Minimum required version is CE ${MIN_CE_MAJOR_VERSION}.x`;
+  }
+  return null;
+}
+
+// ── aerospikeConfig validation ──
+
+/** Keys forbidden in Aerospike CE configuration (Enterprise-only features). */
+const FORBIDDEN_CE_CONFIG_KEYS = ["xdr", "tls"] as const;
+
+/**
+ * Validate that aerospikeConfig does not contain Enterprise-only sections.
+ * Returns an error string or null if valid.
+ */
+export function validateAerospikeConfig(config: Record<string, unknown>): string | null {
+  for (const key of FORBIDDEN_CE_CONFIG_KEYS) {
+    if (key in config) {
+      return `"${key}" section is not available in Aerospike CE. This is an Enterprise-only feature.`;
+    }
+  }
+  return null;
+}
+
+// ── Rack operation validation ──
+
+/**
+ * Validate that a rack config update doesn't simultaneously add and remove racks.
+ * The operator webhook rejects this; we catch it early in the UI.
+ */
+export function validateRackUpdate(currentRackIds: number[], newRackIds: number[]): string | null {
+  const currentSet = new Set(currentRackIds);
+  const newSet = new Set(newRackIds);
+  const added = newRackIds.filter((id) => !currentSet.has(id));
+  const removed = currentRackIds.filter((id) => !newSet.has(id));
+  if (added.length > 0 && removed.length > 0) {
+    return `Cannot add rack(s) [${added.join(", ")}] and remove rack(s) [${removed.join(", ")}] in the same update. Apply these changes separately.`;
+  }
+  return null;
+}

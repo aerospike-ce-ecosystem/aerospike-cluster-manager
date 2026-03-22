@@ -562,6 +562,13 @@ export const api = {
       { method: "POST" },
     ),
 
+  // K8s Clear Operations
+  clearK8sClusterOperations: (namespace: string, name: string) =>
+    request<import("./types").K8sClusterSummary>(
+      `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/operations`,
+      { method: "DELETE" },
+    ),
+
   // K8s Cluster Import
   importK8sCluster: (data: import("./types").ImportClusterRequest) =>
     request<import("./types").K8sClusterSummary>("/api/k8s/clusters/import", {

@@ -56,6 +56,7 @@ export interface EditDialogInitials {
   serviceAccountName: string;
   terminationGracePeriod: number | undefined;
   imagePullSecrets: string[];
+  priorityClassName: string;
   topologySpreadConstraints: TopologySpreadConstraintConfig[];
   podSecurityRunAsUser: number | undefined;
   podSecurityRunAsGroup: number | undefined;
@@ -75,6 +76,7 @@ export interface EditDialogInitials {
   aclConfig: ACLConfig | null;
   resources: ResourceConfig | null;
   rackConfig: RackAwareConfig | null;
+  aerospikeContainerSecurityContext: Record<string, unknown> | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -102,8 +104,10 @@ type PodSpecShape = {
   imagePullSecrets?: string[];
   topologySpreadConstraints?: TopologySpreadConstraintConfig[];
   securityContext?: PodSecurityContextConfig;
+  priorityClassName?: string;
   sidecars?: SidecarConfig[];
   initContainers?: SidecarConfig[];
+  aerospikeContainer?: { securityContext?: Record<string, unknown> };
 };
 
 /** Narrowed shape of `cluster.spec.storage` for type-safe field access. */
@@ -216,6 +220,7 @@ function deriveInitials(cluster: K8sClusterDetail): EditDialogInitials {
       podSpec?.terminationGracePeriodSeconds ??
       undefined,
     imagePullSecrets: specPodScheduling?.imagePullSecrets ?? podSpec?.imagePullSecrets ?? [],
+    priorityClassName: specPodScheduling?.priorityClassName ?? podSpec?.priorityClassName ?? "",
     topologySpreadConstraints:
       specPodScheduling?.topologySpreadConstraints ?? podSpec?.topologySpreadConstraints ?? [],
     podSecurityRunAsUser: specSecCtx?.runAsUser,
@@ -248,6 +253,7 @@ function deriveInitials(cluster: K8sClusterDetail): EditDialogInitials {
     aclConfig: cluster.spec?.acl ?? null,
     resources: cluster.spec?.resources ?? null,
     rackConfig: cluster.spec?.rackConfig ?? null,
+    aerospikeContainerSecurityContext: podSpec?.aerospikeContainer?.securityContext ?? null,
   };
 }
 
@@ -307,6 +313,9 @@ export function useEditDialogState(open: boolean, cluster: K8sClusterDetail) {
         aclConfig: snap.aclConfig ? structuredClone(snap.aclConfig) : null,
         resources: snap.resources ? structuredClone(snap.resources) : null,
         rackConfig: snap.rackConfig ? structuredClone(snap.rackConfig) : null,
+        aerospikeContainerSecurityContext: snap.aerospikeContainerSecurityContext
+          ? structuredClone(snap.aerospikeContainerSecurityContext)
+          : null,
         loading: false,
         error: null,
       });
@@ -360,6 +369,7 @@ export function useEditDialogState(open: boolean, cluster: K8sClusterDetail) {
       state.serviceAccountName !== snap.serviceAccountName ||
       state.terminationGracePeriod !== snap.terminationGracePeriod ||
       JSON.stringify(state.imagePullSecrets) !== JSON.stringify(snap.imagePullSecrets) ||
+      state.priorityClassName !== snap.priorityClassName ||
       JSON.stringify(state.topologySpreadConstraints) !==
         JSON.stringify(snap.topologySpreadConstraints) ||
       state.podSecurityRunAsUser !== snap.podSecurityRunAsUser ||
@@ -379,7 +389,9 @@ export function useEditDialogState(open: boolean, cluster: K8sClusterDetail) {
       JSON.stringify(state.seedsFinderServices) !== JSON.stringify(snap.seedsFinderServices) ||
       JSON.stringify(state.aclConfig) !== JSON.stringify(snap.aclConfig) ||
       JSON.stringify(state.resources) !== JSON.stringify(snap.resources) ||
-      JSON.stringify(state.rackConfig) !== JSON.stringify(snap.rackConfig)
+      JSON.stringify(state.rackConfig) !== JSON.stringify(snap.rackConfig) ||
+      JSON.stringify(state.aerospikeContainerSecurityContext) !==
+        JSON.stringify(snap.aerospikeContainerSecurityContext)
     );
   }, [state]);
 

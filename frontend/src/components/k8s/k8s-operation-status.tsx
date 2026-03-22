@@ -1,6 +1,8 @@
-import { Activity, CheckCircle2, XCircle, Clock, RefreshCw, Zap } from "lucide-react";
+import { useState } from "react";
+import { Activity, CheckCircle2, XCircle, Clock, RefreshCw, Zap, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import type { OperationStatusResponse } from "@/lib/api/types";
@@ -9,6 +11,8 @@ interface K8sOperationStatusProps {
   operationStatus: OperationStatusResponse;
   /** Total pod count in the cluster, used as fallback when podList is empty (targets all pods) */
   totalPodCount: number;
+  /** Callback to clear spec.operations and unblock the cluster */
+  onClear?: () => Promise<void>;
 }
 
 function getPhaseStyle(phase: string) {
@@ -48,7 +52,12 @@ function getOperationLabel(kind: string) {
   }
 }
 
-export function K8sOperationStatus({ operationStatus, totalPodCount }: K8sOperationStatusProps) {
+export function K8sOperationStatus({
+  operationStatus,
+  totalPodCount,
+  onClear,
+}: K8sOperationStatusProps) {
+  const [clearing, setClearing] = useState(false);
   const { kind, phase, completedPods, failedPods, podList, id } = operationStatus;
   const phaseStyle = getPhaseStyle(phase);
 
@@ -86,9 +95,32 @@ export function K8sOperationStatus({ operationStatus, totalPodCount }: K8sOperat
           >
             {phase}
           </Badge>
-          {id && (
-            <span className="text-base-content/40 ml-auto font-mono text-[10px]">ID: {id}</span>
-          )}
+          <span className="ml-auto flex items-center gap-2">
+            {id && <span className="text-base-content/40 font-mono text-[10px]">ID: {id}</span>}
+            {onClear && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-error hover:bg-error/10 h-6 gap-1 px-2 text-[11px]"
+                disabled={clearing}
+                onClick={async () => {
+                  const confirmed = window.confirm(
+                    "Clear the active operation? This will unblock the cluster for new operations.",
+                  );
+                  if (!confirmed) return;
+                  setClearing(true);
+                  try {
+                    await onClear();
+                  } finally {
+                    setClearing(false);
+                  }
+                }}
+              >
+                <Trash2 className="h-3 w-3" />
+                {clearing ? "Clearing..." : "Clear"}
+              </Button>
+            )}
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">

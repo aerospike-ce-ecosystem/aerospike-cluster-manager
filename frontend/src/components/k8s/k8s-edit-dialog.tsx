@@ -28,6 +28,11 @@ import type {
 } from "@/lib/api/types";
 import { api } from "@/lib/api/client";
 import { validateACLConfig } from "@/lib/validations/k8s-acl";
+import {
+  validateCEImage,
+  validateAerospikeConfig,
+  validateRackUpdate,
+} from "@/lib/validations/k8s";
 import { useEditDialogState } from "./hooks/use-edit-dialog-state";
 import {
   EditAclSection,
@@ -43,6 +48,7 @@ import {
   EditTopologySpreadSection,
   EditRackConfigSection,
   EditNodeBlocklistSection,
+  EditContainerSecuritySection,
 } from "./edit-sections";
 
 interface K8sEditDialogProps {
@@ -86,6 +92,33 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
   const handleSave = async () => {
     patchState({ loading: true, error: null });
     try {
+      // ── Pre-save validations ──
+      // CE image version check
+      const imageErr = validateCEImage(state.image);
+      if (imageErr) {
+        patchState({ error: imageErr, loading: false });
+        return;
+      }
+
+      // Replication factor vs cluster size cross-validation
+      if (cluster.spec?.aerospikeConfig) {
+        const nsList = (cluster.spec.aerospikeConfig as Record<string, unknown>).namespaces as
+          | Array<Record<string, unknown>>
+          | undefined;
+        if (nsList) {
+          for (const ns of nsList) {
+            const replFactor = (ns["replication-factor"] as number) ?? 2;
+            if (replFactor > state.size) {
+              patchState({
+                error: `Namespace "${ns.name}" replication factor (${replFactor}) exceeds new cluster size (${state.size}). Reduce replication factor first.`,
+                loading: false,
+              });
+              return;
+            }
+          }
+        }
+      }
+
       const data: UpdateK8sClusterRequest = {};
 
       if (state.size !== initials.size) {
@@ -99,6 +132,12 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
       }
       if (state.aerospikeConfigText !== initials.aerospikeConfigText) {
         const parsed = JSON.parse(state.aerospikeConfigText) as Record<string, unknown>;
+        // Check for Enterprise-only keys (xdr, tls)
+        const configErr = validateAerospikeConfig(parsed);
+        if (configErr) {
+          patchState({ error: configErr, loading: false });
+          return;
+        }
         data.aerospikeConfig = parsed;
       }
       if (state.batchSize !== initials.batchSize && state.batchSize !== undefined) {
@@ -177,6 +216,7 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
         state.serviceAccountName !== initials.serviceAccountName ||
         state.terminationGracePeriod !== initials.terminationGracePeriod ||
         JSON.stringify(state.imagePullSecrets) !== JSON.stringify(initials.imagePullSecrets) ||
+        state.priorityClassName !== initials.priorityClassName ||
         JSON.stringify(state.topologySpreadConstraints) !==
           JSON.stringify(initials.topologySpreadConstraints) ||
         state.podSecurityRunAsUser !== initials.podSecurityRunAsUser ||
@@ -201,6 +241,7 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
           serviceAccountName: state.serviceAccountName || undefined,
           terminationGracePeriodSeconds: state.terminationGracePeriod,
           imagePullSecrets: state.imagePullSecrets.length > 0 ? state.imagePullSecrets : undefined,
+          priorityClassName: state.priorityClassName || undefined,
           topologySpreadConstraints:
             state.topologySpreadConstraints.length > 0
               ? state.topologySpreadConstraints
@@ -278,6 +319,16 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
 
       // Rack Config
       if (JSON.stringify(state.rackConfig) !== JSON.stringify(initials.rackConfig)) {
+        // Validate no simultaneous add+remove of racks
+        if (state.rackConfig && initials.rackConfig) {
+          const currentIds = (initials.rackConfig.racks ?? []).map((r) => r.id);
+          const newIds = (state.rackConfig.racks ?? []).map((r) => r.id);
+          const rackErr = validateRackUpdate(currentIds, newIds);
+          if (rackErr) {
+            patchState({ error: rackErr, loading: false });
+            return;
+          }
+        }
         data.rackConfig = state.rackConfig ?? undefined;
       }
 
@@ -326,6 +377,17 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
         } else {
           data.resources = undefined;
         }
+      }
+
+      // Container Security Context
+      if (
+        JSON.stringify(state.aerospikeContainerSecurityContext) !==
+        JSON.stringify(initials.aerospikeContainerSecurityContext)
+      ) {
+        data.aerospikeContainerSecurityContext =
+          state.aerospikeContainerSecurityContext !== null
+            ? state.aerospikeContainerSecurityContext
+            : {};
       }
 
       await onSave(data);
@@ -724,6 +786,11 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
               patchState({ imagePullSecrets: v });
               clearError();
             }}
+            priorityClassName={state.priorityClassName}
+            onPriorityClassNameChange={(v) => {
+              patchState({ priorityClassName: v });
+              clearError();
+            }}
             disabled={state.loading}
           />
 
@@ -810,6 +877,22 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
                 patchState({ podSecuritySupGroups: v });
                 clearError();
               }}
+            />
+          </CollapsibleSection>
+
+          {/* Container Security Context */}
+          <CollapsibleSection
+            title="Container Security Context"
+            summary={state.aerospikeContainerSecurityContext ? "Configured" : "Default"}
+            size="sm"
+          >
+            <EditContainerSecuritySection
+              value={state.aerospikeContainerSecurityContext}
+              onChange={(v) => {
+                patchState({ aerospikeContainerSecurityContext: v });
+                clearError();
+              }}
+              disabled={state.loading}
             />
           </CollapsibleSection>
 

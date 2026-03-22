@@ -40,6 +40,7 @@ export interface RackConfig {
   region?: string;
   rackLabel?: string;
   nodeName?: string;
+  revision?: string;
   aerospikeConfig?: Record<string, unknown>;
   storage?: RackStorageConfig;
   podSpec?: RackPodSpecConfig;
@@ -403,6 +404,7 @@ export interface PodSchedulingConfig {
   metadata?: PodMetadataConfig;
   topologySpreadConstraints?: TopologySpreadConstraintConfig[];
   podSecurityContext?: PodSecurityContextConfig;
+  priorityClassName?: string;
 }
 
 export interface ServiceMonitorConfig {
