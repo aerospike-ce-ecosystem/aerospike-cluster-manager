@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from aerospike_cluster_manager_api import config, db
 from aerospike_cluster_manager_api.client_manager import client_manager
@@ -720,6 +720,50 @@ async def resync_k8s_cluster_template(
 
     patch: dict[str, Any] = {"metadata": {"annotations": {"acko.io/resync-template": "true"}}}
     result = await k8s_client.patch_cluster(namespace, name, patch)
+    return extract_summary(result)
+
+
+class CloneClusterRequest(BaseModel):
+    """Request to clone an existing cluster with a new name."""
+
+    name: str = Field(min_length=1, max_length=63, description="Name for the cloned cluster")
+    namespace: str | None = Field(default=None, description="Target namespace (defaults to source namespace)")
+
+
+@router.post(
+    "/clusters/{namespace}/{name}/clone",
+    status_code=201,
+    summary="Clone an existing K8s Aerospike cluster",
+)
+@_k8s_endpoint("clone Kubernetes cluster")
+async def clone_k8s_cluster(
+    body: CloneClusterRequest,
+    namespace: str = _K8S_NAMESPACE,
+    name: str = _K8S_NAME,
+) -> K8sClusterSummary:
+    """Clone a cluster by copying its spec into a new cluster with a different name."""
+
+    source = await k8s_client.get_cluster(namespace, name)
+    target_ns = body.namespace or namespace
+
+    existing_namespaces = await k8s_client.list_namespaces()
+    if target_ns not in existing_namespaces:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Namespace '{target_ns}' does not exist. Available: {', '.join(sorted(existing_namespaces))}",
+        )
+
+    cr: dict[str, Any] = {
+        "apiVersion": "acko.io/v1alpha1",
+        "kind": "AerospikeCluster",
+        "metadata": {"name": body.name, "namespace": target_ns},
+        "spec": source.get("spec", {}),
+    }
+    # Remove operation state that shouldn't carry over
+    cr["spec"].pop("operations", None)
+    cr["spec"].pop("paused", None)
+
+    result = await k8s_client.create_cluster(target_ns, cr)
     return extract_summary(result)
 
 
