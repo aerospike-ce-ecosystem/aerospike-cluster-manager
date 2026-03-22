@@ -145,6 +145,74 @@ Modify running cluster settings with diff-based patching. The edit dialog suppor
 - Security context configuration
 - Topology spread constraints
 - Service metadata
+- Rack configuration editing (see [Rack Config Edit](#rack-config-edit-in-edit-dialog))
+- Node blocklist picker (see [Node Blocklist Picker](#node-blocklist-picker))
+
+#### Rack Config Edit in Edit Dialog
+
+After a cluster is created, rack topology can be fully edited through the Edit dialog. This enables operators to adjust data placement, add new availability zones, or remove racks without recreating the cluster.
+
+**Adding and removing racks:**
+
+- Click **Add Rack** to append a new rack entry. Each rack requires a unique rack ID.
+- Click the delete button on a rack row to remove it. The operator will migrate data off the removed rack during the next reconciliation.
+- Use the **Disable Multi-Rack** button to remove all racks and revert to a single default rack topology.
+
+**Per-rack topology settings:**
+
+Each rack can be configured with the following topology fields:
+
+| Field | Description |
+|-------|-------------|
+| Zone | Availability zone label (`topology.kubernetes.io/zone`) for this rack |
+| Region | Region label (`topology.kubernetes.io/region`) for this rack |
+| Node Name | Pin the rack to a specific Kubernetes node |
+| Rack Label | Custom label for identifying this rack |
+
+**Per-rack overrides:**
+
+Each rack supports independent overrides that take precedence over the cluster-level defaults:
+
+| Override | Description |
+|----------|-------------|
+| Aerospike Config | Per-rack Aerospike configuration overrides (e.g., different replication or namespace settings per zone) |
+| Storage Volumes | Per-rack storage class, volume size, and volume mode overrides for heterogeneous storage across zones |
+| Node Selector | Constrain pods in this rack to nodes with specific labels |
+| Tolerations | Allow pods in this rack to schedule on nodes with specific taints |
+| Node Affinity | Rack-specific node affinity rules (e.g., target specific instance types per zone) |
+
+**Global rack settings:**
+
+The following settings apply to all racks and control batch operations during rack topology changes:
+
+| Setting | Description |
+|---------|-------------|
+| maxIgnorablePods | Maximum number of pods that can be ignored during rolling operations |
+| rollingUpdateBatchSize | Number of pods to update simultaneously during a rolling restart |
+| scaleDownBatchSize | Number of pods to remove simultaneously during scale-down |
+
+#### Node Blocklist Picker
+
+The Edit dialog includes an interactive node blocklist picker that replaces manual text input with a visual node selection interface.
+
+**How the picker works:**
+
+1. When the edit dialog opens, it fetches the list of real Kubernetes nodes from the cluster via the `GET /api/k8s/nodes` API endpoint.
+2. Nodes are displayed as a checkbox list showing:
+   - **Node name** -- The Kubernetes node hostname
+   - **Zone** -- The availability zone label of the node (e.g., `us-east-1a`)
+   - **Readiness status** -- Whether the node is in a `Ready` condition
+3. Check the boxes next to nodes you want to exclude from Aerospike pod scheduling. Checked nodes are added to `spec.k8sNodeBlockList`.
+4. Unchecked nodes remain available for scheduling.
+
+**Fallback behavior:**
+
+If the node list cannot be fetched (e.g., due to RBAC restrictions or network issues), the picker falls back to a plain text input field where node names can be entered manually, one per line.
+
+**Visual indicators:**
+
+- Blocked nodes are displayed with a distinct visual style to clearly differentiate them from available nodes.
+- Node readiness status uses color-coded badges (green for Ready, red for NotReady) to help operators avoid blocking already-healthy nodes or identify problematic ones.
 
 ### Export & Import
 

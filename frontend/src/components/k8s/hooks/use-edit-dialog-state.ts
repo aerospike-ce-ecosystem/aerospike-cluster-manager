@@ -18,6 +18,7 @@ import type {
   SeedsFinderServicesConfig,
   ACLConfig,
   ResourceConfig,
+  RackAwareConfig,
 } from "@/lib/api/types";
 
 // ---------------------------------------------------------------------------
@@ -73,6 +74,7 @@ export interface EditDialogInitials {
   seedsFinderServices: SeedsFinderServicesConfig | null;
   aclConfig: ACLConfig | null;
   resources: ResourceConfig | null;
+  rackConfig: RackAwareConfig | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -245,6 +247,7 @@ function deriveInitials(cluster: K8sClusterDetail): EditDialogInitials {
     seedsFinderServices: cluster.spec?.seedsFinderServices ?? null,
     aclConfig: cluster.spec?.acl ?? null,
     resources: cluster.spec?.resources ?? null,
+    rackConfig: cluster.spec?.rackConfig ?? null,
   };
 }
 
@@ -303,6 +306,7 @@ export function useEditDialogState(open: boolean, cluster: K8sClusterDetail) {
           : null,
         aclConfig: snap.aclConfig ? structuredClone(snap.aclConfig) : null,
         resources: snap.resources ? structuredClone(snap.resources) : null,
+        rackConfig: snap.rackConfig ? structuredClone(snap.rackConfig) : null,
         loading: false,
         error: null,
       });
@@ -374,7 +378,8 @@ export function useEditDialogState(open: boolean, cluster: K8sClusterDetail) {
       state.storageDeleteLocalOnRestart !== snap.storageDeleteLocalOnRestart ||
       JSON.stringify(state.seedsFinderServices) !== JSON.stringify(snap.seedsFinderServices) ||
       JSON.stringify(state.aclConfig) !== JSON.stringify(snap.aclConfig) ||
-      JSON.stringify(state.resources) !== JSON.stringify(snap.resources)
+      JSON.stringify(state.resources) !== JSON.stringify(snap.resources) ||
+      JSON.stringify(state.rackConfig) !== JSON.stringify(snap.rackConfig)
     );
   }, [state]);
 

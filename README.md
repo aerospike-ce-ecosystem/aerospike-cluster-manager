@@ -148,6 +148,8 @@ npm run dev                        # http://localhost:3000
   - Operation status tracking (WarmRestart/PodRestart progress, completed/failed pods)
   - Pod selection for targeted restart operations (checkbox-based)
   - Cluster edit dialog (image, size, dynamic config, aerospike config, nodeSelector, tolerations, hostNetwork, imagePullSecrets, serviceAccountName, terminationGracePeriod, validationPolicy, sidecars, initContainers, securityContext, topologySpreadConstraints)
+  - Rack config editing in edit dialog: add/remove racks post-creation, per-rack zone/region/nodeName/rackLabel, per-rack overrides (aerospike config, storage, nodeSelector, tolerations, node affinity), global rack settings (maxIgnorablePods, rollingUpdateBatchSize, scaleDownBatchSize), and "Disable Multi-Rack" button
+  - Node blocklist picker in edit dialog: checkbox-based K8s node selector with node name, zone, and readiness status; falls back to text input if nodes cannot be fetched
   - Cluster-scoped template CRUD: create, browse, view details, and delete AerospikeClusterTemplates
   - Template "Referenced By" display showing which clusters use each template
   - Template sync status monitoring (Synced/Out of Sync badge, last sync timestamp, resync trigger)
@@ -163,7 +165,7 @@ npm run dev                        # http://localhost:3000
   - Network access type configuration (Pod IP, Host Internal/External, Configured IP) with custom network names for configuredIP
   - Kubernetes NetworkPolicy auto-generation (standard K8s or Cilium)
   - Seeds Finder LoadBalancer service for external seed discovery
-  - K8s node block list UI for selecting nodes to exclude from scheduling (wizard + edit dialog)
+  - K8s node block list UI for selecting nodes to exclude from scheduling (wizard + edit dialog) with interactive checkbox-based node picker showing zone and readiness status
   - CNI bandwidth annotations for ingress/egress limits (wizard + edit dialog)
   - HorizontalPodAutoscaler (HPA) management: create, view, and delete HPAs targeting AerospikeCluster resources
   - Enhanced monitoring configuration: exporter image, metric labels, exporter resources (CPU/memory), exporter environment variables, ServiceMonitor config (enabled/interval/labels), PrometheusRule config (enabled/labels/custom alerting rules)
@@ -436,7 +438,7 @@ Full lifecycle management of `AerospikeClusterTemplate` resources:
 From the cluster detail page, you can:
 
 - **Scale** — Change cluster size (1-8 nodes) via a scale dialog
-- **Edit** — Modify running cluster settings (image, size, dynamic config, aerospike config, network policy, NetworkPolicy auto-generation, ACL, monitoring config, bandwidth config, node block list, validation policy, service metadata, rack ID override, pod metadata, nodeSelector, tolerations, hostNetwork, imagePullSecrets, serviceAccountName, terminationGracePeriod, sidecars, initContainers, securityContext, topologySpreadConstraints, Seeds Finder Services) with diff-based patching
+- **Edit** — Modify running cluster settings (image, size, dynamic config, aerospike config, network policy, NetworkPolicy auto-generation, ACL, monitoring config, bandwidth config, node block list, validation policy, service metadata, rack ID override, pod metadata, nodeSelector, tolerations, hostNetwork, imagePullSecrets, serviceAccountName, terminationGracePeriod, sidecars, initContainers, securityContext, topologySpreadConstraints, Seeds Finder Services, rack config, node blocklist picker) with diff-based patching
 - **HPA** — Create, view, and delete HorizontalPodAutoscaler resources for automatic cluster scaling based on CPU/memory utilization
 - **Warm Restart** — Trigger a warm restart operation (all pods or selected pods via checkboxes)
 - **Pod Restart** — Trigger a full pod restart operation (all pods or selected pods via checkboxes)

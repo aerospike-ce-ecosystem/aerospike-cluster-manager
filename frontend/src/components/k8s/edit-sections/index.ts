@@ -9,3 +9,5 @@ export { EditSidecarsSection } from "./edit-sidecars-section";
 export { EditStorageSection } from "./edit-storage-section";
 export { EditSeedsFinderLBSection } from "./edit-seeds-finder-section";
 export { EditTopologySpreadSection } from "./edit-topology-spread-section";
+export { EditRackConfigSection } from "./edit-rack-config-section";
+export { EditNodeBlocklistSection } from "./edit-node-blocklist-section";

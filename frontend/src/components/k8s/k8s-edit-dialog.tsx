@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +24,9 @@ import type {
   UpdateK8sClusterRequest,
   NetworkAccessType,
   BandwidthConfig,
+  K8sNodeInfo,
 } from "@/lib/api/types";
+import { api } from "@/lib/api/client";
 import { validateACLConfig } from "@/lib/validations/k8s-acl";
 import { useEditDialogState } from "./hooks/use-edit-dialog-state";
 import {
@@ -38,6 +41,8 @@ import {
   EditStorageSection,
   EditSeedsFinderLBSection,
   EditTopologySpreadSection,
+  EditRackConfigSection,
+  EditNodeBlocklistSection,
 } from "./edit-sections";
 
 interface K8sEditDialogProps {
@@ -52,6 +57,29 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
     open,
     cluster,
   );
+
+  // Fetch K8s nodes once when dialog opens (shared by RackConfig and NodeBlocklist)
+  const [k8sNodes, setK8sNodes] = useState<K8sNodeInfo[]>([]);
+  const [k8sNodesLoading, setK8sNodesLoading] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setK8sNodesLoading(true);
+    api
+      .getK8sNodes()
+      .then((n) => {
+        if (!cancelled) setK8sNodes(n);
+      })
+      .catch(() => {
+        if (!cancelled) setK8sNodes([]);
+      })
+      .finally(() => {
+        if (!cancelled) setK8sNodesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const clearError = () => patchState({ error: null });
 
@@ -246,6 +274,11 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
         JSON.stringify(initials.headlessServiceConfig)
       ) {
         data.headlessService = state.headlessServiceConfig ?? undefined;
+      }
+
+      // Rack Config
+      if (JSON.stringify(state.rackConfig) !== JSON.stringify(initials.rackConfig)) {
+        data.rackConfig = state.rackConfig ?? undefined;
       }
 
       // Rack ID Override
@@ -515,24 +548,16 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
           />
 
           {/* Node Block List */}
-          <div className="grid gap-1">
-            <Label htmlFor="edit-node-blocklist" className="text-xs">
-              Node Block List
-            </Label>
-            <Input
-              id="edit-node-blocklist"
-              value={state.nodeBlockList}
-              onChange={(e) => {
-                patchState({ nodeBlockList: e.target.value });
-                clearError();
-              }}
-              placeholder="node1, node2"
-              disabled={state.loading}
-            />
-            <p className="text-base-content/60 text-[10px]">
-              Comma-separated K8s node names to exclude from scheduling
-            </p>
-          </div>
+          <EditNodeBlocklistSection
+            value={state.nodeBlockList}
+            onChange={(v) => {
+              patchState({ nodeBlockList: v });
+              clearError();
+            }}
+            disabled={state.loading}
+            nodes={k8sNodes}
+            nodesLoading={k8sNodesLoading}
+          />
 
           {/* Bandwidth Limits */}
           <div className="grid gap-3">
@@ -851,6 +876,28 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
                 patchState({ headlessServiceConfig: v });
                 clearError();
               }}
+            />
+          </CollapsibleSection>
+
+          {/* Rack Config */}
+          <CollapsibleSection
+            title="Rack Configuration"
+            summary={
+              state.rackConfig?.racks?.length
+                ? `${state.rackConfig.racks.length} rack(s)`
+                : "Single rack (default)"
+            }
+            size="sm"
+          >
+            <EditRackConfigSection
+              rackConfig={state.rackConfig}
+              clusterSize={state.size}
+              onChange={(cfg) => {
+                patchState({ rackConfig: cfg });
+                clearError();
+              }}
+              disabled={state.loading}
+              nodes={k8sNodes}
             />
           </CollapsibleSection>
 
