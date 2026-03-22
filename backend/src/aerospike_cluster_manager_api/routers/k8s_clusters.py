@@ -9,7 +9,6 @@ from __future__ import annotations
 import copy
 import functools
 import logging
-import re
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -83,15 +82,21 @@ class DeleteResponse(BaseModel):
     message: str
 
 
-# RFC 1123 DNS label: lowercase alphanumeric and hyphens, must start/end with alphanumeric, max 63 chars.
-_DNS_LABEL_RE = re.compile(r"^[a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?$")
-
-
 class CloneClusterRequest(BaseModel):
-    """Request body for cloning an existing K8s Aerospike cluster."""
+    """Request to clone an existing cluster with a new name."""
 
-    new_name: str
-    target_namespace: str | None = None
+    name: str = Field(
+        min_length=1,
+        max_length=63,
+        pattern=r"^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$",
+        description="Name for the cloned cluster",
+    )
+    namespace: str | None = Field(
+        default=None,
+        max_length=253,
+        pattern=r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+        description="Target namespace (defaults to source namespace)",
+    )
 
 
 def _map_k8s_error(e: K8sApiError) -> HTTPException:
@@ -430,52 +435,40 @@ async def delete_k8s_cluster(
     return DeleteResponse(message=f"Cluster {namespace}/{name} deletion initiated")
 
 
-@router.post("/clusters/{namespace}/{name}/clone", status_code=201, summary="Clone K8s Aerospike cluster")
+@router.post(
+    "/clusters/{namespace}/{name}/clone",
+    status_code=201,
+    summary="Clone an existing K8s Aerospike cluster",
+)
 @_k8s_endpoint("clone Kubernetes cluster")
 async def clone_k8s_cluster(
     body: CloneClusterRequest,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ) -> K8sClusterSummary:
-    """Clone an existing cluster's spec into a new cluster with a different name/namespace.
+    """Clone a cluster by copying its spec into a new cluster with a different name."""
 
-    The source CR spec is deep-copied, and ``operations`` and ``paused`` fields
-    are stripped so the clone starts fresh.
-    """
+    source = await k8s_client.get_cluster(namespace, name)
+    target_ns = body.namespace or namespace
 
-    # Validate new_name is a valid DNS label
-    if not _DNS_LABEL_RE.match(body.new_name):
+    existing_namespaces = await k8s_client.list_namespaces()
+    if target_ns not in existing_namespaces:
         raise HTTPException(
-            status_code=422,
-            detail=(
-                f"Invalid cluster name '{body.new_name}'. "
-                "Must be a valid DNS label: lowercase alphanumeric and hyphens, "
-                "1-63 characters, must start and end with an alphanumeric character."
-            ),
+            status_code=400,
+            detail=f"Namespace '{target_ns}' does not exist. Available: {', '.join(sorted(existing_namespaces))}",
         )
 
-    target_ns = body.target_namespace or namespace
-
-    # Fetch source cluster
-    source_cr = await k8s_client.get_cluster(namespace, name)
-
-    # Deep-copy the spec and strip operational state
-    cloned_spec = copy.deepcopy(source_cr.get("spec", {}))
-    cloned_spec.pop("operations", None)
-    cloned_spec.pop("paused", None)
-
-    # Build the new CR
-    new_cr: dict[str, Any] = {
+    cr: dict[str, Any] = {
         "apiVersion": "acko.io/v1alpha1",
         "kind": "AerospikeCluster",
-        "metadata": {
-            "name": body.new_name,
-            "namespace": target_ns,
-        },
-        "spec": cloned_spec,
+        "metadata": {"name": body.name, "namespace": target_ns},
+        "spec": copy.deepcopy(source.get("spec", {})),
     }
+    # Remove operation state that shouldn't carry over
+    cr["spec"].pop("operations", None)
+    cr["spec"].pop("paused", None)
 
-    result = await k8s_client.create_cluster(target_ns, new_cr)
+    result = await k8s_client.create_cluster(target_ns, cr)
     return extract_summary(result)
 
 
@@ -720,60 +713,6 @@ async def resync_k8s_cluster_template(
 
     patch: dict[str, Any] = {"metadata": {"annotations": {"acko.io/resync-template": "true"}}}
     result = await k8s_client.patch_cluster(namespace, name, patch)
-    return extract_summary(result)
-
-
-class CloneClusterRequest(BaseModel):
-    """Request to clone an existing cluster with a new name."""
-
-    name: str = Field(
-        min_length=1,
-        max_length=63,
-        pattern=r"^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$",
-        description="Name for the cloned cluster",
-    )
-    namespace: str | None = Field(
-        default=None,
-        max_length=253,
-        pattern=r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
-        description="Target namespace (defaults to source namespace)",
-    )
-
-
-@router.post(
-    "/clusters/{namespace}/{name}/clone",
-    status_code=201,
-    summary="Clone an existing K8s Aerospike cluster",
-)
-@_k8s_endpoint("clone Kubernetes cluster")
-async def clone_k8s_cluster(
-    body: CloneClusterRequest,
-    namespace: str = _K8S_NAMESPACE,
-    name: str = _K8S_NAME,
-) -> K8sClusterSummary:
-    """Clone a cluster by copying its spec into a new cluster with a different name."""
-
-    source = await k8s_client.get_cluster(namespace, name)
-    target_ns = body.namespace or namespace
-
-    existing_namespaces = await k8s_client.list_namespaces()
-    if target_ns not in existing_namespaces:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Namespace '{target_ns}' does not exist. Available: {', '.join(sorted(existing_namespaces))}",
-        )
-
-    cr: dict[str, Any] = {
-        "apiVersion": "acko.io/v1alpha1",
-        "kind": "AerospikeCluster",
-        "metadata": {"name": body.name, "namespace": target_ns},
-        "spec": copy.deepcopy(source.get("spec", {})),
-    }
-    # Remove operation state that shouldn't carry over
-    cr["spec"].pop("operations", None)
-    cr["spec"].pop("paused", None)
-
-    result = await k8s_client.create_cluster(target_ns, cr)
     return extract_summary(result)
 
 
