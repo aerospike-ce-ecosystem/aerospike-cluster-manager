@@ -156,7 +156,7 @@ class TestBuildRackConfigDict:
 
     def test_with_revision(self):
         rack = SimpleNamespace(
-            id=1,
+            id=2,
             zone=None,
             region=None,
             rack_label=None,
@@ -174,7 +174,7 @@ class TestBuildRackConfigDict:
             rolling_update_batch_size=None,
         )
         result = _build_rack_config_dict(rack_config)
-        assert result["racks"] == [{"id": 1, "revision": "my-cluster-6b8f9c4d77"}]
+        assert result["racks"] == [{"id": 2, "revision": "my-cluster-6b8f9c4d77"}]
 
 
 class TestBuildServiceMetadataDict:

@@ -43,6 +43,7 @@ import {
   EditTopologySpreadSection,
   EditRackConfigSection,
   EditNodeBlocklistSection,
+  EditContainerSecuritySection,
 } from "./edit-sections";
 
 interface K8sEditDialogProps {
@@ -326,6 +327,15 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
         } else {
           data.resources = undefined;
         }
+      }
+
+      // Container Security Context
+      if (
+        JSON.stringify(state.aerospikeContainerSecurityContext) !==
+        JSON.stringify(initials.aerospikeContainerSecurityContext)
+      ) {
+        data.aerospikeContainerSecurityContext =
+          state.aerospikeContainerSecurityContext ?? undefined;
       }
 
       await onSave(data);
@@ -810,6 +820,22 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
                 patchState({ podSecuritySupGroups: v });
                 clearError();
               }}
+            />
+          </CollapsibleSection>
+
+          {/* Container Security Context */}
+          <CollapsibleSection
+            title="Container Security Context"
+            summary={state.aerospikeContainerSecurityContext ? "Configured" : "Default"}
+            size="sm"
+          >
+            <EditContainerSecuritySection
+              value={state.aerospikeContainerSecurityContext}
+              onChange={(v) => {
+                patchState({ aerospikeContainerSecurityContext: v });
+                clearError();
+              }}
+              disabled={state.loading}
             />
           </CollapsibleSection>
 

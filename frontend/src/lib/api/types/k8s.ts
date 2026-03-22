@@ -40,6 +40,7 @@ export interface RackConfig {
   region?: string;
   rackLabel?: string;
   nodeName?: string;
+  revision?: string;
   aerospikeConfig?: Record<string, unknown>;
   storage?: RackStorageConfig;
   podSpec?: RackPodSpecConfig;

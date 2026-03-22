@@ -156,7 +156,7 @@ class CreateK8sClusterRequest(BaseModel):
     aerospike_container_security_context: dict[str, Any] | None = Field(
         default=None,
         alias="aerospikeContainerSecurityContext",
-        description="SecurityContext for the Aerospike container",
+        description="SecurityContext for the Aerospike container (e.g. runAsUser, capabilities)",
     )
 
     model_config = {"populate_by_name": True}
@@ -229,7 +229,7 @@ class UpdateK8sClusterRequest(BaseModel):
     aerospike_container_security_context: dict[str, Any] | None = Field(
         default=None,
         alias="aerospikeContainerSecurityContext",
-        description="SecurityContext for the Aerospike container",
+        description="SecurityContext for the Aerospike container (e.g. runAsUser, capabilities)",
     )
 
     model_config = {"populate_by_name": True}
