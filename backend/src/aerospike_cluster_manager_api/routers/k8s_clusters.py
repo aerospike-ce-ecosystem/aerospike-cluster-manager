@@ -712,6 +712,14 @@ async def clone_k8s_cluster(
     cr["spec"].pop("operations", None)
     cr["spec"].pop("paused", None)
 
+    # Replace cluster-name with the new cluster name to prevent accidental
+    # mesh merges between source and cloned clusters. The webhook defaulter
+    # only sets cluster-name if it doesn't exist, so we must update it here.
+    aerospike_config = cr["spec"].get("aerospikeConfig", {})
+    service_section = aerospike_config.get("service", {})
+    if "cluster-name" in service_section:
+        service_section["cluster-name"] = body.name
+
     result = await k8s_client.create_cluster(target_ns, cr)
     return extract_summary(result)
 
