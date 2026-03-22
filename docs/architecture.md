@@ -260,7 +260,10 @@ The PostgreSQL connection pool is configurable via `DB_POOL_MIN_SIZE`, `DB_POOL_
 | Pod Logs Viewer | No | Yes |
 | Config Drift Detection | No | Yes |
 | Reconciliation Health | No | Yes |
+| Circuit Breaker Reset | No | Yes |
 | Migration Status Monitoring | No | Yes |
+| Split-Brain Detection | No | Yes |
+| PVC Orphan Detection | No | Yes |
 | Events Timeline | No | Yes |
 
 ## New Operator Integration API Endpoints
@@ -329,6 +332,46 @@ Each `PodHashGroup` contains:
 - `podSpecHash` -- Pod spec hash for pods in this group.
 - `pods` -- List of pod names in this group.
 - `isCurrent` -- `true` if this group matches the desired config hash.
+
+### Circuit Breaker Reset
+
+```
+POST /api/k8s/clusters/{namespace}/{name}/reset-circuit-breaker
+```
+
+Resets the operator's circuit breaker by performing two operations:
+
+1. Patches the CR's status subresource to clear `failedReconcileCount` (set to 0) and `lastReconcileError` (set to empty string).
+2. Annotates the CR with `acko.io/force-reconcile` to trigger an immediate reconcile attempt.
+
+**Response:** `K8sClusterSummary` -- the updated cluster summary after the reset.
+
+### Enhanced PVC Response
+
+```
+GET /api/k8s/clusters/{namespace}/{name}/pvcs
+```
+
+The PVC endpoint now returns two additional fields per PVC entry:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `boundPod` | `string?` | Name of the pod currently mounting this PVC, or `null` if no pod is bound |
+| `isOrphan` | `bool` | `true` if the PVC is in Bound status but no running pod in the cluster mounts it |
+
+The backend builds a PVC-to-pod mapping by inspecting the `volumes` spec of all pods matching the cluster's label selector. PVCs not found in any pod's volume list are flagged as orphans.
+
+### Cluster Health Response
+
+```
+GET /api/k8s/clusters/{namespace}/{name}/health
+```
+
+The cluster health endpoint now includes a `splitBrainDetected` field:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `splitBrainDetected` | `bool` | `true` when the Aerospike-reported cluster size disagrees with the spec size while the cluster is in steady state (`Completed` phase, all pods ready) |
 
 ## See also
 
