@@ -87,8 +87,8 @@ async def client():
     with patch("aerospike_cluster_manager_api.config.K8S_MANAGEMENT_ENABLED", True):
         # Reload the router and main modules so the patched config takes effect
         # and the k8s router is registered.
-        import aerospike_cluster_manager_api.routers.k8s_clusters as k8s_mod
         import aerospike_cluster_manager_api.main as main_mod
+        import aerospike_cluster_manager_api.routers.k8s_clusters as k8s_mod
 
         importlib.reload(k8s_mod)
         importlib.reload(main_mod)
