@@ -149,3 +149,15 @@ export function validateMemoryForNamespaces(
   }
   return null;
 }
+
+/** Validate that the image is not an enterprise image (CE operator only supports CE images). */
+export function validateImageNotEnterprise(image: string): string | null {
+  if (/enterprise/i.test(image)) {
+    return "Enterprise images are not supported in CE mode. Please use a CE image (e.g., aerospike:ce-8.1.1.1).";
+  }
+  const tag = image.split(":")[1] ?? "";
+  if (/^(ee|ent)-/i.test(tag)) {
+    return "Enterprise images are not supported in CE mode. Please use a CE image (e.g., aerospike:ce-8.1.1.1).";
+  }
+  return null;
+}

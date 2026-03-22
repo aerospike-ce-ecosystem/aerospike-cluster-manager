@@ -65,6 +65,7 @@ export interface ClusterHealthSummary {
   failedReconcileCount: number;
   pendingRestartCount: number;
   rackDistribution: { id: number; total: number; ready: number }[];
+  splitBrainDetected: boolean;
 }
 
 export interface K8sNodeInfo {

@@ -76,6 +76,7 @@ class ClusterHealthResponse(BaseModel):
     failed_reconcile_count: int = Field(default=0, alias="failedReconcileCount")
     pending_restart_count: int = Field(default=0, alias="pendingRestartCount")
     rack_distribution: list[RackDistribution] = Field(default_factory=list, alias="rackDistribution")
+    split_brain_detected: bool = Field(default=False, alias="splitBrainDetected")
 
 
 class PodHashGroup(BaseModel):

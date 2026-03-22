@@ -443,6 +443,13 @@ export const api = {
       { method: "POST" },
     ),
 
+  // K8s Circuit Breaker Reset
+  resetK8sCircuitBreaker: (namespace: string, name: string) =>
+    request<import("./types").K8sClusterSummary>(
+      `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/reset-circuit-breaker`,
+      { method: "POST" },
+    ),
+
   // K8s Cluster Events
   getK8sClusterEvents: (namespace: string, name: string, limit = 50, category?: string) =>
     request<import("./types").K8sClusterEvent[]>(

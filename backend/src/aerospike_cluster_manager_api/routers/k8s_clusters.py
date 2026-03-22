@@ -290,6 +290,40 @@ async def force_reconcile_k8s_cluster(
     return extract_summary(result)
 
 
+@router.post(
+    "/clusters/{namespace}/{name}/reset-circuit-breaker",
+    summary="Reset circuit breaker for K8s Aerospike cluster",
+)
+@_k8s_endpoint("reset circuit breaker for Kubernetes cluster")
+async def reset_circuit_breaker(
+    namespace: str = _K8S_NAMESPACE,
+    name: str = _K8S_NAME,
+) -> K8sClusterSummary:
+    """Reset the circuit breaker by clearing failedReconcileCount and lastReconcileError
+    via the status subresource, then trigger a reconcile via annotation."""
+
+    # 1. Patch status subresource to reset the circuit breaker counter
+    await k8s_client.patch_cluster_status(
+        namespace,
+        name,
+        {
+            "failedReconcileCount": 0,
+            "lastReconcileError": "",
+        },
+    )
+
+    # 2. Patch metadata annotation to trigger a fresh reconcile
+    patch: dict[str, Any] = {
+        "metadata": {
+            "annotations": {
+                "acko.io/circuit-breaker-reset": datetime.now(UTC).isoformat(),
+            }
+        }
+    }
+    result = await k8s_client.patch_cluster(namespace, name, patch)
+    return extract_summary(result)
+
+
 @router.post("/clusters/import", status_code=201, summary="Import K8s Aerospike cluster from CR")
 @_k8s_endpoint("import Kubernetes cluster")
 async def import_k8s_cluster(body: ImportClusterRequest) -> K8sClusterSummary:

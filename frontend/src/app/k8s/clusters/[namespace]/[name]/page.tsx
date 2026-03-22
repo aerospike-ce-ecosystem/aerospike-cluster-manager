@@ -271,7 +271,7 @@ export default function K8sClusterDetailPage() {
         name={name}
         onResetCircuitBreaker={async () => {
           try {
-            await updateCluster(namespace, name, {});
+            await api.resetK8sCircuitBreaker(namespace, name);
             useToastStore.getState().addToast("success", "Circuit breaker reset triggered");
           } catch (err) {
             useToastStore.getState().addToast("error", getErrorMessage(err));
