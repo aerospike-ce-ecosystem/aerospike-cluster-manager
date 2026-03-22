@@ -6,6 +6,7 @@ When disabled, a 404 is returned so the frontend can hide K8s features.
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import logging
 import uuid
@@ -264,8 +265,19 @@ async def list_k8s_cluster_pvcs(
     """List PersistentVolumeClaims associated with the cluster's StatefulSets."""
 
     label_selector = f"app.kubernetes.io/instance={name}"
-    pvcs_raw = await k8s_client.list_pvcs(namespace, label_selector)
-    return [PVCInfo(**pvc) for pvc in pvcs_raw]
+    pvcs_raw, pod_pvc_map = await asyncio.gather(
+        k8s_client.list_pvcs(namespace, label_selector),
+        k8s_client.get_pod_pvc_map(namespace, label_selector),
+    )
+
+    pvcs = []
+    for pvc in pvcs_raw:
+        pvc_name = pvc.get("name", "")
+        bp = pod_pvc_map.get(pvc_name)
+        pvc["boundPod"] = bp
+        pvc["isOrphan"] = bp is None and pvc.get("status") == "Bound"
+        pvcs.append(PVCInfo(**pvc))
+    return pvcs
 
 
 @router.post(

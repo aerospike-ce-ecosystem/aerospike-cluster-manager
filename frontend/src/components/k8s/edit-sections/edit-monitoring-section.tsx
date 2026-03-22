@@ -10,6 +10,30 @@ import { KeyValueEditor } from "@/components/common/key-value-editor";
 import type { MonitoringConfig } from "@/lib/api/types";
 
 // ---------------------------------------------------------------------------
+// Helpers: convert between [{name,value}] and flat Record for KeyValueEditor
+// ---------------------------------------------------------------------------
+
+/** Convert [{name: "FOO", value: "bar"}] to {FOO: "bar"} for KeyValueEditor. */
+function envArrayToRecord(
+  arr: Record<string, string>[] | undefined,
+): Record<string, string> | undefined {
+  if (!arr || arr.length === 0) return undefined;
+  const rec: Record<string, string> = {};
+  for (const entry of arr) {
+    if (entry.name) rec[entry.name] = entry.value ?? "";
+  }
+  return Object.keys(rec).length > 0 ? rec : undefined;
+}
+
+/** Convert {FOO: "bar"} to [{name: "FOO", value: "bar"}] for backend format. */
+function recordToEnvArray(
+  rec: Record<string, string> | undefined,
+): Record<string, string>[] | undefined {
+  if (!rec || Object.keys(rec).length === 0) return undefined;
+  return Object.entries(rec).map(([name, value]) => ({ name, value }));
+}
+
+// ---------------------------------------------------------------------------
 // Monitoring Section for Edit Dialog
 // ---------------------------------------------------------------------------
 
@@ -141,6 +165,22 @@ export function EditMonitoringSection({
               onChange={(labels) => patch({ metricLabels: labels })}
               keyPlaceholder="label name"
               valuePlaceholder="label value"
+              disabled={disabled}
+              size="sm"
+            />
+          </div>
+
+          {/* Exporter Environment Variables */}
+          <div className="grid gap-1.5">
+            <Label className="text-xs">Exporter Environment Variables</Label>
+            <p className="text-muted-foreground text-[10px]">
+              Environment variables passed to the Prometheus exporter container.
+            </p>
+            <KeyValueEditor
+              value={envArrayToRecord(config.exporterEnv)}
+              onChange={(rec) => patch({ exporterEnv: recordToEnvArray(rec) })}
+              keyPlaceholder="VARIABLE_NAME"
+              valuePlaceholder="value"
               disabled={disabled}
               size="sm"
             />

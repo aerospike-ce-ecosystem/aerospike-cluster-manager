@@ -733,6 +733,8 @@ export interface PVCInfo {
   accessModes: string[];
   volumeMode: string | null;
   createdAt: string | null;
+  boundPod?: string | null;
+  isOrphan?: boolean;
 }
 
 // === Import Cluster ===

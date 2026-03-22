@@ -13,6 +13,30 @@ import { CustomRulesEditor } from "./custom-rules-editor";
 import type { NetworkAccessType, LoadBalancerSpec, MonitoringConfig } from "@/lib/api/types";
 import type { WizardMonitoringStepProps } from "./types";
 
+// ---------------------------------------------------------------------------
+// Helpers: convert between [{name,value}] and flat Record for KeyValueEditor
+// ---------------------------------------------------------------------------
+
+/** Convert [{name: "FOO", value: "bar"}] to {FOO: "bar"} for KeyValueEditor. */
+function envArrayToRecord(
+  arr: Record<string, string>[] | undefined,
+): Record<string, string> | undefined {
+  if (!arr || arr.length === 0) return undefined;
+  const rec: Record<string, string> = {};
+  for (const entry of arr) {
+    if (entry.name) rec[entry.name] = entry.value ?? "";
+  }
+  return Object.keys(rec).length > 0 ? rec : undefined;
+}
+
+/** Convert {FOO: "bar"} to [{name: "FOO", value: "bar"}] for backend format. */
+function recordToEnvArray(
+  rec: Record<string, string> | undefined,
+): Record<string, string>[] | undefined {
+  if (!rec || Object.keys(rec).length === 0) return undefined;
+  return Object.entries(rec).map(([name, value]) => ({ name, value }));
+}
+
 export function WizardMonitoringStep({ form, updateForm }: WizardMonitoringStepProps) {
   const [showLBAdvanced, setShowLBAdvanced] = useState(false);
 
@@ -117,6 +141,21 @@ export function WizardMonitoringStep({ form, updateForm }: WizardMonitoringStepP
               keyPlaceholder="label name"
               valuePlaceholder="label value"
               addLabel="Add label"
+            />
+          </div>
+
+          {/* ── Exporter Environment Variables ── */}
+          <div className="space-y-2 rounded-lg border p-4">
+            <span className="text-sm font-medium">Exporter Environment Variables</span>
+            <p className="text-base-content/60 text-xs">
+              Environment variables passed to the Prometheus exporter container.
+            </p>
+            <KeyValueEditor
+              value={envArrayToRecord(monitoring.exporterEnv)}
+              onChange={(rec) => patchMonitoring({ exporterEnv: recordToEnvArray(rec) })}
+              keyPlaceholder="VARIABLE_NAME"
+              valuePlaceholder="value"
+              addLabel="Add variable"
             />
           </div>
 

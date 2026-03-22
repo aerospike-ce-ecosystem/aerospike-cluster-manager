@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { HardDrive } from "lucide-react";
+import { AlertTriangle, HardDrive } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api/client";
 import type { PVCInfo } from "@/lib/api/types";
@@ -70,6 +70,7 @@ export function K8sPVCStatus({ namespace, name, className }: K8sPVCStatusProps) 
   if (pvcs.length === 0) return null;
 
   const boundCount = pvcs.filter((p) => p.status === "Bound").length;
+  const orphanCount = pvcs.filter((p) => p.isOrphan).length;
 
   return (
     <Card className={className}>
@@ -77,9 +78,19 @@ export function K8sPVCStatus({ namespace, name, className }: K8sPVCStatusProps) 
         <CardTitle className="text-base-content/60 flex items-center gap-2 text-sm font-normal">
           <HardDrive className="h-4 w-4" />
           Storage (PVCs)
-          <Badge variant="outline" className="ml-auto text-[10px]">
-            {boundCount}/{pvcs.length} Bound
-          </Badge>
+          <div className="ml-auto flex items-center gap-2">
+            <Badge variant="outline" className="text-[10px]">
+              {boundCount}/{pvcs.length} Bound
+            </Badge>
+            {orphanCount > 0 && (
+              <Badge
+                variant="outline"
+                className="bg-warning/10 text-warning border-warning/20 text-[10px]"
+              >
+                {orphanCount} Orphan
+              </Badge>
+            )}
+          </div>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -89,6 +100,7 @@ export function K8sPVCStatus({ namespace, name, className }: K8sPVCStatusProps) 
               <tr className="text-base-content/60 border-b text-left text-xs">
                 <th className="pr-4 pb-2 font-medium">Name</th>
                 <th className="pr-4 pb-2 font-medium">Status</th>
+                <th className="pr-4 pb-2 font-medium">Pod</th>
                 <th className="pr-4 pb-2 font-medium">Capacity</th>
                 <th className="pr-4 pb-2 font-medium">Storage Class</th>
                 <th className="pr-4 pb-2 font-medium">Access Modes</th>
@@ -103,6 +115,16 @@ export function K8sPVCStatus({ namespace, name, className }: K8sPVCStatusProps) 
                     <Badge variant="outline" className={cn("text-[10px]", statusColor(pvc.status))}>
                       {pvc.status}
                     </Badge>
+                  </td>
+                  <td className="py-2 pr-4 text-xs">
+                    {pvc.isOrphan ? (
+                      <span className="text-warning inline-flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" />
+                        (orphan)
+                      </span>
+                    ) : (
+                      <span className="font-mono">{pvc.boundPod || "-"}</span>
+                    )}
                   </td>
                   <td className="py-2 pr-4 font-mono text-xs">
                     {pvc.capacity || pvc.requestedSize || "-"}
