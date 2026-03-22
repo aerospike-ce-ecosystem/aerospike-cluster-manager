@@ -318,6 +318,27 @@ class K8sClient:
         logger.debug("_delete_cluster_sync(namespace=%s, name=%s)", namespace, name)
         return self._delete_custom_object_sync(PLURAL, namespace, name)
 
+    def _patch_cluster_status_sync(self, namespace: str, name: str, status_patch: dict[str, Any]) -> dict[str, Any]:
+        """Patch the status subresource of an AerospikeCluster CR."""
+        logger.debug("_patch_cluster_status_sync(namespace=%s, name=%s)", namespace, name)
+        self._ensure_initialized()
+        try:
+            body = {"status": status_patch}
+            return cast(
+                dict[str, Any],
+                self._get_custom_api().patch_namespaced_custom_object_status(
+                    group=GROUP,
+                    version=VERSION,
+                    namespace=namespace,
+                    name=name,
+                    plural=PLURAL,
+                    body=body,
+                    _request_timeout=_K8S_API_TIMEOUT,
+                ),
+            )
+        except Exception as e:
+            raise self._wrap_api_exception(e) from e
+
     def _list_namespaces_sync(self) -> list[str]:
         logger.debug("_list_namespaces_sync()")
         self._ensure_initialized()
@@ -514,6 +535,19 @@ class K8sClient:
         except Exception as e:
             raise self._wrap_api_exception(e) from e
 
+    def _delete_pvc_sync(self, namespace: str, pvc_name: str) -> None:
+        """Delete a PVC by name."""
+        logger.debug("_delete_pvc_sync(namespace=%s, pvc_name=%s)", namespace, pvc_name)
+        self._ensure_initialized()
+        try:
+            self._get_core_api().delete_namespaced_persistent_volume_claim(
+                name=pvc_name,
+                namespace=namespace,
+                _request_timeout=_K8S_API_TIMEOUT,
+            )
+        except Exception as e:
+            raise self._wrap_api_exception(e) from e
+
     def _read_pod_log_sync(
         self, namespace: str, pod_name: str, container: str | None = None, tail_lines: int = 500
     ) -> str:
@@ -551,6 +585,9 @@ class K8sClient:
 
     async def delete_cluster(self, namespace: str, name: str) -> dict[str, Any]:
         return await asyncio.to_thread(self._delete_cluster_sync, namespace, name)
+
+    async def patch_cluster_status(self, namespace: str, name: str, status_patch: dict[str, Any]) -> dict[str, Any]:
+        return await asyncio.to_thread(self._patch_cluster_status_sync, namespace, name, status_patch)
 
     async def list_namespaces(self) -> list[str]:
         return await asyncio.to_thread(self._list_namespaces_sync)
@@ -591,6 +628,9 @@ class K8sClient:
 
     async def list_pvcs(self, namespace: str, label_selector: str) -> list[dict[str, Any]]:
         return await asyncio.to_thread(self._list_pvcs_sync, namespace, label_selector)
+
+    async def delete_pvc(self, namespace: str, pvc_name: str) -> None:
+        return await asyncio.to_thread(self._delete_pvc_sync, namespace, pvc_name)
 
     async def read_pod_log(
         self, namespace: str, pod_name: str, container: str | None = None, tail_lines: int = 500

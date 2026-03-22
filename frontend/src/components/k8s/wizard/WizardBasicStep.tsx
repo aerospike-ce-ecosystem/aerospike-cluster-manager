@@ -13,6 +13,7 @@ import {
   validateMemoryForNamespaces,
   calculateMinMemoryBytes,
   formatMemoryGi,
+  validateImageNotEnterprise,
 } from "@/lib/validations/k8s";
 import { AEROSPIKE_IMAGES } from "@/lib/constants";
 import type { WizardBasicStepProps } from "./types";
@@ -93,7 +94,11 @@ export function WizardBasicStep({
           </FormField>
         </div>
 
-        <FormField id="aerospike-image" label="Aerospike Image">
+        <FormField
+          id="aerospike-image"
+          label="Aerospike Image"
+          error={validateImageNotEnterprise(form.image)}
+        >
           <Select value={form.image} onChange={(e) => updateForm({ image: e.target.value })}>
             {AEROSPIKE_IMAGES.map((img) => (
               <option key={img} value={img}>

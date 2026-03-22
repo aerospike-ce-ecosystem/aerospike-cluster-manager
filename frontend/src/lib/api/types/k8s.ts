@@ -66,6 +66,7 @@ export interface ClusterHealthSummary {
   failedReconcileCount: number;
   pendingRestartCount: number;
   rackDistribution: { id: number; total: number; ready: number }[];
+  splitBrainDetected: boolean;
 }
 
 export interface K8sNodeInfo {
@@ -213,6 +214,7 @@ export interface K8sClusterDetail {
   lastReconcileTime?: string;
   operatorVersion?: string;
   templateSnapshot?: TemplateSnapshot;
+  splitBrainDetected?: boolean;
 }
 
 export interface ReconciliationStatus {

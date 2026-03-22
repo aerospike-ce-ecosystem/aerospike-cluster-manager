@@ -32,6 +32,7 @@ import {
   validateCEImage,
   validateAerospikeConfig,
   validateRackUpdate,
+  validateImageNotEnterprise,
 } from "@/lib/validations/k8s";
 import { useEditDialogState } from "./hooks/use-edit-dialog-state";
 import {
@@ -93,6 +94,12 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
     patchState({ loading: true, error: null });
     try {
       // ── Pre-save validations ──
+      // Enterprise image rejection
+      const eeErr = validateImageNotEnterprise(state.image);
+      if (eeErr) {
+        patchState({ error: eeErr, loading: false });
+        return;
+      }
       // CE image version check
       const imageErr = validateCEImage(state.image);
       if (imageErr) {
@@ -423,6 +430,10 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
               placeholder="aerospike:ce-8.1.1.1"
               disabled={state.loading}
             />
+            {(() => {
+              const eeErr = validateImageNotEnterprise(state.image);
+              return eeErr ? <p className="text-error text-sm">{eeErr}</p> : null;
+            })()}
           </div>
 
           {/* Size */}
@@ -1092,7 +1103,7 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
           <LoadingButton
             onClick={handleSave}
             loading={state.loading}
-            disabled={!hasChanges || state.loading || !!configError}
+            disabled={!hasChanges || state.loading || !!configError || !!validateImageNotEnterprise(state.image)}
           >
             Save Changes
           </LoadingButton>

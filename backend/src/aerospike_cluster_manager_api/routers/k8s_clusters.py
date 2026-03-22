@@ -286,6 +286,28 @@ async def list_k8s_cluster_pvcs(
     return [PVCInfo(**pvc) for pvc in pvcs_raw]
 
 
+@router.delete(
+    "/clusters/{namespace}/{name}/pvcs/{pvc_name}",
+    summary="Delete a PVC",
+    response_model=dict,
+)
+@_k8s_endpoint("delete PVC")
+async def delete_pvc(
+    namespace: str = _K8S_NAMESPACE,
+    name: str = _K8S_NAME,
+    pvc_name: str = Path(..., min_length=1, max_length=253),
+) -> dict[str, str]:
+    """Delete an orphaned PVC. The PVC must belong to the cluster (label check)."""
+    label_selector = f"app.kubernetes.io/instance={name}"
+    pvcs_raw = await k8s_client.list_pvcs(namespace, label_selector)
+    pvc_names = [p.get("name") for p in pvcs_raw]
+    if pvc_name not in pvc_names:
+        raise HTTPException(status_code=404, detail=f"PVC '{pvc_name}' not found for cluster '{name}'")
+
+    await k8s_client.delete_pvc(namespace, pvc_name)
+    return {"message": f"PVC '{pvc_name}' deleted", "namespace": namespace}
+
+
 @router.post(
     "/clusters/{namespace}/{name}/force-reconcile",
     summary="Force reconcile a drifted cluster",
@@ -306,6 +328,38 @@ async def force_reconcile_k8s_cluster(
     }
     result = await k8s_client.patch_cluster(namespace, name, patch)
     return extract_summary(result)
+
+
+@router.post(
+    "/clusters/{namespace}/{name}/reset-circuit-breaker",
+    summary="Reset operator circuit breaker",
+    response_model=dict,
+)
+@_k8s_endpoint("reset circuit breaker")
+async def reset_circuit_breaker(
+    namespace: str = _K8S_NAMESPACE,
+    name: str = _K8S_NAME,
+) -> dict[str, str]:
+    """Reset the circuit breaker by patching status counters and annotating the CR."""
+    # 1. Reset status subresource (clear error state)
+    await k8s_client.patch_cluster_status(
+        namespace,
+        name,
+        {
+            "failedReconcileCount": 0,
+            "lastReconcileError": "",
+        },
+    )
+    # 2. Annotate to trigger fresh reconciliation
+    patch: dict[str, Any] = {
+        "metadata": {
+            "annotations": {
+                "acko.io/circuit-breaker-reset": datetime.now(UTC).isoformat(),
+            }
+        }
+    }
+    await k8s_client.patch_cluster(namespace, name, patch)
+    return {"message": "Circuit breaker reset triggered", "namespace": namespace, "name": name}
 
 
 @router.post("/clusters/import", status_code=201, summary="Import K8s Aerospike cluster from CR")
