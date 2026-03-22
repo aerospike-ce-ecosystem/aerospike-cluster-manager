@@ -548,6 +548,27 @@ class K8sClient:
         except Exception as e:
             raise self._wrap_api_exception(e) from e
 
+    def _get_pod_pvc_map_sync(self, namespace: str, label_selector: str) -> dict[str, str]:
+        """Build a mapping of PVC name -> pod name for pods matching the label selector."""
+        logger.debug("_get_pod_pvc_map_sync(namespace=%s, label_selector=%s)", namespace, label_selector)
+        self._ensure_initialized()
+        try:
+            result = self._get_core_api().list_namespaced_pod(
+                namespace=namespace,
+                label_selector=label_selector,
+                _request_timeout=_K8S_API_TIMEOUT,
+            )
+            pvc_map: dict[str, str] = {}
+            for pod in result.items:
+                pod_name = pod.metadata.name if pod.metadata else ""
+                if pod.spec and pod.spec.volumes:
+                    for vol in pod.spec.volumes:
+                        if vol.persistent_volume_claim and vol.persistent_volume_claim.claim_name:
+                            pvc_map[vol.persistent_volume_claim.claim_name] = pod_name
+            return pvc_map
+        except Exception as e:
+            raise self._wrap_api_exception(e) from e
+
     def _read_pod_log_sync(
         self, namespace: str, pod_name: str, container: str | None = None, tail_lines: int = 500
     ) -> str:
@@ -631,6 +652,10 @@ class K8sClient:
 
     async def delete_pvc(self, namespace: str, pvc_name: str) -> None:
         return await asyncio.to_thread(self._delete_pvc_sync, namespace, pvc_name)
+
+    async def get_pod_pvc_map(self, namespace: str, label_selector: str) -> dict[str, str]:
+        """Get a mapping of PVC name -> pod name for pods matching the label selector."""
+        return await asyncio.to_thread(self._get_pod_pvc_map_sync, namespace, label_selector)
 
     async def read_pod_log(
         self, namespace: str, pod_name: str, container: str | None = None, tail_lines: int = 500

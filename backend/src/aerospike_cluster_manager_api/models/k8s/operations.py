@@ -154,6 +154,10 @@ class PVCInfo(BaseModel):
     access_modes: list[str] = Field(default_factory=list, alias="accessModes")
     volume_mode: str | None = Field(None, alias="volumeMode")
     created_at: str | None = Field(None, alias="createdAt")
+    bound_pod: str | None = Field(default=None, alias="boundPod", description="Pod using this PVC, None if orphaned")
+    is_orphan: bool = Field(
+        default=False, alias="isOrphan", description="True if PVC is not mounted by any running pod"
+    )
 
 
 class ImportClusterRequest(BaseModel):
