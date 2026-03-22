@@ -110,6 +110,8 @@ def build_rack_list(racks: list[RackConfig]) -> list[dict[str, Any]]:
             r["aerospikeConfig"] = rack.aerospike_config
         if rack.storage and rack.storage.volumes:
             r["storage"] = {"volumes": rack.storage.volumes}
+        if rack.revision is not None:
+            r["revision"] = rack.revision
         if rack.pod_spec:
             pod_spec: dict[str, Any] = {}
             if rack.pod_spec.affinity:
@@ -159,6 +161,8 @@ def build_pod_scheduling(sched: PodSchedulingConfig) -> dict[str, Any]:
             meta["annotations"] = sched.metadata.annotations
         if meta:
             result["metadata"] = meta
+    if sched.affinity:
+        result["affinity"] = sched.affinity
     if sched.priority_class_name:
         result["priorityClassName"] = sched.priority_class_name
     return result
@@ -732,6 +736,12 @@ def build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
         pod_spec["initContainers"] = _build_sidecar_list(req.init_containers)
         cr["spec"]["podSpec"] = pod_spec
 
+    # Aerospike container security context
+    if req.aerospike_container_security_context is not None:
+        pod_spec = cr["spec"].get("podSpec", {})
+        pod_spec.setdefault("aerospikeContainer", {})["securityContext"] = req.aerospike_container_security_context
+        cr["spec"]["podSpec"] = pod_spec
+
     return cr
 
 
@@ -1124,6 +1134,10 @@ def build_update_patch(body: UpdateK8sClusterRequest) -> dict[str, Any]:
     if body.init_containers is not None:
         pod_spec = patch["spec"].get("podSpec", {})
         pod_spec["initContainers"] = _build_sidecar_list(body.init_containers)
+        patch["spec"]["podSpec"] = pod_spec
+    if body.aerospike_container_security_context is not None:
+        pod_spec = patch["spec"].get("podSpec", {})
+        pod_spec.setdefault("aerospikeContainer", {})["securityContext"] = body.aerospike_container_security_context
         patch["spec"]["podSpec"] = pod_spec
     return patch
 

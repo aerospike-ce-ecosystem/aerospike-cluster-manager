@@ -12,6 +12,7 @@ import { WizardValidationPolicyStep } from "./advanced/validation-policy";
 import { WizardBandwidthStep } from "./advanced/bandwidth";
 import { WizardPodSecurityContextStep } from "./advanced/pod-security-context";
 import { WizardServiceMetadataStep } from "./advanced/service-metadata";
+import { ContainerSecurityContext } from "./advanced/container-security-context";
 import type { WizardAdvancedStepProps } from "./types";
 
 function WizardRackIDOverrideStep({
@@ -151,6 +152,10 @@ export function WizardAdvancedStep({
 
   const rackIDOverrideSummary = form.enableRackIDOverride ? "Enabled" : "Disabled";
 
+  const containerSecurityContextSummary = form.aerospikeContainerSecurityContext
+    ? "Configured"
+    : "Default";
+
   return (
     <div className="space-y-3">
       <p className="text-base-content/60 text-sm">
@@ -204,6 +209,13 @@ export function WizardAdvancedStep({
 
       <CollapsibleSection title="Rack ID Override" summary={rackIDOverrideSummary}>
         <WizardRackIDOverrideStep form={form} updateForm={updateForm} />
+      </CollapsibleSection>
+
+      <CollapsibleSection
+        title="Container Security Context"
+        summary={containerSecurityContextSummary}
+      >
+        <ContainerSecurityContext form={form} updateForm={updateForm} />
       </CollapsibleSection>
     </div>
   );

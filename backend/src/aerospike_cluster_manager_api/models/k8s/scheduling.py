@@ -195,6 +195,10 @@ class RackConfig(BaseModel):
         alias="podSpec",
         description="Rack-specific pod scheduling override (affinity, tolerations, nodeSelector)",
     )
+    revision: str | None = Field(
+        default=None,
+        description="Revision string for triggering rolling restart of a specific rack",
+    )
 
 
 class RackAwareConfig(BaseModel):

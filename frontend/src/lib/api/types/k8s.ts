@@ -501,6 +501,7 @@ export interface CreateK8sClusterRequest {
   podMetadata?: PodMetadataConfig;
   sidecars?: SidecarConfig[];
   initContainers?: SidecarConfig[];
+  aerospikeContainerSecurityContext?: Record<string, unknown>;
 }
 
 export interface UpdateK8sClusterRequest {
@@ -530,6 +531,7 @@ export interface UpdateK8sClusterRequest {
   podMetadata?: PodMetadataConfig;
   sidecars?: SidecarConfig[];
   initContainers?: SidecarConfig[];
+  aerospikeContainerSecurityContext?: Record<string, unknown>;
 }
 
 export interface ScaleK8sClusterRequest {

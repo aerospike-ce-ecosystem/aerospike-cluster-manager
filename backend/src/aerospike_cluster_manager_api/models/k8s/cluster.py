@@ -153,6 +153,11 @@ class CreateK8sClusterRequest(BaseModel):
     init_containers: list[SidecarConfig] | None = Field(
         default=None, alias="initContainers", description="Init containers to add to the pod"
     )
+    aerospike_container_security_context: dict[str, Any] | None = Field(
+        default=None,
+        alias="aerospikeContainerSecurityContext",
+        description="SecurityContext for the Aerospike container",
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -220,6 +225,11 @@ class UpdateK8sClusterRequest(BaseModel):
     sidecars: list[SidecarConfig] | None = Field(default=None, description="Sidecar containers to add to the pod")
     init_containers: list[SidecarConfig] | None = Field(
         default=None, alias="initContainers", description="Init containers to add to the pod"
+    )
+    aerospike_container_security_context: dict[str, Any] | None = Field(
+        default=None,
+        alias="aerospikeContainerSecurityContext",
+        description="SecurityContext for the Aerospike container",
     )
 
     model_config = {"populate_by_name": True}
