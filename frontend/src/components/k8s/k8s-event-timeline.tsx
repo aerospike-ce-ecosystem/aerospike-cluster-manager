@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AlertTriangle,
   Clock,
+  Download,
   Filter,
   RefreshCw,
   Shield,
@@ -42,6 +43,39 @@ interface K8sEventTimelineProps {
   className?: string;
 }
 
+function downloadFile(content: string, filename: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportEventsAsJson(events: K8sClusterEvent[]) {
+  const data = events.map((e) => ({
+    type: e.type,
+    reason: e.reason,
+    message: e.message,
+    category: e.category || "Other",
+    count: e.count ?? 1,
+    source: e.source,
+    firstTimestamp: e.firstTimestamp,
+    lastTimestamp: e.lastTimestamp,
+  }));
+  downloadFile(JSON.stringify(data, null, 2), "events.json", "application/json");
+}
+
+function exportEventsAsCsv(events: K8sClusterEvent[]) {
+  const header = "Type,Reason,Category,Count,Source,FirstTimestamp,LastTimestamp,Message";
+  const rows = events.map((e) => {
+    const msg = (e.message ?? "").replace(/"/g, '""');
+    return `${e.type},${e.reason},${e.category || "Other"},${e.count ?? 1},${e.source ?? ""},${e.firstTimestamp ?? ""},${e.lastTimestamp ?? ""},"${msg}"`;
+  });
+  downloadFile([header, ...rows].join("\n"), "events.csv", "text/csv");
+}
+
 export function K8sEventTimeline({ events, className }: K8sEventTimelineProps) {
   const [selectedCategory, setSelectedCategory] = useState<EventCategory | null>(null);
 
@@ -66,17 +100,41 @@ export function K8sEventTimeline({ events, className }: K8sEventTimelineProps) {
               {filteredEvents.length}
             </Badge>
           </CardTitle>
-          {selectedCategory && (
-            <button
-              type="button"
-              aria-label="Clear category filter"
-              onClick={() => setSelectedCategory(null)}
-              className="text-base-content/60 hover:text-base-content flex items-center gap-1 text-xs"
-            >
-              <Filter className="h-3 w-3" />
-              Clear filter
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {selectedCategory && (
+              <button
+                type="button"
+                aria-label="Clear category filter"
+                onClick={() => setSelectedCategory(null)}
+                className="text-base-content/60 hover:text-base-content flex items-center gap-1 text-xs"
+              >
+                <Filter className="h-3 w-3" />
+                Clear filter
+              </button>
+            )}
+            {filteredEvents.length > 0 && (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => exportEventsAsJson(filteredEvents)}
+                  className="text-base-content/60 hover:text-base-content flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px]"
+                  title="Export as JSON"
+                >
+                  <Download className="h-3 w-3" />
+                  JSON
+                </button>
+                <button
+                  type="button"
+                  onClick={() => exportEventsAsCsv(filteredEvents)}
+                  className="text-base-content/60 hover:text-base-content flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px]"
+                  title="Export as CSV"
+                >
+                  <Download className="h-3 w-3" />
+                  CSV
+                </button>
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex flex-wrap gap-1.5 pt-2">
           {EVENT_CATEGORIES.filter((cat) => categoryCounts[cat]).map((cat) => {
