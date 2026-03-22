@@ -335,7 +335,17 @@ async def reset_circuit_breaker(
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ) -> dict[str, str]:
-    """Reset the circuit breaker by annotating the CR to trigger fresh reconciliation."""
+    """Reset the circuit breaker by patching status counters and annotating the CR."""
+    # 1. Reset status subresource (clear error state)
+    await k8s_client.patch_cluster_status(
+        namespace,
+        name,
+        {
+            "failedReconcileCount": 0,
+            "lastReconcileError": "",
+        },
+    )
+    # 2. Annotate to trigger fresh reconciliation
     patch: dict[str, Any] = {
         "metadata": {
             "annotations": {
