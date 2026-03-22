@@ -32,6 +32,7 @@ import {
   validateCEImage,
   validateAerospikeConfig,
   validateRackUpdate,
+  validateImageNotEnterprise,
 } from "@/lib/validations/k8s";
 import { useEditDialogState } from "./hooks/use-edit-dialog-state";
 import {

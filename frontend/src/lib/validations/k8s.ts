@@ -150,6 +150,22 @@ export function validateMemoryForNamespaces(
   return null;
 }
 
+
+// ── Enterprise image rejection ──
+
+const ENTERPRISE_IMAGE_RE = /enterprise|ee-|ent-/i;
+
+/**
+ * Validate that the image is not an Enterprise edition image.
+ * CE operator rejects enterprise images; catch early in the UI.
+ */
+export function validateImageNotEnterprise(image: string): string | null {
+  if (ENTERPRISE_IMAGE_RE.test(image)) {
+    return "Enterprise images are not supported. Use Aerospike Community Edition (CE) images.";
+  }
+  return null;
+}
+
 // ── CE image validation ──
 
 /** Minimum required Aerospike CE major version. */

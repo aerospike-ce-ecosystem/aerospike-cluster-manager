@@ -213,6 +213,7 @@ export interface K8sClusterDetail {
   lastReconcileTime?: string;
   operatorVersion?: string;
   templateSnapshot?: TemplateSnapshot;
+  splitBrainDetected?: boolean;
 }
 
 export interface ReconciliationStatus {

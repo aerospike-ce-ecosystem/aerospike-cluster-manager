@@ -569,6 +569,20 @@ export const api = {
       { method: "DELETE" },
     ),
 
+  // K8s Circuit Breaker Reset
+  resetK8sCircuitBreaker: (namespace: string, name: string) =>
+    request<{ message: string }>(
+      `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/reset-circuit-breaker`,
+      { method: "POST" },
+    ),
+
+  // K8s PVC Delete
+  deleteK8sPVC: (namespace: string, name: string, pvcName: string) =>
+    request<{ message: string }>(
+      `/api/k8s/clusters/${encodePathSegment(namespace)}/${encodePathSegment(name)}/pvcs/${encodePathSegment(pvcName)}`,
+      { method: "DELETE" },
+    ),
+
   // K8s Cluster Import
   importK8sCluster: (data: import("./types").ImportClusterRequest) =>
     request<import("./types").K8sClusterSummary>("/api/k8s/clusters/import", {
