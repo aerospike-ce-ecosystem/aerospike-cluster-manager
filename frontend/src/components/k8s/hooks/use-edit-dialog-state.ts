@@ -75,6 +75,7 @@ export interface EditDialogInitials {
   aclConfig: ACLConfig | null;
   resources: ResourceConfig | null;
   rackConfig: RackAwareConfig | null;
+  priorityClassName: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -104,6 +105,7 @@ type PodSpecShape = {
   securityContext?: PodSecurityContextConfig;
   sidecars?: SidecarConfig[];
   initContainers?: SidecarConfig[];
+  priorityClassName?: string;
 };
 
 /** Narrowed shape of `cluster.spec.storage` for type-safe field access. */
@@ -248,6 +250,7 @@ function deriveInitials(cluster: K8sClusterDetail): EditDialogInitials {
     aclConfig: cluster.spec?.acl ?? null,
     resources: cluster.spec?.resources ?? null,
     rackConfig: cluster.spec?.rackConfig ?? null,
+    priorityClassName: podSpec?.priorityClassName ?? "",
   };
 }
 
@@ -379,7 +382,8 @@ export function useEditDialogState(open: boolean, cluster: K8sClusterDetail) {
       JSON.stringify(state.seedsFinderServices) !== JSON.stringify(snap.seedsFinderServices) ||
       JSON.stringify(state.aclConfig) !== JSON.stringify(snap.aclConfig) ||
       JSON.stringify(state.resources) !== JSON.stringify(snap.resources) ||
-      JSON.stringify(state.rackConfig) !== JSON.stringify(snap.rackConfig)
+      JSON.stringify(state.rackConfig) !== JSON.stringify(snap.rackConfig) ||
+      state.priorityClassName !== snap.priorityClassName
     );
   }, [state]);
 

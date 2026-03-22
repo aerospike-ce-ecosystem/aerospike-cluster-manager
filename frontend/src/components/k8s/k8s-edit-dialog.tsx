@@ -184,7 +184,8 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
         state.podSecurityRunAsNonRoot !== initials.podSecurityRunAsNonRoot ||
         state.podSecurityFsGroup !== initials.podSecurityFsGroup ||
         JSON.stringify(state.podSecuritySupGroups) !==
-          JSON.stringify(initials.podSecuritySupGroups);
+          JSON.stringify(initials.podSecuritySupGroups) ||
+        state.priorityClassName !== initials.priorityClassName;
       if (podSchedulingChanged) {
         data.podScheduling = {
           ...data.podScheduling,
@@ -220,6 +221,7 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
                     state.podSecuritySupGroups.length > 0 ? state.podSecuritySupGroups : undefined,
                 }
               : undefined,
+          priorityClassName: state.priorityClassName || undefined,
         };
       }
 
@@ -722,6 +724,11 @@ export function K8sEditDialog({ open, onOpenChange, cluster, onSave }: K8sEditDi
             imagePullSecrets={state.imagePullSecrets}
             onImagePullSecretsChange={(v) => {
               patchState({ imagePullSecrets: v });
+              clearError();
+            }}
+            priorityClassName={state.priorityClassName}
+            onPriorityClassNameChange={(v) => {
+              patchState({ priorityClassName: v });
               clearError();
             }}
             disabled={state.loading}

@@ -403,6 +403,7 @@ export interface PodSchedulingConfig {
   metadata?: PodMetadataConfig;
   topologySpreadConstraints?: TopologySpreadConstraintConfig[];
   podSecurityContext?: PodSecurityContextConfig;
+  priorityClassName?: string;
 }
 
 export interface ServiceMonitorConfig {

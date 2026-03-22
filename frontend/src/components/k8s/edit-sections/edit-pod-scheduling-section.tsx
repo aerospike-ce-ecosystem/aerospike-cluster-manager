@@ -29,6 +29,8 @@ export function EditPodSchedulingSection({
   onTerminationGracePeriodChange,
   imagePullSecrets,
   onImagePullSecretsChange,
+  priorityClassName,
+  onPriorityClassNameChange,
   disabled,
 }: {
   nodeSelector: Record<string, string>;
@@ -45,6 +47,8 @@ export function EditPodSchedulingSection({
   onTerminationGracePeriodChange: (v: number | undefined) => void;
   imagePullSecrets: string[];
   onImagePullSecretsChange: (v: string[]) => void;
+  priorityClassName?: string;
+  onPriorityClassNameChange?: (v: string) => void;
   disabled?: boolean;
 }) {
   const [nsSelectorKey, setNsSelectorKey] = useState("");
@@ -104,6 +108,7 @@ export function EditPodSchedulingSection({
       serviceAccountName ? "SA" : null,
       imagePullSecrets.length > 0 ? `${imagePullSecrets.length} pull secret(s)` : null,
       terminationGracePeriod != null ? `Grace: ${terminationGracePeriod}s` : null,
+      priorityClassName ? `Priority: ${priorityClassName}` : null,
     ]
       .filter(Boolean)
       .join(", ") || "Default";
@@ -331,6 +336,26 @@ export function EditPodSchedulingSection({
             disabled={disabled}
           />
         </div>
+
+        {/* Priority Class Name */}
+        {onPriorityClassNameChange && (
+          <div className="grid gap-1">
+            <Label htmlFor="edit-priority-class" className="text-xs font-semibold">
+              Priority Class Name
+            </Label>
+            <p className="text-base-content/60 text-[10px]">
+              PriorityClass for pod scheduling priority and preemption.
+            </p>
+            <Input
+              id="edit-priority-class"
+              value={priorityClassName ?? ""}
+              onChange={(e) => onPriorityClassNameChange(e.target.value)}
+              placeholder="e.g. high-priority"
+              className="h-7 text-xs"
+              disabled={disabled}
+            />
+          </div>
+        )}
 
         {/* Image Pull Secrets */}
         <div className="grid gap-2">
