@@ -359,6 +359,18 @@ If an operation gets stuck in `InProgress` status, you can clear it using the **
 
 Pause reconciliation for maintenance windows. While paused, the operator will not make changes. Resume to re-enable reconciliation.
 
+### Clone
+
+Clone an existing cluster to create a new one with the same spec. From the cluster detail page, click **Clone** to open the clone dialog:
+
+- **New Cluster Name** -- DNS-compatible name for the cloned cluster (required).
+- **Namespace** -- Target namespace (defaults to the source cluster's namespace).
+
+The clone copies the full `spec` from the source cluster but strips `operations` and `paused` state so the new cluster starts fresh. This is useful for:
+
+- Creating test/staging copies of production clusters.
+- Duplicating a known-good configuration to a different namespace.
+
 ### Delete
 
 Delete the cluster with a confirmation dialog. Associated connection profiles are automatically cleaned up.
