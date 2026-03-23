@@ -668,7 +668,7 @@ class CloneClusterRequest(BaseModel):
     name: str = Field(
         min_length=1,
         max_length=63,
-        pattern=r"^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$",
+        pattern=r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
         description="Name for the cloned cluster",
     )
     namespace: str | None = Field(
@@ -721,7 +721,15 @@ async def clone_k8s_cluster(
     if "cluster-name" in service_section:
         service_section["cluster-name"] = body.name
 
-    result = await k8s_client.create_cluster(target_ns, cr)
+    try:
+        result = await k8s_client.create_cluster(target_ns, cr)
+    except K8sApiError as e:
+        if e.status == 409:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Cluster with name '{body.name}' already exists in namespace '{target_ns}'",
+            ) from e
+        raise
     return extract_summary(result)
 
 
