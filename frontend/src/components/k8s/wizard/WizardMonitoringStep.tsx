@@ -10,32 +10,9 @@ import { MultiValueInput } from "@/components/common/multi-value-input";
 import { isValidCIDR } from "@/lib/validations/network";
 import { ExporterResourcesEditor } from "./exporter-resources-editor";
 import { CustomRulesEditor } from "./custom-rules-editor";
+import { envArrayToRecord, recordToEnvArray } from "@/lib/utils/env";
 import type { NetworkAccessType, LoadBalancerSpec, MonitoringConfig } from "@/lib/api/types";
 import type { WizardMonitoringStepProps } from "./types";
-
-// ---------------------------------------------------------------------------
-// Helpers: convert between [{name,value}] and flat Record for KeyValueEditor
-// ---------------------------------------------------------------------------
-
-/** Convert [{name: "FOO", value: "bar"}] to {FOO: "bar"} for KeyValueEditor. */
-function envArrayToRecord(
-  arr: Record<string, string>[] | undefined,
-): Record<string, string> | undefined {
-  if (!arr || arr.length === 0) return undefined;
-  const rec: Record<string, string> = {};
-  for (const entry of arr) {
-    if (entry.name) rec[entry.name] = entry.value ?? "";
-  }
-  return Object.keys(rec).length > 0 ? rec : undefined;
-}
-
-/** Convert {FOO: "bar"} to [{name: "FOO", value: "bar"}] for backend format. */
-function recordToEnvArray(
-  rec: Record<string, string> | undefined,
-): Record<string, string>[] | undefined {
-  if (!rec || Object.keys(rec).length === 0) return undefined;
-  return Object.entries(rec).map(([name, value]) => ({ name, value }));
-}
 
 export function WizardMonitoringStep({ form, updateForm }: WizardMonitoringStepProps) {
   const [showLBAdvanced, setShowLBAdvanced] = useState(false);

@@ -17,7 +17,6 @@ import {
   AlertTriangle,
   Network,
   Clock,
-  Loader2,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { K8sPodLogsDialog } from "@/components/k8s/k8s-pod-logs-dialog";
@@ -378,7 +377,7 @@ export function K8sPodTable({
                   )}
                   {initCount > 0 && (
                     <Badge variant="outline" className={cn("text-[11px]", STATUS_COLORS.info)}>
-                      <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                      <CheckCircle2 className="mr-1 h-3 w-3" />
                       {initCount} init
                     </Badge>
                   )}
