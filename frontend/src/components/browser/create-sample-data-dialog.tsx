@@ -125,7 +125,11 @@ export function CreateSampleDataDialog({
               onChange={(e) => setSetName(e.target.value)}
             />
           </FormField>
-          <FormField id="sample-record-count" label="Record Count" hint="1 ~ 10,000 records">
+          <FormField
+            id="sample-record-count"
+            label="Record Count"
+            hint={`1 ~ ${MAX_QUERY_RECORDS.toLocaleString()} records`}
+          >
             <Input
               type="number"
               placeholder="1234"
