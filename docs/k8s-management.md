@@ -155,9 +155,11 @@ Modify running cluster settings with diff-based patching. The edit dialog suppor
 The edit dialog now performs early validation before sending updates to the operator webhook:
 
 - **CE image version** -- Rejects images with Aerospike CE major version < 8.
+- **Enterprise image rejection** -- Validates that the specified image is not an Enterprise edition image. The CE operator does not support Enterprise images, so the edit dialog rejects them before submission.
 - **Forbidden config keys** -- Blocks `xdr` and `tls` sections in aerospikeConfig (Enterprise-only features).
 - **Rack add+remove conflict** -- Prevents simultaneously adding and removing racks in the same update.
 - **Replication factor vs size** -- Warns when reducing cluster size below any namespace's replication factor.
+- **CE namespace limit** -- Enforces a maximum of 2 Aerospike namespaces per cluster (CE edition limit), matching the operator webhook validation. Attempts to add more than 2 namespaces are rejected.
 - **Operation status check** -- Disables the operation trigger dialog when another operation is already in progress.
 
 #### Rack Config Edit in Edit Dialog
@@ -305,6 +307,10 @@ The dialog shows the current HPA state including current/desired replicas and sc
 - **Warm Restart** -- Applies configuration changes without a full pod restart. Pods are restarted one at a time in a rolling manner. Does not cause data loss.
 - **Pod Restart** -- Deletes and recreates pods. More disruptive than warm restart and temporarily reduces cluster capacity while pods are being recreated.
 
+**Operation in-progress guard:**
+
+The **Warm Restart** and **Pod Restart** buttons in the cluster detail page toolbar are automatically disabled when another operation is already in progress. This prevents accidental double-operations that could disrupt the cluster. The buttons re-enable once the active operation completes or is cleared.
+
 **Pod-level operation selection:**
 
 Both operation types support targeting specific pods via a dedicated operation trigger dialog:
@@ -387,6 +393,10 @@ Displays rack distribution and data migration status across the cluster. The hea
 - **Pod counts** -- Total, ready, and desired pod counts.
 - **Conditions** -- Available, ConfigApplied, ACLSynced, and Migrating indicators.
 - **Rack distribution** -- Per-rack pod breakdown showing total and ready counts per rack ID.
+
+**Split-brain detection:**
+
+The cluster detail page displays a warning banner when the Aerospike cluster size reported by `asinfo` differs from the expected Kubernetes pod count. This indicates a potential split-brain situation where not all Aerospike nodes can see each other. The banner shows the reported cluster size alongside the expected size, helping operators quickly identify network partition or connectivity issues that may require investigation.
 
 ### Migration Status Monitoring
 
@@ -482,6 +492,10 @@ The PVC status panel lists all PersistentVolumeClaims associated with the cluste
 
 The data is fetched from `GET /api/k8s/clusters/{namespace}/{name}/pvcs`.
 
+**Delete orphaned PVCs:**
+
+Orphaned PVCs (PVCs that are no longer associated with an active pod) can be deleted directly from the PVC status list. Each orphaned PVC row displays a **Delete** button that removes the PVC from the Kubernetes cluster. This is useful for cleaning up storage resources left behind after scale-down operations or failed pod deletions. A confirmation dialog is shown before deletion to prevent accidental data loss.
+
 ### Reconciliation Health Dashboard
 
 Shows the operator's reconciliation circuit breaker state with a severity-based health card. The card uses three severity levels determined by the failed reconcile count:
@@ -499,7 +513,7 @@ The card displays:
 - **Last reconcile error** -- Detailed error message from the most recent failure.
 - **Phase and phase reason** -- The current cluster reconciliation phase.
 - **Operator version** -- The version of the operator managing this cluster.
-- **Manual reset button** -- Clears the circuit breaker state to force an immediate reconcile.
+- **Circuit breaker reset button** -- A dedicated **Reset** button in the Reconciliation Health card clears the circuit breaker state and forces an immediate reconcile. Previously, resetting the circuit breaker required manual CR patching via `kubectl`; now it is a one-click operation via an annotation patch (`acko.io/reset-circuit-breaker`).
 - **Auto-refresh** -- The card polls every 10 seconds to keep the health status current.
 
 The reconciliation health data is fetched from `GET /api/k8s/clusters/{namespace}/{name}/reconciliation-health`.

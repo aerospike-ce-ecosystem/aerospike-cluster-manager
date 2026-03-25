@@ -81,7 +81,7 @@ class CreateK8sClusterRequest(BaseModel):
     )
     namespaces: list[AerospikeNamespaceConfig] = Field(
         default_factory=lambda: [AerospikeNamespaceConfig()],
-        max_length=5,
+        max_length=2,  # CE edition supports max 2 namespaces
     )
     storage: StorageVolumeConfig | StorageSpec | None = None
     resources: ResourceConfig | None = None
@@ -322,6 +322,7 @@ class K8sClusterDetail(BaseModel):
     last_reconcile_time: str | None = Field(default=None, alias="lastReconcileTime")
     operator_version: str | None = Field(default=None, alias="operatorVersion")
     template_snapshot: TemplateSnapshotStatus | None = Field(default=None, alias="templateSnapshot")
+    split_brain_detected: bool = Field(default=False, alias="splitBrainDetected")
 
 
 class EventCategory(StrEnum):

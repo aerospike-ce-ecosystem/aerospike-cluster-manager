@@ -89,6 +89,10 @@ export default function K8sClusterDetailPage() {
   const namespace = params?.namespace || "";
   const name = params?.name || "";
 
+  const operationInProgress =
+    selectedCluster?.operationStatus?.phase === "InProgress" ||
+    selectedCluster?.operationStatus?.phase === "Running";
+
   const handleMigrationUpdate = useCallback((status: MigrationStatus | null) => {
     setMigrationStatus(status);
   }, []);
@@ -216,7 +220,8 @@ export default function K8sClusterDetailPage() {
             <Button
               variant="warning"
               size="sm"
-              disabled={loading}
+              disabled={loading || operationInProgress}
+              title={operationInProgress ? "Another operation is in progress" : undefined}
               onClick={() => {
                 setOperationDialogKind("WarmRestart");
                 setOperationDialogOpen(true);
@@ -227,7 +232,8 @@ export default function K8sClusterDetailPage() {
             <Button
               variant="warning"
               size="sm"
-              disabled={loading}
+              disabled={loading || operationInProgress}
+              title={operationInProgress ? "Another operation is in progress" : undefined}
               onClick={() => {
                 setOperationDialogKind("PodRestart");
                 setOperationDialogOpen(true);
@@ -272,13 +278,29 @@ export default function K8sClusterDetailPage() {
       />
 
       <InlineAlert message={error} />
+
+      {/* Split-brain detection warning */}
+      {selectedCluster.splitBrainDetected && (
+        <div className="border-warning/50 bg-warning/10 flex items-center gap-2 rounded-lg border p-3">
+          <AlertTriangle className="text-warning h-5 w-5 shrink-0" />
+          <div>
+            <p className="text-warning text-sm font-medium">Split-brain Detected</p>
+            <p className="text-base-content/60 text-xs">
+              Aerospike cluster size ({selectedCluster.aerospikeClusterSize}) differs from expected
+              pod count ({selectedCluster.size}). Nodes may not be forming a single cluster.
+            </p>
+          </div>
+        </div>
+      )}
+
       <K8sReconciliationHealth
         namespace={namespace}
         name={name}
         onResetCircuitBreaker={async () => {
           try {
-            await updateCluster(namespace, name, {});
+            await api.resetK8sCircuitBreaker(namespace, name);
             useToastStore.getState().addToast("success", "Circuit breaker reset triggered");
+            fetchCluster(namespace, name);
           } catch (err) {
             useToastStore.getState().addToast("error", getErrorMessage(err));
           }

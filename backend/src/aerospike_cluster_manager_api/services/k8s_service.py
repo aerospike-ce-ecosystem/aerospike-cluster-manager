@@ -977,6 +977,22 @@ def extract_detail(item: dict[str, Any], pods_raw: list[dict[str, Any]]) -> K8sC
             synced=ts_raw.get("synced"),
         )
 
+    # Detect split-brain: only flag when the cluster is in a steady state
+    # (phase == "Completed", all pods ready) but the Aerospike-reported cluster
+    # size disagrees with the spec size.  This avoids false positives during
+    # scaling, rolling restarts, and initial provisioning.
+    aerospike_cluster_size = status.get("aerospikeClusterSize")
+    phase = status.get("phase", "")
+    spec_size = spec.get("size", 0)
+    status_size = status.get("size", 0)
+    split_brain_detected = (
+        aerospike_cluster_size is not None
+        and phase == "Completed"
+        and spec_size > 0
+        and status_size == spec_size  # all pods are ready
+        and aerospike_cluster_size != spec_size
+    )
+
     return K8sClusterDetail(
         name=metadata.get("name", ""),
         namespace=metadata.get("namespace", ""),
@@ -992,11 +1008,12 @@ def extract_detail(item: dict[str, Any], pods_raw: list[dict[str, Any]]) -> K8sC
         operationStatus=operation_status,
         failedReconcileCount=status.get("failedReconcileCount", 0),
         lastReconcileError=status.get("lastReconcileError"),
-        aerospikeClusterSize=status.get("aerospikeClusterSize"),
+        aerospikeClusterSize=aerospike_cluster_size,
         pendingRestartPods=status.get("pendingRestartPods", []),
         lastReconcileTime=last_reconcile_time,
         operatorVersion=status.get("operatorVersion"),
         templateSnapshot=template_snapshot,
+        splitBrainDetected=split_brain_detected,
     )
 
 
@@ -1011,11 +1028,24 @@ def extract_health(item: dict[str, Any]) -> ClusterHealthResponse:
 
     conditions = {c.get("type"): c.get("status") == "True" for c in status.get("conditions", [])}
 
+    # Split-brain detection (same logic as extract_detail)
+    phase = status.get("phase", "Unknown")
+    spec_size = spec.get("size", 0)
+    status_size = status.get("size", 0)
+    aerospike_cluster_size = status.get("aerospikeClusterSize")
+    split_brain_detected = (
+        aerospike_cluster_size is not None
+        and phase == "Completed"
+        and spec_size > 0
+        and status_size == spec_size
+        and aerospike_cluster_size != spec_size
+    )
+
     return ClusterHealthResponse(
-        phase=status.get("phase", "Unknown"),
+        phase=phase,
         totalPods=total_pods,
         readyPods=ready_pods,
-        desiredPods=spec.get("size", 0),
+        desiredPods=spec_size,
         migrating=not conditions.get("MigrationComplete", True),
         available=conditions.get("Available", False),
         configApplied=conditions.get("ConfigApplied", False),
@@ -1023,6 +1053,7 @@ def extract_health(item: dict[str, Any]) -> ClusterHealthResponse:
         failedReconcileCount=status.get("failedReconcileCount", 0),
         pendingRestartCount=len(status.get("pendingRestartPods", [])),
         rackDistribution=compute_rack_distribution(pods_status),
+        splitBrainDetected=split_brain_detected,
     )
 
 
