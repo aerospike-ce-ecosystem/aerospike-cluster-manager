@@ -286,7 +286,7 @@ export function QueryToolbar({
               value={store.maxRecords}
               onChange={(e) =>
                 store.setMaxRecords(
-                  Math.min(parseInt(e.target.value, 10) || 100, MAX_QUERY_RECORDS),
+                  Math.max(1, Math.min(parseInt(e.target.value, 10) || 100, MAX_QUERY_RECORDS)),
                 )
               }
             />
