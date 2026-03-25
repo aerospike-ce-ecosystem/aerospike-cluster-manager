@@ -1,5 +1,4 @@
 import { test, expect } from "@playwright/test";
-import { K8sClustersPage } from "../pages/k8s-clusters-page";
 import {
   waitForK8sApi,
   createK8sClusterViaApi,

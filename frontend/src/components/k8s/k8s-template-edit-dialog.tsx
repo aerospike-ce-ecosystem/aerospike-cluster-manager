@@ -30,6 +30,13 @@ import type {
   TemplateServiceConfig,
 } from "@/lib/api/types";
 
+const KNOWN_SERVICE_KEYS = new Set([
+  "proto-fd-max",
+  "protoFdMax",
+  "feature-key-file",
+  "featureKeyFile",
+]);
+
 interface K8sTemplateEditDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -100,8 +107,11 @@ export function K8sTemplateEditDialog({
     networkConfig?.heartbeatTimeout != null ? Number(networkConfig.heartbeatTimeout) : undefined;
   const initialMaxRacksPerNode =
     rackConfigSpec?.maxRacksPerNode != null ? Number(rackConfigSpec.maxRacksPerNode) : undefined;
-  const initialTopologySpreadConstraints: TopologySpreadConstraintConfig[] =
-    (scheduling?.topologySpreadConstraints as TopologySpreadConstraintConfig[] | undefined) ?? [];
+  const initialTopologySpreadConstraints = useMemo<TopologySpreadConstraintConfig[]>(
+    () =>
+      (scheduling?.topologySpreadConstraints as TopologySpreadConstraintConfig[] | undefined) ?? [],
+    [scheduling?.topologySpreadConstraints],
+  );
   // Service config: read from spec.aerospikeConfig.service (CRD format) or spec.serviceConfig (API format)
   const aerospikeConfig = spec.aerospikeConfig as Record<string, unknown> | undefined;
   const serviceSection =
@@ -113,17 +123,15 @@ export function K8sTemplateEditDialog({
       : serviceSection?.protoFdMax != null
         ? Number(serviceSection.protoFdMax)
         : undefined;
-  const knownServiceKeys = new Set([
-    "proto-fd-max",
-    "protoFdMax",
-    "feature-key-file",
-    "featureKeyFile",
-  ]);
-  const initialServiceExtraParams: { key: string; value: string }[] = serviceSection
-    ? Object.entries(serviceSection)
-        .filter(([k]) => !knownServiceKeys.has(k))
-        .map(([k, v]) => ({ key: k, value: String(v) }))
-    : [];
+  const initialServiceExtraParams = useMemo<{ key: string; value: string }[]>(
+    () =>
+      serviceSection
+        ? Object.entries(serviceSection)
+            .filter(([k]) => !KNOWN_SERVICE_KEYS.has(k))
+            .map(([k, v]) => ({ key: k, value: String(v) }))
+        : [],
+    [serviceSection],
+  );
 
   // Reset form on open
   useEffect(() => {
