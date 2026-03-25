@@ -10,6 +10,7 @@ import { MultiValueInput } from "@/components/common/multi-value-input";
 import { isValidCIDR } from "@/lib/validations/network";
 import { ExporterResourcesEditor } from "./exporter-resources-editor";
 import { CustomRulesEditor } from "./custom-rules-editor";
+import { envArrayToRecord, recordToEnvArray } from "@/lib/utils/env";
 import type { NetworkAccessType, LoadBalancerSpec, MonitoringConfig } from "@/lib/api/types";
 import type { WizardMonitoringStepProps } from "./types";
 
@@ -117,6 +118,21 @@ export function WizardMonitoringStep({ form, updateForm }: WizardMonitoringStepP
               keyPlaceholder="label name"
               valuePlaceholder="label value"
               addLabel="Add label"
+            />
+          </div>
+
+          {/* ── Exporter Environment Variables ── */}
+          <div className="space-y-2 rounded-lg border p-4">
+            <span className="text-sm font-medium">Exporter Environment Variables</span>
+            <p className="text-base-content/60 text-xs">
+              Environment variables passed to the Prometheus exporter container.
+            </p>
+            <KeyValueEditor
+              value={envArrayToRecord(monitoring.exporterEnv)}
+              onChange={(rec) => patchMonitoring({ exporterEnv: recordToEnvArray(rec) })}
+              keyPlaceholder="VARIABLE_NAME"
+              valuePlaceholder="value"
+              addLabel="Add variable"
             />
           </div>
 

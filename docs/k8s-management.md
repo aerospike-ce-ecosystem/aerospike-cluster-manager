@@ -25,7 +25,7 @@ Choose between:
 | Cluster Name | K8s DNS-compatible name (1-63 chars, lowercase alphanumeric + hyphens) | -- |
 | Namespace | Target Kubernetes namespace (must already exist) | `aerospike` |
 | Size | Number of Aerospike nodes (1-8 for CE) | `3` |
-| Image | Aerospike container image | `aerospike:ce-8.1.0.3_1` |
+| Image | Aerospike container image (CE only -- see [Image Validation](#image-validation)) | `aerospike:ce-8.1.0.3_1` |
 
 ### Step 2: Namespace & Storage
 
@@ -51,7 +51,7 @@ Multiple volumes can be configured independently with different storage classes 
 
 ### Step 3: Monitoring & Options
 
-- **Prometheus Exporter** -- Enable/disable the Aerospike Prometheus exporter sidecar with custom image, resource limits, metric labels, and environment variables.
+- **Prometheus Exporter** -- Enable/disable the Aerospike Prometheus exporter sidecar with custom image, resource limits, metric labels, and environment variables. See [Exporter Environment Variables](#exporter-environment-variables) for details on configuring custom env vars.
 - **ServiceMonitor** -- Auto-create a Prometheus ServiceMonitor resource (enabled/disabled, scrape interval, custom labels).
 - **PrometheusRule** -- Auto-create alerting rules (built-in alerts or fully custom rule groups).
 - **Template Reference** -- Optionally reference an AerospikeClusterTemplate for shared defaults.
@@ -126,6 +126,15 @@ Add custom sidecar containers (e.g., log shippers, backup agents) and init conta
 ### Step 10: Review
 
 Summary of all configured settings. The wizard displays the full configuration including Seeds Finder Services, storage volumes, monitoring, and ACL before submission.
+
+### Image Validation
+
+The wizard and edit dialog enforce CE-specific image validation on the Aerospike container image field:
+
+- **Enterprise image rejection** -- Images containing `enterprise` in the name, or tags prefixed with `ee-` or `ent-`, are rejected with a clear error message. The CE operator only supports Community Edition images (e.g., `aerospike:ce-8.1.1.1`).
+- **Minimum version** -- Only Aerospike CE 8.x and above are supported. Images with tags indicating CE 7.x or earlier are rejected.
+
+These validations run client-side before submission and are also enforced server-side by the operator's webhook.
 
 ## Cluster Operations
 
@@ -410,6 +419,26 @@ The migration status card provides real-time visibility into Aerospike data migr
 
 The migration status is fetched from the `GET /api/k8s/clusters/{namespace}/{name}/migration-status` endpoint, which reads the `status.migrationStatus` field from the AerospikeCluster CR.
 
+### Exporter Environment Variables
+
+Custom environment variables can be configured for the Prometheus exporter sidecar container. This is useful for passing configuration flags, secrets, or feature toggles to the exporter process.
+
+**Where to configure:**
+
+- **Creation wizard (Step 3: Monitoring & Options)** -- Within the Prometheus Exporter section, an "Exporter Environment Variables" editor is available when the exporter is enabled.
+- **Edit dialog (Monitoring section)** -- The same key-value editor appears in the monitoring tab of the edit dialog for running clusters.
+
+**How it works:**
+
+The editor uses a key-value interface where each row represents an environment variable:
+
+| Field | Description |
+|-------|-------------|
+| Key | Environment variable name (e.g., `AS_EXPORTER_LOG_LEVEL`, `CUSTOM_METRIC_LABELS`) |
+| Value | Environment variable value |
+
+Variables are stored as `exporterEnv` in the monitoring configuration and are mapped to the exporter container's `env` field in the pod spec. Add or remove rows using the `+` and delete buttons. Changes take effect on the next pod restart or rolling update.
+
 ### Pod Health Tracking
 
 The pod status table provides detailed per-pod health information:
@@ -422,13 +451,24 @@ The pod status table provides detailed per-pod health information:
 | **Readiness Gate** | Whether the operator's custom readiness gate (`acko.io/aerospike-ready`) is satisfied |
 | **Ports** | Pod port and service port displayed as `podPort/servicePort` |
 | **Cluster** | The Aerospike cluster name reported by the pod |
-| **Volumes** | Volume health status showing dirty volumes (needing initialization) and initialized volumes |
+| **Volumes** | Volume health status with color-coded indicators for dirty and initialized volumes (see [Pod Volume Status](#pod-volume-status)) |
 | **Stability** | The `unstableSince` timestamp indicates when a pod entered an unstable state; stable pods show no flag |
 | **Restart History** | `lastRestartReason` (e.g., OOMKilled, CrashLoopBackOff) and `lastRestartTime` per pod |
 | **Config Hash** | Current `configHash` and `podSpecHash` used by Config Drift Detection to group pods |
 | **Rack ID** | Rack assignment for topology-aware deployments |
 
 The table supports row selection via checkboxes. Selected pods can be used directly with the Warm Restart or Pod Restart operations (see [Operations](#operations-warm-restart--pod-restart)).
+
+#### Pod Volume Status
+
+The Volumes column in the pod status table provides per-pod visibility into volume initialization state. Each pod reports two lists from the operator's status:
+
+- **Dirty volumes** (amber badge) -- Volumes that have not yet been initialized or need re-initialization. The badge shows the count (e.g., "2 dirty") in a warning-colored style.
+- **Initialized volumes** (green badge) -- Volumes that have been successfully initialized and are ready for use. The badge shows the count (e.g., "3 init") in a success-colored style.
+
+Hovering over the volume badges opens a tooltip listing the specific volume names in each category. If a pod has no volume status reported, a dash is displayed.
+
+This information is useful during initial cluster provisioning and after storage configuration changes to verify that all volumes have completed initialization before the cluster is considered healthy.
 
 ### Node Blocklist Management
 
@@ -484,11 +524,25 @@ When drift is detected, the **Force Reconcile** button triggers a re-reconciliat
 ### PVC / Storage Status
 
 The PVC status panel lists all PersistentVolumeClaims associated with the cluster's StatefulSets. For each PVC:
-- **Status badge** -- Bound (green), Pending (amber), Released (blue), or Failed (red)
-- **Capacity** -- Provisioned storage capacity
-- **Storage Class** -- The Kubernetes StorageClass used
-- **Access Modes** -- ReadWriteOnce, ReadWriteMany, etc.
-- **Volume Name** -- The bound PersistentVolume name
+
+| Column | Description |
+|--------|-------------|
+| **Name** | PVC name |
+| **Status** | Bound (green), Pending (amber), Released (blue), or Failed (red) |
+| **Pod** | The pod currently using this PVC. Shows the pod name in monospace font, or an orphan warning if no active pod is bound |
+| **Capacity** | Provisioned storage capacity |
+| **Storage Class** | The Kubernetes StorageClass used |
+| **Access Modes** | ReadWriteOnce, ReadWriteMany, etc. |
+| **Volume Name** | The bound PersistentVolume name |
+
+**Pod binding and orphan detection:**
+
+The backend cross-references PVCs with running pods to determine which pod each PVC is mounted on. This mapping is built by inspecting the `volumes` section of each pod's spec and matching `persistentVolumeClaim.claimName` entries to PVC names.
+
+- **Bound PVCs** display the name of the pod that currently mounts them.
+- **Orphaned PVCs** are highlighted with an amber warning indicator. A PVC is considered orphaned when it is in `Bound` status (still attached to a PersistentVolume) but no running pod in the cluster currently mounts it. This typically occurs after a scale-down operation when StatefulSet PVCs are retained.
+
+The header shows a summary badge with the bound count (e.g., "3/5 Bound") and, when orphans exist, a separate amber warning badge showing the orphan count (e.g., "2 Orphan").
 
 The data is fetched from `GET /api/k8s/clusters/{namespace}/{name}/pvcs`.
 
@@ -509,12 +563,29 @@ Shows the operator's reconciliation circuit breaker state with a severity-based 
 The card displays:
 - **Visual progress bar** toward the circuit breaker threshold with severity-colored fill.
 - **Current backoff timer** -- Estimated seconds remaining before the next reconcile attempt.
-- **Failed reconcile count** -- Current count vs. the circuit breaker threshold.
+- **Failed reconcile count** -- Current count vs. the circuit breaker threshold (e.g., "3 / 10").
 - **Last reconcile error** -- Detailed error message from the most recent failure.
 - **Phase and phase reason** -- The current cluster reconciliation phase.
 - **Operator version** -- The version of the operator managing this cluster.
 - **Circuit breaker reset button** -- A dedicated **Reset** button in the Reconciliation Health card clears the circuit breaker state and forces an immediate reconcile. Previously, resetting the circuit breaker required manual CR patching via `kubectl`; now it is a one-click operation via an annotation patch (`acko.io/reset-circuit-breaker`).
 - **Auto-refresh** -- The card polls every 10 seconds to keep the health status current.
+
+#### Circuit Breaker Reset
+
+When the circuit breaker is tripped (i.e., the failed reconcile count reaches the threshold), a "TRIPPED" badge and a **Reset Circuit Breaker** button appear on the health card. Clicking the reset button performs two actions:
+
+1. **Clears the circuit breaker state** -- Patches the CR's status subresource to reset `failedReconcileCount` to 0 and clear `lastReconcileError`.
+2. **Triggers a fresh reconcile** -- Annotates the CR with `acko.io/force-reconcile` to prompt the operator to immediately attempt reconciliation.
+
+This is useful when a transient issue (e.g., temporary API server unavailability or a since-resolved misconfiguration) caused the circuit breaker to trip and you want to force the operator to retry without waiting for the backoff timer to expire.
+
+**API endpoint:**
+
+```
+POST /api/k8s/clusters/{namespace}/{name}/reset-circuit-breaker
+```
+
+The endpoint returns the updated `K8sClusterSummary` after the reset.
 
 The reconciliation health data is fetched from `GET /api/k8s/clusters/{namespace}/{name}/reconciliation-health`.
 
