@@ -61,8 +61,6 @@ function EditCustomRulesEditor({
   );
 }
 
-let nextEnvId = 0;
-
 /** Editor for exporter container environment variables. */
 function ExporterEnvEditor({
   value,
@@ -133,7 +131,6 @@ function ExporterEnvEditor({
       <button
         type="button"
         onClick={() => {
-          const next = [...items, { _id: ++nextEnvId, name: "", value: "" }];
           // Don't sync yet — user needs to fill in the name first
           onChange([...(value ?? []), { name: "", value: "" }]);
         }}

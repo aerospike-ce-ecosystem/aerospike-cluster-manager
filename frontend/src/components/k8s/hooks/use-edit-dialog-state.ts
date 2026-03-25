@@ -271,22 +271,19 @@ export function useEditDialogState(open: boolean, cluster: K8sClusterDetail) {
     setState((prev) => ({ ...prev, ...updates }));
   }, []);
 
-  // Capture a stable snapshot of initials when dialog opens, so auto-polling
-  // doesn't reset the form while the user is editing.
-  const initialsSnapshotRef = useRef(initials);
-  useEffect(() => {
-    if (open) {
-      initialsSnapshotRef.current = initials;
-    }
-    // Only update snapshot when dialog opens, not when initials change during editing
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  // Snapshot of initials captured at dialog-open time. Updated via useState
+  // so hasChanges useMemo re-evaluates when the snapshot changes.
+  const [initialsSnapshot, setInitialsSnapshot] = useState(initials);
 
-  // Reset form state only on open transition (false -> true)
+  // Reset form state and capture snapshot on open transition (false -> true).
+  // Both operations happen in a single effect to avoid stale-closure issues
+  // where the reset effect would read an outdated snapshot.
   const prevOpenRef = useRef(false);
   useEffect(() => {
     if (open && !prevOpenRef.current) {
-      const snap = initialsSnapshotRef.current;
+      // Capture the current initials as the snapshot for this dialog session
+      const snap = initials;
+      setInitialsSnapshot(snap);
 
       setState({
         ...snap,
@@ -321,6 +318,9 @@ export function useEditDialogState(open: boolean, cluster: K8sClusterDetail) {
       });
     }
     prevOpenRef.current = open;
+    // Only reset on open transition; initials is read but intentionally excluded
+    // to prevent resets during auto-polling while the dialog is open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // Derive config error from current text (no effect needed)
@@ -337,7 +337,7 @@ export function useEditDialogState(open: boolean, cluster: K8sClusterDetail) {
   // Compare against the snapshot captured at dialog open time, not the live
   // initials (which update on every auto-poll cycle).
   const hasChanges = useMemo(() => {
-    const snap = initialsSnapshotRef.current;
+    const snap = initialsSnapshot;
     return (
       state.image !== snap.image ||
       state.size !== snap.size ||
@@ -393,7 +393,7 @@ export function useEditDialogState(open: boolean, cluster: K8sClusterDetail) {
       JSON.stringify(state.aerospikeContainerSecurityContext) !==
         JSON.stringify(snap.aerospikeContainerSecurityContext)
     );
-  }, [state]);
+  }, [state, initialsSnapshot]);
 
   return { state, patchState, initials, hasChanges, configError };
 }
