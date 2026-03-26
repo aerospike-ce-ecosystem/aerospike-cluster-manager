@@ -9,7 +9,6 @@ export interface RecordFilterRouteState {
 }
 
 export interface RecordListRouteState {
-  page: number;
   pageSize: number;
   primaryKey: string;
   filters?: RecordFilterRouteState;
@@ -165,7 +164,6 @@ export function readRecordListRouteState(
   defaultPageSize = DEFAULT_PAGE_SIZE,
 ): RecordListRouteState {
   return {
-    page: parsePositiveInteger(searchParams.get("page"), 1),
     pageSize: parsePositiveInteger(searchParams.get("pageSize"), defaultPageSize),
     primaryKey: searchParams.get("primaryKey")?.trim() ?? "",
     filters: deserializeRecordFilters(searchParams.get("filters")),
@@ -177,10 +175,6 @@ export function buildRecordListSearchParams(
   defaultPageSize = DEFAULT_PAGE_SIZE,
 ) {
   const params = new URLSearchParams();
-
-  if (state.page > 1) {
-    params.set("page", String(state.page));
-  }
 
   if (state.pageSize !== defaultPageSize) {
     params.set("pageSize", String(state.pageSize));

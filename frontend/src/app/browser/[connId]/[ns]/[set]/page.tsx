@@ -156,7 +156,6 @@ export default function BrowserPage({
       decodedNs,
       decodedSet,
       routeState.filters,
-      1,
       routeState.pageSize,
       routeState.primaryKey || undefined,
     );
@@ -218,13 +217,11 @@ export default function BrowserPage({
 
   const replaceRouteState = useCallback(
     (nextState: {
-      page: number;
       pageSize: number;
       primaryKey: string;
       filters?: { logic: "and" | "or"; conditions: typeof filterStore.conditions };
     }) => {
       const nextParams = buildRecordListSearchParams({
-        page: nextState.page,
         pageSize: nextState.pageSize,
         primaryKey: nextState.primaryKey,
         filters: nextState.filters,
@@ -245,7 +242,6 @@ export default function BrowserPage({
       decodedNs,
       decodedSet,
       activeFilters,
-      1,
       routeState.pageSize,
       routeState.primaryKey || undefined,
     );
@@ -262,7 +258,6 @@ export default function BrowserPage({
   const handleFilterExecute = useCallback(() => {
     setSelectedPKs(new Set());
     replaceRouteState({
-      page: 1,
       pageSize: routeState.pageSize,
       primaryKey: filterStore.primaryKey.trim(),
       filters:
@@ -286,7 +281,6 @@ export default function BrowserPage({
     (pk: string) => {
       setSelectedPKs(new Set());
       replaceRouteState({
-        page: 1,
         pageSize: routeState.pageSize,
         primaryKey: pk.trim(),
         filters:
@@ -392,7 +386,6 @@ export default function BrowserPage({
   const handleLimitChange = useCallback(
     (newSize: number) => {
       replaceRouteState({
-        page: 1,
         pageSize: newSize,
         primaryKey: routeState.primaryKey,
         filters: routeState.filters,

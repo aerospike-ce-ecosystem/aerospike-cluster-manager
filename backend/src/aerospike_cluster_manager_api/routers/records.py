@@ -195,16 +195,21 @@ async def get_filtered_records(
     raw_results = await q.results(policy)
 
     elapsed_ms = int((time.monotonic() - start_time) * 1000)
-    scanned = len(raw_results)
+    returned = len(raw_results)
 
     records = [record_to_model(r) for r in raw_results]
 
-    # Determine total: use info command for unfiltered scans, otherwise use result count
+    # Determine total and scanned counts.
+    # With server-side max_records, the returned count is capped — it does not
+    # reflect the true number of records scanned by the Aerospike server.
+    # For unfiltered scans we use the info command to get the real set size.
     if has_filters:
-        set_total = scanned
+        set_total = returned
+        scanned = returned  # lower bound; actual server-side scan may be higher
         total_estimated = False
     else:
         set_total = await _get_set_object_count(client, body.namespace, body.set or "")
+        scanned = set_total  # info-based: represents all objects in the set
         total_estimated = True
 
     return FilteredQueryResponse(
@@ -212,9 +217,9 @@ async def get_filtered_records(
         total=set_total,
         page=1,
         pageSize=body.page_size,
-        hasMore=set_total > len(records),
+        hasMore=set_total > returned,
         executionTimeMs=elapsed_ms,
         scannedRecords=scanned,
-        returnedRecords=len(records),
+        returnedRecords=returned,
         totalEstimated=total_estimated,
     )

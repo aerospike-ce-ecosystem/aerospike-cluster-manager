@@ -19,7 +19,6 @@ interface BrowserMutationOptions {
 interface BrowserState {
   records: AerospikeRecord[];
   total: number;
-  page: number;
   pageSize: number;
   hasMore: boolean;
   totalEstimated: boolean;
@@ -33,19 +32,12 @@ interface BrowserState {
 
   setNamespace: (ns: string | null) => void;
   setSet: (set: string | null) => void;
-  fetchRecords: (
-    connId: string,
-    ns: string,
-    set: string,
-    page?: number,
-    pageSize?: number,
-  ) => Promise<void>;
+  fetchRecords: (connId: string, ns: string, set: string, pageSize?: number) => Promise<void>;
   fetchFilteredRecords: (
     connId: string,
     ns: string,
     set: string,
     filters?: FilterGroup,
-    page?: number,
     pageSize?: number,
     primaryKey?: string,
   ) => Promise<void>;
@@ -61,7 +53,6 @@ interface BrowserState {
     pk: string,
     options?: BrowserMutationOptions,
   ) => Promise<void>;
-  setPage: (page: number) => void;
   setPageSize: (size: number) => void;
   reset: () => void;
 }
@@ -69,7 +60,6 @@ interface BrowserState {
 export const useBrowserStore = create<BrowserState>()((set, get) => ({
   records: [],
   total: 0,
-  page: 1,
   pageSize: DEFAULT_PAGE_SIZE,
   hasMore: false,
   totalEstimated: false,
@@ -80,18 +70,16 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
   selectedNamespace: null,
   selectedSet: null,
 
-  setNamespace: (ns) => set({ selectedNamespace: ns, selectedSet: null, records: [], page: 1 }),
-  setSet: (setName) => set({ selectedSet: setName, records: [], page: 1 }),
+  setNamespace: (ns) => set({ selectedNamespace: ns, selectedSet: null, records: [] }),
+  setSet: (setName) => set({ selectedSet: setName, records: [] }),
 
-  fetchRecords: async (connId, ns, setName, page, pageSize) => {
-    const p = page ?? get().page;
+  fetchRecords: async (connId, ns, setName, pageSize) => {
     const ps = pageSize ?? get().pageSize;
     await withLoading(set, async () => {
-      const result: RecordListResponse = await api.getRecords(connId, ns, setName, p, ps);
+      const result: RecordListResponse = await api.getRecords(connId, ns, setName, 1, ps);
       set({
         records: result.records,
         total: result.total,
-        page: result.page,
         pageSize: result.pageSize,
         hasMore: result.hasMore,
         totalEstimated: result.totalEstimated ?? false,
@@ -99,7 +87,7 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
     });
   },
 
-  fetchFilteredRecords: async (connId, ns, setName, filters, page, pageSize, primaryKey) => {
+  fetchFilteredRecords: async (connId, ns, setName, filters, pageSize, primaryKey) => {
     const ps = pageSize ?? get().pageSize;
     await withLoading(set, async () => {
       const body: FilteredQueryRequest = {
@@ -114,7 +102,6 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
       set({
         records: result.records,
         total: result.total,
-        page: 1,
         pageSize: result.pageSize,
         hasMore: result.hasMore,
         totalEstimated: result.totalEstimated ?? false,
@@ -130,8 +117,7 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
       if (options?.refresh) {
         await options.refresh();
       } else {
-        const { page, pageSize } = get();
-        await get().fetchRecords(connId, data.key.namespace, data.key.set, page, pageSize);
+        await get().fetchRecords(connId, data.key.namespace, data.key.set);
       }
     } catch (error) {
       set({ error: getErrorMessage(error) });
@@ -145,8 +131,7 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
       if (options?.refresh) {
         await options.refresh();
       } else {
-        const { page, pageSize } = get();
-        await get().fetchRecords(connId, ns, setName, page, pageSize);
+        await get().fetchRecords(connId, ns, setName);
       }
     } catch (error) {
       set({ error: getErrorMessage(error) });
@@ -154,13 +139,11 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
     }
   },
 
-  setPage: (page) => set({ page }),
-  setPageSize: (pageSize) => set({ pageSize, page: 1 }),
+  setPageSize: (pageSize) => set({ pageSize }),
   reset: () =>
     set({
       records: [],
       total: 0,
-      page: 1,
       hasMore: false,
       totalEstimated: false,
       selectedNamespace: null,

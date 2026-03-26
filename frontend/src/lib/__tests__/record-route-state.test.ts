@@ -10,9 +10,8 @@ import {
 } from "../record-route-state";
 
 describe("record route state helpers", () => {
-  it("round-trips page, pageSize, primaryKey, and filters", () => {
+  it("round-trips pageSize, primaryKey, and filters", () => {
     const params = buildRecordListSearchParams({
-      page: 3,
       pageSize: 50,
       primaryKey: "pk/with spaces",
       filters: {
@@ -32,7 +31,6 @@ describe("record route state helpers", () => {
     const decoded = readRecordListRouteState(params);
 
     expect(decoded).toEqual({
-      page: 3,
       pageSize: 50,
       primaryKey: "pk/with spaces",
       filters: {
@@ -56,7 +54,6 @@ describe("record route state helpers", () => {
     });
 
     expect(readRecordListRouteState(params)).toEqual({
-      page: 1,
       pageSize: 25,
       primaryKey: "",
       filters: undefined,
@@ -70,11 +67,11 @@ describe("record route state helpers", () => {
       setName: "demo set",
       pk: "pk/1",
       intent: "edit",
-      returnTo: "/browser/conn-1/test/demo%20set?page=2",
+      returnTo: "/browser/conn-1/test/demo%20set?pageSize=50",
     });
 
     expect(href).toBe(
-      "/browser/conn-1/test/demo%20set/record?pk=pk%2F1&intent=edit&returnTo=%2Fbrowser%2Fconn-1%2Ftest%2Fdemo%2520set%3Fpage%3D2",
+      "/browser/conn-1/test/demo%20set/record?pk=pk%2F1&intent=edit&returnTo=%2Fbrowser%2Fconn-1%2Ftest%2Fdemo%2520set%3FpageSize%3D50",
     );
   });
 
@@ -84,10 +81,10 @@ describe("record route state helpers", () => {
         connId: "conn-1",
         namespace: "test",
         setName: "demo",
-        returnTo: "/browser/conn-1/test/demo?page=2",
+        returnTo: "/browser/conn-1/test/demo?pageSize=50",
       }),
     ).toBe(
-      "/browser/conn-1/test/demo/record/new?returnTo=%2Fbrowser%2Fconn-1%2Ftest%2Fdemo%3Fpage%3D2",
+      "/browser/conn-1/test/demo/record/new?returnTo=%2Fbrowser%2Fconn-1%2Ftest%2Fdemo%3FpageSize%3D50",
     );
 
     expect(buildDefaultReturnTo("conn-1", "test", "demo")).toBe("/browser/conn-1/test/demo");
@@ -95,8 +92,11 @@ describe("record route state helpers", () => {
 
   it("builds the current list returnTo and rejects external targets", () => {
     expect(
-      buildCurrentListReturnTo("/browser/conn-1/test/demo", new URLSearchParams("page=2")),
-    ).toBe("/browser/conn-1/test/demo?page=2");
+      buildCurrentListReturnTo(
+        "/browser/conn-1/test/demo",
+        new URLSearchParams("pageSize=50"),
+      ),
+    ).toBe("/browser/conn-1/test/demo?pageSize=50");
     expect(resolveReturnTo("https://evil.example.com", "/browser/conn-1/test/demo")).toBe(
       "/browser/conn-1/test/demo",
     );
