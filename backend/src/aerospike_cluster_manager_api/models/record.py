@@ -37,6 +37,7 @@ class RecordListResponse(BaseModel):
     page: int
     pageSize: int
     hasMore: bool
+    totalEstimated: bool = False
 
 
 class RecordWriteRequest(BaseModel):

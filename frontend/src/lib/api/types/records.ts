@@ -38,6 +38,7 @@ export interface RecordListResponse {
   page: number;
   pageSize: number;
   hasMore: boolean;
+  totalEstimated?: boolean;
 }
 
 export interface RecordWriteRequest {

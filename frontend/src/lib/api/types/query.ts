@@ -88,6 +88,7 @@ export interface FilteredQueryResponse {
   executionTimeMs: number;
   scannedRecords: number;
   returnedRecords: number;
+  totalEstimated?: boolean;
 }
 
 // === Index ===

@@ -106,3 +106,4 @@ class FilteredQueryResponse(BaseModel):
     execution_time_ms: int = Field(ge=0, alias="executionTimeMs")
     scanned_records: int = Field(ge=0, alias="scannedRecords")
     returned_records: int = Field(ge=0, alias="returnedRecords")
+    total_estimated: bool = Field(default=False, alias="totalEstimated")

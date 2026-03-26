@@ -9,10 +9,17 @@ from aerospike_py.types import WriteMeta
 from fastapi import APIRouter, HTTPException, Query
 from starlette.responses import Response
 
-from aerospike_cluster_manager_api.constants import MAX_QUERY_RECORDS, POLICY_QUERY, POLICY_READ, POLICY_WRITE
+from aerospike_cluster_manager_api.constants import (
+    MAX_QUERY_RECORDS,
+    POLICY_QUERY,
+    POLICY_READ,
+    POLICY_WRITE,
+    info_sets,
+)
 from aerospike_cluster_manager_api.converters import record_to_model
 from aerospike_cluster_manager_api.dependencies import AerospikeClient
 from aerospike_cluster_manager_api.expression_builder import build_expression
+from aerospike_cluster_manager_api.info_parser import aggregate_set_records
 from aerospike_cluster_manager_api.models.query import FilteredQueryRequest, FilteredQueryResponse
 from aerospike_cluster_manager_api.models.record import (
     AerospikeRecord,
@@ -29,36 +36,49 @@ _auto_detect_pk = auto_detect_pk
 router = APIRouter(prefix="/records", tags=["records"])
 
 
+async def _get_set_object_count(client: Any, ns: str, set_name: str) -> int:
+    """Get the approximate object count for a set via info command."""
+    if not set_name:
+        return 0
+    try:
+        sets_all = await client.info_all(info_sets(ns))
+        agg = aggregate_set_records(sets_all, replication_factor=1)
+        for s in agg:
+            if s["name"] == set_name:
+                return s["objects"]
+    except Exception:
+        logger.debug("Failed to get set object count for %s.%s", ns, set_name, exc_info=True)
+    return 0
+
+
 @router.get(
     "/{conn_id}",
     summary="List records",
-    description="Retrieve paginated records from a namespace and set.",
+    description="Retrieve records from a namespace and set with a server-side limit.",
 )
 async def get_records(
     client: AerospikeClient,
     ns: str = Query(..., min_length=1),
     set: str = "",
-    page: int = Query(1, ge=1),
     pageSize: int = Query(25, ge=1, le=500),
 ) -> RecordListResponse:
-    """Retrieve paginated records from a namespace and set."""
+    """Retrieve records from a namespace and set (limited by pageSize)."""
+    set_total = await _get_set_object_count(client, ns, set)
+
+    limit = min(pageSize, MAX_QUERY_RECORDS)
+    policy = {**POLICY_QUERY, "max_records": limit}
     q = client.query(ns, set)
-    raw_results = await q.results(POLICY_QUERY)
+    raw_results = await q.results(policy)
 
-    if len(raw_results) > MAX_QUERY_RECORDS:
-        raw_results = raw_results[:MAX_QUERY_RECORDS]
-
-    total = len(raw_results)
-    start = (page - 1) * pageSize
-    paged = raw_results[start : start + pageSize]
-    records = [record_to_model(r) for r in paged]
+    records = [record_to_model(r) for r in raw_results]
 
     return RecordListResponse(
         records=records,
-        total=total,
-        page=page,
+        total=set_total,
+        page=1,
         pageSize=pageSize,
-        hasMore=start + pageSize < total,
+        hasMore=set_total > len(raw_results),
+        totalEstimated=True,
     )
 
 
@@ -164,8 +184,11 @@ async def get_filtered_records(
     if body.select_bins:
         q.select(*body.select_bins)
 
-    # Build policy with optional filter expression
-    policy: dict[str, Any] = dict(POLICY_QUERY)
+    # Build policy with server-side max_records limit to prevent OOM
+    has_filters = body.filters is not None or body.predicate is not None
+    effective_limit = min(body.max_records or MAX_QUERY_RECORDS, MAX_QUERY_RECORDS, body.page_size)
+
+    policy: dict[str, Any] = {**POLICY_QUERY, "max_records": effective_limit}
     if body.filters:
         policy["filter_expression"] = build_expression(body.filters)
 
@@ -174,26 +197,24 @@ async def get_filtered_records(
     elapsed_ms = int((time.monotonic() - start_time) * 1000)
     scanned = len(raw_results)
 
-    # Apply max_records limit
-    if body.max_records and body.max_records > 0:
-        raw_results = raw_results[: body.max_records]
-    if len(raw_results) > MAX_QUERY_RECORDS:
-        raw_results = raw_results[:MAX_QUERY_RECORDS]
+    records = [record_to_model(r) for r in raw_results]
 
-    total = len(raw_results)
-
-    # Paginate
-    start = (body.page - 1) * body.page_size
-    paged = raw_results[start : start + body.page_size]
-    records = [record_to_model(r) for r in paged]
+    # Determine total: use info command for unfiltered scans, otherwise use result count
+    if has_filters:
+        set_total = scanned
+        total_estimated = False
+    else:
+        set_total = await _get_set_object_count(client, body.namespace, body.set or "")
+        total_estimated = True
 
     return FilteredQueryResponse(
         records=records,
-        total=total,
-        page=body.page,
+        total=set_total,
+        page=1,
         pageSize=body.page_size,
-        hasMore=start + body.page_size < total,
+        hasMore=set_total > len(records),
         executionTimeMs=elapsed_ms,
         scannedRecords=scanned,
         returnedRecords=len(records),
+        totalEstimated=total_estimated,
     )

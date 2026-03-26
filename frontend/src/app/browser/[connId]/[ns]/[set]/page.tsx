@@ -15,13 +15,14 @@ import {
   X,
   FileJson,
   FileSpreadsheet,
+  RefreshCw,
 } from "lucide-react";
 import type { ColumnDef, ColumnPinningState, Row } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { DataTable } from "@/components/common/data-table";
-import { TablePagination } from "@/components/common/table-pagination";
+import { Select } from "@/components/ui/select";
 import { renderCellValue } from "@/components/browser/record-cell-renderer";
 import {
   RecordEditorDialog,
@@ -35,7 +36,6 @@ import { FilterToolbar } from "@/components/browser/filter-toolbar";
 import { useBrowserStore } from "@/stores/browser-store";
 import { useFilterStore } from "@/stores/filter-store";
 import { useConnectionStore } from "@/stores/connection-store";
-import { usePagination } from "@/hooks/use-pagination";
 import { useAsyncData } from "@/hooks/use-async-data";
 import type {
   AerospikeRecord,
@@ -78,20 +78,18 @@ export default function BrowserPage({
   const {
     records,
     total,
-    page,
     pageSize,
     loading,
     error,
     executionTimeMs,
     scannedRecords,
+    totalEstimated,
     fetchFilteredRecords,
     putRecord,
     deleteRecord,
   } = useBrowserStore();
 
   const filterStore = useFilterStore();
-
-  const pagination = usePagination({ total, page, pageSize });
 
   const connections = useConnectionStore((s) => s.connections);
   const currentConnection = useMemo(
@@ -148,10 +146,9 @@ export default function BrowserPage({
       conditions: routeState.filters?.conditions ?? [],
     });
     useBrowserStore.setState({
-      page: routeState.page,
       pageSize: routeState.pageSize,
     });
-  }, [routeState.filters, routeState.page, routeState.pageSize, routeState.primaryKey]);
+  }, [routeState.filters, routeState.pageSize, routeState.primaryKey]);
 
   useEffect(() => {
     fetchFilteredRecords(
@@ -159,7 +156,7 @@ export default function BrowserPage({
       decodedNs,
       decodedSet,
       routeState.filters,
-      routeState.page,
+      1,
       routeState.pageSize,
       routeState.primaryKey || undefined,
     );
@@ -169,7 +166,6 @@ export default function BrowserPage({
     decodedSet,
     fetchFilteredRecords,
     routeState.filters,
-    routeState.page,
     routeState.pageSize,
     routeState.primaryKey,
   ]);
@@ -242,14 +238,14 @@ export default function BrowserPage({
     [pathname, router],
   );
 
-  // Execute filtered query
+  // Execute filtered query / reload
   const refreshCurrentView = useCallback(async () => {
     await fetchFilteredRecords(
       connId,
       decodedNs,
       decodedSet,
       activeFilters,
-      routeState.page,
+      1,
       routeState.pageSize,
       routeState.primaryKey || undefined,
     );
@@ -259,7 +255,6 @@ export default function BrowserPage({
     decodedNs,
     decodedSet,
     fetchFilteredRecords,
-    routeState.page,
     routeState.pageSize,
     routeState.primaryKey,
   ]);
@@ -394,19 +389,7 @@ export default function BrowserPage({
     }
   };
 
-  const handlePageChange = useCallback(
-    (newPage: number) => {
-      replaceRouteState({
-        page: newPage,
-        pageSize: routeState.pageSize,
-        primaryKey: routeState.primaryKey,
-        filters: routeState.filters,
-      });
-    },
-    [replaceRouteState, routeState.filters, routeState.pageSize, routeState.primaryKey],
-  );
-
-  const handlePageSizeChange = useCallback(
+  const handleLimitChange = useCallback(
     (newSize: number) => {
       replaceRouteState({
         page: 1,
@@ -520,7 +503,7 @@ asyncio.run(main())`;
     useToastStore.getState().addToast("success", "Exported as CSV");
   }, [records]);
 
-  const padLength = String(pagination.end).length;
+  const padLength = String(displayRecords.length).length;
   const { isMobile, isTablet } = useBreakpoint();
 
   /* ─── DataTable column definitions ─────────────────── */
@@ -596,7 +579,7 @@ asyncio.run(main())`;
         header: () => <span className="grid-row-num font-mono">#</span>,
         cell: ({ row }) => (
           <span className="grid-row-num font-mono">
-            {String(pagination.start + row.index).padStart(padLength, "0")}
+            {String(row.index + 1).padStart(padLength, "0")}
           </span>
         ),
         meta: {
@@ -791,7 +774,6 @@ asyncio.run(main())`;
       openRecordDetail,
       toggleAllPKs,
       togglePK,
-      pagination.start,
       padLength,
     ],
   );
@@ -941,6 +923,7 @@ asyncio.run(main())`;
                   <span className="bg-accent relative inline-flex h-1.5 w-1.5 rounded-full" />
                 </span>
                 <span className="text-accent font-mono text-[11px] font-medium tabular-nums">
+                  {totalEstimated ? "~" : ""}
                   {formatNumber(total)}
                 </span>
               </div>
@@ -1106,17 +1089,60 @@ asyncio.run(main())`;
         </div>
       )}
 
-      {/* ── Bottom Bar ───────────────────────────────── */}
-      <TablePagination
-        total={total}
-        page={page}
-        pageSize={pageSize}
-        onPageChange={handlePageChange}
-        onPageSizeChange={handlePageSizeChange}
-        loading={loading}
-        pageSizeOptions={PAGE_SIZE_OPTIONS}
-        className="safe-bottom w-full"
-      />
+      {/* ── Bottom Bar (Limit + Reload) ─────────────── */}
+      {(displayRecords.length > 0 || total > 0) && (
+        <div
+          className={cn(
+            "border-base-300/50 bg-base-100/80 safe-bottom flex w-full min-w-0 shrink-0 flex-col gap-3 border-t px-3 py-2 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between sm:px-6",
+          )}
+        >
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <span className="text-muted-foreground font-mono text-[11px] tabular-nums">
+              Showing {formatNumber(displayRecords.length)}
+              <span className="text-muted-foreground/60 mx-1.5">of</span>
+              {totalEstimated ? "~" : ""}
+              {formatNumber(total)}
+              <span className="text-muted-foreground/60 ml-1.5">records</span>
+            </span>
+            <Select
+              value={String(pageSize)}
+              onChange={(e) => handleLimitChange(parseInt(e.target.value, 10))}
+              className="border-base-300/40 text-muted-foreground h-6 w-[62px] bg-transparent px-2 font-mono text-[11px]"
+              disabled={loading}
+              aria-label="Records limit"
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={String(size)}>
+                  {size}
+                </option>
+              ))}
+            </Select>
+            <span className="text-muted-foreground/60 hidden text-[10px] tracking-wider uppercase sm:inline">
+              per page
+            </span>
+          </div>
+
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            {executionTimeMs > 0 && (
+              <span className="text-muted-foreground/50 font-mono text-[10px] tabular-nums">
+                {executionTimeMs}ms
+              </span>
+            )}
+            <Button
+              onClick={refreshCurrentView}
+              disabled={loading}
+              size="sm"
+              variant="outline"
+              className="border-base-300/40 text-muted-foreground hover:text-base-content h-7 gap-1.5 font-mono text-[11px] transition-colors"
+              data-compact
+              aria-label="Reload records"
+            >
+              <RefreshCw className={cn("h-3 w-3", loading && "animate-spin")} />
+              <span className="hidden sm:inline">Reload</span>
+            </Button>
+          </div>
+        </div>
+      )}
 
       <RecordEditorDialog
         open={editorOpen}

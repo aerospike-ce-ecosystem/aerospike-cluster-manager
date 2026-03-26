@@ -22,6 +22,7 @@ interface BrowserState {
   page: number;
   pageSize: number;
   hasMore: boolean;
+  totalEstimated: boolean;
   loading: boolean;
   error: string | null;
   executionTimeMs: number;
@@ -71,6 +72,7 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
   page: 1,
   pageSize: DEFAULT_PAGE_SIZE,
   hasMore: false,
+  totalEstimated: false,
   loading: false,
   error: null,
   executionTimeMs: 0,
@@ -92,19 +94,19 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
         page: result.page,
         pageSize: result.pageSize,
         hasMore: result.hasMore,
+        totalEstimated: result.totalEstimated ?? false,
       });
     });
   },
 
   fetchFilteredRecords: async (connId, ns, setName, filters, page, pageSize, primaryKey) => {
-    const p = page ?? get().page;
     const ps = pageSize ?? get().pageSize;
     await withLoading(set, async () => {
       const body: FilteredQueryRequest = {
         namespace: ns,
         set: setName,
         filters,
-        page: p,
+        page: 1,
         pageSize: ps,
         primaryKey: primaryKey || undefined,
       };
@@ -112,9 +114,10 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
       set({
         records: result.records,
         total: result.total,
-        page: result.page,
+        page: 1,
         pageSize: result.pageSize,
         hasMore: result.hasMore,
+        totalEstimated: result.totalEstimated ?? false,
         executionTimeMs: result.executionTimeMs,
         scannedRecords: result.scannedRecords,
       });
@@ -159,6 +162,7 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
       total: 0,
       page: 1,
       hasMore: false,
+      totalEstimated: false,
       selectedNamespace: null,
       selectedSet: null,
       error: null,
