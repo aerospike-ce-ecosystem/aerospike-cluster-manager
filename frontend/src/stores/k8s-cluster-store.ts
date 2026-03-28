@@ -106,7 +106,8 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
       try {
         await api.getK8sClusters();
         set({ k8sAvailable: true });
-      } catch {
+      } catch (err) {
+        console.warn("K8s API not available:", err);
         set({ k8sAvailable: false });
       }
     },
@@ -300,7 +301,8 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
       try {
         const secrets = await api.getK8sSecrets(namespace);
         set({ k8sSecrets: secrets });
-      } catch {
+      } catch (err) {
+        console.error(`Failed to fetch K8s secrets for namespace ${namespace}:`, err);
         set({ k8sSecrets: [] });
       }
     },

@@ -76,7 +76,7 @@ export default function ConnectionsPage() {
       .then(() => {
         fetchAllHealth();
       })
-      .catch(() => undefined);
+      .catch((err) => console.error("Failed to load cluster list:", err));
   }, [fetchAll, fetchAllHealth]);
 
   useEffect(() => {

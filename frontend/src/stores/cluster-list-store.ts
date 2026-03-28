@@ -145,7 +145,8 @@ export const useClusterListStore = create<ClusterListState>()((set, get) => ({
           }),
         ),
       }));
-    } catch {
+    } catch (err) {
+      console.error(`Health check failed for ${connectionId}:`, err);
       set((state) => ({
         rows: sortRows(
           state.rows.map((row) => {

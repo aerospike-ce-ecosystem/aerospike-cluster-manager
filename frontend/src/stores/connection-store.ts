@@ -55,7 +55,8 @@ export const useConnectionStore = create<ConnectionState>()((set, get) => ({
         healthStatuses: { ...state.healthStatuses, [id]: status },
         checkingHealth: { ...state.checkingHealth, [id]: false },
       }));
-    } catch {
+    } catch (err) {
+      console.error(`Health check failed for connection ${id}:`, err);
       set((state) => ({
         healthStatuses: {
           ...state.healthStatuses,

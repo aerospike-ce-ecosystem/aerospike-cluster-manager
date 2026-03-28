@@ -182,6 +182,19 @@ export function ClusterCardList({
     );
   }
 
+  if (loading && rows.length === 0) {
+    return (
+      <div className="flex flex-col gap-3">
+        {[1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className="h-24 animate-pulse rounded-2xl border border-base-300 bg-base-100"
+          />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3">
       {rows.map((row) => (

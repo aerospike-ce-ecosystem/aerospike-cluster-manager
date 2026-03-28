@@ -31,8 +31,9 @@ export const useK8sTemplateStore = create<K8sTemplateState>()((set, get) => ({
     try {
       const templates = await api.getK8sTemplates();
       set({ templates });
-    } catch {
+    } catch (err) {
       // Don't set global error — template fetch failures should not block cluster pages
+      console.warn("Failed to fetch K8s templates:", err);
     }
   },
 
