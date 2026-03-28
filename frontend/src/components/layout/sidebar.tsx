@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { FileCode, MoreHorizontal, Plus, Search, Server, Table2, Settings, X } from "lucide-react";
+import { FileCode, MoreHorizontal, Plus, Search, Server, Settings, X } from "lucide-react";
 import { SidebarBrowser } from "./sidebar-browser";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -103,9 +103,6 @@ const ConnectionItem = React.memo(function ConnectionItem({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => handleNav("browser")}>
-            <Table2 className="mr-2 h-4 w-4" /> Namespaces
-          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => handleNav("cluster")}>
             <Server className="mr-2 h-4 w-4" /> Overview
           </DropdownMenuItem>

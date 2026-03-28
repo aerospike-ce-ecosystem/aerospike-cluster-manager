@@ -1,6 +1,7 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Pencil, RefreshCw, Scale, Trash2, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -25,6 +26,15 @@ import { useToastStore } from "@/stores/toast-store";
 
 export default function ClusterPage({ params }: { params: Promise<{ connId: string }> }) {
   const { connId } = use(params);
+  const router = useRouter();
+
+  // Create Set → navigate to new record page with namespace pre-filled
+  const handleCreateSet = useCallback(
+    (namespace: string) => {
+      router.push(`/browser/${connId}/${namespace}/new-set/record/new`);
+    },
+    [connId, router],
+  );
 
   // Connection health check
   const healthStatus = useConnectionStore((s) => s.healthStatuses[connId]);
@@ -299,7 +309,7 @@ export default function ClusterPage({ params }: { params: Promise<{ connId: stri
           </TabsList>
 
           <TabsContent value="overview" className="mt-6 space-y-6">
-            <UnifiedOverview cluster={cluster} connId={connId} />
+            <UnifiedOverview cluster={cluster} connId={connId} onCreateSet={handleCreateSet} />
           </TabsContent>
 
           <TabsContent value="acko-info" className="mt-6">
@@ -319,7 +329,9 @@ export default function ClusterPage({ params }: { params: Promise<{ connId: stri
       {/* ══════════════════════════════════════════════
           Direct Connection 클러스터 레이아웃 (isK8s=false)
           ══════════════════════════════════════════════ */}
-      {!isK8s && <UnifiedOverview cluster={cluster} connId={connId} />}
+      {!isK8s && (
+        <UnifiedOverview cluster={cluster} connId={connId} onCreateSet={handleCreateSet} />
+      )}
 
       {/* ── K8s Dialogs ── */}
       {isK8s && k8sDetail && (

@@ -62,7 +62,7 @@ export function SidebarBrowser({ connId, isMobileOrTablet }: SidebarBrowserProps
   return (
     <div className="flex flex-col px-2 pb-2">
       <span className="text-muted-foreground/70 px-2.5 pt-3 pb-1.5 text-[10px] font-semibold tracking-wider">
-        BROWSER
+        NAMESPACES
       </span>
 
       {loading && (

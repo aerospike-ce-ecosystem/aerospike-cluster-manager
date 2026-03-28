@@ -1,7 +1,15 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ChevronRight, Database, HardDrive, Layers, Server } from "lucide-react";
+import {
+  ChevronRight,
+  Database,
+  FlaskConical,
+  HardDrive,
+  Layers,
+  Plus,
+  Server,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatBytes, formatNumber, formatUptime } from "@/lib/formatters";
 import { StatusBadge } from "@/components/common/status-badge";
@@ -10,6 +18,8 @@ import type { ClusterInfo, NamespaceInfo } from "@/lib/api/types";
 interface UnifiedOverviewProps {
   cluster: ClusterInfo;
   connId: string;
+  onCreateSampleData?: () => void;
+  onCreateSet?: (namespace: string) => void;
 }
 
 function MetricCard({
@@ -43,7 +53,15 @@ function MetricCard({
   );
 }
 
-function NamespaceRow({ ns, connId }: { ns: NamespaceInfo; connId: string }) {
+function NamespaceRow({
+  ns,
+  connId,
+  onCreateSet,
+}: {
+  ns: NamespaceInfo;
+  connId: string;
+  onCreateSet?: (namespace: string) => void;
+}) {
   const router = useRouter();
   const memPct = ns.memoryTotal > 0 ? Math.round((ns.memoryUsed / ns.memoryTotal) * 100) : 0;
   const isWarning = ns.stopWrites || ns.hwmBreached;
@@ -125,28 +143,40 @@ function NamespaceRow({ ns, connId }: { ns: NamespaceInfo; connId: string }) {
       </div>
 
       {/* Sets */}
-      {ns.sets.length > 0 && (
-        <div className="border-base-300/40 flex flex-wrap gap-1.5 border-t px-4 py-2.5 sm:px-5">
-          {ns.sets.map((set) => (
-            <button
-              key={set.name}
-              onClick={() => router.push(`/browser/${connId}/${ns.name}/${set.name}`)}
-              className="border-base-300 bg-base-100 hover:border-primary/30 hover:bg-primary/5 group flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-colors"
-            >
-              <span className="text-base-content font-medium">{set.name}</span>
-              <span className="text-base-content/30 bg-base-200 rounded px-1.5 py-0.5 font-mono text-[10px]">
-                {formatNumber(set.objects)}
-              </span>
-              <ChevronRight className="text-base-content/20 group-hover:text-primary h-3 w-3 transition-colors" />
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="border-base-300/40 flex flex-wrap items-center gap-1.5 border-t px-4 py-2.5 sm:px-5">
+        {ns.sets.map((set) => (
+          <button
+            key={set.name}
+            onClick={() => router.push(`/browser/${connId}/${ns.name}/${set.name}`)}
+            className="border-base-300 bg-base-100 hover:border-primary/30 hover:bg-primary/5 group flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-colors"
+          >
+            <span className="text-base-content font-medium">{set.name}</span>
+            <span className="text-base-content/30 bg-base-200 rounded px-1.5 py-0.5 font-mono text-[10px]">
+              {formatNumber(set.objects)}
+            </span>
+            <ChevronRight className="text-base-content/20 group-hover:text-primary h-3 w-3 transition-colors" />
+          </button>
+        ))}
+        {onCreateSet && (
+          <button
+            onClick={() => onCreateSet(ns.name)}
+            className="text-muted-foreground hover:text-primary hover:border-primary/30 border-base-300 flex items-center gap-1 rounded-lg border border-dashed px-2.5 py-1.5 text-xs transition-colors"
+          >
+            <Plus className="h-3 w-3" />
+            <span>Create Set</span>
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
-export function UnifiedOverview({ cluster, connId }: UnifiedOverviewProps) {
+export function UnifiedOverview({
+  cluster,
+  connId,
+  onCreateSampleData,
+  onCreateSet,
+}: UnifiedOverviewProps) {
   const totalObjects = cluster.namespaces.reduce((sum, ns) => sum + ns.objects, 0);
   const totalMemUsed = cluster.namespaces.reduce((sum, ns) => sum + ns.memoryUsed, 0);
   const totalMemTotal = cluster.namespaces.reduce((sum, ns) => sum + ns.memoryTotal, 0);
@@ -195,12 +225,23 @@ export function UnifiedOverview({ cluster, connId }: UnifiedOverviewProps) {
         <div className="border-base-300 bg-base-100 flex min-w-0 flex-col gap-3 rounded-xl border p-4 shadow-sm sm:p-5 lg:flex-[3]">
           <div className="flex items-center justify-between">
             <span className="text-base-content text-sm font-bold">Namespaces</span>
-            <span className="text-base-content/30 text-xs">
-              {cluster.namespaces.length} / 2 max (CE)
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-base-content/30 text-xs">
+                {cluster.namespaces.length} / 2 max (CE)
+              </span>
+              {onCreateSampleData && (
+                <button
+                  onClick={onCreateSampleData}
+                  className="text-muted-foreground hover:text-primary hover:bg-primary/5 border-base-300 flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors"
+                >
+                  <FlaskConical className="h-3 w-3" />
+                  Sample Data
+                </button>
+              )}
+            </div>
           </div>
           {cluster.namespaces.map((ns) => (
-            <NamespaceRow key={ns.name} ns={ns} connId={connId} />
+            <NamespaceRow key={ns.name} ns={ns} connId={connId} onCreateSet={onCreateSet} />
           ))}
         </div>
 
