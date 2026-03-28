@@ -205,7 +205,7 @@ export default function SettingsPage() {
             <div className="bg-base-300/50 my-0 h-px" />
             <div className="flex justify-between py-0.5">
               <span className="text-muted-foreground">UI Library</span>
-              <span className="font-mono text-xs">shadcn/ui + Tailwind CSS</span>
+              <span className="font-mono text-xs">Tailwind CSS 4</span>
             </div>
             <div className="bg-base-300/50 my-0 h-px" />
             <div className="flex justify-between py-0.5">
