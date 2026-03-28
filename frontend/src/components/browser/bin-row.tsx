@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { ChevronRight, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { JsonViewer } from "@/components/common/json-viewer";
@@ -25,16 +25,17 @@ function BinTypeSelect({
   const [highlighted, setHighlighted] = useState(-1);
   const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (open) setHighlighted(BIN_TYPES.indexOf(value));
-  }, [open, value]);
+  const openDropdown = useCallback(() => {
+    setOpen(true);
+    setHighlighted(BIN_TYPES.indexOf(value));
+  }, [value]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (!open) {
         if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          setOpen(true);
+          openDropdown();
         }
         return;
       }
@@ -61,7 +62,7 @@ function BinTypeSelect({
           break;
       }
     },
-    [open, highlighted, onChange],
+    [open, highlighted, onChange, openDropdown],
   );
 
   return (
@@ -69,7 +70,7 @@ function BinTypeSelect({
       <button
         type="button"
         disabled={disabled}
-        onClick={() => setOpen((p) => !p)}
+        onClick={() => (open ? setOpen(false) : openDropdown())}
         aria-haspopup="listbox"
         aria-expanded={open}
         className={cn(

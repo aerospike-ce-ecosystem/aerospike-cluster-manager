@@ -13,7 +13,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { K8sScaleDialog } from "@/components/k8s/k8s-scale-dialog";
 import { K8sDeleteDialog } from "@/components/k8s/k8s-delete-dialog";
 import { K8sEditDialog } from "@/components/k8s/k8s-edit-dialog";
-import { ClusterOverviewTab } from "@/components/k8s/cluster-overview-tab";
 import { UnifiedOverview } from "@/components/cluster/unified-overview";
 import { CreateSampleDataDialog } from "@/components/browser/create-sample-data-dialog";
 import { ClusterAckoInfoTab } from "@/components/k8s/cluster-acko-info-tab";
