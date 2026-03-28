@@ -83,7 +83,8 @@ export function RecordDetailPage({
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
 
   const [editorPK, setEditorPK] = useState("");
-  const [editorSetName, setEditorSetName] = useState(createMode ? "" : setName);
+  const isCreateSetFlow = createMode && setName === "new-set";
+  const [editorSetName, setEditorSetName] = useState(isCreateSetFlow ? "" : setName);
   const [editorTTL, setEditorTTL] = useState("0");
   const [editorBins, setEditorBins] = useState<BinEntry[]>([createEmptyBinEntry()]);
   const [useCodeEditor, setUseCodeEditor] = useState<Record<string, boolean>>({});
@@ -201,8 +202,8 @@ export function RecordDetailPage({
       return;
     }
 
-    const targetSet = createMode ? editorSetName.trim() : setName;
-    if (createMode && !targetSet) {
+    const targetSet = isCreateSetFlow ? editorSetName.trim() : setName;
+    if (isCreateSetFlow && !targetSet) {
       useToastStore.getState().addToast("error", "Set name is required");
       return;
     }
@@ -232,7 +233,7 @@ export function RecordDetailPage({
     } finally {
       setSaving(false);
     }
-  }, [connId, createMode, editorBins, editorPK, editorSetName, editorTTL, namespace, navigateBack, setName]);
+  }, [connId, createMode, editorBins, editorPK, editorSetName, editorTTL, isCreateSetFlow, namespace, navigateBack, setName]);
 
   const handleDelete = useCallback(async () => {
     if (!record) return;
@@ -250,7 +251,7 @@ export function RecordDetailPage({
     }
   }, [connId, navigateBack, record]);
 
-  const displaySetName = createMode ? editorSetName || setName : setName;
+  const displaySetName = isCreateSetFlow ? editorSetName || setName : setName;
   const description = useMemo(
     () => (
       <span className="font-mono text-xs">
@@ -359,8 +360,8 @@ export function RecordDetailPage({
             saving={saving}
             record={record}
             namespace={namespace}
-            setName={createMode ? editorSetName : setName}
-            onSetNameChange={createMode ? setEditorSetName : undefined}
+            setName={isCreateSetFlow ? editorSetName : setName}
+            onSetNameChange={isCreateSetFlow ? setEditorSetName : undefined}
           />
         </div>
       )}
