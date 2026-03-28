@@ -101,7 +101,7 @@ export function EditStorageSection({
               type="button"
               disabled={loading}
               onClick={() => addVolume(type)}
-              className="text-accent hover:text-accent/80 flex items-center gap-0.5 text-[10px] font-medium disabled:opacity-50"
+              className="text-primary hover:text-primary/80 flex items-center gap-0.5 text-[10px] font-medium disabled:opacity-50"
             >
               <Plus className="h-3 w-3" /> {label}
             </button>

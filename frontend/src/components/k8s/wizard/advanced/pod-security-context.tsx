@@ -122,7 +122,7 @@ export function WizardPodSecurityContextStep({
             {ctx!.supplementalGroups!.map((gid) => (
               <span
                 key={gid}
-                className="bg-accent/10 text-accent inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
+                className="bg-accent/10 text-primary inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
               >
                 {gid}
                 <button
@@ -177,7 +177,7 @@ export function WizardPodSecurityContextStep({
               }
             }}
             disabled={!newSupGroup.trim() || isNaN(parseInt(newSupGroup, 10))}
-            className="bg-accent text-accent-foreground hover:bg-accent/80 rounded px-3 text-xs font-medium disabled:opacity-50"
+            className="bg-accent text-primary-content hover:bg-accent/80 rounded px-3 text-xs font-medium disabled:opacity-50"
           >
             Add
           </button>

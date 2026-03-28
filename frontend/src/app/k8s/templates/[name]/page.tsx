@@ -179,7 +179,7 @@ export default function TemplateDetailPage() {
               {usedBy.map((cluster) => (
                 <li key={cluster} className="text-sm">
                   <button
-                    className="text-accent hover:underline"
+                    className="text-primary hover:underline"
                     onClick={() => {
                       const parts = cluster.split("/");
                       if (parts.length === 2) {

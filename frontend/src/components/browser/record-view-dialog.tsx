@@ -33,15 +33,15 @@ export function RecordDetailSections({ record }: { record: AerospikeRecord }) {
       <RecordMetadataGrid record={record} mode="view" />
 
       <section>
-        <h4 className="text-muted-foreground/60 mb-2.5 flex items-center gap-2 font-mono text-[10px] font-semibold tracking-[0.12em] uppercase">
+        <h4 className="text-base-content/40 mb-2.5 flex items-center gap-2 font-mono text-[10px] font-semibold tracking-[0.12em] uppercase">
           Bins
-          <span className="text-muted-foreground/30">({binEntries.length})</span>
-          <span className="bg-border/30 h-px flex-1" />
+          <span className="text-base-content/25">({binEntries.length})</span>
+          <span className="bg-base-300 h-px flex-1" />
         </h4>
         <div className="divide-base-300/30 divide-y overflow-hidden rounded-lg border">
           {/* Header row */}
           <div
-            className="bin-row-grid bg-base-200/30 text-muted-foreground/50 font-mono text-[11px] tracking-wider uppercase"
+            className="bin-row-grid bg-base-200/50 text-base-content/40 font-mono text-[11px] tracking-wider uppercase"
             data-header
           >
             <span className="text-right">#</span>
@@ -81,7 +81,7 @@ export function RecordViewDialog({ record, onClose }: RecordViewDialogProps) {
         <DialogHeader className="border-base-300/40 space-y-0 border-b px-5 pt-5 pb-3">
           <div className="flex items-center justify-between">
             <DialogTitle className="font-mono text-sm font-medium">Record Detail</DialogTitle>
-            <span className="text-accent ml-4 max-w-[250px] truncate font-mono text-[11px]">
+            <span className="text-primary ml-4 max-w-[250px] truncate font-mono text-[11px]">
               {record?.key.pk}
             </span>
           </div>
@@ -105,7 +105,7 @@ export function RecordViewSheet({ record, onClose }: RecordViewDialogProps) {
         <SheetHeader className="border-base-300/40 space-y-0 border-b px-5 pt-1 pb-3">
           <div className="flex items-center justify-between pr-10">
             <SheetTitle className="font-mono text-sm font-medium">Record Detail</SheetTitle>
-            <span className="text-accent ml-4 max-w-[180px] truncate font-mono text-[11px]">
+            <span className="text-primary ml-4 max-w-[180px] truncate font-mono text-[11px]">
               {record?.key.pk}
             </span>
           </div>

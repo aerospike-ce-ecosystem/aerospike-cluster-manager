@@ -136,7 +136,7 @@ export function K8sOperationStatus({
           <Progress
             value={processedCount}
             max={targetCount}
-            className={cn(failedCount > 0 ? "progress-error" : "progress-success")}
+            className={cn(failedCount > 0 ? "[&>div]:bg-error" : "[&>div]:bg-success")}
           />
         </div>
 

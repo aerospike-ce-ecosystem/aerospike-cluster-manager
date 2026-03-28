@@ -46,7 +46,7 @@ export function WizardCreationModeStep({
           }`}
         >
           <PenLine
-            className={`h-8 w-8 ${creationMode === "scratch" ? "text-accent" : "text-base-content/60"}`}
+            className={`h-8 w-8 ${creationMode === "scratch" ? "text-primary" : "text-base-content/60"}`}
           />
           <span className="text-sm font-medium">Start from Scratch</span>
           <span className="text-base-content/60 text-xs">Configure every setting manually</span>
@@ -61,7 +61,7 @@ export function WizardCreationModeStep({
           }`}
         >
           <FileText
-            className={`h-8 w-8 ${creationMode === "template" ? "text-accent" : "text-base-content/60"}`}
+            className={`h-8 w-8 ${creationMode === "template" ? "text-primary" : "text-base-content/60"}`}
           />
           <span className="text-sm font-medium">Start from Template</span>
           <span className="text-base-content/60 text-xs">Pre-fill settings from a template</span>
@@ -77,7 +77,7 @@ export function WizardCreationModeStep({
               <p className="text-base-content/60 text-sm">No templates found</p>
               <Link
                 href="/k8s/templates/new"
-                className="text-accent text-xs underline underline-offset-2"
+                className="text-primary text-xs underline underline-offset-2"
               >
                 Create a template
               </Link>
@@ -115,7 +115,7 @@ export function WizardCreationModeStep({
                     </div>
                   </div>
                   {templateLoading && selectedTemplateName === t.name && (
-                    <Loader2 className="text-accent h-4 w-4 animate-spin" />
+                    <Loader2 className="text-primary h-4 w-4 animate-spin" />
                   )}
                 </button>
               ))}
@@ -126,7 +126,7 @@ export function WizardCreationModeStep({
           {templateDetail && selectedTemplateName && !templateLoading && (
             <div className="rounded-lg border p-4">
               <h4 className="mb-3 text-sm font-medium">
-                Template Preview: <span className="text-accent">{templateDetail.name}</span>
+                Template Preview: <span className="text-primary">{templateDetail.name}</span>
               </h4>
               <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
                 {PREVIEW_FIELDS.map(({ key, label }) => {

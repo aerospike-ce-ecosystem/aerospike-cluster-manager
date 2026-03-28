@@ -99,7 +99,7 @@ export default function K8sTemplatesPage() {
               <div className="flex items-start justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <FileCode className="text-accent h-4 w-4 shrink-0" />
+                    <FileCode className="text-primary h-4 w-4 shrink-0" />
                     <h3 className="truncate text-sm font-semibold">{tmpl.name}</h3>
                   </div>
                 </div>

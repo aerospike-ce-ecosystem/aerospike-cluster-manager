@@ -42,7 +42,7 @@ const Dialog: React.FC<DialogProps> = ({ open, onOpenChange, preventClose, child
   return (
     <dialog
       ref={dialogRef}
-      className="modal"
+      className="fixed inset-0 z-50 m-0 flex h-full w-full items-center justify-center bg-black/50 p-0 backdrop-blur-sm open:flex [&:not([open])]:hidden"
       onCancel={(e) => {
         e.preventDefault();
         if (!preventClose) handleClose();
@@ -79,6 +79,7 @@ const DialogClose = React.forwardRef<
       ref={ref}
       disabled={preventClose}
       onClick={(e) => {
+        if (preventClose) return;
         onClick?.(e);
         onClose();
       }}
@@ -94,14 +95,17 @@ const DialogContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTML
     return (
       <div
         ref={ref}
-        className={cn("modal-box relative max-w-[calc(100vw-2rem)] sm:max-w-lg", className)}
+        className={cn(
+          "border-base-300 bg-base-100 relative w-full max-w-[calc(100vw-2rem)] rounded-2xl border p-6 shadow-xl sm:max-w-lg",
+          className,
+        )}
         {...props}
       >
         {children}
         <button
           onClick={onClose}
           disabled={preventClose}
-          className="btn btn-sm btn-circle btn-ghost absolute top-4 right-4 h-10 w-10 sm:h-8 sm:w-8"
+          className="text-muted-foreground hover:bg-base-200 hover:text-base-content absolute top-4 right-4 inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors sm:h-7 sm:w-7"
           aria-label="Close"
         >
           <X className="h-4 w-4" />

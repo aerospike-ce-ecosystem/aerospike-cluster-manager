@@ -25,7 +25,7 @@ function MetaLabel({
   label: string;
 }) {
   return (
-    <div className="text-muted-foreground/60 flex items-center gap-1.5 text-[11px]">
+    <div className="text-base-content/50 flex items-center gap-1.5 text-[11px]">
       <Icon className="h-3 w-3 shrink-0" />
       <span className="font-mono tracking-wider">{label}</span>
     </div>
@@ -50,16 +50,16 @@ export function RecordMetadataGrid({
 
   return (
     <section>
-      <h4 className="text-muted-foreground/60 mb-3 flex items-center gap-2 font-mono text-[10px] font-semibold tracking-[0.12em] uppercase">
+      <h4 className="text-base-content/40 mb-3 flex items-center gap-2 font-mono text-[10px] font-semibold tracking-[0.12em] uppercase">
         Record Info
-        <span className="bg-border/30 h-px flex-1" />
+        <span className="bg-base-300 h-px flex-1" />
       </h4>
 
       <div className="grid grid-cols-1 gap-x-6 gap-y-2 font-mono text-[13px] sm:grid-cols-2">
         {/* Namespace */}
         <div className="flex items-center gap-3">
           <MetaLabel icon={Database} label="Namespace" />
-          <span className="text-muted-foreground ml-auto">{ns}</span>
+          <span className="text-base-content/80 ml-auto">{ns}</span>
         </div>
 
         {/* Generation */}
@@ -74,7 +74,7 @@ export function RecordMetadataGrid({
         {/* Set */}
         <div className="flex items-center gap-3">
           <MetaLabel icon={Layers} label="Set" />
-          <span className="text-muted-foreground ml-auto">{set}</span>
+          <span className="text-base-content/80 ml-auto">{set}</span>
         </div>
 
         {/* TTL */}
@@ -84,7 +84,7 @@ export function RecordMetadataGrid({
             <span className="ml-auto">
               {formatTTLHuman(displayTTL)}
               {displayTTL > 0 && displayTTL !== -1 && displayTTL !== NEVER_EXPIRE_TTL && (
-                <span className="text-muted-foreground/40 ml-1 text-[11px]">({displayTTL}s)</span>
+                <span className="text-base-content/40 ml-1 text-[11px]">({displayTTL}s)</span>
               )}
             </span>
           ) : (
@@ -103,7 +103,7 @@ export function RecordMetadataGrid({
         <div className="flex items-center gap-3">
           <MetaLabel icon={KeyRound} label="PK" />
           {mode === "view" ? (
-            <span className="text-accent ml-auto font-semibold">{displayPK}</span>
+            <span className="text-primary ml-auto font-semibold">{displayPK}</span>
           ) : (
             <Input
               placeholder="Record key"
@@ -119,7 +119,7 @@ export function RecordMetadataGrid({
         {mode === "view" && record?.key.digest && (
           <div className="flex items-center gap-3">
             <MetaLabel icon={Hash} label="Digest" />
-            <span className="text-muted-foreground/60 ml-auto text-xs break-all">
+            <span className="text-base-content/50 ml-auto text-xs break-all">
               {record.key.digest}
             </span>
           </div>
@@ -129,7 +129,7 @@ export function RecordMetadataGrid({
         {mode === "view" && record?.meta.lastUpdateMs && (
           <div className="flex items-center gap-3">
             <MetaLabel icon={CalendarClock} label="Updated" />
-            <span className="text-muted-foreground/60 ml-auto text-[12px]">
+            <span className="text-base-content/50 ml-auto text-[12px]">
               {new Date(record.meta.lastUpdateMs).toISOString()}
             </span>
           </div>

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { FileCode, MoreHorizontal, Plus, Search, Server, Table2, Settings, X } from "lucide-react";
+import { SidebarBrowser } from "./sidebar-browser";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -56,8 +57,8 @@ const ConnectionItem = React.memo(function ConnectionItem({
         className={cn(
           "flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-all duration-150",
           isActive
-            ? "bg-accent/10 text-accent"
-            : "hover:bg-sidebar-accent text-sidebar-foreground/80 hover:text-sidebar-foreground",
+            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+            : "hover:bg-base-200/60 text-sidebar-foreground/80 hover:text-sidebar-foreground",
         )}
       >
         <span
@@ -120,6 +121,13 @@ function SidebarContent({ isMobileOrTablet }: { isMobileOrTablet: boolean }) {
   const setMobileNavOpen = useUIStore((s) => s.setMobileNavOpen);
   const [search, setSearch] = useState("");
   const router = useRouter();
+  const pathname = usePathname();
+
+  // Detect active connection from URL
+  const connIdMatch = pathname?.match(
+    /\/(browser|cluster|indexes|admin|udfs|query|terminal|observability)\/([^/]+)/,
+  );
+  const activeConnId = connIdMatch?.[2];
 
   useEffect(() => {
     fetchConnections()
@@ -175,13 +183,22 @@ function SidebarContent({ isMobileOrTablet }: { isMobileOrTablet: boolean }) {
         </div>
       </div>
 
-      <div className="divider my-0 px-2" />
+      {/* Namespace Tree Browser */}
+      {activeConnId && (
+        <SidebarBrowser
+          key={activeConnId}
+          connId={activeConnId}
+          isMobileOrTablet={isMobileOrTablet}
+        />
+      )}
+
+      <div className="bg-base-300 mx-2 my-0 h-px" />
 
       <div className="space-y-1 p-2.5">
         <Button
           variant="outline"
           size="sm"
-          className="border-sidebar-border hover:border-accent/50 hover:bg-accent/5 hover:text-accent h-8 w-full justify-start gap-2 border-dashed text-xs transition-colors"
+          className="border-sidebar-border hover:border-primary/50 hover:bg-primary/5 hover:text-primary h-8 w-full justify-start gap-2 border-dashed text-xs transition-colors"
           onClick={() => handleNavigation("/")}
         >
           <Plus className="h-3.5 w-3.5" />
@@ -192,7 +209,7 @@ function SidebarContent({ isMobileOrTablet }: { isMobileOrTablet: boolean }) {
             <Button
               variant="outline"
               size="sm"
-              className="border-sidebar-border hover:border-accent/50 hover:bg-accent/5 hover:text-accent h-8 w-full justify-start gap-2 border-dashed text-xs transition-colors"
+              className="border-sidebar-border hover:border-primary/50 hover:bg-primary/5 hover:text-primary h-8 w-full justify-start gap-2 border-dashed text-xs transition-colors"
               onClick={() => handleNavigation("/k8s/clusters/new")}
             >
               <Plus className="h-3.5 w-3.5" />
@@ -234,7 +251,7 @@ export function Sidebar() {
     if (!sidebarOpen) return null;
     return (
       <aside className="border-sidebar-border bg-sidebar relative flex w-56 flex-col border-r">
-        <div className="via-accent/15 pointer-events-none absolute top-0 right-0 bottom-0 w-px bg-gradient-to-b from-transparent to-transparent" />
+        <div className="via-primary/15 pointer-events-none absolute top-0 right-0 bottom-0 w-px bg-gradient-to-b from-transparent to-transparent" />
         <SidebarContent isMobileOrTablet={false} />
       </aside>
     );
@@ -271,7 +288,7 @@ export function Sidebar() {
             <X className="h-4 w-4" />
           </Button>
         </div>
-        <div className="divider my-0 px-2" />
+        <div className="bg-base-300 mx-2 my-0 h-px" />
         <SidebarContent isMobileOrTablet={true} />
       </aside>
     </>

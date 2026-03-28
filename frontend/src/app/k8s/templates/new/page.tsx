@@ -67,7 +67,10 @@ export default function CreateTemplatePage() {
     api
       .getK8sStorageClasses()
       .then(setStorageClasses)
-      .catch(() => {});
+      .catch((err) => {
+        // eslint-disable-next-line no-console -- intentional: surface storage class fetch failures
+        console.error("Failed to load storage classes:", err);
+      });
   }, []);
 
   const handleSubmit = async () => {
@@ -391,7 +394,7 @@ export default function CreateTemplatePage() {
         </div>
 
         {/* Network Config (Heartbeat) */}
-        <div className="bg-card space-y-4 rounded-xl border p-6">
+        <div className="bg-base-100 space-y-4 rounded-xl border p-6">
           <div className="flex items-center gap-2">
             <Checkbox
               id="tmpl-network-config"
@@ -463,7 +466,7 @@ export default function CreateTemplatePage() {
         </div>
 
         {/* Rack Config */}
-        <div className="bg-card space-y-4 rounded-xl border p-6">
+        <div className="bg-base-100 space-y-4 rounded-xl border p-6">
           <h3 className="text-sm font-semibold">Rack Config</h3>
           <div className="grid gap-2 sm:w-1/2">
             <Label className="text-xs">Max Racks Per Node</Label>
@@ -486,7 +489,7 @@ export default function CreateTemplatePage() {
         </div>
 
         {/* Service Config */}
-        <div className="bg-card space-y-4 rounded-xl border p-6">
+        <div className="bg-base-100 space-y-4 rounded-xl border p-6">
           <div className="flex items-center gap-2">
             <Checkbox
               id="tmpl-service-config"

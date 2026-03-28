@@ -144,7 +144,7 @@ export function ConnectionFormDialog({
                     backgroundColor: color,
                     boxShadow:
                       form.color === color
-                        ? `0 0 0 2px var(--color-background), 0 0 0 4px ${color}`
+                        ? `0 0 0 2px var(--color-base-100), 0 0 0 4px ${color}`
                         : undefined,
                   }}
                   onClick={() => onFormChange({ ...form, color })}

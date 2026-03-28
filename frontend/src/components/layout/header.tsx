@@ -29,7 +29,7 @@ export function Header() {
   return (
     <header className="bg-base-100/80 border-base-300/60 relative z-50 flex h-12 items-center justify-between border-b px-4 backdrop-blur-md">
       {/* Bottom gradient accent line */}
-      <div className="via-accent/50 absolute right-0 bottom-0 left-0 h-[2px] bg-gradient-to-r from-transparent to-transparent" />
+      <div className="via-primary/30 absolute right-0 bottom-0 left-0 h-[1px] bg-gradient-to-r from-transparent to-transparent" />
 
       <div className="flex items-center gap-3">
         <Tooltip>

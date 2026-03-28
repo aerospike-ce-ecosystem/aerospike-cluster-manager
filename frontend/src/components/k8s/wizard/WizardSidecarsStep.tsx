@@ -293,7 +293,7 @@ function ContainerEditor({
             <button
               type="button"
               onClick={addPort}
-              className="text-accent hover:text-accent/80 flex items-center gap-1 text-[10px] font-medium"
+              className="text-primary hover:text-primary/80 flex items-center gap-1 text-[10px] font-medium"
             >
               <Plus className="h-3 w-3" /> Add Port
             </button>
@@ -334,7 +334,7 @@ function ContainerEditor({
             <button
               type="button"
               onClick={addEnv}
-              className="text-accent hover:text-accent/80 flex items-center gap-1 text-[10px] font-medium"
+              className="text-primary hover:text-primary/80 flex items-center gap-1 text-[10px] font-medium"
             >
               <Plus className="h-3 w-3" /> Add Env Var
             </button>
@@ -375,7 +375,7 @@ function ContainerEditor({
             <button
               type="button"
               onClick={addVolumeMount}
-              className="text-accent hover:text-accent/80 flex items-center gap-1 text-[10px] font-medium"
+              className="text-primary hover:text-primary/80 flex items-center gap-1 text-[10px] font-medium"
             >
               <Plus className="h-3 w-3" /> Add Volume Mount
             </button>
@@ -431,7 +431,7 @@ function ContainerListEditor({
       <button
         type="button"
         onClick={addContainer}
-        className="text-accent hover:text-accent/80 flex items-center gap-1 text-xs font-medium"
+        className="text-primary hover:text-primary/80 flex items-center gap-1 text-xs font-medium"
       >
         <Plus className="h-3.5 w-3.5" /> Add {title.replace(/s$/, "")}
       </button>

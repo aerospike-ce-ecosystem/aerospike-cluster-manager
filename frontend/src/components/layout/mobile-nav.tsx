@@ -47,7 +47,7 @@ export function MobileNav({ connId }: MobileNavProps) {
                   onClick={() => handleClick(tab.path)}
                   className={cn(
                     "flex w-full items-center gap-3 px-4 py-3 text-sm transition-colors",
-                    isActive ? "text-accent" : "text-muted-foreground hover:text-base-content",
+                    isActive ? "text-primary" : "text-muted-foreground hover:text-base-content",
                   )}
                 >
                   <tab.icon className="h-4 w-4" />
@@ -69,10 +69,10 @@ export function MobileNav({ connId }: MobileNavProps) {
               onClick={() => handleClick(tab.path)}
               className={cn(
                 "flex flex-col items-center gap-1 px-3 py-2 text-[10px] font-medium transition-colors",
-                isActive ? "text-accent" : "text-muted-foreground",
+                isActive ? "text-primary" : "text-muted-foreground",
               )}
             >
-              <tab.icon className={cn("h-5 w-5", isActive && "text-accent")} />
+              <tab.icon className={cn("h-5 w-5", isActive && "text-primary")} />
               {tab.label}
             </button>
           );
@@ -82,7 +82,7 @@ export function MobileNav({ connId }: MobileNavProps) {
           className={cn(
             "flex flex-col items-center gap-1 px-3 py-2 text-[10px] font-medium transition-colors",
             moreOpen || moreTabs.some((t) => pathname?.startsWith(`/${t.path}/`))
-              ? "text-accent"
+              ? "text-primary"
               : "text-muted-foreground",
           )}
         >

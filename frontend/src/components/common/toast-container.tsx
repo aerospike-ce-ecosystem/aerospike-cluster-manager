@@ -23,7 +23,7 @@ export function ToastContainer() {
           <span className="text-sm">{t.message}</span>
           <button
             onClick={() => removeToast(t.id)}
-            className="btn btn-ghost btn-xs btn-circle"
+            className="text-muted-foreground hover:bg-base-200 hover:text-base-content inline-flex h-6 w-6 items-center justify-center rounded-full transition-colors"
             aria-label="Dismiss"
           >
             <X className="h-3 w-3" />

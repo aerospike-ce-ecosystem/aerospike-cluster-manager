@@ -4,6 +4,7 @@ import { useBrowserStore } from "../browser-store";
 vi.mock("@/lib/api/client", () => ({
   api: {
     getRecords: vi.fn(),
+    getFilteredRecords: vi.fn(),
     putRecord: vi.fn(),
     deleteRecord: vi.fn(),
   },
@@ -91,6 +92,66 @@ describe("useBrowserStore", () => {
     expect(mockApi.deleteRecord).toHaveBeenCalledWith("conn-1", "ns", "users", "pk-1");
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(mockApi.getRecords).not.toHaveBeenCalled();
+  });
+
+  it("fetchFilteredRecords populates state", async () => {
+    const mockResult = {
+      records: [{ key: { pk: "1" }, meta: {}, bins: { name: "test" } }],
+      total: 50,
+      page: 1,
+      pageSize: 25,
+      hasMore: true,
+      scannedRecords: 50,
+      executionTimeMs: 12,
+    };
+    mockApi.getFilteredRecords.mockResolvedValue(mockResult as any);
+
+    await useBrowserStore.getState().fetchFilteredRecords("conn-1", "ns", "set");
+
+    const state = useBrowserStore.getState();
+    expect(state.records).toEqual(mockResult.records);
+    expect(state.total).toBe(50);
+    expect(state.scannedRecords).toBe(50);
+    expect(state.loading).toBe(false);
+    expect(state.error).toBeNull();
+  });
+
+  it("fetchFilteredRecords sets error on failure", async () => {
+    mockApi.getFilteredRecords.mockRejectedValue(new Error("Query failed"));
+
+    await useBrowserStore.getState().fetchFilteredRecords("conn-1", "ns", "set");
+
+    expect(useBrowserStore.getState().error).toBe("Query failed");
+    expect(useBrowserStore.getState().loading).toBe(false);
+  });
+
+  it("fetchFilteredRecords passes filters and primaryKey", async () => {
+    const mockResult = {
+      records: [],
+      total: 0,
+      page: 1,
+      pageSize: 25,
+      hasMore: false,
+      scannedRecords: 0,
+      executionTimeMs: 5,
+    };
+    mockApi.getFilteredRecords.mockResolvedValue(mockResult as any);
+
+    const filters = { logic: "and" as const, conditions: [] };
+    await useBrowserStore
+      .getState()
+      .fetchFilteredRecords("conn-1", "ns", "set", filters, 50, "key-1");
+
+    expect(mockApi.getFilteredRecords).toHaveBeenCalledWith(
+      "conn-1",
+      expect.objectContaining({
+        namespace: "ns",
+        set: "set",
+        filters,
+        pageSize: 50,
+        primaryKey: "key-1",
+      }),
+    );
   });
 
   it("reset clears all state", () => {

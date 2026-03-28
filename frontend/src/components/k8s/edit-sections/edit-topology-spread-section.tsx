@@ -140,7 +140,7 @@ export function EditTopologySpreadSection({
             },
           ]);
         }}
-        className="text-accent hover:text-accent/80 flex items-center gap-1 text-[10px] font-medium"
+        className="text-primary hover:text-primary/80 flex items-center gap-1 text-[10px] font-medium"
         disabled={disabled}
       >
         <Plus className="h-3 w-3" /> Add Constraint

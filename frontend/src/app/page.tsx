@@ -19,7 +19,7 @@ import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { InlineAlert } from "@/components/common/inline-alert";
 import { LoadingButton } from "@/components/common/loading-button";
 import { PageHeader } from "@/components/common/page-header";
-import { ClusterListTable } from "@/components/cluster-list/cluster-list-table";
+import { ClusterCardList } from "@/components/cluster-list/cluster-card-list";
 import { K8sImportDialog } from "@/components/k8s/k8s-import-dialog";
 import { useConnectionStore } from "@/stores/connection-store";
 import { useClusterListStore } from "@/stores/cluster-list-store";
@@ -76,7 +76,10 @@ export default function ConnectionsPage() {
       .then(() => {
         fetchAllHealth();
       })
-      .catch(() => undefined);
+      .catch((err) => {
+        // eslint-disable-next-line no-console -- intentional: surface initial load failures
+        console.error("Failed to load cluster list:", err);
+      });
   }, [fetchAll, fetchAllHealth]);
 
   useEffect(() => {
@@ -242,7 +245,7 @@ export default function ConnectionsPage() {
 
       <InlineAlert message={error} />
 
-      <ClusterListTable
+      <ClusterCardList
         rows={rows}
         loading={loading}
         onRowClick={handleRowClick}
@@ -332,7 +335,7 @@ export default function ConnectionsPage() {
                       backgroundColor: color,
                       boxShadow:
                         form.color === color
-                          ? `0 0 0 2px var(--color-background), 0 0 0 4px ${color}`
+                          ? `0 0 0 2px var(--color-base-100), 0 0 0 4px ${color}`
                           : undefined,
                     }}
                     onClick={() => setForm({ ...form, color })}

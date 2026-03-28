@@ -33,7 +33,7 @@ export const StatCard = React.memo(function StatCard({
               "flex h-8 w-8 items-center justify-center rounded-lg sm:h-10 sm:w-10",
               trend === "up" && "bg-success/10 text-success",
               trend === "down" && "bg-error/10 text-error",
-              (!trend || trend === "neutral") && "bg-accent/10 text-accent",
+              (!trend || trend === "neutral") && "bg-primary/10 text-primary",
             )}
           >
             <Icon className="h-5 w-5" />

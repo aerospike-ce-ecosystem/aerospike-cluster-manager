@@ -19,7 +19,10 @@ const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
         onChange?.(e);
         onCheckedChange?.(e.target.checked);
       }}
-      className={cn("checkbox checkbox-sm checkbox-primary", className)}
+      className={cn(
+        "border-base-300 accent-primary focus-visible:ring-primary/50 h-4 w-4 shrink-0 rounded border transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50",
+        className,
+      )}
       {...props}
     />
   ),

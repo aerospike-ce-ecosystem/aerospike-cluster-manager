@@ -207,7 +207,7 @@ function RackAffinityEditor({
       <button
         type="button"
         onClick={addExpression}
-        className="text-accent hover:text-accent/80 flex items-center gap-1 text-xs font-medium"
+        className="text-primary hover:text-primary/80 flex items-center gap-1 text-xs font-medium"
       >
         <Plus className="h-3.5 w-3.5" /> Add Expression
       </button>

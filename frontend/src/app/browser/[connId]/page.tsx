@@ -364,7 +364,7 @@ export default function BrowserSetListPage({ params }: { params: Promise<{ connI
                   </div>
 
                   {/* Sets */}
-                  <div className="divider my-0" />
+                  <div className="bg-base-300 my-0 h-px" />
                   <div>
                     <div className="mb-2.5 flex items-center justify-between">
                       <h4 className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
@@ -406,7 +406,7 @@ export default function BrowserSetListPage({ params }: { params: Promise<{ connI
                                   {formatBytes(s.memoryDataBytes)}
                                 </Badge>
                               )}
-                              <ChevronRight className="text-muted-foreground/40 group-hover:text-accent h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                              <ChevronRight className="text-muted-foreground/40 group-hover:text-primary h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                             </div>
                           </button>
                         ))}

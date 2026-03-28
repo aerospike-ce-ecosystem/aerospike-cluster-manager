@@ -113,7 +113,7 @@ Local dev with `compose.dev.yaml` requires setting `AEROSPIKE_HOST=localhost AER
 - **API Proxy**: `/api/*` requests are proxied to the backend via Next.js `rewrites`. Target is configured with `BACKEND_URL` env var (default: `http://localhost:8000`).
 - **State Management**: Zustand stores are separated by domain. Only `ui-store` persists to localStorage via `persist` middleware.
 - **Type Mirroring**: Backend Pydantic models and frontend TypeScript types (`lib/api/types.ts`) are manually synchronized. Both sides must be updated when models change.
-- **Styling**: Tailwind CSS 4 + DaisyUI 5. Light/dark mode themes via CSS custom properties. Custom animations defined in `globals.css`.
+- **Styling**: Tailwind CSS 4 + CSS custom properties (no component library). Light/dark mode via `data-theme` attribute. Design tokens defined in `globals.css` `@theme` block. Inter font (UI) + JetBrains Mono (data). Primary color `#2563EB` (blue), accent `#F59E0B` (amber).
 - **Path Alias**: `@/` points to `frontend/src/` (configured in both tsconfig and vitest).
 
 ### Backend Policies

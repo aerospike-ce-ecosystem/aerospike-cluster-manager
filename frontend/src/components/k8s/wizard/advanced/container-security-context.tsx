@@ -177,7 +177,7 @@ export function ContainerSecurityContext({ form, updateForm }: ContainerSecurity
                 setAddCapInput("");
               }}
               disabled={!addCapInput.trim()}
-              className="bg-accent text-accent-foreground hover:bg-accent/80 rounded px-3 text-xs font-medium disabled:opacity-50"
+              className="bg-accent text-primary-content hover:bg-accent/80 rounded px-3 text-xs font-medium disabled:opacity-50"
             >
               Add
             </button>
@@ -192,7 +192,7 @@ export function ContainerSecurityContext({ form, updateForm }: ContainerSecurity
               {capabilities.drop!.map((cap) => (
                 <span
                   key={cap}
-                  className="bg-destructive/10 text-destructive inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
+                  className="bg-error/10 text-error inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
                 >
                   {cap}
                   <button
@@ -200,7 +200,7 @@ export function ContainerSecurityContext({ form, updateForm }: ContainerSecurity
                     onClick={() =>
                       updateCapabilities({ drop: capabilities.drop!.filter((c) => c !== cap) })
                     }
-                    className="hover:bg-destructive/20 ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full"
+                    className="hover:bg-error/20 ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full"
                   >
                     &times;
                   </button>
@@ -235,7 +235,7 @@ export function ContainerSecurityContext({ form, updateForm }: ContainerSecurity
                 setDropCapInput("");
               }}
               disabled={!dropCapInput.trim()}
-              className="bg-accent text-accent-foreground hover:bg-accent/80 rounded px-3 text-xs font-medium disabled:opacity-50"
+              className="bg-accent text-primary-content hover:bg-accent/80 rounded px-3 text-xs font-medium disabled:opacity-50"
             >
               Add
             </button>

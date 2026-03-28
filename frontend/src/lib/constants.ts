@@ -9,10 +9,11 @@ export const CE_LIMITS = {
 } as const;
 
 export const BRAND_COLORS = {
-  yellow: "#ffe600",
-  blue: "#0097D3",
-  navy: "#0D1B32",
-  red: "#c4373a",
+  primary: "#2563EB",
+  accent: "#F59E0B",
+  navy: "#111827",
+  success: "#059669",
+  error: "#DC2626",
 } as const;
 
 export const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
@@ -114,23 +115,23 @@ export const DUAL_VALUE_OPERATORS: FilterOperator[] = ["between"];
 export const AEROSPIKE_IMAGES = ["aerospike:ce-8.1.1.1"] as const;
 
 export const BIN_TYPE_COLORS: Record<BinType, string> = {
-  string: "bg-success/10 text-success border-success/20",
-  integer: "bg-info/10 text-info border-info/20",
-  float: "bg-info/10 text-info border-info/20",
-  bool: "bg-secondary/10 text-secondary border-secondary/20",
-  list: "bg-warning/10 text-warning border-warning/20",
-  map: "bg-accent/15 text-accent border-accent/25",
+  string: "bg-[#059669]/10 text-[#059669] border-[#059669]/20",
+  integer: "bg-[#2563EB]/10 text-[#2563EB] border-[#2563EB]/20",
+  float: "bg-[#7C3AED]/10 text-[#7C3AED] border-[#7C3AED]/20",
+  bool: "bg-[#D97706]/10 text-[#D97706] border-[#D97706]/20",
+  list: "bg-[#0891B2]/10 text-[#0891B2] border-[#0891B2]/20",
+  map: "bg-[#DB2777]/10 text-[#DB2777] border-[#DB2777]/20",
   bytes: "bg-base-200 text-muted-foreground border-base-300",
-  geojson: "bg-info/10 text-info border-info/20",
+  geojson: "bg-[#059669]/10 text-[#059669] border-[#059669]/20",
 };
 
 export const BIN_TYPE_BORDER_COLORS: Record<BinType, string> = {
-  string: "border-l-success/40",
-  integer: "border-l-info/40",
-  float: "border-l-info/40",
-  bool: "border-l-secondary/40",
-  list: "border-l-warning/40",
-  map: "border-l-accent/40",
+  string: "border-l-[#059669]/40",
+  integer: "border-l-[#2563EB]/40",
+  float: "border-l-[#7C3AED]/40",
+  bool: "border-l-[#D97706]/40",
+  list: "border-l-[#0891B2]/40",
+  map: "border-l-[#DB2777]/40",
   bytes: "border-l-muted-foreground/20",
-  geojson: "border-l-info/40",
+  geojson: "border-l-[#059669]/40",
 };

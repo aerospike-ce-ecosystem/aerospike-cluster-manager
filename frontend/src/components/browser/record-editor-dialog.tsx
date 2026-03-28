@@ -95,7 +95,7 @@ export function RecordEditorFields({
             size="sm"
             onClick={onAddBin}
             disabled={saving}
-            className="border-base-300/40 text-muted-foreground hover:text-accent hover:border-accent/30 h-6 gap-1 font-mono text-[11px]"
+            className="border-base-300/40 text-muted-foreground hover:text-primary hover:border-accent/30 h-6 gap-1 font-mono text-[11px]"
           >
             <Plus className="h-3 w-3" />
             Add

@@ -38,7 +38,7 @@ export class ErrorBoundary extends React.Component<
           </p>
           <button
             onClick={() => this.setState({ hasError: false, error: undefined })}
-            className="text-accent mt-4 text-sm underline"
+            className="text-primary mt-4 text-sm underline"
           >
             Try again
           </button>

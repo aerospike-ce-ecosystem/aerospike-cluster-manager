@@ -113,7 +113,7 @@ export function WizardNodeBlockListStep({ form, updateForm, nodes }: WizardNodeB
             type="button"
             onClick={addManualNode}
             disabled={!manualNode.trim()}
-            className="bg-accent text-accent-foreground hover:bg-accent/80 rounded px-3 text-xs font-medium disabled:opacity-50"
+            className="bg-accent text-primary-content hover:bg-accent/80 rounded px-3 text-xs font-medium disabled:opacity-50"
           >
             Add
           </button>

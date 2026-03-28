@@ -127,7 +127,7 @@ export function EditPodSchedulingSection({
               {Object.entries(nodeSelector).map(([k, v]) => (
                 <span
                   key={k}
-                  className="bg-accent/10 text-accent inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
+                  className="bg-accent/10 text-primary inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
                 >
                   {k}={v}
                   <button
@@ -259,7 +259,7 @@ export function EditPodSchedulingSection({
             type="button"
             onClick={addToleration}
             disabled={disabled}
-            className="text-accent hover:text-accent/80 flex items-center gap-1 text-xs font-medium"
+            className="text-primary hover:text-primary/80 flex items-center gap-1 text-xs font-medium"
           >
             <Plus className="h-3.5 w-3.5" /> Add Toleration
           </button>
@@ -385,7 +385,7 @@ export function EditPodSchedulingSection({
               {imagePullSecrets.map((secret) => (
                 <span
                   key={secret}
-                  className="bg-accent/10 text-accent inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
+                  className="bg-accent/10 text-primary inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
                 >
                   {secret}
                   <button

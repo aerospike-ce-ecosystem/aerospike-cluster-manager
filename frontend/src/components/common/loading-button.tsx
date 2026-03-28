@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface LoadingButtonProps extends React.ComponentProps<typeof Button> {
@@ -11,7 +12,7 @@ export const LoadingButton = React.forwardRef<HTMLButtonElement, LoadingButtonPr
   function LoadingButton({ loading, disabled, children, ...props }, ref) {
     return (
       <Button ref={ref} disabled={disabled || loading} {...props}>
-        {loading && <span className="loading loading-spinner loading-xs mr-2" />}
+        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
         {children}
       </Button>
     );

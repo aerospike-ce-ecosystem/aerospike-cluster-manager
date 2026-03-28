@@ -385,9 +385,9 @@ export function K8sClusterWizard() {
               <span
                 className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium ${
                   i === step
-                    ? "bg-accent text-accent-foreground"
+                    ? "bg-accent text-primary-content"
                     : i < step
-                      ? "bg-accent/20 text-accent"
+                      ? "bg-accent/20 text-primary"
                       : "bg-base-200 text-base-content/60"
                 }`}
               >

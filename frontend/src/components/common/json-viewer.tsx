@@ -36,7 +36,7 @@ export function JsonViewer({ data, collapsed = false, level = 0, className }: Js
       <span className={cn("font-mono text-sm", className)}>
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="hover:text-accent inline-flex items-center"
+          className="hover:text-primary inline-flex items-center"
           aria-expanded={!isCollapsed}
           aria-label={isCollapsed ? "Expand JSON array" : "Collapse JSON array"}
         >
@@ -70,7 +70,7 @@ export function JsonViewer({ data, collapsed = false, level = 0, className }: Js
       <span className={cn("font-mono text-sm", className)}>
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="hover:text-accent inline-flex items-center"
+          className="hover:text-primary inline-flex items-center"
           aria-expanded={!isCollapsed}
           aria-label={isCollapsed ? "Expand JSON object" : "Collapse JSON object"}
         >

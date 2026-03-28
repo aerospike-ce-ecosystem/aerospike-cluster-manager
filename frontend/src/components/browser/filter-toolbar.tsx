@@ -170,7 +170,7 @@ export function FilterToolbar({
               )}
               <span>Add filter</span>
               {availableBins.length > 0 && (
-                <span className="bg-accent/10 text-accent rounded-full px-1 text-[10px] font-medium tabular-nums">
+                <span className="bg-accent/10 text-primary rounded-full px-1 text-[10px] font-medium tabular-nums">
                   {availableBins.length}
                 </span>
               )}

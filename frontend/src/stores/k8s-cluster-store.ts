@@ -106,7 +106,9 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
       try {
         await api.getK8sClusters();
         set({ k8sAvailable: true });
-      } catch {
+      } catch (err) {
+        // eslint-disable-next-line no-console -- intentional: surface K8s availability check failures
+        console.warn("K8s API not available:", err);
         set({ k8sAvailable: false });
       }
     },
@@ -300,7 +302,9 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
       try {
         const secrets = await api.getK8sSecrets(namespace);
         set({ k8sSecrets: secrets });
-      } catch {
+      } catch (err) {
+        // eslint-disable-next-line no-console -- intentional: surface secret fetch failures
+        console.error(`Failed to fetch K8s secrets for namespace ${namespace}:`, err);
         set({ k8sSecrets: [] });
       }
     },

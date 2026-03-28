@@ -70,7 +70,7 @@ function ViewBinRow({ index, name, type, value }: ViewBinRowProps) {
           {complex ? (
             <button
               type="button"
-              className="hover:text-accent flex items-center gap-1 transition-colors"
+              className="hover:text-primary flex items-center gap-1 transition-colors"
               onClick={() => setExpanded((p) => !p)}
             >
               {expanded ? (
@@ -176,7 +176,7 @@ function EditBinRow({
           {isComplexType && (
             <button
               type="button"
-              className="text-muted-foreground/60 hover:text-accent mt-1 font-mono text-[10px] transition-colors disabled:pointer-events-none disabled:opacity-50"
+              className="text-muted-foreground/60 hover:text-primary mt-1 font-mono text-[10px] transition-colors disabled:pointer-events-none disabled:opacity-50"
               onClick={() => onToggleCodeEditor(bin.id)}
               disabled={saving}
             >

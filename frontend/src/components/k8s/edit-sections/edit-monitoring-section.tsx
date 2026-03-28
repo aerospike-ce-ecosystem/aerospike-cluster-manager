@@ -134,7 +134,7 @@ function ExporterEnvEditor({
           // Don't sync yet — user needs to fill in the name first
           onChange([...(value ?? []), { name: "", value: "" }]);
         }}
-        className="text-accent hover:text-accent/80 text-xs font-medium"
+        className="text-primary hover:text-primary/80 text-xs font-medium"
         disabled={disabled}
       >
         + Add Variable

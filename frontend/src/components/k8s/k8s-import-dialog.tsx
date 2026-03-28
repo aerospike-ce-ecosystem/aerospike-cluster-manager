@@ -109,7 +109,7 @@ export function K8sImportDialog({ open, onOpenChange, onSuccess }: K8sImportDial
               type="file"
               accept=".json,.yaml,.yml"
               onChange={handleFileUpload}
-              className="file-input file-input-bordered mt-1 w-full text-sm"
+              className="border-base-300 bg-base-100 file:bg-primary/10 file:text-primary mt-1 w-full rounded-lg border px-3 py-2 text-sm shadow-sm file:mr-3 file:rounded-md file:border-0 file:px-3 file:py-1 file:text-sm file:font-medium"
             />
           </div>
 
