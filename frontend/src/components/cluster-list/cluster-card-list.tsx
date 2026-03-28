@@ -57,7 +57,12 @@ function ClusterCard({
       role="button"
       tabIndex={0}
       onClick={() => onRowClick(row)}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onRowClick(row); } }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onRowClick(row);
+        }
+      }}
       className={cn(
         "group bg-base-100 flex cursor-pointer overflow-hidden rounded-2xl border shadow-sm transition-all duration-200 hover:shadow-md",
         isConnected ? "border-base-300 hover:border-primary/30" : "border-error/20 opacity-75",
@@ -123,9 +128,17 @@ function ClusterCard({
 
         {/* Action */}
         <div className="ml-auto flex items-center gap-2">
-          <ChevronRight className={cn("h-5 w-5 transition-colors", isConnected ? "text-primary/40 group-hover:text-primary" : "text-base-content/20")} />
+          <ChevronRight
+            className={cn(
+              "h-5 w-5 transition-colors",
+              isConnected ? "text-primary/40 group-hover:text-primary" : "text-base-content/20",
+            )}
+          />
           <DropdownMenu>
-            <DropdownMenuTrigger onClick={(e) => e.stopPropagation()} className="border-base-300 text-muted-foreground hover:bg-base-200 hover:text-base-content inline-flex h-9 w-9 items-center justify-center rounded-lg border transition-colors sm:hidden sm:group-hover:inline-flex">
+            <DropdownMenuTrigger
+              onClick={(e) => e.stopPropagation()}
+              className="border-base-300 text-muted-foreground hover:bg-base-200 hover:text-base-content inline-flex h-9 w-9 items-center justify-center rounded-lg border transition-colors sm:hidden sm:group-hover:inline-flex"
+            >
               <svg
                 width="16"
                 height="16"
@@ -140,12 +153,23 @@ function ClusterCard({
               </svg>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(row.id); }}>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit(row.id);
+                }}
+              >
                 <Pencil className="mr-2 h-3.5 w-3.5" />
                 Edit
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(row); }} className="text-error">
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(row);
+                }}
+                className="text-error"
+              >
                 <Trash2 className="mr-2 h-3.5 w-3.5" />
                 Delete
               </DropdownMenuItem>

@@ -313,7 +313,12 @@ export default function ClusterPage({ params }: { params: Promise<{ connId: stri
           </TabsList>
 
           <TabsContent value="overview" className="mt-6 space-y-6">
-            <UnifiedOverview cluster={cluster} connId={connId} onCreateSet={handleCreateSet} onCreateSampleData={() => setSampleDataOpen(true)} />
+            <UnifiedOverview
+              cluster={cluster}
+              connId={connId}
+              onCreateSet={handleCreateSet}
+              onCreateSampleData={() => setSampleDataOpen(true)}
+            />
           </TabsContent>
 
           <TabsContent value="acko-info" className="mt-6">
@@ -334,7 +339,12 @@ export default function ClusterPage({ params }: { params: Promise<{ connId: stri
           Direct Connection 클러스터 레이아웃 (isK8s=false)
           ══════════════════════════════════════════════ */}
       {!isK8s && (
-        <UnifiedOverview cluster={cluster} connId={connId} onCreateSet={handleCreateSet} onCreateSampleData={() => setSampleDataOpen(true)} />
+        <UnifiedOverview
+          cluster={cluster}
+          connId={connId}
+          onCreateSet={handleCreateSet}
+          onCreateSampleData={() => setSampleDataOpen(true)}
+        />
       )}
 
       {/* ── K8s Dialogs ── */}

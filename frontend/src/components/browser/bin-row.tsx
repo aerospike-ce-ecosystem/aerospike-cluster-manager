@@ -79,19 +79,29 @@ function BinTypeSelect({
         )}
       >
         <span className="truncate font-mono">{value}</span>
-        {open ? <ChevronUp className="text-base-content/30 ml-1 h-3 w-3 shrink-0" /> : <ChevronDown className="text-base-content/30 ml-1 h-3 w-3 shrink-0" />}
+        {open ? (
+          <ChevronUp className="text-base-content/30 ml-1 h-3 w-3 shrink-0" />
+        ) : (
+          <ChevronDown className="text-base-content/30 ml-1 h-3 w-3 shrink-0" />
+        )}
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div role="listbox" className="bg-base-100 border-base-300 absolute left-0 z-50 mt-1 w-full overflow-hidden rounded-lg border py-1 shadow-lg">
+          <div
+            role="listbox"
+            className="bg-base-100 border-base-300 absolute left-0 z-50 mt-1 w-full overflow-hidden rounded-lg border py-1 shadow-lg"
+          >
             {BIN_TYPES.map((t, i) => (
               <button
                 key={t}
                 type="button"
                 role="option"
                 aria-selected={t === value}
-                onClick={() => { onChange(t); setOpen(false); }}
+                onClick={() => {
+                  onChange(t);
+                  setOpen(false);
+                }}
                 onMouseEnter={() => setHighlighted(i)}
                 className={cn(
                   "flex w-full items-center px-2 py-1.5 font-mono text-xs transition-colors",

@@ -233,7 +233,18 @@ export function RecordDetailPage({
     } finally {
       setSaving(false);
     }
-  }, [connId, createMode, editorBins, editorPK, editorSetName, editorTTL, isCreateSetFlow, namespace, navigateBack, setName]);
+  }, [
+    connId,
+    createMode,
+    editorBins,
+    editorPK,
+    editorSetName,
+    editorTTL,
+    isCreateSetFlow,
+    namespace,
+    navigateBack,
+    setName,
+  ]);
 
   const handleDelete = useCallback(async () => {
     if (!record) return;
