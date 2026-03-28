@@ -37,7 +37,7 @@ Browse namespaces with memory/device usage, replication factor, HWM thresholds, 
 
 ### Record Browser
 
-Browse, create, edit, duplicate and delete records with full pagination support.
+Browse, create, edit, duplicate and delete records with server-side limiting and reload.
 
 ![Record Browser](docs/images/03-record-browser.png)
 
