@@ -23,9 +23,7 @@ interface ClusterCardListProps {
 function MetricCell({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-muted-foreground/60 text-[10px] font-medium tracking-wider">
-        {label}
-      </span>
+      <span className="text-base-content/40 text-[10px] font-medium tracking-wider">{label}</span>
       <span className="text-base-content font-mono text-lg font-bold">{value}</span>
     </div>
   );
@@ -86,11 +84,12 @@ function ClusterCard({
             />
           </div>
           <div className="flex flex-col gap-0.5">
-            <span className="text-muted-foreground truncate font-mono text-[11px]">
-              {row.hosts}
-            </span>
+            <span className="text-base-content/60 truncate font-mono text-[11px]">{row.hosts}</span>
+            {row.description && (
+              <span className="text-base-content/50 truncate text-[11px]">{row.description}</span>
+            )}
             {row.build && (
-              <span className="text-muted-foreground/50 text-[11px]">
+              <span className="text-base-content/40 text-[11px]">
                 {row.edition ?? "CE"} {row.build}
               </span>
             )}
