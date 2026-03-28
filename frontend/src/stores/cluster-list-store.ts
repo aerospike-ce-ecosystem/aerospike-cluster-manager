@@ -146,6 +146,7 @@ export const useClusterListStore = create<ClusterListState>()((set, get) => ({
         ),
       }));
     } catch (err) {
+      // eslint-disable-next-line no-console -- intentional: surface silent health-check failures for debugging
       console.error(`Health check failed for ${connectionId}:`, err);
       set((state) => ({
         rows: sortRows(

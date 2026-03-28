@@ -33,6 +33,7 @@ export const useK8sTemplateStore = create<K8sTemplateState>()((set, get) => ({
       set({ templates });
     } catch (err) {
       // Don't set global error — template fetch failures should not block cluster pages
+      // eslint-disable-next-line no-console -- intentional: surface template fetch failures
       console.warn("Failed to fetch K8s templates:", err);
     }
   },

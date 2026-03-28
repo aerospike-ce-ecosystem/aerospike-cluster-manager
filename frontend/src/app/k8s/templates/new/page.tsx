@@ -67,7 +67,10 @@ export default function CreateTemplatePage() {
     api
       .getK8sStorageClasses()
       .then(setStorageClasses)
-      .catch((err) => console.error("Failed to load storage classes:", err));
+      .catch((err) => {
+        // eslint-disable-next-line no-console -- intentional: surface storage class fetch failures
+        console.error("Failed to load storage classes:", err);
+      });
   }, []);
 
   const handleSubmit = async () => {

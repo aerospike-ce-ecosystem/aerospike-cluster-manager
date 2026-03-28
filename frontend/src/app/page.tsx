@@ -76,7 +76,10 @@ export default function ConnectionsPage() {
       .then(() => {
         fetchAllHealth();
       })
-      .catch((err) => console.error("Failed to load cluster list:", err));
+      .catch((err) => {
+        // eslint-disable-next-line no-console -- intentional: surface initial load failures
+        console.error("Failed to load cluster list:", err);
+      });
   }, [fetchAll, fetchAllHealth]);
 
   useEffect(() => {

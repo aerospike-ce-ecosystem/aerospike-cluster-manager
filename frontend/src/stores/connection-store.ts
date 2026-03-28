@@ -56,6 +56,7 @@ export const useConnectionStore = create<ConnectionState>()((set, get) => ({
         checkingHealth: { ...state.checkingHealth, [id]: false },
       }));
     } catch (err) {
+      // eslint-disable-next-line no-console -- intentional: surface silent health-check failures for debugging
       console.error(`Health check failed for connection ${id}:`, err);
       set((state) => ({
         healthStatuses: {

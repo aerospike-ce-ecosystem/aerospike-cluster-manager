@@ -39,8 +39,12 @@ export function SidebarBrowser({ connId, isMobileOrTablet }: SidebarBrowserProps
       .then((data) => {
         if (!cancelled) setState({ namespaces: data.namespaces, loading: false, error: null });
       })
-      .catch(() => {
-        if (!cancelled) setState({ loading: false, error: "Failed to load" });
+      .catch((err) => {
+        if (!cancelled) {
+          // eslint-disable-next-line no-console -- intentional: surface namespace fetch failures
+          console.error(`Failed to load namespaces for ${connId}:`, err);
+          setState({ loading: false, error: "Failed to load" });
+        }
       });
 
     return () => {
