@@ -83,6 +83,7 @@ export function RecordDetailPage({
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
 
   const [editorPK, setEditorPK] = useState("");
+  const [editorSetName, setEditorSetName] = useState(createMode ? "" : setName);
   const [editorTTL, setEditorTTL] = useState("0");
   const [editorBins, setEditorBins] = useState<BinEntry[]>([createEmptyBinEntry()]);
   const [useCodeEditor, setUseCodeEditor] = useState<Record<string, boolean>>({});
@@ -200,6 +201,12 @@ export function RecordDetailPage({
       return;
     }
 
+    const targetSet = createMode ? editorSetName.trim() : setName;
+    if (createMode && !targetSet) {
+      useToastStore.getState().addToast("error", "Set name is required");
+      return;
+    }
+
     setSaving(true);
     try {
       const bins: Record<string, BinValue> = {};
@@ -210,7 +217,7 @@ export function RecordDetailPage({
       }
 
       const payload: RecordWriteRequest = {
-        key: { namespace, set: setName, pk: editorPK.trim() },
+        key: { namespace, set: targetSet, pk: editorPK.trim() },
         bins,
         ttl: Number.parseInt(editorTTL, 10) || 0,
       };
@@ -225,7 +232,7 @@ export function RecordDetailPage({
     } finally {
       setSaving(false);
     }
-  }, [connId, createMode, editorBins, editorPK, editorTTL, namespace, navigateBack, setName]);
+  }, [connId, createMode, editorBins, editorPK, editorSetName, editorTTL, namespace, navigateBack, setName]);
 
   const handleDelete = useCallback(async () => {
     if (!record) return;
@@ -243,12 +250,13 @@ export function RecordDetailPage({
     }
   }, [connId, navigateBack, record]);
 
+  const displaySetName = createMode ? editorSetName || setName : setName;
   const description = useMemo(
     () => (
       <span className="font-mono text-xs">
         {namespace}
         <span className="text-muted-foreground/30 mx-1">.</span>
-        {setName}
+        {displaySetName}
         {!createMode && editorPK && (
           <>
             <span className="text-muted-foreground/30 mx-1">/</span>
@@ -257,7 +265,7 @@ export function RecordDetailPage({
         )}
       </span>
     ),
-    [createMode, editorPK, namespace, setName],
+    [createMode, displaySetName, editorPK, namespace],
   );
 
   if (loading) {
@@ -351,7 +359,8 @@ export function RecordDetailPage({
             saving={saving}
             record={record}
             namespace={namespace}
-            setName={setName}
+            setName={createMode ? editorSetName : setName}
+            onSetNameChange={createMode ? setEditorSetName : undefined}
           />
         </div>
       )}

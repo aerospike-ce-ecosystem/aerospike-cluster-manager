@@ -138,7 +138,7 @@ function EditBinRow({
         <Select
           value={bin.type}
           onChange={(e) => onUpdate(bin.id, "type", e.target.value)}
-          className="border-base-300/40 h-7 font-mono text-[11px]"
+          className="border-base-300/40 h-7 px-2 font-mono text-[11px]"
           disabled={saving}
         >
           {BIN_TYPES.map((t) => (

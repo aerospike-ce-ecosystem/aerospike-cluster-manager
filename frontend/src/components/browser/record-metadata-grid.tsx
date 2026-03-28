@@ -15,6 +15,7 @@ interface RecordMetadataGridProps {
   disabled?: boolean;
   namespace?: string;
   setName?: string;
+  onSetNameChange?: (setName: string) => void;
 }
 
 function MetaLabel({
@@ -42,6 +43,7 @@ export function RecordMetadataGrid({
   disabled,
   namespace,
   setName,
+  onSetNameChange,
 }: RecordMetadataGridProps) {
   const ns = record?.key.namespace ?? namespace ?? "";
   const set = record?.key.set ?? setName ?? "";
@@ -74,7 +76,17 @@ export function RecordMetadataGrid({
         {/* Set */}
         <div className="flex items-center gap-3">
           <MetaLabel icon={Layers} label="Set" />
-          <span className="text-base-content/80 ml-auto">{set}</span>
+          {mode === "create" && onSetNameChange ? (
+            <Input
+              placeholder="Set name"
+              value={set}
+              onChange={(e) => onSetNameChange(e.target.value)}
+              disabled={disabled}
+              className="border-base-300/50 focus-visible:ring-accent/30 ml-auto h-7 w-48 font-mono text-xs"
+            />
+          ) : (
+            <span className="text-base-content/80 ml-auto">{set}</span>
+          )}
         </div>
 
         {/* TTL */}

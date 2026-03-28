@@ -526,7 +526,7 @@ kbd {
 /* ─── Bin Row Grid ──────────────────────────────────── */
 .bin-row-grid {
   display: grid;
-  grid-template-columns: 28px minmax(100px, 180px) 72px 1fr auto;
+  grid-template-columns: 28px minmax(100px, 180px) 100px 1fr auto;
   align-items: center;
   gap: 8px;
   padding: 8px 12px;

@@ -160,7 +160,7 @@ function NamespaceRow({
         {onCreateSet && (
           <button
             onClick={() => onCreateSet(ns.name)}
-            className="text-muted-foreground hover:text-primary hover:border-primary/30 border-base-300 flex items-center gap-1 rounded-lg border border-dashed px-2.5 py-1.5 text-xs transition-colors"
+            className="text-primary/70 hover:text-primary hover:border-primary/40 hover:bg-primary/5 border-primary/20 flex items-center gap-1 rounded-lg border border-dashed px-2.5 py-1.5 text-xs font-medium transition-colors"
           >
             <Plus className="h-3 w-3" />
             <span>Create Set</span>
@@ -232,7 +232,7 @@ export function UnifiedOverview({
               {onCreateSampleData && (
                 <button
                   onClick={onCreateSampleData}
-                  className="text-muted-foreground hover:text-primary hover:bg-primary/5 border-base-300 flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors"
+                  className="text-primary bg-primary/5 hover:bg-primary/10 border-primary/20 flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors"
                 >
                   <FlaskConical className="h-3 w-3" />
                   Sample Data
