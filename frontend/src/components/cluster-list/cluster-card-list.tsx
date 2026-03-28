@@ -9,7 +9,6 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { formatBytes } from "@/lib/formatters";
 import { EmptyState } from "@/components/common/empty-state";
 import type { UnifiedClusterRow } from "@/lib/api/types";
 

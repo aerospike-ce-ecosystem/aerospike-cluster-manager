@@ -125,7 +125,7 @@ function SidebarContent({ isMobileOrTablet }: { isMobileOrTablet: boolean }) {
 
   // Detect active connection from URL
   const connIdMatch = pathname?.match(
-    /\/(browser|cluster|indexes|admin|udfs|observability)\/([^/]+)/,
+    /\/(browser|cluster|indexes|admin|udfs|query|terminal|observability)\/([^/]+)/,
   );
   const activeConnId = connIdMatch?.[2];
 

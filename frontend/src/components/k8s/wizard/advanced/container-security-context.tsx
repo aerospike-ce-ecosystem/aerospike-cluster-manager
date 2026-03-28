@@ -192,7 +192,7 @@ export function ContainerSecurityContext({ form, updateForm }: ContainerSecurity
               {capabilities.drop!.map((cap) => (
                 <span
                   key={cap}
-                  className="bg-error/10 text-destructive inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
+                  className="bg-error/10 text-error inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
                 >
                   {cap}
                   <button
