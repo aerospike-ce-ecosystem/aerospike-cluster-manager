@@ -14,12 +14,13 @@ from aerospike_cluster_manager_api.constants import (
     POLICY_QUERY,
     POLICY_READ,
     POLICY_WRITE,
+    info_namespace,
     info_sets,
 )
 from aerospike_cluster_manager_api.converters import record_to_model
 from aerospike_cluster_manager_api.dependencies import AerospikeClient
 from aerospike_cluster_manager_api.expression_builder import build_expression
-from aerospike_cluster_manager_api.info_parser import aggregate_set_records
+from aerospike_cluster_manager_api.info_parser import aggregate_node_kv, aggregate_set_records, safe_int
 from aerospike_cluster_manager_api.models.query import FilteredQueryRequest, FilteredQueryResponse
 from aerospike_cluster_manager_api.models.record import (
     AerospikeRecord,
@@ -37,12 +38,21 @@ router = APIRouter(prefix="/records", tags=["records"])
 
 
 async def _get_set_object_count(client: Any, ns: str, set_name: str) -> int:
-    """Get the approximate object count for a set via info command."""
+    """Get the approximate object count for a set via info command.
+
+    Fetches the namespace replication-factor to de-duplicate counts
+    across nodes, matching the same approach used in clusters.py.
+    """
     if not set_name:
         return 0
     try:
+        # Resolve replication factor from namespace info (same pattern as clusters.py)
+        ns_all = await client.info_all(info_namespace(ns))
+        ns_stats = aggregate_node_kv(ns_all)
+        replication_factor = safe_int(ns_stats.get("replication-factor"), 1)
+
         sets_all = await client.info_all(info_sets(ns))
-        agg = aggregate_set_records(sets_all, replication_factor=1)
+        agg = aggregate_set_records(sets_all, replication_factor)
         for s in agg:
             if s["name"] == set_name:
                 return s["objects"]

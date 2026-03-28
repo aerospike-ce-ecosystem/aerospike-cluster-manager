@@ -24,11 +24,14 @@ export function renderCellValue(value: BinValue, binName?: string): React.ReactN
       </span>
     );
 
-  // Detect boolean-like integers (0/1) when bin name contains "bool"
+  // Detect boolean-like integers (0/1) when bin name strongly suggests boolean.
+  // Matches: bin_bool, is_active, has_flag, bool_field, enabled, disabled — but not "hyperbolic".
   if (
     typeof value === "number" &&
     binName &&
-    /bool/i.test(binName) &&
+    /(?:^bool|bool$|^is[_A-Z]|^has[_A-Z]|_bool_|_bool$|^enabled$|^disabled$|^active$|^flag)/i.test(
+      binName,
+    ) &&
     (value === 0 || value === 1)
   ) {
     const boolVal = value === 1;
