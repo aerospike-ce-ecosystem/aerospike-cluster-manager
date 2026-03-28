@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useEffect, useReducer } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { ChevronDown, ChevronRight, Folder, Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -19,39 +19,33 @@ export function SidebarBrowser({ connId, isMobileOrTablet }: SidebarBrowserProps
   const setMobileNavOpen = useUIStore((s) => s.setMobileNavOpen);
   const treeExpanded = useUIStore((s) => s.sidebarTreeExpanded);
   const toggleTree = useUIStore((s) => s.toggleSidebarTree);
-  const [namespaces, setNamespaces] = useState<NamespaceInfo[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useReducer(
+    (prev: { namespaces: NamespaceInfo[]; loading: boolean; error: string | null }, action: Partial<typeof prev>) => ({
+      ...prev,
+      ...action,
+    }),
+    { namespaces: [], loading: true, error: null },
+  );
+  const [retryCount, retry] = useReducer((c: number) => c + 1, 0);
 
-  const fetchNamespaces = useCallback(() => {
+  useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
 
     api
       .getCluster(connId)
       .then((data) => {
-        if (!cancelled) {
-          setNamespaces(data.namespaces);
-          setLoading(false);
-        }
+        if (!cancelled) setState({ namespaces: data.namespaces, loading: false, error: null });
       })
-      .catch((err) => {
-        if (!cancelled) {
-          console.error(`Failed to load namespaces for connection ${connId}:`, err);
-          setError("Failed to load");
-          setLoading(false);
-        }
+      .catch(() => {
+        if (!cancelled) setState({ loading: false, error: "Failed to load" });
       });
 
     return () => {
       cancelled = true;
     };
-  }, [connId]);
+  }, [connId, retryCount]);
 
-  useEffect(() => {
-    return fetchNamespaces();
-  }, [fetchNamespaces]);
+  const { namespaces, loading, error } = state;
 
   const handleNavigate = (path: string) => {
     router.push(path);
@@ -73,7 +67,7 @@ export function SidebarBrowser({ connId, isMobileOrTablet }: SidebarBrowserProps
 
       {error && (
         <button
-          onClick={fetchNamespaces}
+          onClick={retry}
           className="flex items-center gap-2 px-2.5 py-2 text-xs text-error hover:bg-base-200/40 rounded-md transition-colors"
         >
           <AlertCircle className="h-3 w-3 shrink-0" />
