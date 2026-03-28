@@ -523,10 +523,18 @@ kbd {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* ─── Select chevron ───────────────────────────────── */
+.select-chevron {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5' stroke='%239CA3AF' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  background-size: 12px;
+}
+
 /* ─── Bin Row Grid ──────────────────────────────────── */
 .bin-row-grid {
   display: grid;
-  grid-template-columns: 28px minmax(100px, 180px) 100px 1fr auto;
+  grid-template-columns: 28px minmax(100px, 180px) 130px 1fr auto;
   align-items: center;
   gap: 8px;
   padding: 8px 12px;

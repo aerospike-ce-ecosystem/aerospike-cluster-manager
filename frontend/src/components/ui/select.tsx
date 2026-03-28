@@ -7,14 +7,19 @@ import { cn } from "@/lib/utils";
 /* ------------------------------------------------------------------ */
 
 const SelectNative = React.forwardRef<HTMLSelectElement, React.ComponentProps<"select">>(
-  ({ className, children, ...props }, ref) => {
+  ({ className, children, style, ...props }, ref) => {
     return (
       <select
         ref={ref}
         className={cn(
-          "border-base-300 bg-base-100 focus-visible:ring-primary/50 flex h-10 w-full appearance-none rounded-lg border px-3 py-2 text-base shadow-sm transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm",
+          "select-chevron border-base-300 bg-base-100 focus-visible:ring-primary/50 flex h-10 w-full cursor-pointer appearance-none rounded-lg border py-2 pr-7 pl-3 text-base shadow-sm transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm",
           className,
         )}
+        style={{
+          WebkitAppearance: "none",
+          MozAppearance: "none",
+          ...style,
+        }}
         {...props}
       >
         {children}

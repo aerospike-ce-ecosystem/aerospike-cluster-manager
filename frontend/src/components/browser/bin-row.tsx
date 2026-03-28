@@ -1,15 +1,69 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronRight, ChevronDown, Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
+import { ChevronRight, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { JsonViewer } from "@/components/common/json-viewer";
 import { LazyCodeEditor as CodeEditor } from "@/components/common/code-editor-lazy";
 import { BinTypeBadge } from "@/components/browser/bin-type-badge";
 import { BIN_TYPES, BIN_TYPE_BORDER_COLORS, type BinType } from "@/lib/constants";
 import type { BinValue, BinEntry } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
+
+/* ─── BinTypeSelect (custom dropdown) ────────────── */
+
+function BinTypeSelect({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: BinType;
+  onChange: (type: string) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((p) => !p)}
+        className={cn(
+          "border-base-300/40 flex h-7 w-full items-center justify-between rounded-lg border px-2 text-xs transition-colors",
+          "hover:border-primary/30 focus:ring-primary/50 focus:ring-2 focus:outline-none",
+          "disabled:cursor-not-allowed disabled:opacity-50",
+        )}
+      >
+        <span className="truncate font-mono">{value}</span>
+        {open ? <ChevronUp className="text-base-content/30 ml-1 h-3 w-3 shrink-0" /> : <ChevronDown className="text-base-content/30 ml-1 h-3 w-3 shrink-0" />}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="bg-base-100 border-base-300 absolute left-0 z-50 mt-1 w-full overflow-hidden rounded-lg border py-1 shadow-lg">
+            {BIN_TYPES.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => { onChange(t); setOpen(false); }}
+                className={cn(
+                  "flex w-full items-center px-2 py-1.5 font-mono text-xs transition-colors",
+                  t === value
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-base-content hover:bg-base-200",
+                )}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 /* ─── View mode helpers ───────────────────────────── */
 
@@ -135,18 +189,11 @@ function EditBinRow({
           className="border-base-300/40 h-7 font-mono text-xs"
         />
         {/* type select */}
-        <Select
-          value={bin.type}
-          onChange={(e) => onUpdate(bin.id, "type", e.target.value)}
-          className="border-base-300/40 h-7 px-2 font-mono text-[11px]"
+        <BinTypeSelect
+          value={bin.type as BinType}
+          onChange={(t) => onUpdate(bin.id, "type", t)}
           disabled={saving}
-        >
-          {BIN_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </Select>
+        />
         {/* value input */}
         <div className="min-w-0">
           {isComplexType && showCode ? (
