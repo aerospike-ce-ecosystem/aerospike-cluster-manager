@@ -42,6 +42,7 @@ export interface RecordEditorFieldsProps {
   record?: AerospikeRecord | null;
   namespace?: string;
   setName?: string;
+  onSetNameChange?: (setName: string) => void;
 }
 
 interface RecordEditorDialogProps extends RecordEditorFieldsProps {
@@ -68,6 +69,7 @@ export function RecordEditorFields({
   record,
   namespace,
   setName,
+  onSetNameChange,
 }: RecordEditorFieldsProps) {
   return (
     <div className="space-y-5 p-5">
@@ -81,6 +83,7 @@ export function RecordEditorFields({
         disabled={saving}
         namespace={namespace}
         setName={setName}
+        onSetNameChange={onSetNameChange}
       />
 
       <section>
@@ -102,7 +105,7 @@ export function RecordEditorFields({
           </Button>
         </div>
 
-        <div className="divide-base-300/30 divide-y overflow-hidden rounded-lg border">
+        <div className="divide-base-300/30 divide-y rounded-lg border">
           {/* Header row */}
           <div
             className="bin-row-grid bg-base-200/30 text-muted-foreground/50 font-mono text-[11px] tracking-wider uppercase"

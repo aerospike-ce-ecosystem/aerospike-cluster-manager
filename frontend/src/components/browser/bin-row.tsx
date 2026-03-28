@@ -1,15 +1,126 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronRight, ChevronDown, Trash2 } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
+import { ChevronRight, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { JsonViewer } from "@/components/common/json-viewer";
 import { LazyCodeEditor as CodeEditor } from "@/components/common/code-editor-lazy";
 import { BinTypeBadge } from "@/components/browser/bin-type-badge";
 import { BIN_TYPES, BIN_TYPE_BORDER_COLORS, type BinType } from "@/lib/constants";
 import type { BinValue, BinEntry } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
+
+/* ─── BinTypeSelect (custom dropdown) ────────────── */
+
+function BinTypeSelect({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: BinType;
+  onChange: (type: string) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [highlighted, setHighlighted] = useState(-1);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const openDropdown = useCallback(() => {
+    setOpen(true);
+    setHighlighted(BIN_TYPES.indexOf(value));
+  }, [value]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (!open) {
+        if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          openDropdown();
+        }
+        return;
+      }
+      switch (e.key) {
+        case "Escape":
+          e.preventDefault();
+          setOpen(false);
+          break;
+        case "ArrowDown":
+          e.preventDefault();
+          setHighlighted((h) => (h + 1) % BIN_TYPES.length);
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          setHighlighted((h) => (h - 1 + BIN_TYPES.length) % BIN_TYPES.length);
+          break;
+        case "Enter":
+        case " ":
+          e.preventDefault();
+          if (highlighted >= 0) {
+            onChange(BIN_TYPES[highlighted]);
+            setOpen(false);
+          }
+          break;
+      }
+    },
+    [open, highlighted, onChange, openDropdown],
+  );
+
+  return (
+    <div ref={ref} className="relative" onKeyDown={handleKeyDown}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => (open ? setOpen(false) : openDropdown())}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className={cn(
+          "border-base-300/40 flex h-7 w-full items-center justify-between rounded-lg border px-2 text-xs transition-colors",
+          "hover:border-primary/30 focus:ring-primary/50 focus:ring-2 focus:outline-none",
+          "disabled:cursor-not-allowed disabled:opacity-50",
+        )}
+      >
+        <span className="truncate font-mono">{value}</span>
+        {open ? (
+          <ChevronUp className="text-base-content/30 ml-1 h-3 w-3 shrink-0" />
+        ) : (
+          <ChevronDown className="text-base-content/30 ml-1 h-3 w-3 shrink-0" />
+        )}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div
+            role="listbox"
+            className="bg-base-100 border-base-300 absolute left-0 z-50 mt-1 w-full overflow-hidden rounded-lg border py-1 shadow-lg"
+          >
+            {BIN_TYPES.map((t, i) => (
+              <button
+                key={t}
+                type="button"
+                role="option"
+                aria-selected={t === value}
+                onClick={() => {
+                  onChange(t);
+                  setOpen(false);
+                }}
+                onMouseEnter={() => setHighlighted(i)}
+                className={cn(
+                  "flex w-full items-center px-2 py-1.5 font-mono text-xs transition-colors",
+                  t === value
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-base-content hover:bg-base-200",
+                  i === highlighted && t !== value && "bg-base-200",
+                )}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 /* ─── View mode helpers ───────────────────────────── */
 
@@ -135,18 +246,11 @@ function EditBinRow({
           className="border-base-300/40 h-7 font-mono text-xs"
         />
         {/* type select */}
-        <Select
-          value={bin.type}
-          onChange={(e) => onUpdate(bin.id, "type", e.target.value)}
-          className="border-base-300/40 h-7 font-mono text-[11px]"
+        <BinTypeSelect
+          value={bin.type as BinType}
+          onChange={(t) => onUpdate(bin.id, "type", t)}
           disabled={saving}
-        >
-          {BIN_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </Select>
+        />
         {/* value input */}
         <div className="min-w-0">
           {isComplexType && showCode ? (

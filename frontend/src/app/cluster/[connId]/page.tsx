@@ -13,8 +13,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { K8sScaleDialog } from "@/components/k8s/k8s-scale-dialog";
 import { K8sDeleteDialog } from "@/components/k8s/k8s-delete-dialog";
 import { K8sEditDialog } from "@/components/k8s/k8s-edit-dialog";
-import { ClusterOverviewTab } from "@/components/k8s/cluster-overview-tab";
 import { UnifiedOverview } from "@/components/cluster/unified-overview";
+import { CreateSampleDataDialog } from "@/components/browser/create-sample-data-dialog";
 import { ClusterAckoInfoTab } from "@/components/k8s/cluster-acko-info-tab";
 import { useAsyncData } from "@/hooks/use-async-data";
 import { useK8sClusterStore } from "@/stores/k8s-cluster-store";
@@ -35,6 +35,9 @@ export default function ClusterPage({ params }: { params: Promise<{ connId: stri
     },
     [connId, router],
   );
+
+  // Sample data dialog
+  const [sampleDataOpen, setSampleDataOpen] = useState(false);
 
   // Connection health check
   const healthStatus = useConnectionStore((s) => s.healthStatuses[connId]);
@@ -309,7 +312,12 @@ export default function ClusterPage({ params }: { params: Promise<{ connId: stri
           </TabsList>
 
           <TabsContent value="overview" className="mt-6 space-y-6">
-            <UnifiedOverview cluster={cluster} connId={connId} onCreateSet={handleCreateSet} />
+            <UnifiedOverview
+              cluster={cluster}
+              connId={connId}
+              onCreateSet={handleCreateSet}
+              onCreateSampleData={() => setSampleDataOpen(true)}
+            />
           </TabsContent>
 
           <TabsContent value="acko-info" className="mt-6">
@@ -330,7 +338,12 @@ export default function ClusterPage({ params }: { params: Promise<{ connId: stri
           Direct Connection 클러스터 레이아웃 (isK8s=false)
           ══════════════════════════════════════════════ */}
       {!isK8s && (
-        <UnifiedOverview cluster={cluster} connId={connId} onCreateSet={handleCreateSet} />
+        <UnifiedOverview
+          cluster={cluster}
+          connId={connId}
+          onCreateSet={handleCreateSet}
+          onCreateSampleData={() => setSampleDataOpen(true)}
+        />
       )}
 
       {/* ── K8s Dialogs ── */}
@@ -414,6 +427,17 @@ export default function ClusterPage({ params }: { params: Promise<{ connId: stri
             }}
           />
         </>
+      )}
+
+      {/* ── Sample Data Dialog ── */}
+      {cluster && (
+        <CreateSampleDataDialog
+          open={sampleDataOpen}
+          onOpenChange={setSampleDataOpen}
+          connId={connId}
+          namespaces={cluster.namespaces.map((ns) => ns.name)}
+          onSuccess={refetchCluster}
+        />
       )}
     </div>
   );
