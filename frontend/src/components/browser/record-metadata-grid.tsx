@@ -103,7 +103,7 @@ export function RecordMetadataGrid({
         <div className="flex items-center gap-3">
           <MetaLabel icon={KeyRound} label="PK" />
           {mode === "view" ? (
-            <span className="text-accent ml-auto font-semibold">{displayPK}</span>
+            <span className="text-primary ml-auto font-semibold">{displayPK}</span>
           ) : (
             <Input
               placeholder="Record key"

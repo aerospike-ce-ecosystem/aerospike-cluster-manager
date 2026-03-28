@@ -523,7 +523,7 @@ asyncio.run(main())`;
               className={cn(
                 "inline-flex h-4 w-4 items-center justify-center rounded border transition-colors",
                 pks.size === displayRecords.length && displayRecords.length > 0
-                  ? "border-accent bg-accent text-accent-foreground"
+                  ? "border-accent bg-accent text-primary-content"
                   : pks.size > 0
                     ? "border-accent/60 bg-accent/20"
                     : "border-muted-foreground/30 hover:border-muted-foreground/50",
@@ -549,7 +549,7 @@ asyncio.run(main())`;
               className={cn(
                 "inline-flex h-4 w-4 items-center justify-center rounded border transition-colors",
                 pks.has(pk)
-                  ? "border-accent bg-accent text-accent-foreground"
+                  ? "border-accent bg-accent text-primary-content"
                   : "border-muted-foreground/30 hover:border-muted-foreground/50",
               )}
             >
@@ -592,7 +592,7 @@ asyncio.run(main())`;
               e.stopPropagation();
               openRecordDetail(row.original);
             }}
-            className="text-base-content hover:text-accent w-full truncate text-left font-mono text-[13px] font-medium hover:underline"
+            className="text-base-content hover:text-primary w-full truncate text-left font-mono text-[13px] font-medium hover:underline"
           >
             {truncateMiddle(String(row.original.key.pk), 28)}
           </button>
@@ -794,7 +794,7 @@ asyncio.run(main())`;
                 className={cn(
                   "inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors",
                   selectedPKs.has(String(record.key.pk))
-                    ? "border-accent bg-accent text-accent-foreground"
+                    ? "border-accent bg-accent text-primary-content"
                     : "border-muted-foreground/30 hover:border-muted-foreground/50",
                 )}
                 aria-label={`Select ${record.key.pk}`}
@@ -803,7 +803,7 @@ asyncio.run(main())`;
               </button>
 
               <div className="min-w-0">
-                <div className="text-accent truncate font-mono text-sm font-medium">
+                <div className="text-primary truncate font-mono text-sm font-medium">
                   {truncateMiddle(String(record.key.pk), 24)}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
@@ -898,7 +898,7 @@ asyncio.run(main())`;
                 {decodedNs}
               </button>
               <span className="text-muted-foreground/30 mx-1 shrink-0 sm:mx-1.5">›</span>
-              <span className="text-accent max-w-[80px] truncate font-medium sm:max-w-none">
+              <span className="text-primary max-w-[80px] truncate font-medium sm:max-w-none">
                 {decodedSet}
               </span>
             </nav>
@@ -909,7 +909,7 @@ asyncio.run(main())`;
                   <span className="bg-accent absolute inline-flex h-full w-full animate-ping rounded-full opacity-40" />
                   <span className="bg-accent relative inline-flex h-1.5 w-1.5 rounded-full" />
                 </span>
-                <span className="text-accent font-mono text-[11px] font-medium tabular-nums">
+                <span className="text-primary font-mono text-[11px] font-medium tabular-nums">
                   {totalEstimated ? "~" : ""}
                   {formatNumber(total)}
                 </span>
@@ -930,7 +930,7 @@ asyncio.run(main())`;
             }
             size="sm"
             variant="outline"
-            className="border-accent/30 text-accent hover:bg-accent/10 hover:border-accent/50 h-8 shrink-0 gap-1.5 font-mono text-xs transition-colors sm:h-7"
+            className="border-accent/30 text-primary hover:bg-accent/10 hover:border-accent/50 h-8 shrink-0 gap-1.5 font-mono text-xs transition-colors sm:h-7"
             data-compact
             aria-label="New record"
           >
@@ -1016,7 +1016,7 @@ asyncio.run(main())`;
                     This set appears to be empty. Create a new record to get started.
                   </p>
                   <button
-                    className="btn btn-primary btn-sm gap-2"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-content px-3 h-8 text-xs font-medium shadow-sm hover:bg-primary/90 transition-colors"
                     onClick={() =>
                       router.push(
                         buildNewRecordHref({
@@ -1051,7 +1051,7 @@ asyncio.run(main())`;
         <div className="border-accent/30 bg-accent/5 shrink-0 border-t px-3 py-2 backdrop-blur-md sm:px-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
-              <span className="text-accent font-mono text-[11px] font-medium tabular-nums">
+              <span className="text-primary font-mono text-[11px] font-medium tabular-nums">
                 {selectedPKs.size} selected
               </span>
               <button
@@ -1066,7 +1066,7 @@ asyncio.run(main())`;
               onClick={() => setBatchDialogOpen(true)}
               size="sm"
               variant="outline"
-              className="border-accent/30 text-accent hover:bg-accent/10 hover:border-accent/50 h-7 gap-1.5 font-mono text-xs transition-colors"
+              className="border-accent/30 text-primary hover:bg-accent/10 hover:border-accent/50 h-7 gap-1.5 font-mono text-xs transition-colors"
               data-compact
             >
               <Code className="h-3 w-3" />
@@ -1127,7 +1127,7 @@ asyncio.run(main())`;
             disabled={loading}
             size="sm"
             variant="outline"
-            className="border-accent/25 text-accent hover:border-accent/50 hover:bg-accent/5 h-7 gap-1.5 font-mono text-[11px] transition-colors"
+            className="border-accent/25 text-primary hover:border-accent/50 hover:bg-accent/5 h-7 gap-1.5 font-mono text-[11px] transition-colors"
             data-compact
             aria-label="Reload records"
           >

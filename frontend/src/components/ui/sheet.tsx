@@ -40,7 +40,7 @@ export function Sheet({ open, onOpenChange, preventClose, children }: SheetProps
   return (
     <dialog
       ref={dialogRef}
-      className="modal modal-bottom p-0 sm:p-0"
+      className="fixed inset-0 z-50 m-0 flex h-full w-full items-end justify-center bg-black/50 p-0 backdrop-blur-sm open:flex [&:not([open])]:hidden"
       onCancel={(e) => {
         e.preventDefault();
         if (!preventClose) handleClose();
@@ -106,7 +106,7 @@ export const SheetContent = React.forwardRef<HTMLDivElement, SheetContentProps>(
         {children}
         <button
           onClick={onClose}
-          className="btn btn-sm btn-circle btn-ghost absolute top-3 right-3 h-10 w-10"
+          className="absolute top-3 right-3 inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-base-300 hover:text-base-content transition-colors"
           aria-label="Close"
         >
           <X className="h-4 w-4" />

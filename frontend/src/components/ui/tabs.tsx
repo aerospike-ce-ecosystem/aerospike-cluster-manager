@@ -49,7 +49,12 @@ Tabs.displayName = "Tabs";
 
 const TabsList = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} role="tablist" className={cn("tabs tabs-bordered", className)} {...props} />
+    <div
+      ref={ref}
+      role="tablist"
+      className={cn("flex border-b border-base-300", className)}
+      {...props}
+    />
   ),
 );
 TabsList.displayName = "TabsList";
@@ -67,7 +72,13 @@ const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>(
       <button
         ref={ref}
         role="tab"
-        className={cn("tab", isActive && "tab-active", className)}
+        className={cn(
+          "relative px-4 py-2.5 text-sm font-medium transition-colors",
+          isActive
+            ? "text-primary after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-primary"
+            : "text-muted-foreground hover:text-base-content",
+          className,
+        )}
         onClick={() => ctx.onValueChange(value)}
         {...props}
       />

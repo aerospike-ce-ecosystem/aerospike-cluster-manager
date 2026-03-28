@@ -81,7 +81,7 @@ export function RecordViewDialog({ record, onClose }: RecordViewDialogProps) {
         <DialogHeader className="border-base-300/40 space-y-0 border-b px-5 pt-5 pb-3">
           <div className="flex items-center justify-between">
             <DialogTitle className="font-mono text-sm font-medium">Record Detail</DialogTitle>
-            <span className="text-accent ml-4 max-w-[250px] truncate font-mono text-[11px]">
+            <span className="text-primary ml-4 max-w-[250px] truncate font-mono text-[11px]">
               {record?.key.pk}
             </span>
           </div>
@@ -105,7 +105,7 @@ export function RecordViewSheet({ record, onClose }: RecordViewDialogProps) {
         <SheetHeader className="border-base-300/40 space-y-0 border-b px-5 pt-1 pb-3">
           <div className="flex items-center justify-between pr-10">
             <SheetTitle className="font-mono text-sm font-medium">Record Detail</SheetTitle>
-            <span className="text-accent ml-4 max-w-[180px] truncate font-mono text-[11px]">
+            <span className="text-primary ml-4 max-w-[180px] truncate font-mono text-[11px]">
               {record?.key.pk}
             </span>
           </div>

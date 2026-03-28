@@ -164,7 +164,7 @@ export function EditPodSecuritySection({
             {supplementalGroups.map((gid) => (
               <span
                 key={gid}
-                className="bg-accent/10 text-accent inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                className="bg-accent/10 text-primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
               >
                 {gid}
                 <button

@@ -1,108 +1,57 @@
 @import "tailwindcss";
-@plugin "daisyui" {
-  themes: false;
-}
 
-/* ─── Bumblebee Light Theme ──────────────────────────── */
-@plugin "daisyui/theme" {
-  name: "bumblebee";
-  default: true;
-  prefersdark: false;
-  color-scheme: "light";
-
-  --color-base-100: oklch(100% 0 0);
-  --color-base-200: oklch(97% 0 0);
-  --color-base-300: oklch(92% 0 0);
-  --color-base-content: oklch(20% 0 0);
-  --color-primary: oklch(78% 0.199 91.936);
-  --color-primary-content: oklch(22% 0.06 60);
-  --color-secondary: oklch(65% 0.18 55.934);
-  --color-secondary-content: oklch(100% 0 0);
-  --color-accent: oklch(75% 0.15 85);
-  --color-accent-content: oklch(20% 0.05 75);
-  --color-neutral: oklch(30% 0.015 67.558);
-  --color-neutral-content: oklch(95% 0.003 48.717);
-  --color-info: oklch(62% 0.18 240);
-  --color-info-content: oklch(100% 0 0);
-  --color-success: oklch(65% 0.2 155);
-  --color-success-content: oklch(100% 0 0);
-  --color-warning: oklch(78% 0.19 70);
-  --color-warning-content: oklch(22% 0.06 50);
-  --color-error: oklch(60% 0.22 25);
-  --color-error-content: oklch(100% 0 0);
-
-  --radius-selector: 1rem;
-  --radius-field: 0.5rem;
-  --radius-box: 1rem;
-  --size-selector: 0.25rem;
-  --size-field: 0.25rem;
-  --border: 1px;
-  --depth: 1;
-  --noise: 0;
-}
-
-/* ─── Bumblebee Dark Theme ───────────────────────────── */
-@plugin "daisyui/theme" {
-  name: "bumblebee-dark";
-  default: false;
-  prefersdark: true;
-  color-scheme: "dark";
-
-  --color-base-100: oklch(22% 0.015 75);
-  --color-base-200: oklch(19% 0.012 75);
-  --color-base-300: oklch(16% 0.01 75);
-  --color-base-content: oklch(95% 0.01 90);
-  --color-primary: oklch(78% 0.199 91.936);
-  --color-primary-content: oklch(18% 0.05 91);
-  --color-secondary: oklch(65% 0.18 55.934);
-  --color-secondary-content: oklch(100% 0 0);
-  --color-accent: oklch(35% 0.03 80);
-  --color-accent-content: oklch(90% 0.02 85);
-  --color-neutral: oklch(30% 0.015 75);
-  --color-neutral-content: oklch(90% 0.01 90);
-  --color-info: oklch(62% 0.18 240);
-  --color-info-content: oklch(100% 0 0);
-  --color-success: oklch(65% 0.2 155);
-  --color-success-content: oklch(100% 0 0);
-  --color-warning: oklch(78% 0.19 70);
-  --color-warning-content: oklch(18% 0.05 50);
-  --color-error: oklch(60% 0.22 25);
-  --color-error-content: oklch(100% 0 0);
-
-  --radius-selector: 1rem;
-  --radius-field: 0.5rem;
-  --radius-box: 1rem;
-  --size-selector: 0.25rem;
-  --size-field: 0.25rem;
-  --border: 1px;
-  --depth: 0;
-  --noise: 0;
-}
-
-/* Dark mode variant using data-theme attribute */
+/* ─── Light Theme (default) ─────────────────────────── */
 @custom-variant dark (&:where([data-theme=bumblebee-dark], [data-theme=bumblebee-dark] *));
 
-/* ─── Custom Theme Extensions (non-DaisyUI tokens) ──── */
 @theme {
-  /* Muted foreground — no DaisyUI equivalent */
-  --color-muted-foreground: oklch(45% 0.01 75);
+  /* Base colors — Light (Paper design: cool gray palette) */
+  --color-base-100: #FFFFFF;
+  --color-base-200: #F8F9FB;
+  --color-base-300: #E8EAF0;
+  --color-base-content: #111827;
 
-  /* Sidebar colors — derived from bumblebee base tones */
-  --color-sidebar: oklch(100% 0 0);
-  --color-sidebar-foreground: oklch(20% 0 0);
-  --color-sidebar-border: oklch(92% 0 0);
-  --color-sidebar-accent: oklch(97% 0 0);
-  --color-sidebar-accent-foreground: oklch(20% 0 0);
+  /* Semantic colors (Paper design: blue primary) */
+  --color-primary: #2563EB;
+  --color-primary-content: #FFFFFF;
+  --color-secondary: #6B7280;
+  --color-secondary-content: #FFFFFF;
+  --color-accent: #F59E0B;
+  --color-accent-content: #FFFFFF;
+  --color-neutral: #374151;
+  --color-neutral-content: #F9FAFB;
+  --color-info: #2563EB;
+  --color-info-content: #FFFFFF;
+  --color-success: #059669;
+  --color-success-content: #FFFFFF;
+  --color-warning: #D97706;
+  --color-warning-content: #FFFFFF;
+  --color-error: #DC2626;
+  --color-error-content: #FFFFFF;
 
-  /* Chart palette — mapped to semantic colors */
-  --color-chart-1: oklch(74% 0.16 232.661);
-  --color-chart-2: oklch(85% 0.199 91.936);
-  --color-chart-3: oklch(76% 0.177 163.223);
-  --color-chart-4: oklch(82% 0.189 84.429);
-  --color-chart-5: oklch(70% 0.191 22.216);
+  /* Radius & sizing */
+  --radius-selector: 0.625rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.875rem;
+
+  /* Muted foreground */
+  --color-muted-foreground: #9CA3AF;
+
+  /* Sidebar colors */
+  --color-sidebar: #FFFFFF;
+  --color-sidebar-foreground: #111827;
+  --color-sidebar-border: #F0F1F3;
+  --color-sidebar-accent: #EFF6FF;
+  --color-sidebar-accent-foreground: #2563EB;
+
+  /* Chart palette */
+  --color-chart-1: #2563EB;
+  --color-chart-2: #F59E0B;
+  --color-chart-3: #059669;
+  --color-chart-4: #7C3AED;
+  --color-chart-5: #DB2777;
 
   /* Fonts */
-  --font-sans: var(--font-outfit);
+  --font-sans: var(--font-inter);
   --font-mono: var(--font-jetbrains-mono);
 
   /* Z-index */
@@ -181,19 +130,44 @@
   }
 }
 
-/* Dark theme overrides for custom tokens */
+/* ─── Dark Theme Overrides ──────────────────────────── */
 [data-theme="bumblebee-dark"] {
-  --color-muted-foreground: oklch(68% 0.01 75);
-  --color-sidebar: oklch(19% 0.012 75);
-  --color-sidebar-foreground: oklch(95% 0.01 90);
-  --color-sidebar-border: oklch(16% 0.01 75);
-  --color-sidebar-accent: oklch(22% 0.015 75);
-  --color-sidebar-accent-foreground: oklch(95% 0.01 90);
-  --color-chart-1: oklch(74% 0.16 232.661);
-  --color-chart-2: oklch(85% 0.199 91.936);
-  --color-chart-3: oklch(76% 0.177 163.223);
-  --color-chart-4: oklch(82% 0.189 84.429);
-  --color-chart-5: oklch(70% 0.191 22.216);
+  /* Base colors */
+  --color-base-100: #111827;
+  --color-base-200: #0F1318;
+  --color-base-300: #1E2740;
+  --color-base-content: #E8ECF4;
+
+  /* Semantic colors */
+  --color-primary: #3B82F6;
+  --color-primary-content: #FFFFFF;
+  --color-secondary: #8B95A9;
+  --color-secondary-content: #FFFFFF;
+  --color-accent: #F59E0B;
+  --color-accent-content: #0C1017;
+  --color-neutral: #374151;
+  --color-neutral-content: #E5E7EB;
+  --color-info: #3B82F6;
+  --color-info-content: #FFFFFF;
+  --color-success: #10B981;
+  --color-success-content: #FFFFFF;
+  --color-warning: #F59E0B;
+  --color-warning-content: #111827;
+  --color-error: #EF4444;
+  --color-error-content: #FFFFFF;
+
+  /* Custom tokens */
+  --color-muted-foreground: #5A6478;
+  --color-sidebar: #0F1318;
+  --color-sidebar-foreground: #E8ECF4;
+  --color-sidebar-border: #1E2740;
+  --color-sidebar-accent: rgba(59, 130, 246, 0.12);
+  --color-sidebar-accent-foreground: #3B82F6;
+  --color-chart-1: #3B82F6;
+  --color-chart-2: #F59E0B;
+  --color-chart-3: #10B981;
+  --color-chart-4: #8B5CF6;
+  --color-chart-5: #EC4899;
 }
 
 /* ─── Shadow Variables ───────────────────────────────── */

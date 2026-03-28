@@ -3,23 +3,30 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 const variantClasses: Record<string, string> = {
-  default: "btn-primary",
-  destructive: "btn-error",
-  outline: "btn-outline",
-  secondary: "btn-secondary",
-  ghost: "btn-ghost",
-  link: "btn-link",
-  info: "btn-info",
-  success: "btn-success",
-  warning: "btn-warning",
-  neutral: "btn-neutral",
+  default:
+    "bg-primary text-primary-content hover:bg-primary/90 shadow-sm",
+  destructive:
+    "bg-error text-error-content hover:bg-error/90 shadow-sm",
+  outline:
+    "border border-base-300 bg-base-100 text-base-content hover:bg-base-200 shadow-sm",
+  secondary:
+    "bg-secondary text-secondary-content hover:bg-secondary/90 shadow-sm",
+  ghost: "text-base-content hover:bg-base-200",
+  link: "text-primary underline-offset-4 hover:underline",
+  info: "bg-info text-info-content hover:bg-info/90 shadow-sm",
+  success:
+    "bg-success text-success-content hover:bg-success/90 shadow-sm",
+  warning:
+    "bg-warning text-warning-content hover:bg-warning/90 shadow-sm",
+  neutral:
+    "bg-neutral text-neutral-content hover:bg-neutral/90 shadow-sm",
 };
 
 const sizeClasses: Record<string, string> = {
-  default: "",
-  sm: "btn-sm",
-  lg: "btn-lg",
-  icon: "btn-square",
+  default: "h-10 px-4 py-2 text-sm",
+  sm: "h-8 px-3 text-xs",
+  lg: "h-12 px-6 text-base",
+  icon: "h-10 w-10 p-0",
 };
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -80,7 +87,13 @@ const buttonVariants = ({
   variant?: string;
   size?: string;
   className?: string;
-} = {}) => cn("btn", variantClasses[variant] || "", sizeClasses[size] || "", className);
+} = {}) =>
+  cn(
+    "inline-flex items-center justify-center gap-2 rounded-lg font-medium whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:pointer-events-none disabled:opacity-50",
+    variantClasses[variant] || "",
+    sizeClasses[size] || "",
+    className,
+  );
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   (
@@ -88,7 +101,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ref,
   ) => {
     const classes = cn(
-      "btn",
+      "inline-flex items-center justify-center gap-2 rounded-lg font-medium whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:pointer-events-none disabled:opacity-50",
       variantClasses[variant],
       sizeClasses[size],
       "[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",

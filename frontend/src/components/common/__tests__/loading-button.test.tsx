@@ -11,7 +11,7 @@ describe("LoadingButton", () => {
 
   it("shows spinner when loading", () => {
     const { container } = render(<LoadingButton loading>Submit</LoadingButton>);
-    expect(container.querySelector(".loading-spinner")).toBeInTheDocument();
+    expect(container.querySelector(".animate-spin")).toBeInTheDocument();
   });
 
   it("disables button when loading", () => {

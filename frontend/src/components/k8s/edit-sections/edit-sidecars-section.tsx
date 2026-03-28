@@ -197,7 +197,7 @@ export function EditSidecarsSection({
             type="button"
             onClick={() => onSidecarsChange([...sidecars, { name: "", image: "" }])}
             disabled={loading}
-            className="text-accent hover:text-accent/80 flex items-center gap-1 text-[10px] font-medium disabled:opacity-50"
+            className="text-primary hover:text-primary/80 flex items-center gap-1 text-[10px] font-medium disabled:opacity-50"
           >
             <Plus className="h-3 w-3" /> Add Sidecar
           </button>
@@ -223,7 +223,7 @@ export function EditSidecarsSection({
             type="button"
             onClick={() => onInitContainersChange([...initContainers, { name: "", image: "" }])}
             disabled={loading}
-            className="text-accent hover:text-accent/80 flex items-center gap-1 text-[10px] font-medium disabled:opacity-50"
+            className="text-primary hover:text-primary/80 flex items-center gap-1 text-[10px] font-medium disabled:opacity-50"
           >
             <Plus className="h-3 w-3" /> Add Init Container
           </button>

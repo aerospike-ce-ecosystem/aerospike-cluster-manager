@@ -22,7 +22,7 @@ export function ClusterOverviewTab({ cluster }: ClusterOverviewTabProps) {
         <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
           <CardHeader className="pb-2">
             <CardDescription className="flex items-center gap-2 text-xs font-medium tracking-wider uppercase">
-              <Server className="text-accent h-3.5 w-3.5" />
+              <Server className="text-primary h-3.5 w-3.5" />
               Nodes
             </CardDescription>
           </CardHeader>
@@ -37,7 +37,7 @@ export function ClusterOverviewTab({ cluster }: ClusterOverviewTabProps) {
         <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
           <CardHeader className="pb-2">
             <CardDescription className="flex items-center gap-2 text-xs font-medium tracking-wider uppercase">
-              <Database className="text-accent h-3.5 w-3.5" />
+              <Database className="text-primary h-3.5 w-3.5" />
               Namespaces
             </CardDescription>
           </CardHeader>
@@ -52,7 +52,7 @@ export function ClusterOverviewTab({ cluster }: ClusterOverviewTabProps) {
         <Card className="transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
           <CardHeader className="pb-2">
             <CardDescription className="flex items-center gap-2 text-xs font-medium tracking-wider uppercase">
-              <Network className="text-accent h-3.5 w-3.5" />
+              <Network className="text-primary h-3.5 w-3.5" />
               Node Names
             </CardDescription>
           </CardHeader>

@@ -2,8 +2,6 @@
 
 import * as React from "react";
 
-import { cn } from "@/lib/utils";
-
 function extractText(node: React.ReactNode): string {
   if (typeof node === "string") return node;
   if (typeof node === "number") return String(node);
@@ -31,17 +29,10 @@ interface TooltipContentProps extends React.HTMLAttributes<HTMLDivElement> {
 const TooltipContent: React.FC<TooltipContentProps> = () => null;
 TooltipContent.displayName = "TooltipContent";
 
-const sideClassMap: Record<string, string> = {
-  top: "tooltip-top",
-  bottom: "tooltip-bottom",
-  left: "tooltip-left",
-  right: "tooltip-right",
-};
-
 const Tooltip = ({ children }: { children: React.ReactNode }) => {
   let triggerContent: React.ReactNode = null;
   let tipText = "";
-  let side = "top";
+  let asChild = false;
 
   React.Children.forEach(children, (child) => {
     if (!React.isValidElement(child)) return;
@@ -49,17 +40,25 @@ const Tooltip = ({ children }: { children: React.ReactNode }) => {
     if (child.type === TooltipTrigger) {
       const p = child.props as TooltipTriggerProps;
       triggerContent = p.children;
+      asChild = p.asChild ?? false;
     } else if (child.type === TooltipContent) {
       const p = child.props as TooltipContentProps & { children?: React.ReactNode };
       tipText = extractText(p.children);
-      side = p.side || "top";
     }
   });
 
+  // When asChild is true, clone the child element to add the title attribute directly
+  if (asChild && React.isValidElement(triggerContent)) {
+    return React.cloneElement(
+      triggerContent as React.ReactElement<{ title?: string }>,
+      { title: tipText },
+    );
+  }
+
   return (
-    <div className={cn("tooltip", sideClassMap[side] || "tooltip-top")} data-tip={tipText}>
+    <span className="inline-flex" title={tipText}>
       {triggerContent}
-    </div>
+    </span>
   );
 };
 

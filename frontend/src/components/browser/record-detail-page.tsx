@@ -252,7 +252,7 @@ export function RecordDetailPage({
         {!createMode && editorPK && (
           <>
             <span className="text-muted-foreground/30 mx-1">/</span>
-            <span className="text-accent">{editorPK}</span>
+            <span className="text-primary">{editorPK}</span>
           </>
         )}
       </span>

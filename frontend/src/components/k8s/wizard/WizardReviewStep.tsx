@@ -23,7 +23,7 @@ function EditButton({ onClick, className }: { onClick: () => void; className?: s
       type="button"
       onClick={onClick}
       className={cn(
-        "text-base-content/60 hover:text-accent ml-1.5 inline-flex h-5 w-5 items-center justify-center rounded transition-colors",
+        "text-base-content/60 hover:text-primary ml-1.5 inline-flex h-5 w-5 items-center justify-center rounded transition-colors",
         className,
       )}
       title="Edit"
@@ -412,7 +412,7 @@ export function WizardReviewStep({
           <>
             <span className="text-base-content/60">Template</span>
             <span className="font-medium">
-              Created from <span className="text-accent">{form.templateRef.name}</span>
+              Created from <span className="text-primary">{form.templateRef.name}</span>
             </span>
           </>
         )}

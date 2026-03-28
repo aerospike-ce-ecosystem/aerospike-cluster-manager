@@ -69,14 +69,14 @@ export default function SettingsPage() {
                 <opt.icon
                   className={cn(
                     "h-6 w-6 transition-colors",
-                    theme === opt.value ? "text-accent" : "text-muted-foreground",
+                    theme === opt.value ? "text-primary" : "text-muted-foreground",
                   )}
                 />
                 <div className="text-center">
                   <span
                     className={cn(
                       "block text-sm font-medium",
-                      theme === opt.value ? "text-accent" : "text-base-content",
+                      theme === opt.value ? "text-primary" : "text-base-content",
                     )}
                   >
                     {opt.label}
@@ -182,7 +182,7 @@ export default function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Info className="text-accent h-4 w-4" />
+            <Info className="text-primary h-4 w-4" />
             About
           </CardTitle>
         </CardHeader>
@@ -192,32 +192,32 @@ export default function SettingsPage() {
               <span className="text-muted-foreground">Application</span>
               <span className="font-medium">Aerospike Cluster Manager</span>
             </div>
-            <div className="divider bg-border/50 my-0" />
+            <div className="h-px bg-base-300/50 my-0" />
             <div className="flex justify-between py-0.5">
               <span className="text-muted-foreground">Version</span>
               <span className="font-mono text-xs">0.1.0</span>
             </div>
-            <div className="divider bg-border/50 my-0" />
+            <div className="h-px bg-base-300/50 my-0" />
             <div className="flex justify-between py-0.5">
               <span className="text-muted-foreground">Framework</span>
               <span className="font-mono text-xs">Next.js 16</span>
             </div>
-            <div className="divider bg-border/50 my-0" />
+            <div className="h-px bg-base-300/50 my-0" />
             <div className="flex justify-between py-0.5">
               <span className="text-muted-foreground">UI Library</span>
               <span className="font-mono text-xs">shadcn/ui + Tailwind CSS</span>
             </div>
-            <div className="divider bg-border/50 my-0" />
+            <div className="h-px bg-base-300/50 my-0" />
             <div className="flex justify-between py-0.5">
               <span className="text-muted-foreground">Backend Client</span>
               <span className="font-mono text-xs">aerospike-py</span>
             </div>
-            <div className="divider bg-border/50 my-0" />
+            <div className="h-px bg-base-300/50 my-0" />
             <div className="flex justify-between py-0.5">
               <span className="text-muted-foreground">Observability</span>
               <span className="font-mono text-xs">OpenTelemetry / Prometheus</span>
             </div>
-            <div className="divider bg-border/50 my-0" />
+            <div className="h-px bg-base-300/50 my-0" />
             <div className="flex justify-between py-0.5">
               <span className="text-muted-foreground">Desktop</span>
               <span className="font-mono text-xs">Tauri 2 (planned)</span>

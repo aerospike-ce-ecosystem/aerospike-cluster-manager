@@ -220,7 +220,7 @@ export function WizardPodSettingsStep({ form, updateForm }: WizardPodSettingsSte
             {Object.entries(scheduling!.nodeSelector!).map(([k, v]) => (
               <span
                 key={k}
-                className="bg-accent/10 text-accent inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
+                className="bg-accent/10 text-primary inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
               >
                 {k}={v}
                 <button
@@ -264,7 +264,7 @@ export function WizardPodSettingsStep({ form, updateForm }: WizardPodSettingsSte
             type="button"
             onClick={addNodeSelector}
             disabled={!nsSelectorKey.trim() || !nsSelectorValue.trim()}
-            className="bg-accent text-accent-foreground hover:bg-accent/80 rounded px-3 text-xs font-medium disabled:opacity-50"
+            className="bg-accent text-primary-content hover:bg-accent/80 rounded px-3 text-xs font-medium disabled:opacity-50"
           >
             Add
           </button>
@@ -343,7 +343,7 @@ export function WizardPodSettingsStep({ form, updateForm }: WizardPodSettingsSte
         <button
           type="button"
           onClick={addToleration}
-          className="text-accent hover:text-accent/80 flex items-center gap-1 text-xs font-medium"
+          className="text-primary hover:text-primary/80 flex items-center gap-1 text-xs font-medium"
         >
           <Plus className="h-3.5 w-3.5" /> Add Toleration
         </button>
@@ -438,7 +438,7 @@ export function WizardPodSettingsStep({ form, updateForm }: WizardPodSettingsSte
             {scheduling!.imagePullSecrets!.map((secret) => (
               <span
                 key={secret}
-                className="bg-accent/10 text-accent inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
+                className="bg-accent/10 text-primary inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
               >
                 {secret}
                 <button
@@ -470,7 +470,7 @@ export function WizardPodSettingsStep({ form, updateForm }: WizardPodSettingsSte
             type="button"
             onClick={addImagePullSecret}
             disabled={!newSecret.trim()}
-            className="bg-accent text-accent-foreground hover:bg-accent/80 rounded px-3 text-xs font-medium disabled:opacity-50"
+            className="bg-accent text-primary-content hover:bg-accent/80 rounded px-3 text-xs font-medium disabled:opacity-50"
           >
             Add
           </button>
@@ -605,7 +605,7 @@ export function WizardPodSettingsStep({ form, updateForm }: WizardPodSettingsSte
               ],
             });
           }}
-          className="text-accent hover:text-accent/80 flex items-center gap-1 text-xs font-medium"
+          className="text-primary hover:text-primary/80 flex items-center gap-1 text-xs font-medium"
         >
           <Plus className="h-3.5 w-3.5" /> Add Topology Spread Constraint
         </button>

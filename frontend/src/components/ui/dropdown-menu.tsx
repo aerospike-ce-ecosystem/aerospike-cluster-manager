@@ -170,7 +170,7 @@ const DropdownMenuContent = React.forwardRef<HTMLDivElement, DropdownMenuContent
         ref={setRefs}
         role="menu"
         className={cn(
-          "border-base-300 bg-base-100 text-base-content rounded-box min-w-[8rem] overflow-hidden border p-2 shadow-lg",
+          "border-base-300 bg-base-100 text-base-content rounded-xl min-w-[8rem] overflow-hidden border p-2 shadow-lg",
           className,
         )}
         style={position}

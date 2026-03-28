@@ -30,7 +30,7 @@ export function BatchReadDialog({
         <DialogHeader className="border-base-300/40 space-y-0 border-b px-5 pt-5 pb-3">
           <div className="flex items-center justify-between">
             <DialogTitle className="font-mono text-sm font-medium">batch_read Code</DialogTitle>
-            <span className="text-accent ml-4 font-mono text-[11px]">{selectedCount} keys</span>
+            <span className="text-primary ml-4 font-mono text-[11px]">{selectedCount} keys</span>
           </div>
           <DialogDescription className="text-muted-foreground/60 font-mono text-xs">
             Python aerospike-py async client batch_read snippet
