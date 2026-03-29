@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { FileCode, MoreHorizontal, Plus, Search, Server, Settings, X } from "lucide-react";
 import { SidebarBrowser } from "./sidebar-browser";
@@ -17,8 +17,9 @@ import { useConnectionStore } from "@/stores/connection-store";
 import { useK8sClusterStore } from "@/stores/k8s-cluster-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
+import { useEventStream } from "@/hooks/use-event-stream";
 import { SIDEBAR_HEALTH_POLL_INTERVAL_MS } from "@/lib/constants";
-import type { ConnectionProfile } from "@/lib/api/types";
+import type { ConnectionProfile, ConnectionHealthData, SSEEventType } from "@/lib/api/types";
 
 interface ConnectionItemProps {
   connection: ConnectionProfile;
@@ -112,6 +113,8 @@ const ConnectionItem = React.memo(function ConnectionItem({
   );
 });
 
+const SIDEBAR_SSE_TYPES: SSEEventType[] = ["connection.health"];
+
 function SidebarContent({ isMobileOrTablet }: { isMobileOrTablet: boolean }) {
   const { connections, fetchConnections, fetchAllHealth } = useConnectionStore();
   const { k8sAvailable, checkAvailability } = useK8sClusterStore();
@@ -126,6 +129,38 @@ function SidebarContent({ isMobileOrTablet }: { isMobileOrTablet: boolean }) {
   );
   const activeConnId = connIdMatch?.[2];
 
+  // SSE handler for connection health events
+  const handleSSEEvent = useCallback(
+    (event: { event: string; data: unknown }) => {
+      if (event.event === "connection.health") {
+        const data = event.data as ConnectionHealthData;
+        useConnectionStore.setState((state) => ({
+          healthStatuses: {
+            ...state.healthStatuses,
+            [data.connectionId]: {
+              connected: data.connected,
+              nodeCount: data.nodeCount,
+              namespaceCount: data.namespaceCount,
+              build: data.build,
+              edition: data.edition,
+              memoryUsed: data.memoryUsed,
+              memoryTotal: data.memoryTotal,
+              diskUsed: data.diskUsed,
+              diskTotal: data.diskTotal,
+            },
+          },
+        }));
+      }
+    },
+    [],
+  );
+
+  const { fallbackToPolling } = useEventStream({
+    eventTypes: SIDEBAR_SSE_TYPES,
+    onEvent: handleSSEEvent,
+    enabled: true,
+  });
+
   useEffect(() => {
     fetchConnections()
       .then(() => {
@@ -133,12 +168,15 @@ function SidebarContent({ isMobileOrTablet }: { isMobileOrTablet: boolean }) {
       })
       .catch((err) => console.error("Failed to load sidebar connections:", err));
 
+    // Only poll if SSE has fallen back to polling mode
+    if (!fallbackToPolling) return;
+
     const interval = setInterval(() => {
       fetchAllHealth();
     }, SIDEBAR_HEALTH_POLL_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [fetchConnections, fetchAllHealth]);
+  }, [fetchConnections, fetchAllHealth, fallbackToPolling]);
 
   useEffect(() => {
     checkAvailability();

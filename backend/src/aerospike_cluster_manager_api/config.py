@@ -42,3 +42,8 @@ AS_TEND_INTERVAL: int = _get_int("AS_TEND_INTERVAL", 1000)  # Cluster tend inter
 # Kubernetes API
 K8S_API_TIMEOUT: int = _get_int("K8S_API_TIMEOUT", 10)
 K8S_LOG_TIMEOUT: int = _get_int("K8S_LOG_TIMEOUT", 30)
+
+# SSE (Server-Sent Events) streaming
+SSE_ENABLED: bool = os.getenv("SSE_ENABLED", "true").lower() in ("true", "1", "yes")
+SSE_HEARTBEAT_INTERVAL: int = _get_int("SSE_HEARTBEAT_INTERVAL", 15)  # seconds between heartbeat pings
+SSE_MAX_CONNECTIONS: int = _get_int("SSE_MAX_CONNECTIONS", 50)  # max concurrent SSE subscribers

@@ -15,6 +15,8 @@ from starlette.responses import Response
 
 from aerospike_cluster_manager_api import config, db
 from aerospike_cluster_manager_api.client_manager import client_manager
+from aerospike_cluster_manager_api.events.broker import broker
+from aerospike_cluster_manager_api.events.collector import collector
 from aerospike_cluster_manager_api.logging_config import setup_logging
 from aerospike_cluster_manager_api.rate_limit import limiter
 from aerospike_cluster_manager_api.routers import (
@@ -22,6 +24,7 @@ from aerospike_cluster_manager_api.routers import (
     admin_users,
     clusters,
     connections,
+    events,
     indexes,
     metrics,
     query,
@@ -42,8 +45,15 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     logger.info("Starting Aerospike Cluster Manager API")
     await db.init_db()
 
+    # Configure broker max connections from config and start event collector
+    broker.max_connections = config.SSE_MAX_CONNECTIONS
+    if config.SSE_ENABLED:
+        await collector.start()
+
     yield
 
+    if config.SSE_ENABLED:
+        await collector.stop()
     await client_manager.close_all()
     await db.close_db()
     logger.info("Shutdown complete")
@@ -205,6 +215,7 @@ _routers = [
     udfs.router,
     sample_data.router,
     metrics.router,
+    events.router,
 ]
 
 if config.K8S_MANAGEMENT_ENABLED:
