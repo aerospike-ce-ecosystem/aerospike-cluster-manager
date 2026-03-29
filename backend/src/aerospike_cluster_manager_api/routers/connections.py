@@ -142,7 +142,7 @@ async def get_connection_health(conn_id: str = Depends(_get_verified_connection)
             memoryTotal=memory_total,
             diskUsed=disk_used,
             diskTotal=disk_total,
-            tendHealthy=await client.ping() if hasattr(client, "ping") else client.is_connected(),  # type: ignore[attr-defined]  # ping() available in aerospike-py >= 0.0.5
+            tendHealthy=await client.ping(),  # type: ignore[attr-defined]  # ping() added in aerospike-py 0.0.5
         )
     except (AerospikeError, ClusterError, ConnectionRefusedError, OSError):
         logger.warning("Health check failed for connection '%s'", conn_id, exc_info=True)
