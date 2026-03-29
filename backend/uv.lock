@@ -30,7 +30,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aerospike-py", specifier = ">=0.0.3" },
+    { name = "aerospike-py", specifier = ">=0.0.4" },
     { name = "aiosqlite", specifier = ">=0.21.0" },
     { name = "asyncpg", specifier = ">=0.30.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
@@ -53,19 +53,12 @@ dev = [
 
 [[package]]
 name = "aerospike-py"
-version = "0.0.3"
+version = "0.0.5"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/ec/21/d1110f45b31d7a79da067f20b24b31c88afd1c15cde8da0298877b6c5f84/aerospike_py-0.0.3.tar.gz", hash = "sha256:67e9b1d8633ba65f1b022b4518a220d7bcb3e49bfcd347cd755aa65a3d009abb", size = 126774, upload-time = "2026-03-09T08:57:44.177Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/4b/f0/55a46dc0a75af65e489efa90308e39522549b554ef78161cce2880402d1e/aerospike_py-0.0.3-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:57c0f8eabdb4327ffafa5614ef6c6706b97662dd11f28f8e3c9a31614db0aeb8", size = 2176310, upload-time = "2026-03-09T08:57:24.916Z" },
-    { url = "https://files.pythonhosted.org/packages/6e/47/84aef3c5cfc83d02359ac876354e9a9a38c9e4e9dbb754adcdf7635536c8/aerospike_py-0.0.3-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:25b663ec342d03b39ce9d7cb62950c71b8c9d16c87f742b0cceb774ad48542ad", size = 1976413, upload-time = "2026-03-09T08:57:26.616Z" },
-    { url = "https://files.pythonhosted.org/packages/6e/9d/51870a0fd72f67103a1df6ecb754b57335b58fe412cdae88f2ab41bc003d/aerospike_py-0.0.3-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:9c44cebbfd6883582a6d38d6a0254c4cd3a855de766bb5df638caa93c8cadfb9", size = 2179298, upload-time = "2026-03-09T08:57:28.071Z" },
-    { url = "https://files.pythonhosted.org/packages/24/6a/261601f0daa12cb9e4e1342f58baa9b8fdede9625573b19199b336499fc2/aerospike_py-0.0.3-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:eb24114f3cb5539ba6ffe3214d9f98674b93736191d9869d7901c69eab0dd007", size = 2299550, upload-time = "2026-03-09T08:57:29.591Z" },
-    { url = "https://files.pythonhosted.org/packages/69/15/b76ad8d05116eb7309d8e9fd0d7bf6a722a317a6ae32346991d3b33baae7/aerospike_py-0.0.3-cp313-cp313-win_amd64.whl", hash = "sha256:ef6592f07dc3080d3e46ecb431293e9020f01d4954c9ddcfc8d4361d83ef0a08", size = 2127722, upload-time = "2026-03-09T08:57:31.391Z" },
-    { url = "https://files.pythonhosted.org/packages/ea/fa/f1db741a9af6d68c19bd0278dacf0b3cd0261aab59cccd3a63df03255a66/aerospike_py-0.0.3-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:d81c7709f2a7e146a96ae3e67aeefe670b8388d57bd880f74c2dc6685008a6db", size = 2179394, upload-time = "2026-03-09T08:57:33.235Z" },
-    { url = "https://files.pythonhosted.org/packages/45/5c/152ceed8ec595cd85dc52ee1f33c2583c72d5b498e6972809e6a95445494/aerospike_py-0.0.3-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:e8fba66c5e310523fc3a875d9766927085e6628a61d4d0ae1c8ccad801000004", size = 2178197, upload-time = "2026-03-09T08:57:34.719Z" },
-    { url = "https://files.pythonhosted.org/packages/27/8d/1c3b494103eeea07b426e7642743c5ee422990a59ebc60af48dc490e5307/aerospike_py-0.0.3-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:5b595aa8d2b2792b62468249493002b383eae6323815c95de379d1c0f78b7778", size = 2300297, upload-time = "2026-03-09T08:57:36.45Z" },
-    { url = "https://files.pythonhosted.org/packages/ad/bc/2dc9cdd8ca313f2daa4b09833b46b71dbe07ffdda4bab7025b4b5edf6d9c/aerospike_py-0.0.3-cp314-cp314t-manylinux_2_28_aarch64.whl", hash = "sha256:44592e9a7b5247899b330d49e7b94c8bbe8d759017182de78bfc12023f8958f0", size = 2171192, upload-time = "2026-03-09T08:57:37.865Z" },
+    { url = "https://files.pythonhosted.org/packages/e2/1b/f93586722037f6e799d797638ec85e36a3e90fb5eec08c71037a8e751e73/aerospike_py-0.0.5-cp313-cp313-macosx_10_12_x86_64.whl", hash = "sha256:4c9f8f54bf36bca3ca34a14ba7ed479c87a661726ce469d30e973673a9175986", size = 2166429, upload-time = "2026-03-29T16:18:32.521Z" },
+    { url = "https://files.pythonhosted.org/packages/83/28/409d5d20e221e65f115c7c431ec98da1921bbc7a536a895766465321a978/aerospike_py-0.0.5-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:53ab381623ed606fc148d69e96eab2183d28292433dcd767ebb4060268c02bd2", size = 1972051, upload-time = "2026-03-29T16:18:34.628Z" },
+    { url = "https://files.pythonhosted.org/packages/c5/d9/3e01bf6925e2a86fca3ddd0b583aa0e6170d5c31774babd751af08736242/aerospike_py-0.0.5-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:012d64761bec7113c44207c52538398301bb6e88e2076bd10a4a9d1c2366065a", size = 2185444, upload-time = "2026-03-29T16:18:36.469Z" },
 ]
 
 [[package]]

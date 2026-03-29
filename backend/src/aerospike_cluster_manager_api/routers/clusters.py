@@ -45,7 +45,7 @@ router = APIRouter(prefix="/clusters", tags=["clusters"])
 async def get_cluster(client: AerospikeClient, conn_id: VerifiedConnId) -> ClusterInfo:
     """Retrieve full cluster information including nodes, namespaces, and sets."""
     # --- Nodes ---
-    node_names = await client.get_node_names()
+    node_names = await client.get_node_names()  # type: ignore[misc]  # async in runtime, sync in stubs
     info_all_stats = await client.info_all(INFO_STATISTICS)
     info_all_build = await client.info_all(INFO_BUILD)
     info_all_edition = await client.info_all(INFO_EDITION)
