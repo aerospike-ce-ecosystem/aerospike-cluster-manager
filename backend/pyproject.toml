@@ -8,7 +8,7 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "aerospike-py>=0.0.5", # v0.0.5: ping() health check 지원
+    "aerospike-py>=0.0.4", # v0.0.5+: ping() health check 사용 가능
     "aiosqlite>=0.21.0",
     "asyncpg>=0.30.0",
     "fastapi>=0.115.0",
