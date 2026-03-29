@@ -46,7 +46,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await db.init_db()
 
     # Configure broker max connections from config and start event collector
-    broker._max_connections = config.SSE_MAX_CONNECTIONS
+    broker.max_connections = config.SSE_MAX_CONNECTIONS
     if config.SSE_ENABLED:
         await collector.start()
 

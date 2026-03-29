@@ -26,6 +26,14 @@ class EventBroker:
         self._lock = asyncio.Lock()
 
     @property
+    def max_connections(self) -> int:
+        return self._max_connections
+
+    @max_connections.setter
+    def max_connections(self, value: int) -> None:
+        self._max_connections = value
+
+    @property
     def subscriber_count(self) -> int:
         return len(self._subscribers)
 

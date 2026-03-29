@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-
 import pytest
 
 from aerospike_cluster_manager_api.events.broker import EventBroker
@@ -32,7 +30,7 @@ async def test_type_filtering(broker: EventBroker) -> None:
     _, q_all = await broker.subscribe(event_types=None)
 
     await broker.publish({"event": "a", "data": {}})
-    assert not q2.empty() is False or q2.qsize() == 0  # q2 should be empty
+    assert q2.empty()  # q2 should be empty — event "a" doesn't match type "b"
     assert q1.qsize() == 1
     assert q_all.qsize() == 1
     assert q2.qsize() == 0

@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import time
+from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
@@ -28,7 +29,7 @@ async def _event_generator(
     request: Request,
     subscriber_id: str,
     queue: asyncio.Queue,
-) -> None:
+) -> AsyncGenerator[dict]:
     """Async generator that yields SSE-formatted dicts from the broker queue.
 
     Sends a ``:ping`` comment every ``SSE_HEARTBEAT_INTERVAL`` seconds to
