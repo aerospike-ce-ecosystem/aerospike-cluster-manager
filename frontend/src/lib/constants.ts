@@ -29,6 +29,12 @@ export const K8S_DETAIL_POLL_INTERVAL_MS = 5_000;
 export const K8S_DETAIL_POLL_MAX_BACKOFF_MS = 60_000;
 export const SIDEBAR_HEALTH_POLL_INTERVAL_MS = 30_000;
 
+// SSE (Server-Sent Events) streaming
+export const SSE_RECONNECT_BASE_MS = 1_000;
+export const SSE_RECONNECT_MAX_MS = 30_000;
+export const SSE_HEARTBEAT_TIMEOUT_MS = 45_000;
+export const SSE_MAX_RETRIES_BEFORE_FALLBACK = 3;
+
 export const PRESET_COLORS = [
   "#0097D3",
   "#c4373a",

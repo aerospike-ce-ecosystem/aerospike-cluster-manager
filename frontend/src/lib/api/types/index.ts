@@ -6,3 +6,4 @@ export * from "./query";
 export * from "./admin";
 export * from "./metrics";
 export * from "./k8s";
+export * from "./events";

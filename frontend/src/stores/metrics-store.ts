@@ -29,10 +29,16 @@ interface MetricsState {
   _isTabVisible: boolean;
   _pollingConnId: string | null;
   consecutiveErrors: number;
+  /** When true, SSE is providing data and polling is not needed */
+  sseActive: boolean;
 
   fetchMetrics: (connId: string) => Promise<void>;
   startPolling: (connId: string) => void;
   stopPolling: () => void;
+  /** Called by the SSE event handler to update metrics without polling */
+  handleSSEMetrics: (metrics: ClusterMetrics) => void;
+  /** Activate/deactivate SSE mode — when active, polling is paused */
+  setSSEActive: (active: boolean) => void;
 }
 
 export const useMetricsStore = create<MetricsState>()((set, get) => ({
@@ -43,6 +49,7 @@ export const useMetricsStore = create<MetricsState>()((set, get) => ({
   _isTabVisible: true,
   _pollingConnId: null,
   consecutiveErrors: 0,
+  sseActive: false,
 
   fetchMetrics: async (connId) => {
     // Prevent concurrent requests
@@ -77,11 +84,15 @@ export const useMetricsStore = create<MetricsState>()((set, get) => ({
     if (_visibilityCleanup) _visibilityCleanup();
 
     set({ _pollingConnId: connId });
+
+    // If SSE is active, skip polling — SSE provides the data
+    if (get().sseActive) return;
+
     get().fetchMetrics(connId);
 
     _intervalId = setInterval(() => {
-      // Skip polling when tab is not visible
-      if (!get()._isTabVisible) return;
+      // Skip polling when tab is not visible or SSE is active
+      if (!get()._isTabVisible || get().sseActive) return;
       const currentConnId = get()._pollingConnId;
       if (currentConnId) get().fetchMetrics(currentConnId);
     }, METRIC_INTERVAL_MS);
@@ -109,5 +120,33 @@ export const useMetricsStore = create<MetricsState>()((set, get) => ({
       _visibilityCleanup = null;
     }
     set({ _isFetching: false, _pollingConnId: null });
+  },
+
+  handleSSEMetrics: (metrics) => {
+    // Only accept metrics for the currently polling connection
+    const connId = get()._pollingConnId;
+    if (connId && metrics.connectionId === connId) {
+      set({ metrics, loading: false, error: null, consecutiveErrors: 0 });
+    }
+  },
+
+  setSSEActive: (active) => {
+    set({ sseActive: active });
+    if (active && _intervalId) {
+      // SSE took over — stop polling
+      clearInterval(_intervalId);
+      _intervalId = null;
+    } else if (!active && get()._pollingConnId) {
+      // SSE failed — resume polling
+      const connId = get()._pollingConnId;
+      if (connId && !_intervalId) {
+        get().fetchMetrics(connId);
+        _intervalId = setInterval(() => {
+          if (!get()._isTabVisible) return;
+          const currentConnId = get()._pollingConnId;
+          if (currentConnId) get().fetchMetrics(currentConnId);
+        }, METRIC_INTERVAL_MS);
+      }
+    }
   },
 }));

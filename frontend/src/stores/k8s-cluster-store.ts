@@ -28,6 +28,8 @@ interface K8sClusterState {
   detailHealth: ClusterHealthSummary | null;
   consecutiveErrors: number;
   _pollingTarget: { namespace: string; name: string } | null;
+  /** When true, SSE is providing data and polling is not needed */
+  sseActive: boolean;
 
   // Infrastructure data (K8s namespaces, storage classes, secrets, nodes)
   k8sNamespaces: string[];
@@ -54,6 +56,11 @@ interface K8sClusterState {
   startDetailPolling: (namespace: string, name: string) => void;
   stopDetailPolling: () => void;
   clearDetailData: () => void;
+  /** SSE handlers for real-time updates */
+  handleSSEDetail: (detail: K8sClusterDetail) => void;
+  handleSSEEvents: (namespace: string, name: string, events: K8sClusterEvent[]) => void;
+  handleSSEHealth: (namespace: string, name: string, health: ClusterHealthSummary) => void;
+  setSSEActive: (active: boolean) => void;
 
   /** @deprecated Use useK8sTemplateStore instead. Kept for backward compatibility with the wizard. */
   templates: K8sTemplateSummary[];
@@ -89,6 +96,7 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
     detailHealth: null,
     consecutiveErrors: 0,
     _pollingTarget: null,
+    sseActive: false,
     k8sNamespaces: [],
     k8sStorageClasses: [],
     k8sSecrets: [],
@@ -238,9 +246,12 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
       if (_k8sDetailIntervalId) clearInterval(_k8sDetailIntervalId);
       set({ consecutiveErrors: 0, _pollingTarget: { namespace, name } });
 
+      // If SSE is active, skip polling
+      if (get().sseActive) return;
+
       const poll = async () => {
         const target = get()._pollingTarget;
-        if (!target) return;
+        if (!target || get().sseActive) return;
         try {
           await loadCluster(target.namespace, target.name);
           const [events, health] = await Promise.all([
@@ -286,6 +297,41 @@ export const useK8sClusterStore = create<K8sClusterState>()((set, get) => {
 
     clearDetailData: () => {
       set({ detailEvents: [], detailHealth: null, selectedCluster: null });
+    },
+
+    handleSSEDetail: (detail) => {
+      const target = get()._pollingTarget;
+      if (target && detail.namespace === target.namespace && detail.name === target.name) {
+        set({ selectedCluster: detail });
+      }
+    },
+
+    handleSSEEvents: (namespace, name, events) => {
+      const target = get()._pollingTarget;
+      if (target && target.namespace === namespace && target.name === name) {
+        set({ detailEvents: events, consecutiveErrors: 0 });
+      }
+    },
+
+    handleSSEHealth: (namespace, name, health) => {
+      const target = get()._pollingTarget;
+      if (target && target.namespace === namespace && target.name === name) {
+        set({ detailHealth: health, consecutiveErrors: 0 });
+      }
+    },
+
+    setSSEActive: (active) => {
+      set({ sseActive: active });
+      if (active && _k8sDetailIntervalId) {
+        clearInterval(_k8sDetailIntervalId);
+        _k8sDetailIntervalId = null;
+      } else if (!active && get()._pollingTarget) {
+        // SSE failed — resume polling
+        const target = get()._pollingTarget;
+        if (target) {
+          get().startDetailPolling(target.namespace, target.name);
+        }
+      }
     },
 
     fetchK8sNamespaces: async () => {
