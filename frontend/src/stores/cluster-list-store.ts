@@ -194,7 +194,7 @@ export const useClusterListStore = create<ClusterListState>()((set, get) => ({
         };
       });
     } catch (error) {
-      set({ error: getErrorMessage(error), isLoadingMore: false });
+      set({ error: getErrorMessage(error), isLoadingMore: false, k8sHasMore: false, k8sContinueToken: null });
     }
   },
 
