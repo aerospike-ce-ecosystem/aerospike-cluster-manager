@@ -62,11 +62,11 @@ class ClientManager:
         conn_lock = await self._get_conn_lock(conn_id)
         async with conn_lock:
             client = self._clients.pop(conn_id, None)
-        async with self._global_lock:
-            self._conn_locks.pop(conn_id, None)
-        if client is not None:
-            with contextlib.suppress(AerospikeError, OSError):
-                await client.close()
+            async with self._global_lock:
+                self._conn_locks.pop(conn_id, None)
+            if client is not None:
+                with contextlib.suppress(AerospikeError, OSError):
+                    await client.close()
 
     async def close_all(self) -> None:
         async with self._global_lock:
