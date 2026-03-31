@@ -14,6 +14,7 @@ import aerospike_py
 from aerospike_py.exception import AerospikeError
 
 from aerospike_cluster_manager_api import config, db
+from aerospike_cluster_manager_api.services.info_cache import info_cache
 from aerospike_cluster_manager_api.utils import parse_host_port
 
 
@@ -62,6 +63,7 @@ class ClientManager:
         conn_lock = await self._get_conn_lock(conn_id)
         async with conn_lock:
             client = self._clients.pop(conn_id, None)
+            info_cache.invalidate_connection(conn_id)
             async with self._global_lock:
                 self._conn_locks.pop(conn_id, None)
             if client is not None:
@@ -69,6 +71,7 @@ class ClientManager:
                     await client.close()
 
     async def close_all(self) -> None:
+        info_cache.clear()
         async with self._global_lock:
             clients = list(self._clients.values())
             self._clients.clear()

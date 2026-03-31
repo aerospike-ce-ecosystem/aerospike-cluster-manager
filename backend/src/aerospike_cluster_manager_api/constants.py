@@ -60,6 +60,10 @@ NS_SUM_KEYS = frozenset(
     }
 )
 
+# Cache TTLs (seconds)
+INFO_CACHE_TTL_STATIC = 60.0  # build, edition — rarely change at runtime
+INFO_CACHE_TTL_VOLATILE = 5.0  # statistics, namespace/*, sets/* — balances freshness vs load
+
 # Query limits
 MAX_QUERY_RECORDS = 10_000
 
