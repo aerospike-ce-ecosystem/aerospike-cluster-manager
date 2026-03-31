@@ -687,10 +687,18 @@ async def delete_k8s_template(
     name: str = _K8S_NAME,
 ) -> DeleteResponse:
 
-    clusters = await k8s_client.list_clusters()
+    # Fetch all clusters (unpaginated) to check for template references
+    all_clusters: list[dict[str, Any]] = []
+    token: str | None = None
+    while True:
+        items, token = await k8s_client.list_clusters(continue_token=token)
+        all_clusters.extend(items)
+        if not token:
+            break
+
     referencing = [
         c.get("metadata", {}).get("name", "")
-        for c in clusters
+        for c in all_clusters
         if c.get("spec", {}).get("templateRef", {}).get("name") == name
     ]
     if referencing:
