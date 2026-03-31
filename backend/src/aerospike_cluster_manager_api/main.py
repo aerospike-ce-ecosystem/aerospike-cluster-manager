@@ -157,7 +157,7 @@ try:
     async def _server_error(_req: Request, exc: ServerError) -> JSONResponse:
         msg = str(exc)
         # TODO: Replace string check with proper error code when aerospike-py exposes result_code
-        if "FailForbidden" in msg:
+        if "failforbidden" in msg.lower():
             return JSONResponse(
                 status_code=403,
                 content={
@@ -165,7 +165,7 @@ try:
                     "If setting TTL, ensure the namespace has 'nsup-period' configured."
                 },
             )
-        logger.exception("Aerospike server error")
+        logger.warning("Unrecognized ServerError: %s", msg)
         return JSONResponse(status_code=500, content={"detail": "An internal server error occurred"})
 
     @app.exception_handler(AerospikeTimeoutError)
