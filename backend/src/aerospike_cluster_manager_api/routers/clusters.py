@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, HTTPException
@@ -31,6 +32,7 @@ from aerospike_cluster_manager_api.models.cluster import (
     SetInfo,
 )
 from aerospike_cluster_manager_api.models.common import MessageResponse
+from aerospike_cluster_manager_api.services.info_cache import info_cache
 
 logger = logging.getLogger(__name__)
 
@@ -44,12 +46,14 @@ router = APIRouter(prefix="/clusters", tags=["clusters"])
 )
 async def get_cluster(client: AerospikeClient, conn_id: VerifiedConnId) -> ClusterInfo:
     """Retrieve full cluster information including nodes, namespaces, and sets."""
-    # --- Nodes ---
-    node_names = await client.get_node_names()  # type: ignore[misc]  # async in runtime, sync in stubs
-    info_all_stats = await client.info_all(INFO_STATISTICS)
-    info_all_build = await client.info_all(INFO_BUILD)
-    info_all_edition = await client.info_all(INFO_EDITION)
-    info_all_service = await client.info_all(INFO_SERVICE)
+    # --- Phase 1: All node-level calls in parallel ---
+    node_names, info_all_stats, info_all_build, info_all_edition, info_all_service = await asyncio.gather(
+        client.get_node_names(),  # type: ignore[misc]  # async in runtime, sync in stubs
+        client.info_all(INFO_STATISTICS),
+        info_cache.get_or_fetch(conn_id, INFO_BUILD, lambda: client.info_all(INFO_BUILD)),
+        info_cache.get_or_fetch(conn_id, INFO_EDITION, lambda: client.info_all(INFO_EDITION)),
+        client.info_all(INFO_SERVICE),
+    )
 
     node_map: dict[str, dict] = {}
     for name, _err, resp in info_all_stats:
@@ -82,15 +86,27 @@ async def get_cluster(client: AerospikeClient, conn_id: VerifiedConnId) -> Clust
             )
         )
 
-    # --- Namespaces ---
+    # --- Phase 2: Namespace list ---
     ns_raw = await client.info_random_node(INFO_NAMESPACES)
     ns_names = parse_list(ns_raw)
 
     total_nodes = len(node_names)
 
+    # --- Phase 3: All namespace info calls in parallel ---
+    if ns_names:
+        ns_tasks = []
+        for ns_name in ns_names:
+            ns_tasks.append(client.info_all(info_namespace(ns_name)))
+            ns_tasks.append(client.info_all(info_sets(ns_name)))
+        ns_results = await asyncio.gather(*ns_tasks)
+    else:
+        ns_results = []
+
     namespaces: list[NamespaceInfo] = []
-    for ns_name in ns_names:
-        ns_all = await client.info_all(info_namespace(ns_name))
+    for i, ns_name in enumerate(ns_names):
+        ns_all = ns_results[i * 2]
+        sets_all = ns_results[i * 2 + 1]
+
         ns_stats = aggregate_node_kv(ns_all, keys_to_sum=NS_SUM_KEYS)
 
         replication_factor = safe_int(ns_stats.get("replication-factor"), 1)
@@ -108,8 +124,6 @@ async def get_cluster(client: AerospikeClient, conn_id: VerifiedConnId) -> Clust
         if memory_total > 0:
             memory_free_pct = int((1 - memory_used / memory_total) * 100)
 
-        # --- Sets for this namespace (query all nodes and merge) ---
-        sets_all = await client.info_all(info_sets(ns_name))
         agg_sets = aggregate_set_records(sets_all, replication_factor)
         sets = [
             SetInfo(

@@ -23,7 +23,7 @@ export const DEFAULT_PAGE_SIZE = 25;
 export const MAX_QUERY_RECORDS = 10_000;
 
 export const METRIC_HISTORY_POINTS = 60;
-export const METRIC_INTERVAL_MS = 2000;
+export const METRIC_INTERVAL_MS = 5000;
 
 export const K8S_DETAIL_POLL_INTERVAL_MS = 5_000;
 export const K8S_DETAIL_POLL_MAX_BACKOFF_MS = 60_000;

@@ -7,6 +7,7 @@ device usage.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import random
 import time
@@ -81,17 +82,25 @@ async def build_cluster_metrics(client, conn_id: str) -> ClusterMetrics:
     looking charts but the data is simulated.
     """
     try:
-        # Cluster-level statistics (aggregated across all nodes)
-        stats_all = await client.info_all(INFO_STATISTICS)
+        # Cluster-level statistics and namespace list in parallel
+        stats_all, ns_raw = await asyncio.gather(
+            client.info_all(INFO_STATISTICS),
+            client.info_random_node(INFO_NAMESPACES),
+        )
         stats = aggregate_node_kv(stats_all, keys_to_sum=_STATS_SUM_KEYS, keys_to_min=_STATS_MIN_KEYS)
         uptime = safe_int(stats.get("uptime"))
         client_connections = safe_int(stats.get("client_connections"))
 
-        # Namespace list
-        ns_raw = await client.info_random_node(INFO_NAMESPACES)
         ns_names = parse_list(ns_raw)
 
         total_nodes = len(stats_all)
+
+        # All per-namespace info calls in parallel
+        if ns_names:
+            ns_tasks = [client.info_all(info_namespace(ns_name)) for ns_name in ns_names]
+            ns_results = await asyncio.gather(*ns_tasks)
+        else:
+            ns_results = []
 
         ts_points = 60
         ns_metrics: list[NamespaceMetrics] = []
@@ -103,7 +112,7 @@ async def build_cluster_metrics(client, conn_id: str) -> ClusterMetrics:
         total_write_success = 0
 
         for i, ns_name in enumerate(ns_names):
-            ns_all = await client.info_all(info_namespace(ns_name))
+            ns_all = ns_results[i]
             ns_stats = aggregate_node_kv(ns_all, keys_to_sum=NS_SUM_KEYS)
 
             replication_factor = safe_int(ns_stats.get("replication-factor"), 1)

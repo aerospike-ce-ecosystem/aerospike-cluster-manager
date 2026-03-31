@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import logging
 import uuid
@@ -96,11 +97,17 @@ async def get_connection_health(conn_id: str = Depends(_get_verified_connection)
     """
     try:
         client = await client_manager.get_client(conn_id)
-        node_names = await client.get_node_names()  # type: ignore[misc]  # async in runtime, sync in stubs
-        ns_raw = await client.info_random_node(INFO_NAMESPACES)
+
+        # Fetch node names, namespace list, build, and edition in parallel
+        node_names, ns_raw, build_raw, edition_raw = await asyncio.gather(
+            client.get_node_names(),  # type: ignore[misc]  # async in runtime, sync in stubs
+            client.info_random_node(INFO_NAMESPACES),
+            client.info_random_node(INFO_BUILD),
+            client.info_random_node(INFO_EDITION),
+        )
         namespaces = parse_list(ns_raw)
-        build = (await client.info_random_node(INFO_BUILD)).strip()
-        edition = (await client.info_random_node(INFO_EDITION)).strip()
+        build = build_raw.strip()
+        edition = edition_raw.strip()
         node_count = len(node_names)
 
         # Collect namespace-level summary metrics
@@ -110,8 +117,15 @@ async def get_connection_health(conn_id: str = Depends(_get_verified_connection)
         disk_total = 0
 
         try:
-            for ns_name in namespaces:
-                ns_info = await client.info_random_node(f"namespace/{ns_name}")
+            # Fetch all namespace info in parallel
+            if namespaces:
+                ns_infos = await asyncio.gather(
+                    *[client.info_random_node(f"namespace/{ns_name}") for ns_name in namespaces]
+                )
+            else:
+                ns_infos = []
+
+            for ns_info in ns_infos:
                 kv = parse_kv_pairs(ns_info)
                 # CE 8 uses unified data_used_bytes/data_total_bytes for both memory and device.
                 # Fall back to legacy memory_used_bytes/memory-size for older versions.
