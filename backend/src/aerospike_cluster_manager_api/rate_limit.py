@@ -11,7 +11,7 @@ def _get_client_ip(request: Request) -> str:
     if config.TRUSTED_PROXIES and client_host in config.TRUSTED_PROXIES:
         forwarded_for = request.headers.get("X-Forwarded-For")
         if forwarded_for:
-            return forwarded_for.split(",")[0].strip()
+            return forwarded_for.split(",")[-1].strip()
 
     return client_host
 

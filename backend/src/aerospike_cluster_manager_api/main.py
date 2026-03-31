@@ -110,7 +110,9 @@ async def security_headers_middleware(request: Request, call_next: RequestRespon
 
     csp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'"
     if config.CSP_REPORT_URI:
-        csp += f"; report-uri {config.CSP_REPORT_URI}"
+        sanitized_uri = config.CSP_REPORT_URI.split(";")[0].strip()
+        if sanitized_uri:
+            csp += f"; report-uri {sanitized_uri}"
     response.headers["Content-Security-Policy"] = csp
 
     if config.ENABLE_HSTS:

@@ -93,7 +93,14 @@ def test_get_client_ip_ignores_xff_from_untrusted():
 
 def test_get_client_ip_respects_xff_from_trusted():
     with patch("aerospike_cluster_manager_api.config.TRUSTED_PROXIES", ["10.0.0.1"]):
-        req = _FakeRequest("10.0.0.1", forwarded_for="203.0.113.50, 10.0.0.1")
+        req = _FakeRequest("10.0.0.1", forwarded_for="203.0.113.50")
+        assert _get_client_ip(req) == "203.0.113.50"
+
+
+def test_get_client_ip_ignores_spoofed_xff_prefix():
+    """Attacker-prepended IPs in X-Forwarded-For must be ignored."""
+    with patch("aerospike_cluster_manager_api.config.TRUSTED_PROXIES", ["10.0.0.1"]):
+        req = _FakeRequest("10.0.0.1", forwarded_for="spoofed.ip, 203.0.113.50")
         assert _get_client_ip(req) == "203.0.113.50"
 
 
