@@ -53,7 +53,11 @@ describe("useK8sClusterStore", () => {
 
   it("createCluster refreshes clusters before loading completes", async () => {
     mockApi.createK8sCluster.mockResolvedValue(clusterSummary);
-    mockApi.getK8sClusters.mockResolvedValue({ items: [clusterSummary], continueToken: null, hasMore: false });
+    mockApi.getK8sClusters.mockResolvedValue({
+      items: [clusterSummary],
+      continueToken: null,
+      hasMore: false,
+    });
 
     const result = await useK8sClusterStore.getState().createCluster({
       name: "cluster-1",
@@ -95,7 +99,11 @@ describe("useK8sClusterStore", () => {
     const scaledDetail = { ...clusterDetail, size: 5 } as any;
     useK8sClusterStore.setState({ selectedCluster: clusterDetail });
     mockApi.scaleK8sCluster.mockResolvedValue(scaledSummary);
-    mockApi.getK8sClusters.mockResolvedValue({ items: [scaledSummary], continueToken: null, hasMore: false });
+    mockApi.getK8sClusters.mockResolvedValue({
+      items: [scaledSummary],
+      continueToken: null,
+      hasMore: false,
+    });
     mockApi.getK8sCluster.mockResolvedValue(scaledDetail);
 
     await useK8sClusterStore

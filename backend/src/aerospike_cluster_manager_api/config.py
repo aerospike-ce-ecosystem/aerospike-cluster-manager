@@ -36,9 +36,7 @@ ENABLE_HSTS: bool = os.getenv("ENABLE_HSTS", "false").lower() in ("true", "1", "
 CSP_REPORT_URI: str = os.getenv("CSP_REPORT_URI", "")
 
 # Trusted reverse-proxy addresses for X-Forwarded-For support
-TRUSTED_PROXIES: list[str] = [
-    p.strip() for p in os.getenv("TRUSTED_PROXIES", "").split(",") if p.strip()
-]
+TRUSTED_PROXIES: list[str] = [p.strip() for p in os.getenv("TRUSTED_PROXIES", "").split(",") if p.strip()]
 
 # Database connection pool
 DB_POOL_MIN_SIZE: int = _get_int("DB_POOL_MIN_SIZE", 2)

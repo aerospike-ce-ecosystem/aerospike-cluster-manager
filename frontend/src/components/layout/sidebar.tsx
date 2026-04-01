@@ -130,30 +130,27 @@ function SidebarContent({ isMobileOrTablet }: { isMobileOrTablet: boolean }) {
   const activeConnId = connIdMatch?.[2];
 
   // SSE handler for connection health events
-  const handleSSEEvent = useCallback(
-    (event: { event: string; data: unknown }) => {
-      if (event.event === "connection.health") {
-        const data = event.data as ConnectionHealthData;
-        useConnectionStore.setState((state) => ({
-          healthStatuses: {
-            ...state.healthStatuses,
-            [data.connectionId]: {
-              connected: data.connected,
-              nodeCount: data.nodeCount,
-              namespaceCount: data.namespaceCount,
-              build: data.build,
-              edition: data.edition,
-              memoryUsed: data.memoryUsed,
-              memoryTotal: data.memoryTotal,
-              diskUsed: data.diskUsed,
-              diskTotal: data.diskTotal,
-            },
+  const handleSSEEvent = useCallback((event: { event: string; data: unknown }) => {
+    if (event.event === "connection.health") {
+      const data = event.data as ConnectionHealthData;
+      useConnectionStore.setState((state) => ({
+        healthStatuses: {
+          ...state.healthStatuses,
+          [data.connectionId]: {
+            connected: data.connected,
+            nodeCount: data.nodeCount,
+            namespaceCount: data.namespaceCount,
+            build: data.build,
+            edition: data.edition,
+            memoryUsed: data.memoryUsed,
+            memoryTotal: data.memoryTotal,
+            diskUsed: data.diskUsed,
+            diskTotal: data.diskTotal,
           },
-        }));
-      }
-    },
-    [],
-  );
+        },
+      }));
+    }
+  }, []);
 
   const { fallbackToPolling } = useEventStream({
     eventTypes: SIDEBAR_SSE_TYPES,

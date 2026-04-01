@@ -67,4 +67,9 @@ export type SSEEvent =
 
 // --- SSE connection status ---
 
-export type SSEConnectionStatus = "connecting" | "connected" | "reconnecting" | "disconnected" | "fallback";
+export type SSEConnectionStatus =
+  | "connecting"
+  | "connected"
+  | "reconnecting"
+  | "disconnected"
+  | "fallback";

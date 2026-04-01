@@ -132,7 +132,9 @@ export const useClusterListStore = create<ClusterListState>()((set, get) => ({
       const connections: ConnectionProfile[] =
         connectionsResult.status === "fulfilled" ? connectionsResult.value : [];
       const k8sResponse =
-        k8sResult.status === "fulfilled" ? k8sResult.value : { items: [], continueToken: null, hasMore: false };
+        k8sResult.status === "fulfilled"
+          ? k8sResult.value
+          : { items: [], continueToken: null, hasMore: false };
 
       const rows = mergeK8sClusters(connections, k8sResponse.items);
 
@@ -194,7 +196,12 @@ export const useClusterListStore = create<ClusterListState>()((set, get) => ({
         };
       });
     } catch (error) {
-      set({ error: getErrorMessage(error), isLoadingMore: false, k8sHasMore: false, k8sContinueToken: null });
+      set({
+        error: getErrorMessage(error),
+        isLoadingMore: false,
+        k8sHasMore: false,
+        k8sContinueToken: null,
+      });
     }
   },
 

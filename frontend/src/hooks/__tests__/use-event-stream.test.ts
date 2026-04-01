@@ -125,9 +125,7 @@ describe("useEventStream", () => {
     const onEvent = vi.fn();
     const eventTypes: SSEEventType[] = ["cluster.metrics"];
 
-    const { result } = renderHook(() =>
-      useEventStream({ eventTypes, onEvent, enabled: false }),
-    );
+    const { result } = renderHook(() => useEventStream({ eventTypes, onEvent, enabled: false }));
 
     expect(result.current.status).toBe("disconnected");
     expect(result.current.fallbackToPolling).toBe(false);

@@ -118,7 +118,9 @@ async def security_headers_middleware(request: Request, call_next: RequestRespon
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
 
-    csp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'"
+    csp = (
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'"
+    )
     if config.CSP_REPORT_URI:
         sanitized_uri = config.CSP_REPORT_URI.split(";")[0].strip()
         if sanitized_uri:

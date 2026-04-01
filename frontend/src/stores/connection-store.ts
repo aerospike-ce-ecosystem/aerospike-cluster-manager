@@ -66,8 +66,10 @@ export const useConnectionStore = create<ConnectionState>()((set, get) => ({
       // eslint-disable-next-line no-console -- intentional: surface silent health-check failures for debugging
       console.error(`Health check failed for connection ${id}:`, err);
       const error = getErrorMessage(err);
-      const errorType =
-        err && typeof err === "object" && "status" in err ? String(err.status) : undefined;
+      const errorType: import("@/lib/api/types").HealthErrorType | undefined =
+        err && typeof err === "object" && "status" in err
+          ? (String(err.status) as import("@/lib/api/types").HealthErrorType)
+          : undefined;
       set((state) => ({
         healthStatuses: {
           ...state.healthStatuses,
