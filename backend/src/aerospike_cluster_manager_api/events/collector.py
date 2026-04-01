@@ -157,12 +157,12 @@ class EventCollector:
         try:
             from aerospike_cluster_manager_api.k8s_client import k8s_client
 
-            clusters = await asyncio.to_thread(k8s_client.list_clusters)
+            clusters, _ = await k8s_client.list_clusters()
             for cluster in clusters:
                 ns = cluster.get("namespace", "")
                 name = cluster.get("name", "")
                 try:
-                    detail = await asyncio.to_thread(k8s_client.get_cluster, ns, name)
+                    detail = await k8s_client.get_cluster(ns, name)
                     await broker.publish(
                         {
                             "event": "k8s.cluster.detail",
@@ -175,7 +175,8 @@ class EventCollector:
                     logger.debug("Failed to collect K8s detail for %s/%s", ns, name, exc_info=True)
 
                 try:
-                    events = await asyncio.to_thread(k8s_client.get_cluster_events, ns, name)
+                    field_selector = f"involvedObject.name={name},involvedObject.kind=AerospikeCluster"
+                    events = await k8s_client.list_events(ns, field_selector)
                     await broker.publish(
                         {
                             "event": "k8s.cluster.events",
@@ -188,7 +189,10 @@ class EventCollector:
                     logger.debug("Failed to collect K8s events for %s/%s", ns, name, exc_info=True)
 
                 try:
-                    health = await asyncio.to_thread(k8s_client.get_cluster_health, ns, name)
+                    from aerospike_cluster_manager_api.routers.k8s_clusters import extract_health
+
+                    cr = await k8s_client.get_cluster(ns, name)
+                    health = extract_health(cr)
                     await broker.publish(
                         {
                             "event": "k8s.cluster.health",
