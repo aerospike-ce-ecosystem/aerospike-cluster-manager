@@ -98,9 +98,11 @@ async def get_connection_health(conn_id: str = Depends(_get_verified_connection)
     try:
         client = await client_manager.get_client(conn_id)
 
-        # Fetch node names, namespace list, build, and edition in parallel
-        node_names, ns_raw, build_raw, edition_raw = await asyncio.gather(
-            client.get_node_names(),  # type: ignore[misc]  # async in runtime, sync in stubs
+        # get_node_names() is synchronous — call it before the async gather
+        node_names = client.get_node_names()
+
+        # Fetch namespace list, build, and edition in parallel
+        ns_raw, build_raw, edition_raw = await asyncio.gather(
             client.info_random_node(INFO_NAMESPACES),
             client.info_random_node(INFO_BUILD),
             client.info_random_node(INFO_EDITION),

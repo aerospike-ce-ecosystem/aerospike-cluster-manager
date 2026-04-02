@@ -47,8 +47,9 @@ router = APIRouter(prefix="/clusters", tags=["clusters"])
 async def get_cluster(client: AerospikeClient, conn_id: VerifiedConnId) -> ClusterInfo:
     """Retrieve full cluster information including nodes, namespaces, and sets."""
     # --- Phase 1: All node-level calls in parallel ---
-    node_names, info_all_stats, info_all_build, info_all_edition, info_all_service = await asyncio.gather(
-        client.get_node_names(),  # type: ignore[misc]  # async in runtime, sync in stubs
+    # get_node_names() is synchronous — call it before the async gather
+    node_names = client.get_node_names()
+    info_all_stats, info_all_build, info_all_edition, info_all_service = await asyncio.gather(
         client.info_all(INFO_STATISTICS),
         info_cache.get_or_fetch(conn_id, INFO_BUILD, lambda: client.info_all(INFO_BUILD)),
         info_cache.get_or_fetch(conn_id, INFO_EDITION, lambda: client.info_all(INFO_EDITION)),

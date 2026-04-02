@@ -102,7 +102,7 @@ class EventCollector:
         for conn in connections:
             try:
                 client = await client_manager.get_client(conn.id)
-                node_names = await client.get_node_names()  # type: ignore[misc]
+                node_names = client.get_node_names()
                 ns_raw = await client.info_random_node(INFO_NAMESPACES)
                 namespaces = parse_list(ns_raw)
                 build = (await client.info_random_node(INFO_BUILD)).strip()
