@@ -40,14 +40,14 @@ function MetricCard({
   return (
     <div className="border-base-300 bg-base-100 flex flex-col gap-2 rounded-xl border p-4 shadow-sm">
       <div className="flex items-center justify-between">
-        <span className="text-base-content/40 text-[11px] font-medium">{label}</span>
+        <span className="text-base-content/65 text-[11px] font-medium">{label}</span>
         <div className={cn("flex h-7 w-7 items-center justify-center rounded-lg", iconBg)}>
           <Icon className={cn("h-3.5 w-3.5", iconColor)} />
         </div>
       </div>
       <div className="flex items-baseline gap-1.5">
         <span className="text-base-content text-2xl font-extrabold">{value}</span>
-        {subtitle && <span className="text-base-content/40 text-xs font-medium">{subtitle}</span>}
+        {subtitle && <span className="text-base-content/65 text-xs font-medium">{subtitle}</span>}
       </div>
     </div>
   );
@@ -87,7 +87,7 @@ function NamespaceRow({
                 label={ns.stopWrites ? "Stop Writes" : ns.hwmBreached ? "HWM Breached" : "Healthy"}
               />
             </div>
-            <span className="text-base-content/40 text-[10px]">
+            <span className="text-base-content/65 text-[10px]">
               {ns.sets.length} set{ns.sets.length !== 1 ? "s" : ""} · RF {ns.replicationFactor}
             </span>
           </div>
@@ -96,7 +96,7 @@ function NamespaceRow({
         {/* Metrics — 2-col grid on mobile, inline on desktop */}
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 pl-4 sm:flex sm:flex-1 sm:gap-5 sm:pl-0">
           <div className="flex flex-col gap-0.5">
-            <span className="text-base-content/30 text-[9px] font-medium tracking-wider">
+            <span className="text-base-content/60 text-[9px] font-medium tracking-wider">
               OBJECTS
             </span>
             <span className="text-base-content font-mono text-xs font-semibold">
@@ -104,7 +104,7 @@ function NamespaceRow({
             </span>
           </div>
           <div className="flex flex-col gap-0.5">
-            <span className="text-base-content/30 text-[9px] font-medium tracking-wider">
+            <span className="text-base-content/60 text-[9px] font-medium tracking-wider">
               MEMORY
             </span>
             <span className="text-base-content font-mono text-xs font-semibold">
@@ -112,7 +112,7 @@ function NamespaceRow({
             </span>
           </div>
           <div className="flex flex-col gap-0.5">
-            <span className="text-base-content/30 text-[9px] font-medium tracking-wider">HWM</span>
+            <span className="text-base-content/60 text-[9px] font-medium tracking-wider">HWM</span>
             <span
               className={cn(
                 "font-mono text-xs font-semibold",
@@ -123,8 +123,8 @@ function NamespaceRow({
             </span>
           </div>
           <div className="flex flex-col gap-0.5">
-            <span className="text-base-content/30 text-[9px] font-medium tracking-wider">TTL</span>
-            <span className="text-base-content/50 font-mono text-xs font-semibold">
+            <span className="text-base-content/60 text-[9px] font-medium tracking-wider">TTL</span>
+            <span className="text-base-content/70 font-mono text-xs font-semibold">
               {ns.defaultTtl === 0 ? "None" : `${ns.defaultTtl}s`}
             </span>
           </div>
@@ -138,7 +138,7 @@ function NamespaceRow({
               style={{ width: `${Math.max(memPct, 1)}%` }}
             />
           </div>
-          <span className="text-base-content/30 text-right text-[9px]">{memPct}%</span>
+          <span className="text-base-content/60 text-right text-[9px]">{memPct}%</span>
         </div>
       </div>
 
@@ -151,7 +151,7 @@ function NamespaceRow({
             className="border-base-300 bg-base-100 hover:border-primary/30 hover:bg-primary/5 group flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-colors"
           >
             <span className="text-base-content font-medium">{set.name}</span>
-            <span className="text-base-content/30 bg-base-200 rounded px-1.5 py-0.5 font-mono text-[10px]">
+            <span className="text-base-content/60 bg-base-200 rounded px-1.5 py-0.5 font-mono text-[10px]">
               {formatNumber(set.objects)}
             </span>
             <ChevronRight className="text-base-content/20 group-hover:text-primary h-3 w-3 transition-colors" />
@@ -226,7 +226,7 @@ export function UnifiedOverview({
           <div className="flex items-center justify-between">
             <span className="text-base-content text-sm font-bold">Namespaces</span>
             <div className="flex items-center gap-2">
-              <span className="text-base-content/30 text-xs">
+              <span className="text-base-content/60 text-xs">
                 {cluster.namespaces.length} / 2 max (CE)
               </span>
               {onCreateSampleData && (
@@ -285,7 +285,7 @@ export function UnifiedOverview({
                     </span>
                   </div>
                 </div>
-                <span className="text-base-content/30 truncate font-mono text-[9px]">
+                <span className="text-base-content/60 truncate font-mono text-[9px]">
                   {node.address}:{node.port}
                 </span>
               </div>

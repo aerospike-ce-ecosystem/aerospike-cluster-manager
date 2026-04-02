@@ -186,7 +186,7 @@ function SideBySideDiff({
                   line.type === "removed" && "bg-error/10",
                 )}
               >
-                <td className="text-base-content/30 w-8 border-r px-1 text-right select-none">
+                <td className="text-base-content/60 w-8 border-r px-1 text-right select-none">
                   {line.leftNum ?? ""}
                 </td>
                 <td
@@ -198,7 +198,7 @@ function SideBySideDiff({
                 >
                   {line.left}
                 </td>
-                <td className="text-base-content/30 w-8 border-x px-1 text-right select-none">
+                <td className="text-base-content/60 w-8 border-x px-1 text-right select-none">
                   {line.rightNum ?? ""}
                 </td>
                 <td

@@ -90,7 +90,7 @@ export function EditNodeBlocklistSection({
               disabled={disabled}
             />
             <span className="flex-1 font-mono">{node.name}</span>
-            {node.zone && <span className="text-base-content/40">{node.zone}</span>}
+            {node.zone && <span className="text-base-content/65">{node.zone}</span>}
             <span
               className={`inline-block h-2 w-2 rounded-full ${node.ready ? "bg-success" : "bg-error"}`}
               title={node.ready ? "Ready" : "Not Ready"}

@@ -1004,7 +1004,7 @@ asyncio.run(main())`;
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                   <Database className="text-muted-foreground/30 mb-4 h-16 w-16" />
                   <h3 className="text-base-content/70 mb-2 text-lg font-semibold">No Results</h3>
-                  <p className="text-base-content/50 max-w-md text-sm">
+                  <p className="text-base-content/70 max-w-md text-sm">
                     No records match the current filters. Try adjusting or clearing the filters.
                   </p>
                 </div>
@@ -1014,7 +1014,7 @@ asyncio.run(main())`;
                   <h3 className="text-base-content/70 mb-2 text-lg font-semibold">
                     No Records Found
                   </h3>
-                  <p className="text-base-content/50 mb-6 max-w-md text-sm">
+                  <p className="text-base-content/70 mb-6 max-w-md text-sm">
                     This set appears to be empty. Create a new record to get started.
                   </p>
                   <button

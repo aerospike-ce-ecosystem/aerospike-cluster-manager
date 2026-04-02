@@ -96,7 +96,7 @@ export function K8sOperationStatus({
             {phase}
           </Badge>
           <span className="ml-auto flex items-center gap-2">
-            {id && <span className="text-base-content/40 font-mono text-[10px]">ID: {id}</span>}
+            {id && <span className="text-base-content/65 font-mono text-[10px]">ID: {id}</span>}
             {onClear && (
               <Button
                 variant="ghost"
@@ -163,7 +163,7 @@ export function K8sOperationStatus({
                 ))}
               </ul>
             ) : (
-              <p className="text-base-content/40 text-xs">None yet</p>
+              <p className="text-base-content/65 text-xs">None yet</p>
             )}
           </div>
 
@@ -175,7 +175,7 @@ export function K8sOperationStatus({
               <XCircle
                 className={cn(
                   "h-3.5 w-3.5",
-                  failedCount > 0 ? "text-error" : "text-base-content/40",
+                  failedCount > 0 ? "text-error" : "text-base-content/65",
                 )}
               />
               <span className="text-xs font-medium">Failed ({failedCount})</span>
@@ -192,7 +192,7 @@ export function K8sOperationStatus({
                 ))}
               </ul>
             ) : (
-              <p className="text-base-content/40 text-xs">None</p>
+              <p className="text-base-content/65 text-xs">None</p>
             )}
           </div>
 
@@ -202,7 +202,7 @@ export function K8sOperationStatus({
               <Clock
                 className={cn(
                   "h-3.5 w-3.5",
-                  isRunning ? "text-info animate-pulse" : "text-base-content/40",
+                  isRunning ? "text-info animate-pulse" : "text-base-content/65",
                 )}
               />
               <span className="text-xs font-medium">Pending ({targetCount - processedCount})</span>
@@ -222,12 +222,12 @@ export function K8sOperationStatus({
                 ))}
               </ul>
             ) : isAllPods && targetCount - processedCount > 0 ? (
-              <p className="text-base-content/40 text-xs">
+              <p className="text-base-content/65 text-xs">
                 {targetCount - processedCount} pod{targetCount - processedCount !== 1 ? "s" : ""}{" "}
                 remaining
               </p>
             ) : (
-              <p className="text-base-content/40 text-xs">None</p>
+              <p className="text-base-content/65 text-xs">None</p>
             )}
           </div>
         </div>
