@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -21,7 +21,7 @@ def _info_all_result(name: str, resp: str) -> tuple[str, int | None, str]:
 def _make_mock_client() -> AsyncMock:
     """Build a mock AsyncClient that returns realistic Aerospike info data."""
     mock = AsyncMock()
-    mock.get_node_names.return_value = ["node1", "node2"]
+    mock.get_node_names = Mock(return_value=["node1", "node2"])
     mock.is_connected.return_value = True
 
     node_stats = "cluster_size=2;uptime=3600;client_connections=10;stat_read_reqs=1000;stat_write_reqs=500"
