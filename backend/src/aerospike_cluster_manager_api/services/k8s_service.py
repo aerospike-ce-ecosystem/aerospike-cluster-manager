@@ -623,10 +623,7 @@ def build_cr(req: CreateK8sClusterRequest) -> dict[str, Any]:
                     "aerospikeContainer": {"resources": _build_resources_dict(req.template_overrides.resources)}
                 }
             if req.template_overrides.monitoring:
-                overrides["monitoring"] = {
-                    "enabled": req.template_overrides.monitoring.enabled,
-                    "port": req.template_overrides.monitoring.port,
-                }
+                overrides["monitoring"] = build_monitoring(req.template_overrides.monitoring)
             if req.template_overrides.network_policy:
                 overrides["aerospikeNetworkPolicy"] = build_network_policy(req.template_overrides.network_policy)
             if req.template_overrides.enable_dynamic_config is not None:

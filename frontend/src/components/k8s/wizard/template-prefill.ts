@@ -49,9 +49,11 @@ export function buildFormUpdatesFromTemplate(
 
   if (spec.storage && typeof spec.storage === "object") {
     const st = spec.storage as Record<string, unknown>;
+    const res = st.resources as Record<string, unknown> | undefined;
+    const req = res?.requests as Record<string, unknown> | undefined;
     const storageUpdate: StorageVolumeConfig = {
       storageClass: (st.storageClassName as string) || "standard",
-      size: (st.size as string) || "10Gi",
+      size: (req?.storage as string) || (st.size as string) || "10Gi",
       mountPath: "/opt/aerospike/data",
     };
     updates.storage = storageUpdate;
@@ -81,7 +83,9 @@ export function formatTemplateSpecField(key: string, value: unknown): string | n
     case "storage": {
       const st = value as Record<string, unknown>;
       const parts: string[] = [];
-      if (st.size) parts.push(st.size as string);
+      const res = st.resources as Record<string, unknown> | undefined;
+      const req = res?.requests as Record<string, unknown> | undefined;
+      if (req?.storage) parts.push(req.storage as string);
       if (st.storageClassName) parts.push(st.storageClassName as string);
       return parts.length > 0 ? parts.join(" / ") : null;
     }

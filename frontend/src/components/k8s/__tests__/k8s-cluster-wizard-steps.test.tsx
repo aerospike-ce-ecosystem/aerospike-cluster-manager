@@ -256,7 +256,7 @@ describe("Template prefill", () => {
 
     it("maps storage from spec", () => {
       const result = buildFormUpdatesFromTemplate(
-        { storage: { storageClassName: "gp3", size: "20Gi" } },
+        { storage: { storageClassName: "gp3", resources: { requests: { storage: "20Gi" } } } },
         "t1",
       );
       expect(result.storage).toEqual({
@@ -313,6 +313,20 @@ describe("Template prefill", () => {
       expect(formatTemplateSpecField("monitoring", { enabled: false, port: 9145 })).toBe(
         "Disabled",
       );
+    });
+
+    it("formats storage with both size and class", () => {
+      const storage = { storageClassName: "gp3", resources: { requests: { storage: "100Gi" } } };
+      expect(formatTemplateSpecField("storage", storage)).toBe("100Gi / gp3");
+    });
+
+    it("formats storage with size only", () => {
+      const storage = { resources: { requests: { storage: "50Gi" } } };
+      expect(formatTemplateSpecField("storage", storage)).toBe("50Gi");
+    });
+
+    it("returns null for empty storage", () => {
+      expect(formatTemplateSpecField("storage", {})).toBeNull();
     });
 
     it("returns null for unknown keys", () => {
