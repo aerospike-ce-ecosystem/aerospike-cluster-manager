@@ -186,7 +186,7 @@ function SideBySideDiff({
                   line.type === "removed" && "bg-error/10",
                 )}
               >
-                <td className="text-base-content/60 w-8 border-r px-1 text-right select-none">
+                <td className="text-base-content/50 w-8 border-r px-1 text-right select-none">
                   {line.leftNum ?? ""}
                 </td>
                 <td
@@ -198,7 +198,7 @@ function SideBySideDiff({
                 >
                   {line.left}
                 </td>
-                <td className="text-base-content/60 w-8 border-x px-1 text-right select-none">
+                <td className="text-base-content/50 w-8 border-x px-1 text-right select-none">
                   {line.rightNum ?? ""}
                 </td>
                 <td
@@ -252,7 +252,7 @@ export function K8sConfigDriftCard({
     return (
       <Card className={className}>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base-content/60 text-sm font-normal">Config Status</CardTitle>
+          <CardTitle className="text-base-content/50 text-sm font-normal">Config Status</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="bg-base-200 h-8 animate-pulse rounded" />
@@ -276,7 +276,7 @@ export function K8sConfigDriftCard({
   return (
     <Card className={className}>
       <CardHeader className="pb-2">
-        <CardTitle className="text-base-content/60 flex items-center gap-2 text-sm font-normal">
+        <CardTitle className="text-base-content/50 flex items-center gap-2 text-sm font-normal">
           <FileCode className="h-4 w-4" />
           Config Status
         </CardTitle>
@@ -323,7 +323,7 @@ export function K8sConfigDriftCard({
         {drift.hasDrift && (drift.desiredConfig || fieldDiffs.length > 0) && (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <p className="text-base-content/60 text-xs font-medium">Spec vs Applied diff:</p>
+              <p className="text-base-content/50 text-xs font-medium">Spec vs Applied diff:</p>
               <div className="ml-auto flex rounded border text-[10px]">
                 <button
                   type="button"
@@ -332,7 +332,7 @@ export function K8sConfigDriftCard({
                     "flex items-center gap-1 px-2 py-0.5",
                     diffView === "fields"
                       ? "bg-primary/10 text-primary"
-                      : "text-base-content/60 hover:bg-base-200",
+                      : "text-base-content/50 hover:bg-base-200",
                   )}
                 >
                   <List className="h-3 w-3" />
@@ -345,7 +345,7 @@ export function K8sConfigDriftCard({
                     "flex items-center gap-1 border-l px-2 py-0.5",
                     diffView === "side-by-side"
                       ? "bg-primary/10 text-primary"
-                      : "text-base-content/60 hover:bg-base-200",
+                      : "text-base-content/50 hover:bg-base-200",
                   )}
                 >
                   <Columns2 className="h-3 w-3" />
@@ -404,7 +404,7 @@ export function K8sConfigDriftCard({
         {/* Fallback: show field badges when no detail available for diff */}
         {fieldDiffs.length === 0 && drift.changedFields.length > 0 && (
           <div>
-            <p className="text-base-content/60 mb-1 text-xs">Changed fields:</p>
+            <p className="text-base-content/50 mb-1 text-xs">Changed fields:</p>
             <div className="flex flex-wrap gap-1">
               {drift.changedFields.map((field) => (
                 <Badge key={field} variant="outline" className="text-xs">
@@ -417,7 +417,7 @@ export function K8sConfigDriftCard({
 
         {drift.podHashGroups.length > 1 && (
           <div>
-            <p className="text-base-content/60 mb-1.5 text-xs">Pod config versions:</p>
+            <p className="text-base-content/50 mb-1.5 text-xs">Pod config versions:</p>
             <div className="space-y-1">
               {drift.podHashGroups.map((group) => (
                 <div
@@ -428,7 +428,7 @@ export function K8sConfigDriftCard({
                   )}
                 >
                   <div className="flex items-center gap-1.5">
-                    <Hash className="text-base-content/60 h-3 w-3" />
+                    <Hash className="text-base-content/50 h-3 w-3" />
                     <span className="font-mono">{group.configHash?.slice(0, 8) || "unknown"}</span>
                     {group.isCurrent && (
                       <Badge variant="secondary" className="px-1 py-0 text-[10px]">
@@ -436,7 +436,7 @@ export function K8sConfigDriftCard({
                       </Badge>
                     )}
                   </div>
-                  <span className="text-base-content/60">
+                  <span className="text-base-content/50">
                     {group.pods.length} pod{group.pods.length !== 1 ? "s" : ""}
                   </span>
                 </div>

@@ -105,7 +105,7 @@ function RackCard({
 
       {/* Pod grid */}
       {totalCount === 0 ? (
-        <p className="text-base-content/65 py-2 text-center text-xs">No pods</p>
+        <p className="text-base-content/60 py-2 text-center text-xs">No pods</p>
       ) : (
         <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
           {rackGroup.pods.map((pod) => (
@@ -277,7 +277,7 @@ export function K8sRackTopology({
                     <Badge variant="outline" className="bg-base-100 text-[11px] font-medium">
                       {zoneLabel}
                     </Badge>
-                    <span className="text-base-content/65 text-[10px]">
+                    <span className="text-base-content/60 text-[10px]">
                       {rackGroups.length} rack{rackGroups.length !== 1 ? "s" : ""},{" "}
                       {rackGroups.reduce((sum, rg) => sum + rg.pods.length, 0)} pod
                       {rackGroups.reduce((sum, rg) => sum + rg.pods.length, 0) !== 1 ? "s" : ""}

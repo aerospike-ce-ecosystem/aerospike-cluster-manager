@@ -9,6 +9,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { PRESET_COLORS } from "@/lib/constants";
 import { EmptyState } from "@/components/common/empty-state";
 import type { HealthErrorType, UnifiedClusterRow } from "@/lib/api/types";
 
@@ -53,6 +54,9 @@ function ClusterCard({
 }) {
   const isConnected = row.status === "connected";
   const isChecking = row.status === "checking";
+  const safeColor = (PRESET_COLORS as readonly string[]).includes(row.color)
+    ? row.color
+    : PRESET_COLORS[0];
 
   const diskPct =
     row.diskTotal && row.diskTotal > 0
@@ -81,13 +85,10 @@ function ClusterCard({
     >
       {/* Left color bar — uses per-cluster preset color */}
       <div
-        className={cn(
-          "w-1 shrink-0",
-          !isConnected && "from-error to-error/70 bg-gradient-to-b",
-        )}
+        className={cn("w-1 shrink-0", !isConnected && "from-error to-error/70 bg-gradient-to-b")}
         style={
           isConnected
-            ? { background: `linear-gradient(to bottom, ${row.color}, ${row.color}B3)` }
+            ? { background: `linear-gradient(to bottom, ${safeColor}, ${safeColor}B3)` }
             : undefined
         }
       />
@@ -109,9 +110,11 @@ function ClusterCard({
               />
             </div>
             <div className="flex flex-col gap-0.5">
-              <span className="text-base-content/70 truncate font-mono text-[11px]">{row.hosts}</span>
+              <span className="text-base-content/60 truncate font-mono text-[11px]">
+                {row.hosts}
+              </span>
               {row.build && (
-                <span className="text-base-content/60 text-[11px]">
+                <span className="text-base-content/50 text-[11px]">
                   {row.edition ?? "CE"} {row.build}
                 </span>
               )}
@@ -127,7 +130,7 @@ function ClusterCard({
           {row.description && (
             <>
               <div className="bg-base-300/60 hidden h-12 w-px sm:block" />
-              <span className="text-base-content/70 hidden min-w-0 flex-1 truncate text-sm sm:block">
+              <span className="text-base-content/75 hidden min-w-0 flex-1 truncate text-sm sm:block">
                 {row.description}
               </span>
             </>
