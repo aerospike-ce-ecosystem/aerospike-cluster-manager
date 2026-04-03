@@ -3,7 +3,7 @@ set -e
 
 # Start backend (FastAPI)
 cd /app/backend
-uv run uvicorn aerospike_cluster_manager_api.main:app \
+uv run --no-dev uvicorn aerospike_cluster_manager_api.main:app \
     --host 0.0.0.0 --port 8000 &
 backend_pid=$!
 
