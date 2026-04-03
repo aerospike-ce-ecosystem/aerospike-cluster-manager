@@ -51,6 +51,8 @@ NS_SUM_KEYS = frozenset(
         "tombstones",
         "memory_used_bytes",
         "memory-size",
+        "data_used_bytes",
+        "data_total_bytes",
         "device_used_bytes",
         "device-total-bytes",
         "client_read_success",

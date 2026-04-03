@@ -116,8 +116,18 @@ async def get_cluster(client: AerospikeClient, conn_id: VerifiedConnId) -> Clust
         raw_objects = safe_int(ns_stats.get("objects"))
         unique_objects = raw_objects // effective_rf if effective_rf > 0 else raw_objects
 
-        memory_used = safe_int(ns_stats.get("memory_used_bytes"))
-        memory_total = safe_int(ns_stats.get("memory-size"))
+        # CE 8 uses unified data_used_bytes/data_total_bytes for both memory and device.
+        # Fall back to legacy memory_used_bytes/memory-size for older versions.
+        memory_used = (
+            safe_int(ns_stats.get("data_used_bytes"))
+            if "data_used_bytes" in ns_stats
+            else safe_int(ns_stats.get("memory_used_bytes"))
+        )
+        memory_total = (
+            safe_int(ns_stats.get("data_total_bytes"))
+            if "data_total_bytes" in ns_stats
+            else safe_int(ns_stats.get("memory-size"))
+        )
         device_used = safe_int(ns_stats.get("device_used_bytes"))
         device_total = safe_int(ns_stats.get("device-total-bytes"))
 
