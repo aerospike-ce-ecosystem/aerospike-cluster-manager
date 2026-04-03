@@ -1091,42 +1091,66 @@ asyncio.run(main())`;
         </div>
       )}
 
-      {/* ── Bottom Bar (Stats + Limit) ─────────────── */}
+      {/* ── Bottom Status Bar ─────────────────────────── */}
       {(displayRecords.length > 0 || total > 0) && (
-        <div className="gradient-border-top safe-bottom bg-base-100/90 flex w-full min-w-0 shrink-0 items-center gap-3 px-4 py-2.5 backdrop-blur-md sm:px-6">
-          {/* Execution time */}
-          {executionTimeMs > 0 && (
-            <span className="bg-success/10 text-success rounded-md px-2 py-0.5 font-mono text-xs font-semibold tabular-nums">
-              {executionTimeMs}ms
-            </span>
-          )}
+        <div className="border-base-300 safe-bottom bg-base-200/60 flex w-full min-w-0 shrink-0 items-center border-t px-4 py-1.5 sm:px-6">
+          <div className="flex items-center gap-2">
+            {/* Execution time */}
+            {executionTimeMs > 0 && (
+              <div className="bg-success/15 text-success flex items-center gap-1 rounded px-1.5 py-0.5">
+                <svg
+                  className="h-3 w-3"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                <span className="font-mono text-[11px] font-bold tabular-nums">
+                  {executionTimeMs}ms
+                </span>
+              </div>
+            )}
 
-          {/* Record count */}
-          <span className="text-base-content/80 font-mono text-xs tabular-nums">
-            <span className="font-semibold">{formatNumber(displayRecords.length)}</span>
-            <span className="text-base-content/50 mx-1">of</span>
-            <span className="font-semibold">
-              {totalEstimated ? "~" : ""}
-              {formatNumber(total)}
-            </span>
-          </span>
+            {/* Divider */}
+            <span className="bg-base-300 h-3.5 w-px" />
 
-          <span className="bg-base-300 h-4 w-px" />
+            {/* Record count */}
+            <div className="flex items-center gap-1 font-mono text-[12px] tabular-nums">
+              <span className="text-base-content font-bold">
+                {formatNumber(displayRecords.length)}
+              </span>
+              <span className="text-base-content/40">of</span>
+              <span className="text-base-content font-bold">
+                {totalEstimated ? "~" : ""}
+                {formatNumber(total)}
+              </span>
+              <span className="text-base-content/40 ml-0.5">rows</span>
+            </div>
 
-          {/* Limit selector */}
-          <Select
-            value={String(pageSize)}
-            onChange={(e) => handleLimitChange(parseInt(e.target.value, 10))}
-            className="border-base-300 text-base-content h-7 w-[62px] rounded-md bg-transparent px-2 font-mono text-xs font-medium"
-            disabled={loading}
-            aria-label="Records limit"
-          >
-            {PAGE_SIZE_OPTIONS.map((size) => (
-              <option key={size} value={String(size)}>
-                {size}
-              </option>
-            ))}
-          </Select>
+            {/* Divider */}
+            <span className="bg-base-300 h-3.5 w-px" />
+
+            {/* Limit selector */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-base-content/50 text-[11px] font-medium">Limit</span>
+              <Select
+                value={String(pageSize)}
+                onChange={(e) => handleLimitChange(parseInt(e.target.value, 10))}
+                className="border-base-300 bg-base-100 text-base-content h-6 w-[56px] rounded px-1.5 font-mono text-[11px] font-bold"
+                disabled={loading}
+                aria-label="Records limit"
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={String(size)}>
+                    {size}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </div>
         </div>
       )}
 
