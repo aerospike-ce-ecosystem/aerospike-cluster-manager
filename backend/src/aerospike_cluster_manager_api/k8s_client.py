@@ -72,18 +72,16 @@ class K8sClient:
             from . import config as app_config
 
             if not app_config.K8S_VERIFY_SSL:
-                api_client = client.ApiClient()
-                api_client.configuration.verify_ssl = False
+                configuration = client.Configuration.get_default_copy()
+                configuration.verify_ssl = False
+                configuration.ssl_ca_cert = None
+                client.Configuration.set_default(configuration)
                 logger.warning("K8S_VERIFY_SSL=false — TLS certificate verification disabled")
-                self._custom_api = client.CustomObjectsApi(api_client)
-                self._core_api = client.CoreV1Api(api_client)
-                self._storage_api = client.StorageV1Api(api_client)
-                self._autoscaling_api = client.AutoscalingV2Api(api_client)
-            else:
-                self._custom_api = client.CustomObjectsApi()
-                self._core_api = client.CoreV1Api()
-                self._storage_api = client.StorageV1Api()
-                self._autoscaling_api = client.AutoscalingV2Api()
+
+            self._custom_api = client.CustomObjectsApi()
+            self._core_api = client.CoreV1Api()
+            self._storage_api = client.StorageV1Api()
+            self._autoscaling_api = client.AutoscalingV2Api()
             self._initialized = True
 
     # ------------------------------------------------------------------
