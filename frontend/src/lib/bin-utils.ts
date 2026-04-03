@@ -1,5 +1,6 @@
 import type { AerospikeRecord, BinValue, BinEntry } from "@/lib/api/types";
 import type { BinType } from "@/lib/constants";
+import { uuid } from "@/lib/utils";
 
 export function parseBinValue(value: string, type: BinType): BinValue {
   switch (type) {
@@ -48,12 +49,12 @@ export function serializeBinValue(value: BinValue): string {
 }
 
 export function createEmptyBinEntry(): BinEntry {
-  return { id: crypto.randomUUID(), name: "", value: "", type: "string" };
+  return { id: uuid(), name: "", value: "", type: "string" };
 }
 
 export function buildBinEntriesFromRecord(record: AerospikeRecord): BinEntry[] {
   return Object.entries(record.bins).map(([name, value]) => ({
-    id: crypto.randomUUID(),
+    id: uuid(),
     name,
     value: serializeBinValue(value),
     type: detectBinType(value),

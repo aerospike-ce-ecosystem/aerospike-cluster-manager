@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { BinDataType, FilterCondition, FilterGroup, FilterOperator } from "@/lib/api/types";
 import { FILTER_OPERATORS_BY_TYPE } from "@/lib/constants";
+import { uuid } from "@/lib/utils";
 
 interface FilterState {
   conditions: FilterCondition[];
@@ -26,7 +27,7 @@ export const useFilterStore = create<FilterState>()((set, get) => ({
     const operators = FILTER_OPERATORS_BY_TYPE[binType];
     const defaultOp = operators[0]?.value ?? ("eq" as FilterOperator);
     const condition: FilterCondition = {
-      id: crypto.randomUUID(),
+      id: uuid(),
       bin,
       operator: defaultOp,
       binType,
