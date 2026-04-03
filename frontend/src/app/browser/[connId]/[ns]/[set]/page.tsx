@@ -919,26 +919,39 @@ asyncio.run(main())`;
             )}
           </div>
 
-          <Button
-            onClick={() =>
-              router.push(
-                buildNewRecordHref({
-                  connId,
-                  namespace: decodedNs,
-                  setName: decodedSet,
-                  returnTo: currentListReturnTo,
-                }),
-              )
-            }
-            size="sm"
-            variant="outline"
-            className="border-accent/30 text-primary hover:bg-accent/10 hover:border-accent/50 h-8 shrink-0 gap-1.5 font-mono text-xs transition-colors sm:h-7"
-            data-compact
-            aria-label="New record"
-          >
-            <Plus className="h-3 w-3" />
-            <span className="hidden sm:inline">new record</span>
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              onClick={refreshCurrentView}
+              disabled={loading}
+              size="sm"
+              className="bg-primary hover:bg-primary/90 text-primary-content h-8 shrink-0 gap-1.5 text-xs font-medium shadow-sm transition-colors sm:h-7"
+              data-compact
+              aria-label="Reload records"
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+              <span className="hidden sm:inline">Reload</span>
+            </Button>
+            <Button
+              onClick={() =>
+                router.push(
+                  buildNewRecordHref({
+                    connId,
+                    namespace: decodedNs,
+                    setName: decodedSet,
+                    returnTo: currentListReturnTo,
+                  }),
+                )
+              }
+              size="sm"
+              variant="outline"
+              className="border-accent/30 text-primary hover:bg-accent/10 hover:border-accent/50 h-8 shrink-0 gap-1.5 font-mono text-xs transition-colors sm:h-7"
+              data-compact
+              aria-label="New record"
+            >
+              <Plus className="h-3 w-3" />
+              <span className="hidden sm:inline">new record</span>
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -1078,38 +1091,33 @@ asyncio.run(main())`;
         </div>
       )}
 
-      {/* ── Bottom Bar (Limit + Reload) ─────────────── */}
+      {/* ── Bottom Bar (Stats + Limit) ─────────────── */}
       {(displayRecords.length > 0 || total > 0) && (
-        <div className="gradient-border-top safe-bottom bg-base-100/90 flex w-full min-w-0 shrink-0 items-center gap-4 px-4 py-2 backdrop-blur-md sm:px-6">
+        <div className="gradient-border-top safe-bottom bg-base-100/90 flex w-full min-w-0 shrink-0 items-center gap-3 px-4 py-2.5 backdrop-blur-md sm:px-6">
           {/* Execution time */}
           {executionTimeMs > 0 && (
-            <>
-              <span className="text-muted-foreground font-mono text-[11px] font-medium tabular-nums">
-                {executionTimeMs}ms
-              </span>
-              <span className="text-base-300 text-xs">|</span>
-            </>
+            <span className="bg-success/10 text-success rounded-md px-2 py-0.5 font-mono text-xs font-semibold tabular-nums">
+              {executionTimeMs}ms
+            </span>
           )}
 
           {/* Record count */}
-          <span className="text-muted-foreground font-mono text-[11px] tabular-nums">
-            <span className="text-base-content/80 font-medium">
-              {formatNumber(displayRecords.length)}
-            </span>
-            <span className="mx-1 opacity-50">of</span>
-            <span className="text-base-content/80 font-medium">
+          <span className="text-base-content/80 font-mono text-xs tabular-nums">
+            <span className="font-semibold">{formatNumber(displayRecords.length)}</span>
+            <span className="text-base-content/50 mx-1">of</span>
+            <span className="font-semibold">
               {totalEstimated ? "~" : ""}
               {formatNumber(total)}
             </span>
           </span>
 
-          <span className="text-base-300 hidden text-xs sm:inline">|</span>
+          <span className="bg-base-300 h-4 w-px" />
 
           {/* Limit selector */}
           <Select
             value={String(pageSize)}
             onChange={(e) => handleLimitChange(parseInt(e.target.value, 10))}
-            className="border-base-300/50 text-base-content/70 h-6 w-[58px] bg-transparent px-1.5 font-mono text-[11px]"
+            className="border-base-300 text-base-content h-7 w-[62px] rounded-md bg-transparent px-2 font-mono text-xs font-medium"
             disabled={loading}
             aria-label="Records limit"
           >
@@ -1119,23 +1127,6 @@ asyncio.run(main())`;
               </option>
             ))}
           </Select>
-
-          {/* Spacer */}
-          <div className="flex-1" />
-
-          {/* Reload button */}
-          <Button
-            onClick={refreshCurrentView}
-            disabled={loading}
-            size="sm"
-            variant="outline"
-            className="border-accent/25 text-primary hover:border-accent/50 hover:bg-accent/5 h-7 gap-1.5 font-mono text-[11px] transition-colors"
-            data-compact
-            aria-label="Reload records"
-          >
-            <RefreshCw className={cn("h-3 w-3", loading && "animate-spin")} />
-            <span className="hidden sm:inline">Reload</span>
-          </Button>
         </div>
       )}
 
