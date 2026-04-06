@@ -162,7 +162,7 @@ export function K8sMigrationStatus({
           <Clock className="h-3 w-3" />
           <span>Last checked: {formatRelativeTime(status.lastChecked)}</span>
           {inProgress && (
-            <span className="text-base-content/40 ml-auto">Auto-refreshing every 5s</span>
+            <span className="text-base-content/60 ml-auto">Auto-refreshing every 5s</span>
           )}
         </div>
       </CardContent>

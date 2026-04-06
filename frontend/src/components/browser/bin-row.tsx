@@ -81,9 +81,9 @@ function BinTypeSelect({
       >
         <span className="truncate font-mono">{value}</span>
         {open ? (
-          <ChevronUp className="text-base-content/30 ml-1 h-3 w-3 shrink-0" />
+          <ChevronUp className="text-base-content/50 ml-1 h-3 w-3 shrink-0" />
         ) : (
-          <ChevronDown className="text-base-content/30 ml-1 h-3 w-3 shrink-0" />
+          <ChevronDown className="text-base-content/50 ml-1 h-3 w-3 shrink-0" />
         )}
       </button>
       {open && (

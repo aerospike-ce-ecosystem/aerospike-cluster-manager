@@ -892,14 +892,14 @@ asyncio.run(main())`;
               >
                 Namespaces
               </button>
-              <span className="text-muted-foreground/30 mx-1 shrink-0 sm:mx-1.5">›</span>
+              <span className="text-muted-foreground/50 mx-1 shrink-0 sm:mx-1.5">›</span>
               <button
                 onClick={() => router.push(`/browser/${connId}`)}
                 className="text-muted-foreground hover:text-base-content max-w-[60px] truncate transition-colors sm:max-w-none"
               >
                 {decodedNs}
               </button>
-              <span className="text-muted-foreground/30 mx-1 shrink-0 sm:mx-1.5">›</span>
+              <span className="text-muted-foreground/50 mx-1 shrink-0 sm:mx-1.5">›</span>
               <span className="text-primary max-w-[80px] truncate font-medium sm:max-w-none">
                 {decodedSet}
               </span>
@@ -1015,19 +1015,19 @@ asyncio.run(main())`;
             emptyState={
               filterStore.conditions.length > 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
-                  <Database className="text-muted-foreground/30 mb-4 h-16 w-16" />
+                  <Database className="text-muted-foreground/50 mb-4 h-16 w-16" />
                   <h3 className="text-base-content/70 mb-2 text-lg font-semibold">No Results</h3>
-                  <p className="text-base-content/50 max-w-md text-sm">
+                  <p className="text-base-content/75 max-w-md text-sm">
                     No records match the current filters. Try adjusting or clearing the filters.
                   </p>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
-                  <Database className="text-muted-foreground/30 mb-4 h-16 w-16" />
+                  <Database className="text-muted-foreground/50 mb-4 h-16 w-16" />
                   <h3 className="text-base-content/70 mb-2 text-lg font-semibold">
                     No Records Found
                   </h3>
-                  <p className="text-base-content/50 mb-6 max-w-md text-sm">
+                  <p className="text-base-content/75 mb-6 max-w-md text-sm">
                     This set appears to be empty. Create a new record to get started.
                   </p>
                   <button

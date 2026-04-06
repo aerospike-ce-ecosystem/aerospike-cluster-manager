@@ -470,13 +470,13 @@ export function WizardReviewStep({
                     {rack.rackLabel ? ` label: ${rack.rackLabel}` : ""}
                   </span>
                   {(rack.podSpec?.tolerations ?? []).length > 0 && (
-                    <span className="text-base-content/50 block pl-3">
+                    <span className="text-base-content/75 block pl-3">
                       {rack.podSpec!.tolerations!.length} toleration
                       {rack.podSpec!.tolerations!.length !== 1 ? "s" : ""}
                     </span>
                   )}
                   {rack.podSpec?.affinity && (
-                    <span className="text-base-content/50 block pl-3">
+                    <span className="text-base-content/75 block pl-3">
                       node affinity configured
                     </span>
                   )}

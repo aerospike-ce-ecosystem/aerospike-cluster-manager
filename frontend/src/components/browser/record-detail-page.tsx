@@ -267,11 +267,11 @@ export function RecordDetailPage({
     () => (
       <span className="font-mono text-xs">
         {namespace}
-        <span className="text-muted-foreground/30 mx-1">.</span>
+        <span className="text-muted-foreground/50 mx-1">.</span>
         {displaySetName}
         {!createMode && editorPK && (
           <>
-            <span className="text-muted-foreground/30 mx-1">/</span>
+            <span className="text-muted-foreground/50 mx-1">/</span>
             <span className="text-primary">{editorPK}</span>
           </>
         )}
