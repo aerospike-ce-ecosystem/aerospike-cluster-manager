@@ -4,7 +4,7 @@ import logging
 import time
 from typing import Any
 
-from aerospike_py.exception import RecordNotFound
+from aerospike_py.exception import AerospikeError, RecordNotFound
 from aerospike_py.types import WriteMeta
 from fastapi import APIRouter, HTTPException, Query
 from starlette.responses import Response
@@ -53,7 +53,7 @@ async def _get_set_object_count(client: Any, ns: str, set_name: str) -> int:
         for s in agg:
             if s["name"] == set_name:
                 return s["objects"]
-    except Exception:
+    except (AerospikeError, OSError):
         logger.debug("Failed to get set object count for %s.%s", ns, set_name, exc_info=True)
     return 0
 

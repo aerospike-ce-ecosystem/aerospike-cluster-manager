@@ -174,8 +174,7 @@ export function K8sClusterWizard() {
   // Fetch K8s nodes when on Advanced step (scratch mode only)
   useEffect(() => {
     if (!isTemplateMode && step === 3) {
-      fetchK8sNodes().catch((err) => {
-        console.error("Failed to fetch K8s nodes:", err);
+      fetchK8sNodes().catch(() => {
         useToastStore
           .getState()
           .addToast("error", "Failed to load node information for zone selection");

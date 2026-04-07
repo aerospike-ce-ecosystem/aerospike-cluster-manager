@@ -118,12 +118,10 @@ export default function K8sClusterDetailPage() {
 
     // Non-transitional phase: fetch once without starting a polling interval.
     Promise.all([
-      api.getK8sClusterEvents(namespace, name).catch((err) => {
-        console.error("Failed to fetch cluster events:", err);
+      api.getK8sClusterEvents(namespace, name).catch(() => {
         return useK8sClusterStore.getState().detailEvents;
       }),
-      api.getK8sClusterHealth(namespace, name).catch((err) => {
-        console.error("Failed to fetch cluster health:", err);
+      api.getK8sClusterHealth(namespace, name).catch(() => {
         return useK8sClusterStore.getState().detailHealth;
       }),
     ]).then(([events, health]) => {
