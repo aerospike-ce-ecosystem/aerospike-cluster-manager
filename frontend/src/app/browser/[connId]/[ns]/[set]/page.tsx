@@ -246,6 +246,7 @@ export default function BrowserPage({
       activeFilters,
       routeState.pageSize,
       routeState.primaryKey || undefined,
+      true, // force: bypass cache so Reload/write mutations always fetch fresh data
     );
   }, [
     activeFilters,

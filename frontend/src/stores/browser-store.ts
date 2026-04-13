@@ -71,6 +71,7 @@ interface BrowserState {
     filters?: FilterGroup,
     pageSize?: number,
     primaryKey?: string,
+    force?: boolean,
   ) => Promise<void>;
   putRecord: (
     connId: string,
@@ -131,21 +132,23 @@ export const useBrowserStore = create<BrowserState>()((set, get) => ({
     });
   },
 
-  fetchFilteredRecords: async (connId, ns, setName, filters, pageSize, primaryKey) => {
+  fetchFilteredRecords: async (connId, ns, setName, filters, pageSize, primaryKey, force) => {
     const ps = pageSize ?? get().pageSize;
     const cacheKey = buildCacheKey(connId, ns, setName, filters, ps, primaryKey);
-    const cached = get().recordCache.get(cacheKey);
-    if (cached) {
-      set({
-        records: cached.records,
-        total: cached.total,
-        pageSize: cached.pageSize,
-        hasMore: cached.hasMore,
-        totalEstimated: cached.totalEstimated,
-        executionTimeMs: cached.executionTimeMs,
-        scannedRecords: cached.scannedRecords,
-      });
-      return;
+    if (!force) {
+      const cached = get().recordCache.get(cacheKey);
+      if (cached) {
+        set({
+          records: cached.records,
+          total: cached.total,
+          pageSize: cached.pageSize,
+          hasMore: cached.hasMore,
+          totalEstimated: cached.totalEstimated,
+          executionTimeMs: cached.executionTimeMs,
+          scannedRecords: cached.scannedRecords,
+        });
+        return;
+      }
     }
 
     await withLoading(set, async () => {
