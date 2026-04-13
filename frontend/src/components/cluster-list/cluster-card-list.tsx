@@ -9,6 +9,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { PRESET_COLORS } from "@/lib/constants";
 import { EmptyState } from "@/components/common/empty-state";
 import type { HealthErrorType, UnifiedClusterRow } from "@/lib/api/types";
 
@@ -34,7 +35,7 @@ const ERROR_TYPE_LABELS: Record<HealthErrorType, string> = {
 function MetricCell({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-base-content/40 text-[10px] font-medium tracking-wider">{label}</span>
+      <span className="text-base-content/60 text-[10px] font-medium tracking-wider">{label}</span>
       <span className="text-base-content font-mono text-lg font-bold">{value}</span>
     </div>
   );
@@ -53,6 +54,9 @@ function ClusterCard({
 }) {
   const isConnected = row.status === "connected";
   const isChecking = row.status === "checking";
+  const safeColor = (PRESET_COLORS as readonly string[]).includes(row.color)
+    ? row.color
+    : PRESET_COLORS[0];
 
   const diskPct =
     row.diskTotal && row.diskTotal > 0
@@ -79,46 +83,58 @@ function ClusterCard({
         isConnected ? "border-base-300 hover:border-primary/30" : "border-error/20 opacity-75",
       )}
     >
-      {/* Left color bar */}
+      {/* Left color bar — uses per-cluster preset color */}
       <div
-        className={cn(
-          "w-1 shrink-0",
+        className={cn("w-1 shrink-0", !isConnected && "from-error to-error/70 bg-gradient-to-b")}
+        style={
           isConnected
-            ? "from-success to-success/70 bg-gradient-to-b"
-            : "from-error to-error/70 bg-gradient-to-b",
-        )}
+            ? { background: `linear-gradient(to bottom, ${safeColor}, ${safeColor}B3)` }
+            : undefined
+        }
       />
 
       <div className="flex flex-1 items-center gap-6 px-6 py-5 sm:gap-8">
-        {/* Identity */}
-        <div className="flex min-w-0 flex-col gap-1.5 sm:w-48">
-          <div className="flex items-center gap-2.5">
-            <span className="text-base-content truncate text-base font-bold">{row.name}</span>
-            <span
-              className={cn(
-                "h-2 w-2 shrink-0 rounded-full",
-                isChecking && "bg-muted-foreground animate-pulse",
-                isConnected && "bg-success shadow-success/15 shadow-[0_0_0_3px]",
-                !isConnected && !isChecking && "bg-error shadow-error/15 shadow-[0_0_0_3px]",
+        {/* Identity + Description row */}
+        <div className="flex min-w-0 flex-1 items-center gap-6 sm:gap-8">
+          {/* Name & meta */}
+          <div className="flex min-w-0 flex-col gap-1.5 sm:w-48 sm:shrink-0">
+            <div className="flex items-center gap-2.5">
+              <span className="text-base-content truncate text-base font-bold">{row.name}</span>
+              <span
+                className={cn(
+                  "h-2 w-2 shrink-0 rounded-full",
+                  isChecking && "bg-muted-foreground animate-pulse",
+                  isConnected && "bg-success shadow-success/15 shadow-[0_0_0_3px]",
+                  !isConnected && !isChecking && "bg-error shadow-error/15 shadow-[0_0_0_3px]",
+                )}
+              />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-base-content/60 truncate font-mono text-[11px]">
+                {row.hosts}
+              </span>
+              {row.build && (
+                <span className="text-base-content/50 text-[11px]">
+                  {row.edition ?? "CE"} {row.build}
+                </span>
               )}
-            />
+              {!isConnected && !isChecking && (
+                <span className="text-error text-[11px] font-medium">
+                  {row.errorType ? ERROR_TYPE_LABELS[row.errorType] : "Unavailable"}
+                </span>
+              )}
+            </div>
           </div>
-          <div className="flex flex-col gap-0.5">
-            <span className="text-base-content/60 truncate font-mono text-[11px]">{row.hosts}</span>
-            {row.description && (
-              <span className="text-base-content/50 truncate text-[11px]">{row.description}</span>
-            )}
-            {row.build && (
-              <span className="text-base-content/40 text-[11px]">
-                {row.edition ?? "CE"} {row.build}
+
+          {/* Description — shown next to identity when available */}
+          {row.description && (
+            <>
+              <div className="bg-base-300/60 hidden h-12 w-px sm:block" />
+              <span className="text-base-content/75 hidden min-w-0 flex-1 truncate text-sm sm:block">
+                {row.description}
               </span>
-            )}
-            {!isConnected && !isChecking && (
-              <span className="text-error text-[11px] font-medium">
-                {row.errorType ? ERROR_TYPE_LABELS[row.errorType] : "Unavailable"}
-              </span>
-            )}
-          </div>
+            </>
+          )}
         </div>
 
         {/* Divider */}
@@ -126,13 +142,13 @@ function ClusterCard({
 
         {/* Metrics */}
         {isConnected ? (
-          <div className="hidden flex-1 gap-7 sm:flex">
+          <div className="hidden shrink-0 gap-7 sm:flex">
             <MetricCell label="NODES" value={String(row.nodeCount)} />
             <MetricCell label="DISK" value={diskPct} />
             <MetricCell label="MEMORY" value={memPct} />
           </div>
         ) : (
-          <div className="hidden flex-1 gap-7 sm:flex">
+          <div className="hidden shrink-0 gap-7 sm:flex">
             <MetricCell label="NODES" value="—" />
             <MetricCell label="DISK" value="—" />
             <MetricCell label="MEMORY" value="—" />

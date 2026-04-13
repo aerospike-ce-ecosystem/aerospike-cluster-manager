@@ -169,7 +169,7 @@ export function RecordEditorDialog({
           </DialogTitle>
           <DialogDescription className="text-muted-foreground/60 font-mono text-xs">
             {namespace}
-            <span className="text-muted-foreground/30 mx-1">.</span>
+            <span className="text-muted-foreground/50 mx-1">.</span>
             {set}
           </DialogDescription>
         </DialogHeader>

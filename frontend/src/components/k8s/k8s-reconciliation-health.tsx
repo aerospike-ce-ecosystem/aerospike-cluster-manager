@@ -241,7 +241,7 @@ export function K8sReconciliationHealth({
         )}
 
         {/* Auto-refresh indicator */}
-        <div className="text-base-content/40 flex items-center gap-1 text-[10px]">
+        <div className="text-base-content/60 flex items-center gap-1 text-[10px]">
           <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
           Auto-refreshing every 10s
         </div>

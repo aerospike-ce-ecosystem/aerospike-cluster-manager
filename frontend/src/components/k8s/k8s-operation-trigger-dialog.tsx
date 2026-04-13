@@ -215,7 +215,7 @@ export function K8sOperationTriggerDialog({
             </p>
             <div className="max-h-[240px] overflow-y-auto rounded border p-2">
               {pods.length === 0 ? (
-                <p className="text-base-content/40 py-2 text-center text-xs">No pods available</p>
+                <p className="text-base-content/60 py-2 text-center text-xs">No pods available</p>
               ) : (
                 <div className="space-y-1">
                   {/* Select all checkbox (header) */}
