@@ -17,7 +17,7 @@ RUN npm run build
 # =============================================================================
 # Stage 2: Backend build
 # =============================================================================
-FROM python:3.13-slim AS backend-builder
+FROM python:3.14-slim AS backend-builder
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 WORKDIR /app/backend
@@ -31,7 +31,7 @@ RUN uv sync --frozen --no-dev
 # =============================================================================
 # Stage 3: Production runtime (Python + Node.js)
 # =============================================================================
-FROM python:3.13-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
