@@ -157,7 +157,10 @@ export default function MobileSidebar() {
           </DrawerTitle>
         </DrawerHeader>
         <DrawerBody>
-          <nav aria-label="core mobile navigation" className="flex flex-col gap-4">
+          <nav
+            aria-label="core mobile navigation"
+            className="flex flex-col gap-4"
+          >
             <div>
               <SectionLabel>Clusters</SectionLabel>
               <Accordion
@@ -192,10 +195,7 @@ export default function MobileSidebar() {
                     focusRing,
                   )}
                 >
-                  <RiStackLine
-                    className="size-4 shrink-0"
-                    aria-hidden="true"
-                  />
+                  <RiStackLine className="size-4 shrink-0" aria-hidden="true" />
                   All clusters
                 </Link>
               </DrawerClose>
@@ -294,7 +294,9 @@ function ClusterNodeMobile({
     pathname === `/clusters/${cluster.id}` ||
     pathname.startsWith(`/clusters/${cluster.id}/`)
   const expandedNs = cluster.namespaces
-    .filter((ns) => pathname.includes(`/clusters/${cluster.id}/sets/${ns.name}`))
+    .filter((ns) =>
+      pathname.includes(`/clusters/${cluster.id}/sets/${ns.name}`),
+    )
     .map((ns) => ns.name)
 
   return (

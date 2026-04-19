@@ -1,8 +1,8 @@
-"use client";
+"use client"
 
-import React from "react";
+import React from "react"
 
-import { Button } from "@/components/Button";
+import { Button } from "@/components/Button"
 import {
   Dialog,
   DialogContent,
@@ -10,16 +10,16 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/Dialog";
-import { Input } from "@/components/Input";
-import { Label } from "@/components/Label";
-import { ApiError } from "@/lib/api/client";
-import { createConnection } from "@/lib/api/connections";
+} from "@/components/Dialog"
+import { Input } from "@/components/Input"
+import { Label } from "@/components/Label"
+import { ApiError } from "@/lib/api/client"
+import { createConnection } from "@/lib/api/connections"
 
 interface AddConnectionDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSuccess?: () => void;
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onSuccess?: () => void
 }
 
 const INITIAL_STATE = {
@@ -30,54 +30,54 @@ const INITIAL_STATE = {
   password: "",
   color: "#4F46E5",
   description: "",
-};
+}
 
 export function AddConnectionDialog({
   open,
   onOpenChange,
   onSuccess,
 }: AddConnectionDialogProps) {
-  const [form, setForm] = React.useState(INITIAL_STATE);
-  const [error, setError] = React.useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [form, setForm] = React.useState(INITIAL_STATE)
+  const [error, setError] = React.useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = React.useState(false)
 
   const resetForm = () => {
-    setForm(INITIAL_STATE);
-    setError(null);
-  };
+    setForm(INITIAL_STATE)
+    setError(null)
+  }
 
   const handleOpenChange = (next: boolean) => {
-    if (!next) resetForm();
-    onOpenChange(next);
-  };
+    if (!next) resetForm()
+    onOpenChange(next)
+  }
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setError(null);
+    event.preventDefault()
+    setError(null)
 
-    const name = form.name.trim();
+    const name = form.name.trim()
     if (!name) {
-      setError("Name is required.");
-      return;
+      setError("Name is required.")
+      return
     }
 
     const hostList = form.hosts
       .split(",")
       .map((h) => h.trim())
-      .filter((h) => h.length > 0);
+      .filter((h) => h.length > 0)
 
     if (hostList.length === 0) {
-      setError("At least one host is required.");
-      return;
+      setError("At least one host is required.")
+      return
     }
 
-    const portNum = Number.parseInt(form.port, 10);
+    const portNum = Number.parseInt(form.port, 10)
     if (!Number.isFinite(portNum) || portNum <= 0 || portNum > 65535) {
-      setError("Port must be a number between 1 and 65535.");
-      return;
+      setError("Port must be a number between 1 and 65535.")
+      return
     }
 
-    setIsSubmitting(true);
+    setIsSubmitting(true)
     try {
       await createConnection({
         name,
@@ -87,22 +87,22 @@ export function AddConnectionDialog({
         password: form.password ? form.password : null,
         color: form.color || "#4F46E5",
         description: form.description.trim() || null,
-      });
-      resetForm();
-      onSuccess?.();
-      onOpenChange(false);
+      })
+      resetForm()
+      onSuccess?.()
+      onOpenChange(false)
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.detail || err.message);
+        setError(err.detail || err.message)
       } else if (err instanceof Error) {
-        setError(err.message);
+        setError(err.message)
       } else {
-        setError("Failed to create connection.");
+        setError("Failed to create connection.")
       }
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false)
     }
-  };
+  }
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -195,7 +195,9 @@ export function AddConnectionDialog({
             <Input
               id="conn-description"
               value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, description: e.target.value })
+              }
               placeholder="Notes about this cluster"
             />
           </div>
@@ -209,14 +211,18 @@ export function AddConnectionDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" isLoading={isSubmitting} loadingText="Creating...">
+            <Button
+              type="submit"
+              isLoading={isSubmitting}
+              loadingText="Creating..."
+            >
               Create
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
-  );
+  )
 }
 
-export default AddConnectionDialog;
+export default AddConnectionDialog

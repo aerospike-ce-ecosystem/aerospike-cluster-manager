@@ -199,7 +199,11 @@ export default function UdfsPage({ params }: PageProps) {
               placeholder="Filter modules..."
               className="w-60"
             />
-            <Button variant="secondary" onClick={() => void load()} isLoading={loading}>
+            <Button
+              variant="secondary"
+              onClick={() => void load()}
+              isLoading={loading}
+            >
               <RiRefreshLine className="mr-2 size-4" aria-hidden="true" />
               Refresh
             </Button>
@@ -225,7 +229,9 @@ export default function UdfsPage({ params }: PageProps) {
           emptyState={
             <EmptyState
               icon={RiCodeSSlashLine}
-              title={udfs.length === 0 ? "No UDF modules" : "No matching modules"}
+              title={
+                udfs.length === 0 ? "No UDF modules" : "No matching modules"
+              }
               description={
                 udfs.length === 0
                   ? "Upload a Lua script to register a User-Defined Function."
@@ -233,7 +239,10 @@ export default function UdfsPage({ params }: PageProps) {
               }
               action={
                 udfs.length === 0 ? (
-                  <Button variant="primary" onClick={() => setRegisterOpen(true)}>
+                  <Button
+                    variant="primary"
+                    onClick={() => setRegisterOpen(true)}
+                  >
                     <RiAddLine className="mr-2 size-4" aria-hidden="true" />
                     Register UDF
                   </Button>

@@ -235,7 +235,11 @@ export default function SecondaryIndexesPage({ params }: PageProps) {
               placeholder="Filter indexes..."
               className="w-60"
             />
-            <Button variant="secondary" onClick={() => void load()} isLoading={loading}>
+            <Button
+              variant="secondary"
+              onClick={() => void load()}
+              isLoading={loading}
+            >
               <RiRefreshLine className="mr-2 size-4" aria-hidden="true" />
               Refresh
             </Button>
@@ -410,8 +414,8 @@ function IndexStatsDialog({ target, onOpenChange }: IndexStatsDialogProps) {
         {/* FIXME(stream-b): wire up `asinfo "sindex/ns/name"` backend endpoint
             for live size/n_keys once available. */}
         <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
-          Live index statistics (size, n_keys) will appear here once the
-          backend exposes <code className="font-mono">asinfo sindex/…</code>.
+          Live index statistics (size, n_keys) will appear here once the backend
+          exposes <code className="font-mono">asinfo sindex/…</code>.
         </p>
       </DialogContent>
     </Dialog>

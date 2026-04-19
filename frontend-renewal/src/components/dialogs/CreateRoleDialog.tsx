@@ -154,7 +154,9 @@ export function CreateRoleDialog({
           </div>
 
           <div className="flex flex-col gap-y-1.5">
-            <Label htmlFor="role-whitelist">Whitelist (comma-separated IPs)</Label>
+            <Label htmlFor="role-whitelist">
+              Whitelist (comma-separated IPs)
+            </Label>
             <Input
               id="role-whitelist"
               value={whitelist}

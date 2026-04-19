@@ -3,19 +3,19 @@
  * Persisted to localStorage so the UI shell restores on reload.
  */
 
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { create } from "zustand"
+import { persist } from "zustand/middleware"
 
-export type SidebarMode = "expanded" | "collapsed";
+export type SidebarMode = "expanded" | "collapsed"
 
 interface UiStore {
-  sidebarMode: SidebarMode;
+  sidebarMode: SidebarMode
   /** Which top-level section is currently active in the sidebar. */
-  activeSection: string | null;
+  activeSection: string | null
 
-  toggleSidebar: () => void;
-  setSidebarMode: (mode: SidebarMode) => void;
-  setActiveSection: (section: string | null) => void;
+  toggleSidebar: () => void
+  setSidebarMode: (mode: SidebarMode) => void
+  setActiveSection: (section: string | null) => void
 }
 
 export const useUiStore = create<UiStore>()(
@@ -26,7 +26,8 @@ export const useUiStore = create<UiStore>()(
 
       toggleSidebar: () =>
         set({
-          sidebarMode: get().sidebarMode === "expanded" ? "collapsed" : "expanded",
+          sidebarMode:
+            get().sidebarMode === "expanded" ? "collapsed" : "expanded",
         }),
       setSidebarMode: (sidebarMode) => set({ sidebarMode }),
       setActiveSection: (activeSection) => set({ activeSection }),
@@ -36,4 +37,4 @@ export const useUiStore = create<UiStore>()(
       version: 1,
     },
   ),
-);
+)

@@ -202,7 +202,9 @@ export default function CreateTemplatePage() {
                 value={size ?? ""}
                 onChange={(e) => {
                   const v = parseInt(e.target.value, 10)
-                  setSize(Number.isNaN(v) ? undefined : Math.min(8, Math.max(1, v)))
+                  setSize(
+                    Number.isNaN(v) ? undefined : Math.min(8, Math.max(1, v)),
+                  )
                 }}
                 placeholder="Optional"
                 disabled={loading}
@@ -232,9 +234,7 @@ export default function CreateTemplatePage() {
               <Label>Pod anti-affinity</Label>
               <Select
                 value={antiAffinity}
-                onValueChange={(v) =>
-                  setAntiAffinity(v as typeof antiAffinity)
-                }
+                onValueChange={(v) => setAntiAffinity(v as typeof antiAffinity)}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -273,7 +273,10 @@ export default function CreateTemplatePage() {
               checked={includeResources}
               onCheckedChange={(c) => setIncludeResources(c === true)}
             />
-            <Label htmlFor="tmpl-resources" className="cursor-pointer font-semibold">
+            <Label
+              htmlFor="tmpl-resources"
+              className="cursor-pointer font-semibold"
+            >
               Include resource defaults
             </Label>
           </div>
@@ -322,7 +325,10 @@ export default function CreateTemplatePage() {
               checked={includeStorage}
               onCheckedChange={(c) => setIncludeStorage(c === true)}
             />
-            <Label htmlFor="tmpl-storage" className="cursor-pointer font-semibold">
+            <Label
+              htmlFor="tmpl-storage"
+              className="cursor-pointer font-semibold"
+            >
               Include storage defaults
             </Label>
           </div>
@@ -330,10 +336,7 @@ export default function CreateTemplatePage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid gap-1.5">
                 <Label className="text-xs">Storage class</Label>
-                <Select
-                  value={storageClass}
-                  onValueChange={setStorageClass}
-                >
+                <Select value={storageClass} onValueChange={setStorageClass}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -394,9 +397,7 @@ export default function CreateTemplatePage() {
             <Label className="text-xs">Network access type</Label>
             <Select
               value={accessType}
-              onValueChange={(v) =>
-                setAccessType(v as typeof accessType)
-              }
+              onValueChange={(v) => setAccessType(v as typeof accessType)}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -421,9 +422,7 @@ export default function CreateTemplatePage() {
               value={maxRacksPerNode ?? ""}
               onChange={(e) => {
                 const v = parseInt(e.target.value, 10)
-                setMaxRacksPerNode(
-                  Number.isNaN(v) ? undefined : Math.max(1, v),
-                )
+                setMaxRacksPerNode(Number.isNaN(v) ? undefined : Math.max(1, v))
               }}
               placeholder="No limit"
               disabled={loading}
@@ -435,7 +434,10 @@ export default function CreateTemplatePage() {
               checked={includeServiceConfig}
               onCheckedChange={(c) => setIncludeServiceConfig(c === true)}
             />
-            <Label htmlFor="tmpl-service-config" className="cursor-pointer text-xs">
+            <Label
+              htmlFor="tmpl-service-config"
+              className="cursor-pointer text-xs"
+            >
               Include service config (proto-fd-max)
             </Label>
           </div>

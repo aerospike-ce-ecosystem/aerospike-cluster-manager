@@ -22,7 +22,10 @@ function formatValue(condition: FilterConditionWithId): string {
 function getOperatorLabel(condition: FilterConditionWithId): string {
   const binType = condition.binType ?? "string"
   const ops = FILTER_OPERATORS_BY_TYPE[binType]
-  return ops?.find((o) => o.value === condition.operator)?.label ?? condition.operator
+  return (
+    ops?.find((o) => o.value === condition.operator)?.label ??
+    condition.operator
+  )
 }
 
 interface FilterChipProps {

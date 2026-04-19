@@ -1,8 +1,8 @@
-"use client";
+"use client"
 
-import React from "react";
+import React from "react"
 
-import { Button } from "@/components/Button";
+import { Button } from "@/components/Button"
 import {
   Dialog,
   DialogContent,
@@ -10,33 +10,33 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/Dialog";
-import { Input } from "@/components/Input";
-import { Label } from "@/components/Label";
+} from "@/components/Dialog"
+import { Input } from "@/components/Input"
+import { Label } from "@/components/Label"
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/Select";
-import { ApiError } from "@/lib/api/client";
-import { createIndex } from "@/lib/api/indexes";
-import type { SecondaryIndexType } from "@/lib/types/index";
+} from "@/components/Select"
+import { ApiError } from "@/lib/api/client"
+import { createIndex } from "@/lib/api/indexes"
+import type { SecondaryIndexType } from "@/lib/types/index"
 
 interface CreateIndexDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSuccess?: () => void;
-  connId: string;
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onSuccess?: () => void
+  connId: string
 }
 
 interface FormState {
-  name: string;
-  namespace: string;
-  set: string;
-  bin: string;
-  binType: SecondaryIndexType;
+  name: string
+  namespace: string
+  set: string
+  bin: string
+  binType: SecondaryIndexType
 }
 
 const INITIAL_STATE: FormState = {
@@ -45,13 +45,13 @@ const INITIAL_STATE: FormState = {
   set: "",
   bin: "",
   binType: "numeric",
-};
+}
 
 const BIN_TYPE_OPTIONS: Array<{ value: SecondaryIndexType; label: string }> = [
   { value: "numeric", label: "NUMERIC" },
   { value: "string", label: "STRING" },
   { value: "geo2dsphere", label: "GEO2DSPHERE" },
-];
+]
 
 export function CreateIndexDialog({
   open,
@@ -59,43 +59,43 @@ export function CreateIndexDialog({
   onSuccess,
   connId,
 }: CreateIndexDialogProps) {
-  const [form, setForm] = React.useState<FormState>(INITIAL_STATE);
-  const [error, setError] = React.useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [form, setForm] = React.useState<FormState>(INITIAL_STATE)
+  const [error, setError] = React.useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = React.useState(false)
 
   const resetForm = () => {
-    setForm(INITIAL_STATE);
-    setError(null);
-  };
+    setForm(INITIAL_STATE)
+    setError(null)
+  }
 
   const handleOpenChange = (next: boolean) => {
-    if (!next) resetForm();
-    onOpenChange(next);
-  };
+    if (!next) resetForm()
+    onOpenChange(next)
+  }
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setError(null);
+    event.preventDefault()
+    setError(null)
 
-    const name = form.name.trim();
-    const namespace = form.namespace.trim();
-    const bin = form.bin.trim();
-    const set = form.set.trim();
+    const name = form.name.trim()
+    const namespace = form.namespace.trim()
+    const bin = form.bin.trim()
+    const set = form.set.trim()
 
     if (!name) {
-      setError("Index name is required.");
-      return;
+      setError("Index name is required.")
+      return
     }
     if (!namespace) {
-      setError("Namespace is required.");
-      return;
+      setError("Namespace is required.")
+      return
     }
     if (!bin) {
-      setError("Bin is required.");
-      return;
+      setError("Bin is required.")
+      return
     }
 
-    setIsSubmitting(true);
+    setIsSubmitting(true)
     try {
       await createIndex(connId, {
         name,
@@ -103,22 +103,22 @@ export function CreateIndexDialog({
         set,
         bin,
         type: form.binType,
-      });
-      resetForm();
-      onSuccess?.();
-      onOpenChange(false);
+      })
+      resetForm()
+      onSuccess?.()
+      onOpenChange(false)
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.detail || err.message);
+        setError(err.detail || err.message)
       } else if (err instanceof Error) {
-        setError(err.message);
+        setError(err.message)
       } else {
-        setError("Failed to create index.");
+        setError("Failed to create index.")
       }
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false)
     }
-  };
+  }
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -155,7 +155,9 @@ export function CreateIndexDialog({
               <Input
                 id="idx-namespace"
                 value={form.namespace}
-                onChange={(e) => setForm({ ...form, namespace: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, namespace: e.target.value })
+                }
                 placeholder="test"
                 required
               />
@@ -213,14 +215,18 @@ export function CreateIndexDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" isLoading={isSubmitting} loadingText="Creating...">
+            <Button
+              type="submit"
+              isLoading={isSubmitting}
+              loadingText="Creating..."
+            >
               Create index
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
-  );
+  )
 }
 
-export default CreateIndexDialog;
+export default CreateIndexDialog

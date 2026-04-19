@@ -119,7 +119,7 @@ export function FilterToolbar({
   )
 
   return (
-    <div className="shrink-0 space-y-0 border-b border-gray-200 px-3 py-2 dark:border-gray-800 sm:px-4">
+    <div className="shrink-0 space-y-0 border-b border-gray-200 px-3 py-2 sm:px-4 dark:border-gray-800">
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
           <button

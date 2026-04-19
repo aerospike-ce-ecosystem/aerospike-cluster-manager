@@ -5,8 +5,9 @@ import * as React from "react"
 
 import { cx } from "@/lib/utils"
 
-interface CheckboxProps
-  extends React.ComponentPropsWithoutRef<typeof LabelPrimitives.Root> {
+interface CheckboxProps extends React.ComponentPropsWithoutRef<
+  typeof LabelPrimitives.Root
+> {
   disabled?: boolean
 }
 

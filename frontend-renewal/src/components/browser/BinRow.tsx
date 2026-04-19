@@ -10,7 +10,11 @@ import { useCallback, useRef, useState } from "react"
 
 import { Input } from "@/components/Input"
 import { JsonViewer } from "@/components/common/JsonViewer"
-import { BIN_TYPES, BIN_TYPE_BORDER_COLORS, type BinType } from "@/lib/constants"
+import {
+  BIN_TYPES,
+  BIN_TYPE_BORDER_COLORS,
+  type BinType,
+} from "@/lib/constants"
 import type { BinValue } from "@/lib/types/record"
 import { cx } from "@/lib/utils"
 
@@ -57,9 +61,7 @@ function BinTypeSelect({
           break
         case "ArrowUp":
           e.preventDefault()
-          setHighlighted(
-            (h) => (h - 1 + BIN_TYPES.length) % BIN_TYPES.length,
-          )
+          setHighlighted((h) => (h - 1 + BIN_TYPES.length) % BIN_TYPES.length)
           break
         case "Enter":
         case " ":
@@ -103,10 +105,7 @@ function BinTypeSelect({
       </button>
       {open && (
         <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setOpen(false)}
-          />
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div
             role="listbox"
             className="absolute left-0 z-50 mt-1 w-full overflow-hidden rounded-md border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-800 dark:bg-gray-950"
@@ -159,13 +158,7 @@ function complexSummary(value: BinValue, type: BinType): string {
   return ""
 }
 
-function PrimitiveValue({
-  value,
-  type,
-}: {
-  value: BinValue
-  type: BinType
-}) {
+function PrimitiveValue({ value, type }: { value: BinValue; type: BinType }) {
   if (type === "string")
     return (
       <span className="text-emerald-700 dark:text-emerald-400">
@@ -191,7 +184,9 @@ function PrimitiveValue({
       </span>
     )
   }
-  return <span className="text-gray-500 dark:text-gray-400">{String(value)}</span>
+  return (
+    <span className="text-gray-500 dark:text-gray-400">{String(value)}</span>
+  )
 }
 
 /* ─── ViewBinRow ──────────────────────────────────── */
@@ -225,15 +220,9 @@ function ViewBinRow({ index, name, type, value }: ViewBinRowProps) {
               onClick={() => setExpanded((p) => !p)}
             >
               {expanded ? (
-                <RiArrowDownSLine
-                  aria-hidden
-                  className="size-3 shrink-0"
-                />
+                <RiArrowDownSLine aria-hidden className="size-3 shrink-0" />
               ) : (
-                <RiArrowRightSLine
-                  aria-hidden
-                  className="size-3 shrink-0"
-                />
+                <RiArrowRightSLine aria-hidden className="size-3 shrink-0" />
               )}
               <span className="text-xs text-gray-500 dark:text-gray-400">
                 {complexSummary(value, type)}

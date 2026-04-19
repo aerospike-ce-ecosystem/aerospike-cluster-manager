@@ -182,8 +182,7 @@ const triggerStyles = tv({
 })
 
 interface TriggerProps
-  extends React.ComponentProps<"button">,
-    VariantProps<typeof triggerStyles> {
+  extends React.ComponentProps<"button">, VariantProps<typeof triggerStyles> {
   placeholder?: string
 }
 
@@ -1205,5 +1204,7 @@ DateRangePicker.displayName = "DateRangePicker"
 export {
   DatePicker,
   DateRangePicker,
-  type DatePreset, type DateRange, type DateRangePreset
+  type DatePreset,
+  type DateRange,
+  type DateRangePreset,
 }

@@ -197,7 +197,9 @@ export function K8sOperationStatus({
             />
             Pending ({targetCount - processedCount})
           </div>
-          {pendingPods.length === 0 && isAllPods && targetCount - processedCount > 0 ? (
+          {pendingPods.length === 0 &&
+          isAllPods &&
+          targetCount - processedCount > 0 ? (
             <p className="text-xs text-gray-500 dark:text-gray-400">
               {targetCount - processedCount} pod
               {targetCount - processedCount !== 1 ? "s" : ""} remaining

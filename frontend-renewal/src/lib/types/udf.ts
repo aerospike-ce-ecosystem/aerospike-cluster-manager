@@ -4,13 +4,13 @@
  */
 
 export interface UDFModule {
-  filename: string;
-  type: "LUA";
-  hash: string;
-  content?: string | null;
+  filename: string
+  type: "LUA"
+  hash: string
+  content?: string | null
 }
 
 export interface UploadUDFRequest {
-  filename: string;
-  content: string;
+  filename: string
+  content: string
 }

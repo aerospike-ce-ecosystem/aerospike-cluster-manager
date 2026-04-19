@@ -1,6 +1,10 @@
 "use client"
 
-import { RiArrowLeftLine, RiDeleteBin2Line, RiFileCopyLine } from "@remixicon/react"
+import {
+  RiArrowLeftLine,
+  RiDeleteBin2Line,
+  RiFileCopyLine,
+} from "@remixicon/react"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
@@ -23,13 +27,8 @@ export default function TemplateDetailPage() {
   const router = useRouter()
   const params = useParams<{ name: string }>()
   const paramName = params?.name ?? ""
-  const {
-    selectedTemplate,
-    loading,
-    error,
-    fetchTemplate,
-    deleteTemplate,
-  } = useK8sTemplateStore()
+  const { selectedTemplate, loading, error, fetchTemplate, deleteTemplate } =
+    useK8sTemplateStore()
   const [showDelete, setShowDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [copyMsg, setCopyMsg] = useState<string | null>(null)
@@ -111,7 +110,11 @@ export default function TemplateDetailPage() {
                 Back
               </Link>
             </Button>
-            <Button variant="secondary" onClick={() => void handleCopySpec()} className="gap-1">
+            <Button
+              variant="secondary"
+              onClick={() => void handleCopySpec()}
+              className="gap-1"
+            >
               <RiFileCopyLine aria-hidden="true" className="size-4" />
               Copy spec
             </Button>
@@ -120,9 +123,7 @@ export default function TemplateDetailPage() {
               onClick={() => setShowDelete(true)}
               disabled={usedBy.length > 0}
               title={
-                usedBy.length > 0
-                  ? `Used by: ${usedBy.join(", ")}`
-                  : undefined
+                usedBy.length > 0 ? `Used by: ${usedBy.join(", ")}` : undefined
               }
               className="gap-1"
             >

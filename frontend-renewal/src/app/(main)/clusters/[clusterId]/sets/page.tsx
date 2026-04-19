@@ -24,7 +24,8 @@ function formatBytes(bytes: number): string {
 
 function formatCount(n: number): string {
   if (!Number.isFinite(n)) return "0"
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`
+  if (n >= 1_000_000)
+    return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}K`
   return n.toLocaleString()
 }
@@ -47,7 +48,10 @@ export default function SetsPage({ params }: PageProps) {
   const cluster = useCluster(params.clusterId)
   const [filter, setFilter] = useState("")
 
-  const namespaces = useMemo(() => cluster.data?.namespaces ?? [], [cluster.data])
+  const namespaces = useMemo(
+    () => cluster.data?.namespaces ?? [],
+    [cluster.data],
+  )
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase()
@@ -76,7 +80,8 @@ export default function SetsPage({ params }: PageProps) {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-gray-500 dark:text-gray-500">
-            {namespaces.length} / 2 max <span className="font-medium">(CE)</span>
+            {namespaces.length} / 2 max{" "}
+            <span className="font-medium">(CE)</span>
           </span>
           <Button variant="secondary">Sample data</Button>
         </div>
@@ -184,7 +189,11 @@ function NamespaceCard({
             <div
               className={cx(
                 "h-full rounded-full",
-                memPct > 80 ? "bg-red-500" : memPct > 60 ? "bg-amber-500" : "bg-indigo-500",
+                memPct > 80
+                  ? "bg-red-500"
+                  : memPct > 60
+                    ? "bg-amber-500"
+                    : "bg-indigo-500",
               )}
               style={{ width: `${Math.max(memPct, 1)}%` }}
             />
@@ -202,7 +211,12 @@ function NamespaceCard({
           </span>
         )}
         {ns.sets.map((s) => (
-          <SetChip key={s.name} clusterId={clusterId} namespace={ns.name} set={s} />
+          <SetChip
+            key={s.name}
+            clusterId={clusterId}
+            namespace={ns.name}
+            set={s}
+          />
         ))}
         <button
           className={cx(
@@ -235,7 +249,9 @@ function SetChip({
         "hover:border-indigo-300 hover:bg-indigo-50/50 dark:border-gray-800 dark:bg-gray-950 hover:dark:border-indigo-900/60 hover:dark:bg-indigo-950/20",
       )}
     >
-      <span className="font-mono text-gray-900 dark:text-gray-50">{set.name}</span>
+      <span className="font-mono text-gray-900 dark:text-gray-50">
+        {set.name}
+      </span>
       <span className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-600 dark:bg-gray-900 dark:text-gray-400">
         {formatCount(set.objects)}
       </span>

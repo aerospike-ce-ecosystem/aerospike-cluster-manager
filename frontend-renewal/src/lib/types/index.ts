@@ -7,22 +7,22 @@
  * to avoid ambiguity with the default module resolution.
  */
 
-export type SecondaryIndexType = "numeric" | "string" | "geo2dsphere";
-export type SecondaryIndexState = "ready" | "building" | "error";
+export type SecondaryIndexType = "numeric" | "string" | "geo2dsphere"
+export type SecondaryIndexState = "ready" | "building" | "error"
 
 export interface SecondaryIndex {
-  name: string;
-  namespace: string;
-  set: string;
-  bin: string;
-  type: SecondaryIndexType;
-  state: SecondaryIndexState;
+  name: string
+  namespace: string
+  set: string
+  bin: string
+  type: SecondaryIndexType
+  state: SecondaryIndexState
 }
 
 export interface CreateIndexRequest {
-  namespace: string;
-  set: string;
-  bin: string;
-  name: string;
-  type: SecondaryIndexType;
+  namespace: string
+  set: string
+  bin: string
+  name: string
+  type: SecondaryIndexType
 }

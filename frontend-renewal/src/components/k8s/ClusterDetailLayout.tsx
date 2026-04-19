@@ -16,7 +16,10 @@ import { Card } from "@/components/Card"
 import { InlineAlert } from "@/components/common/InlineAlert"
 import { JsonViewer } from "@/components/common/JsonViewer"
 import { PageHeader } from "@/components/common/PageHeader"
-import { K8sClusterStatusBadge, TRANSITIONAL_PHASES } from "@/components/k8s/K8sClusterStatusBadge"
+import {
+  K8sClusterStatusBadge,
+  TRANSITIONAL_PHASES,
+} from "@/components/k8s/K8sClusterStatusBadge"
 import { K8sDeleteDialog } from "@/components/k8s/K8sDeleteDialog"
 import { K8sEventTimeline } from "@/components/k8s/K8sEventTimeline"
 import { K8sOperationStatus } from "@/components/k8s/K8sOperationStatus"
@@ -72,7 +75,9 @@ export function ClusterDetailLayout({
     try {
       const [detail, evts] = await Promise.all([
         getK8sCluster(namespace, name),
-        listK8sClusterEvents(namespace, name).catch(() => [] as K8sClusterEvent[]),
+        listK8sClusterEvents(namespace, name).catch(
+          () => [] as K8sClusterEvent[],
+        ),
       ])
       setCluster(detail)
       setEvents(evts)
@@ -93,7 +98,9 @@ export function ClusterDetailLayout({
   // Auto-refresh during transitional phases.
   useEffect(() => {
     if (!cluster?.phase) return
-    const isTransitional = (TRANSITIONAL_PHASES as string[]).includes(cluster.phase)
+    const isTransitional = (TRANSITIONAL_PHASES as string[]).includes(
+      cluster.phase,
+    )
     if (!isTransitional) return
     const id = setInterval(() => {
       void refetchAll()
@@ -373,10 +380,7 @@ export function ClusterDetailLayout({
                 <div className="flex items-center gap-4 text-gray-500 dark:text-gray-400">
                   {cond.reason && <span>{cond.reason}</span>}
                   {cond.message && (
-                    <span
-                      className="max-w-xs truncate"
-                      title={cond.message}
-                    >
+                    <span className="max-w-xs truncate" title={cond.message}>
                       {cond.message}
                     </span>
                   )}

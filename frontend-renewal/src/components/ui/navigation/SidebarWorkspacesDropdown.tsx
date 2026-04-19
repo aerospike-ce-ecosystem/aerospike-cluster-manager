@@ -60,97 +60,102 @@ function WorkspaceSwitcher({ variant }: { variant: "desktop" | "mobile" }) {
 
   return (
     <>
-    <DropdownMenu>
-      <DropdownMenuTrigger className={triggerClass} aria-label="Switch workspace">
-        <Avatar
-          initials={active ? initialsOf(active.name) : "—"}
-          color={active?.color ?? "#4F46E5"}
-        />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-50">
-            {active?.name ?? (isLoading ? "Loading…" : "No workspace")}
-          </p>
-          <p className="truncate font-mono text-xs text-gray-500 dark:text-gray-400">
-            {active ? primaryHost(active.hosts, active.port) : "Add a connection to start"}
-          </p>
-        </div>
-        <RiExpandUpDownLine
-          className="size-4 shrink-0 text-gray-500 dark:text-gray-500"
-          aria-hidden="true"
-        />
-      </DropdownMenuTrigger>
-
-      <DropdownMenuContent
-        align="start"
-        className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[260px]"
-      >
-        <DropdownMenuLabel>
-          Workspaces{" "}
-          <span className="font-normal text-gray-500 dark:text-gray-400">
-            ({data?.length ?? 0})
-          </span>
-        </DropdownMenuLabel>
-        <DropdownMenuGroup>
-          {(data ?? []).map((c) => {
-            const isActive = active?.id === c.id
-            return (
-              <DropdownMenuItem
-                key={c.id}
-                onSelect={(e) => {
-                  e.preventDefault()
-                  // Preserve same sub-section if possible (e.g. /sets, /admin)
-                  if (!params?.clusterId) {
-                    router.push(`/clusters/${c.id}`)
-                    return
-                  }
-                  const rest = pathname.slice(
-                    `/clusters/${params.clusterId}`.length,
-                  )
-                  router.push(`/clusters/${c.id}${rest}`)
-                }}
-                className={cx(
-                  "flex items-start gap-3 py-2",
-                  isActive && "bg-gray-50 dark:bg-gray-900",
-                )}
-              >
-                <Avatar initials={initialsOf(c.name)} color={c.color} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-50">
-                    {c.name}
-                  </p>
-                  <p className="truncate font-mono text-xs text-gray-500 dark:text-gray-400">
-                    {primaryHost(c.hosts, c.port)}
-                  </p>
-                </div>
-              </DropdownMenuItem>
-            )
-          })}
-          {(!data || data.length === 0) && !isLoading && (
-            <DropdownMenuItem disabled className="text-sm text-gray-500">
-              No saved workspaces
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onSelect={(e) => {
-            e.preventDefault()
-            setAddOpen(true)
-          }}
-          className="flex items-center gap-2 text-sm"
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          className={triggerClass}
+          aria-label="Switch workspace"
         >
-          <RiAddLine className="size-4" aria-hidden="true" />
-          Add workspace
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-    <AddConnectionDialog
-      open={addOpen}
-      onOpenChange={setAddOpen}
-      onSuccess={() => {
-        void refetch()
-      }}
-    />
+          <Avatar
+            initials={active ? initialsOf(active.name) : "—"}
+            color={active?.color ?? "#4F46E5"}
+          />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-50">
+              {active?.name ?? (isLoading ? "Loading…" : "No workspace")}
+            </p>
+            <p className="truncate font-mono text-xs text-gray-500 dark:text-gray-400">
+              {active
+                ? primaryHost(active.hosts, active.port)
+                : "Add a connection to start"}
+            </p>
+          </div>
+          <RiExpandUpDownLine
+            className="size-4 shrink-0 text-gray-500 dark:text-gray-500"
+            aria-hidden="true"
+          />
+        </DropdownMenuTrigger>
+
+        <DropdownMenuContent
+          align="start"
+          className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[260px]"
+        >
+          <DropdownMenuLabel>
+            Workspaces{" "}
+            <span className="font-normal text-gray-500 dark:text-gray-400">
+              ({data?.length ?? 0})
+            </span>
+          </DropdownMenuLabel>
+          <DropdownMenuGroup>
+            {(data ?? []).map((c) => {
+              const isActive = active?.id === c.id
+              return (
+                <DropdownMenuItem
+                  key={c.id}
+                  onSelect={(e) => {
+                    e.preventDefault()
+                    // Preserve same sub-section if possible (e.g. /sets, /admin)
+                    if (!params?.clusterId) {
+                      router.push(`/clusters/${c.id}`)
+                      return
+                    }
+                    const rest = pathname.slice(
+                      `/clusters/${params.clusterId}`.length,
+                    )
+                    router.push(`/clusters/${c.id}${rest}`)
+                  }}
+                  className={cx(
+                    "flex items-start gap-3 py-2",
+                    isActive && "bg-gray-50 dark:bg-gray-900",
+                  )}
+                >
+                  <Avatar initials={initialsOf(c.name)} color={c.color} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-50">
+                      {c.name}
+                    </p>
+                    <p className="truncate font-mono text-xs text-gray-500 dark:text-gray-400">
+                      {primaryHost(c.hosts, c.port)}
+                    </p>
+                  </div>
+                </DropdownMenuItem>
+              )
+            })}
+            {(!data || data.length === 0) && !isLoading && (
+              <DropdownMenuItem disabled className="text-sm text-gray-500">
+                No saved workspaces
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onSelect={(e) => {
+              e.preventDefault()
+              setAddOpen(true)
+            }}
+            className="flex items-center gap-2 text-sm"
+          >
+            <RiAddLine className="size-4" aria-hidden="true" />
+            Add workspace
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <AddConnectionDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        onSuccess={() => {
+          void refetch()
+        }}
+      />
     </>
   )
 }

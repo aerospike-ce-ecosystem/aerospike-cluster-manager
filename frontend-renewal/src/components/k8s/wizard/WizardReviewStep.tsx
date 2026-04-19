@@ -24,7 +24,9 @@ export function WizardReviewStep({ form }: WizardStepProps) {
           </div>
           <div>
             <dt className="text-xs text-gray-500 dark:text-gray-400">Size</dt>
-            <dd>{form.size} node{form.size !== 1 ? "s" : ""}</dd>
+            <dd>
+              {form.size} node{form.size !== 1 ? "s" : ""}
+            </dd>
           </div>
           <div>
             <dt className="text-xs text-gray-500 dark:text-gray-400">Image</dt>

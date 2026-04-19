@@ -118,19 +118,27 @@ export function FilterConditionEditor({
       {needsValue && !isGeo && (
         <Input
           ref={inputRef}
-          type={binType === "integer" || binType === "float" ? "number" : "text"}
-          placeholder={condition.operator === "regex" ? "Pattern..." : "Value..."}
+          type={
+            binType === "integer" || binType === "float" ? "number" : "text"
+          }
+          placeholder={
+            condition.operator === "regex" ? "Pattern..." : "Value..."
+          }
           value={val}
           onChange={(e) => setVal(e.target.value)}
           onKeyDown={handleKeyDown}
           className="h-8 text-xs"
-          inputClassName={condition.operator === "regex" ? "font-mono" : undefined}
+          inputClassName={
+            condition.operator === "regex" ? "font-mono" : undefined
+          }
         />
       )}
 
       {needsValue2 && (
         <Input
-          type={binType === "integer" || binType === "float" ? "number" : "text"}
+          type={
+            binType === "integer" || binType === "float" ? "number" : "text"
+          }
           placeholder="Upper bound..."
           value={val2}
           onChange={(e) => setVal2(e.target.value)}
@@ -151,11 +159,7 @@ export function FilterConditionEditor({
       )}
 
       <div className="flex items-center justify-end gap-2 pt-1">
-        <Button
-          variant="ghost"
-          onClick={onCancel}
-          className="h-7 px-3 text-xs"
-        >
+        <Button variant="ghost" onClick={onCancel} className="h-7 px-3 text-xs">
           Cancel
         </Button>
         <Button onClick={handleApply} className="h-7 px-3 text-xs">

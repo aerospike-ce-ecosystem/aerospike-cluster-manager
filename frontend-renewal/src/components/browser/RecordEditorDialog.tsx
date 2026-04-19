@@ -10,18 +10,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/Dialog"
-import type { AerospikeRecord } from "@/lib/types/record"
+import type { AerospikeRecord, BinEntry } from "@/lib/types/record"
 
-import type { BinEntry } from "./_utils"
 import { BinRow } from "./BinRow"
 import { RecordMetadataGrid } from "./RecordMetadataGrid"
 
-export type {
-  BinEntry,
-  buildBinEntriesFromRecord,
-  createEmptyBinEntry,
-  parseBinValue,
-} from "./_utils"
+// Re-export the BinEntry shape so page-level code can keep importing it
+// from the dialog module. The value-level helpers
+// (buildBinEntriesFromRecord / createEmptyBinEntry / parseBinValue) live
+// in `@/lib/bin-utils` — do not re-export them here as types; doing so
+// erases them at runtime.
+export type { BinEntry } from "@/lib/types/record"
 
 export interface RecordEditorFieldsProps {
   mode: "create" | "edit" | "duplicate"
@@ -157,7 +156,7 @@ export function RecordEditorDialog({
       }}
     >
       <DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[700px]">
-        <DialogHeader className="space-y-0.5 border-b border-gray-200 px-5 pt-5 pb-3 dark:border-gray-800">
+        <DialogHeader className="space-y-0.5 border-b border-gray-200 px-5 pb-3 pt-5 dark:border-gray-800">
           <DialogTitle className="font-mono text-sm font-medium">
             {mode === "create"
               ? "New Record"

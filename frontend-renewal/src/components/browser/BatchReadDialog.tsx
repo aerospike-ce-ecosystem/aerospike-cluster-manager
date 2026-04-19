@@ -32,7 +32,7 @@ export function BatchReadDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[80vh] gap-0 overflow-hidden p-0 sm:max-w-[620px]">
-        <DialogHeader className="space-y-0 border-b border-gray-200 px-5 pt-5 pb-3 dark:border-gray-800">
+        <DialogHeader className="space-y-0 border-b border-gray-200 px-5 pb-3 pt-5 dark:border-gray-800">
           <div className="flex items-center justify-between">
             <DialogTitle className="font-mono text-sm font-medium">
               batch_read Code

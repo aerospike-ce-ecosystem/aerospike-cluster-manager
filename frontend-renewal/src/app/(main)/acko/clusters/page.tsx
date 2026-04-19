@@ -67,10 +67,7 @@ export default function AckoClustersPage() {
         }
       />
 
-      <InlineAlert
-        message={error ? error.message : null}
-        variant="error"
-      />
+      <InlineAlert message={error ? error.message : null} variant="error" />
 
       {isLoading && !data ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

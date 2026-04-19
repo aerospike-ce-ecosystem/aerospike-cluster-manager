@@ -53,8 +53,11 @@ interface K8sEventTimelineProps {
 }
 
 export function K8sEventTimeline({ events, className }: K8sEventTimelineProps) {
-  const [selectedCategory, setSelectedCategory] = useState<EventCategory | null>(null)
-  const [typeFilter, setTypeFilter] = useState<"all" | "Warning" | "Normal">("all")
+  const [selectedCategory, setSelectedCategory] =
+    useState<EventCategory | null>(null)
+  const [typeFilter, setTypeFilter] = useState<"all" | "Warning" | "Normal">(
+    "all",
+  )
 
   const categoryCounts = useMemo(
     () =>

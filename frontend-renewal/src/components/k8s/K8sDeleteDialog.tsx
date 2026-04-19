@@ -79,7 +79,10 @@ export function K8sDeleteDialog({
             </p>
             <ul className="mt-2 space-y-1.5 text-red-800 dark:text-red-300">
               <li className="flex items-center gap-2">
-                <RiDeleteBin2Line aria-hidden="true" className="size-4 shrink-0" />
+                <RiDeleteBin2Line
+                  aria-hidden="true"
+                  className="size-4 shrink-0"
+                />
                 <span>
                   <span className="font-semibold">AerospikeCluster</span>{" "}
                   <code className="font-mono text-xs">

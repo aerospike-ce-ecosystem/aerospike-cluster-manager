@@ -29,13 +29,15 @@ function phaseBadge(phase: string | undefined): {
   variant: "success" | "warning" | "error" | "neutral"
   dot: string
 } {
-  if (!phase) return { label: "Unknown", variant: "neutral", dot: "bg-gray-400" }
+  if (!phase)
+    return { label: "Unknown", variant: "neutral", dot: "bg-gray-400" }
   const p = phase.toLowerCase()
   if (p === "ready" || p === "running")
     return { label: phase, variant: "success", dot: "bg-emerald-500" }
   if (p === "error" || p === "failed")
     return { label: phase, variant: "error", dot: "bg-red-500" }
-  if (p === "paused") return { label: phase, variant: "neutral", dot: "bg-gray-400" }
+  if (p === "paused")
+    return { label: phase, variant: "neutral", dot: "bg-gray-400" }
   return { label: phase, variant: "warning", dot: "bg-amber-500" }
 }
 
@@ -137,7 +139,9 @@ export default function ClustersPage() {
 function ClusterCard({ row }: { row: Row }) {
   const status = phaseBadge(row.phase)
   const hostLabel =
-    row.hosts.length > 0 ? `${row.hosts[0]}:${row.port}` : row.k8sNamespace ?? "—"
+    row.hosts.length > 0
+      ? `${row.hosts[0]}:${row.port}`
+      : (row.k8sNamespace ?? "—")
 
   return (
     <Card className="flex flex-col gap-4">
@@ -175,7 +179,9 @@ function ClusterCard({ row }: { row: Row }) {
 
       <dl className="grid grid-cols-2 gap-3 border-t border-gray-200 pt-4 dark:border-gray-800">
         <div>
-          <dt className="text-xs text-gray-500 dark:text-gray-500">Managed by</dt>
+          <dt className="text-xs text-gray-500 dark:text-gray-500">
+            Managed by
+          </dt>
           <dd className="font-medium text-gray-900 dark:text-gray-50">
             {row.managedBy === "ACKO" ? "ACKO" : "Manual"}
           </dd>
@@ -191,7 +197,9 @@ function ClusterCard({ row }: { row: Row }) {
       <div className="flex gap-2">
         {row.connId ? (
           <Button variant="secondary" className="flex-1" asChild>
-            <Link href={clusterSections.overview(row.connId)}>Open overview</Link>
+            <Link href={clusterSections.overview(row.connId)}>
+              Open overview
+            </Link>
           </Button>
         ) : (
           <Badge variant="warning">connection not linked</Badge>
@@ -225,8 +233,8 @@ function EmptyState() {
         No clusters yet
       </h3>
       <p className="max-w-md text-sm text-gray-500 dark:text-gray-500">
-        Add a connection profile to manage an existing cluster, or create a new one
-        via ACKO.
+        Add a connection profile to manage an existing cluster, or create a new
+        one via ACKO.
       </p>
       <div className="flex gap-2 pt-2">
         <Button variant="secondary">Add Connection</Button>

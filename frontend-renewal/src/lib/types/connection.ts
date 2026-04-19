@@ -8,70 +8,70 @@ export type ConnectionErrorType =
   | "connection_refused"
   | "cluster_error"
   | "auth_error"
-  | "unknown";
+  | "unknown"
 
 export interface ConnectionStatus {
-  connected: boolean;
-  nodeCount: number;
-  namespaceCount: number;
-  build?: string | null;
-  edition?: string | null;
-  memoryUsed: number;
-  memoryTotal: number;
-  diskUsed: number;
-  diskTotal: number;
-  tendHealthy?: boolean | null;
-  error?: string | null;
-  errorType?: ConnectionErrorType | null;
+  connected: boolean
+  nodeCount: number
+  namespaceCount: number
+  build?: string | null
+  edition?: string | null
+  memoryUsed: number
+  memoryTotal: number
+  diskUsed: number
+  diskTotal: number
+  tendHealthy?: boolean | null
+  error?: string | null
+  errorType?: ConnectionErrorType | null
 }
 
 export interface ConnectionProfileResponse {
-  id: string;
-  name: string;
-  hosts: string[];
-  port: number;
-  clusterName?: string | null;
-  username?: string | null;
-  color: string;
-  description?: string | null;
-  createdAt: string;
-  updatedAt: string;
+  id: string
+  name: string
+  hosts: string[]
+  port: number
+  clusterName?: string | null
+  username?: string | null
+  color: string
+  description?: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 export interface ConnectionWithStatus extends ConnectionProfileResponse {
-  status: ConnectionStatus;
+  status: ConnectionStatus
 }
 
 export interface CreateConnectionRequest {
-  name?: string;
-  hosts?: string[];
-  port?: number;
-  clusterName?: string | null;
-  username?: string | null;
-  password?: string | null;
-  color?: string;
-  description?: string | null;
+  name?: string
+  hosts?: string[]
+  port?: number
+  clusterName?: string | null
+  username?: string | null
+  password?: string | null
+  color?: string
+  description?: string | null
 }
 
 export interface UpdateConnectionRequest {
-  name?: string;
-  hosts?: string[];
-  port?: number;
-  clusterName?: string | null;
-  username?: string | null;
-  password?: string | null;
-  color?: string;
-  description?: string | null;
+  name?: string
+  hosts?: string[]
+  port?: number
+  clusterName?: string | null
+  username?: string | null
+  password?: string | null
+  color?: string
+  description?: string | null
 }
 
 export interface TestConnectionRequest {
-  hosts: string[];
-  port?: number;
-  username?: string | null;
-  password?: string | null;
+  hosts: string[]
+  port?: number
+  username?: string | null
+  password?: string | null
 }
 
 export interface TestConnectionResponse {
-  success: boolean;
-  message: string;
+  success: boolean
+  message: string
 }

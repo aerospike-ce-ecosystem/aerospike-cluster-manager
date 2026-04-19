@@ -61,12 +61,18 @@ export function ClusterTabs({ clusterId }: Props) {
   ]
 
   const isActive = (href: string, exact?: boolean) =>
-    exact ? pathname === href : pathname === href || pathname.startsWith(href + "/")
+    exact
+      ? pathname === href
+      : pathname === href || pathname.startsWith(href + "/")
 
   return (
     <TabNavigation>
       {tabs.map((t) => (
-        <TabNavigationLink key={t.href} asChild active={isActive(t.href, t.exact)}>
+        <TabNavigationLink
+          key={t.href}
+          asChild
+          active={isActive(t.href, t.exact)}
+        >
           <Link href={t.href} className="inline-flex items-center gap-2">
             <t.icon className="size-4 shrink-0" aria-hidden="true" />
             {t.label}

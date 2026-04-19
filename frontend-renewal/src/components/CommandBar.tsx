@@ -105,11 +105,10 @@ const CommandBarSeperator = React.forwardRef<
 })
 CommandBarSeperator.displayName = "CommandBar.Seperator"
 
-interface CommandProps
-  extends Omit<
-    React.ComponentPropsWithoutRef<"button">,
-    "children" | "onClick"
-  > {
+interface CommandProps extends Omit<
+  React.ComponentPropsWithoutRef<"button">,
+  "children" | "onClick"
+> {
   action: () => void | Promise<void>
   label: string
   shortcut: { shortcut: string; label?: string }

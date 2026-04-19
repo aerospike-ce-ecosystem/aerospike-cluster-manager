@@ -39,8 +39,7 @@ export function K8sPodTable({
     )
   }
 
-  const allSelected =
-    pods.length > 0 && selectedPods.length === pods.length
+  const allSelected = pods.length > 0 && selectedPods.length === pods.length
   const someSelected = selectedPods.length > 0 && !allSelected
 
   const toggleAll = () => {
@@ -98,7 +97,7 @@ export function K8sPodTable({
                 <TableCell className="font-mono text-xs">{pod.name}</TableCell>
                 <TableCell>
                   <Badge variant={pod.isReady ? "success" : "warning"}>
-                    {pod.isReady ? "Ready" : pod.phase ?? "Unknown"}
+                    {pod.isReady ? "Ready" : (pod.phase ?? "Unknown")}
                   </Badge>
                 </TableCell>
                 <TableCell>

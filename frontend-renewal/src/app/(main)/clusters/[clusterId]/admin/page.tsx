@@ -318,7 +318,7 @@ export default function AdminPage({ params }: PageProps) {
         header: "Quotas (R / W)",
         size: 140,
         cell: ({ row }) => (
-          <span className="tabular-nums text-xs text-gray-500 dark:text-gray-400">
+          <span className="text-xs tabular-nums text-gray-500 dark:text-gray-400">
             {row.original.readQuota} / {row.original.writeQuota}
           </span>
         ),
@@ -387,7 +387,10 @@ export default function AdminPage({ params }: PageProps) {
           {tab === "users" && (
             <section className="flex flex-col gap-3">
               <div className="flex items-center justify-end">
-                <Button variant="primary" onClick={() => setCreateUserOpen(true)}>
+                <Button
+                  variant="primary"
+                  onClick={() => setCreateUserOpen(true)}
+                >
                   <RiAddLine className="mr-2 size-4" aria-hidden="true" />
                   Create user
                 </Button>
@@ -407,7 +410,10 @@ export default function AdminPage({ params }: PageProps) {
                           variant="primary"
                           onClick={() => setCreateUserOpen(true)}
                         >
-                          <RiAddLine className="mr-2 size-4" aria-hidden="true" />
+                          <RiAddLine
+                            className="mr-2 size-4"
+                            aria-hidden="true"
+                          />
                           Create user
                         </Button>
                       }
@@ -422,7 +428,10 @@ export default function AdminPage({ params }: PageProps) {
           {tab === "roles" && (
             <section className="flex flex-col gap-3">
               <div className="flex items-center justify-end">
-                <Button variant="primary" onClick={() => setCreateRoleOpen(true)}>
+                <Button
+                  variant="primary"
+                  onClick={() => setCreateRoleOpen(true)}
+                >
                   <RiAddLine className="mr-2 size-4" aria-hidden="true" />
                   Create role
                 </Button>
@@ -442,7 +451,10 @@ export default function AdminPage({ params }: PageProps) {
                           variant="primary"
                           onClick={() => setCreateRoleOpen(true)}
                         >
-                          <RiAddLine className="mr-2 size-4" aria-hidden="true" />
+                          <RiAddLine
+                            className="mr-2 size-4"
+                            aria-hidden="true"
+                          />
                           Create role
                         </Button>
                       }
@@ -518,8 +530,8 @@ function SecurityDisabledCard() {
         </h3>
         <p className="mx-auto mt-1 max-w-md text-sm text-gray-500 dark:text-gray-400">
           User and role management requires security to be enabled in
-          aerospike.conf. Aerospike CE supports security — it is simply
-          disabled by default.
+          aerospike.conf. Aerospike CE supports security — it is simply disabled
+          by default.
         </p>
       </div>
       <pre className="rounded bg-gray-100 px-4 py-3 text-left font-mono text-xs text-gray-700 dark:bg-gray-900 dark:text-gray-300">

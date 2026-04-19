@@ -48,9 +48,7 @@ export function WizardBasicStep({
           id="cluster-name"
           placeholder="my-aerospike"
           value={form.name}
-          onChange={(e) =>
-            updateForm({ name: e.target.value.toLowerCase() })
-          }
+          onChange={(e) => updateForm({ name: e.target.value.toLowerCase() })}
         />
         {nameError ? (
           <p className="text-xs text-red-600 dark:text-red-400">{nameError}</p>

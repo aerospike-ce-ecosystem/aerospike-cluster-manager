@@ -38,5 +38,11 @@ export default function ClusterAckoSubtabPage() {
     )
   }
 
-  return <ClusterDetailLayout namespace={match.namespace} name={match.name} hideBackButton />
+  return (
+    <ClusterDetailLayout
+      namespace={match.namespace}
+      name={match.name}
+      hideBackButton
+    />
+  )
 }

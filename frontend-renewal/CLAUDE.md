@@ -31,17 +31,17 @@ Non-goals:
 
 ## Stack
 
-| Layer | Renewal | Why |
-|---|---|---|
-| Framework | **Next 14.2** (App Router) | Pinned to match Tremor dashboard template; avoids React 19 breakage on Calendar / DatePicker / TabNavigation |
-| React | **18.2** | Same reason |
-| Styling | **Tailwind 3.4** | Tremor Raw components ship Tailwind 3 classnames; avoid the Tailwind 4 migration cost until Tremor updates |
-| Components | **Tremor Raw (MIT)** copy-pasted to `src/components/` | Licensed under MIT, `LICENSE.md` preserved in the directory |
-| Charts | recharts | As shipped by Tremor Raw |
-| Icons | `@remixicon/react` | Tremor's default icon set |
-| State | `zustand` | Matches frontend/'s choice |
-| Forms | `react-hook-form` NOT used. Plain `useState` + zod parse at submit. | Keeps dialogs simple |
-| Package manager | **npm** (with `--legacy-peer-deps`) | Template ships pnpm; we standardise on npm across the repo |
+| Layer           | Renewal                                                             | Why                                                                                                          |
+| --------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Framework       | **Next 14.2** (App Router)                                          | Pinned to match Tremor dashboard template; avoids React 19 breakage on Calendar / DatePicker / TabNavigation |
+| React           | **18.2**                                                            | Same reason                                                                                                  |
+| Styling         | **Tailwind 3.4**                                                    | Tremor Raw components ship Tailwind 3 classnames; avoid the Tailwind 4 migration cost until Tremor updates   |
+| Components      | **Tremor Raw (MIT)** copy-pasted to `src/components/`               | Licensed under MIT, `LICENSE.md` preserved in the directory                                                  |
+| Charts          | recharts                                                            | As shipped by Tremor Raw                                                                                     |
+| Icons           | `@remixicon/react`                                                  | Tremor's default icon set                                                                                    |
+| State           | `zustand`                                                           | Matches frontend/'s choice                                                                                   |
+| Forms           | `react-hook-form` NOT used. Plain `useState` + zod parse at submit. | Keeps dialogs simple                                                                                         |
+| Package manager | **npm** (with `--legacy-peer-deps`)                                 | Template ships pnpm; we standardise on npm across the repo                                                   |
 
 ## Commands
 
@@ -238,12 +238,12 @@ ACKO-specific surfaces that must live inside the `/clusters/[id]/...` tree
 
 Established in `frontend/` and replicated here:
 
-| Backend response | UI renders |
-|---|---|
-| 2xx | Normal state |
+| Backend response                               | UI renders                                                                          |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------- |
+| 2xx                                            | Normal state                                                                        |
 | 403 with `EE_MSG` ("Security is not enabled…") | Explanatory card with `security { }` config snippet + docs link. Tab stays visible. |
-| 503 (cluster unreachable) | Error banner + retry button. Do not hide page. |
-| 404 | Empty state for the resource. |
+| 503 (cluster unreachable)                      | Error banner + retry button. Do not hide page.                                      |
+| 404                                            | Empty state for the resource.                                                       |
 
 Use `ApiError.status` check after `listUsers` / `listRoles` / etc. to branch.
 

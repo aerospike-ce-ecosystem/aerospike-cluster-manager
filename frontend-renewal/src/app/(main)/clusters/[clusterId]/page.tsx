@@ -188,7 +188,8 @@ export default function ClusterOverview({ params }: PageProps) {
         description={
           cluster.data ? (
             <span className="font-mono text-xs">
-              {firstNode?.edition ?? "Aerospike"} · Build {firstNode?.build ?? "—"}
+              {firstNode?.edition ?? "Aerospike"} · Build{" "}
+              {firstNode?.build ?? "—"}
             </span>
           ) : cluster.isLoading ? (
             "Loading cluster info…"
@@ -204,7 +205,9 @@ export default function ClusterOverview({ params }: PageProps) {
             {cluster.data && <Badge variant="success">Connected</Badge>}
             <Button
               variant="secondary"
-              onClick={() => void cluster.refetch().then(() => void loadMetrics())}
+              onClick={() =>
+                void cluster.refetch().then(() => void loadMetrics())
+              }
               isLoading={cluster.isLoading}
             >
               <RiRefreshLine className="mr-2 size-4" aria-hidden="true" />
@@ -214,9 +217,7 @@ export default function ClusterOverview({ params }: PageProps) {
         }
       />
 
-      {cluster.error && (
-        <InlineAlert message={errorMessage(cluster.error)} />
-      )}
+      {cluster.error && <InlineAlert message={errorMessage(cluster.error)} />}
 
       {ackoInfo && (
         <AckoPanel info={ackoInfo} onToast={(m) => toast("info", m)} />

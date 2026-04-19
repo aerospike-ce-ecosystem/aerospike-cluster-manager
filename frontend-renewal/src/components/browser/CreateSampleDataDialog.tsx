@@ -179,8 +179,8 @@ export function CreateSampleDataDialog({
               htmlFor="create-indexes"
               className="cursor-pointer text-sm font-normal"
             >
-              Create secondary indexes (5 indexes on
-              int/str/double/bool/geojson bins)
+              Create secondary indexes (5 indexes on int/str/double/bool/geojson
+              bins)
             </Label>
           </div>
         </div>

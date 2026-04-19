@@ -6,10 +6,7 @@ import { Label } from "@/components/Label"
 
 import type { WizardStepProps } from "./types"
 
-export function WizardRollingUpdateStep({
-  form,
-  updateForm,
-}: WizardStepProps) {
+export function WizardRollingUpdateStep({ form, updateForm }: WizardStepProps) {
   const ru = form.rollingUpdate ?? {}
 
   return (

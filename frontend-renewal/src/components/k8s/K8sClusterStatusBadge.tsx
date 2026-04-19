@@ -16,7 +16,10 @@ type Phase =
 
 const phaseConfig: Record<
   string,
-  { label: string; variant: "default" | "neutral" | "success" | "warning" | "error" }
+  {
+    label: string
+    variant: "default" | "neutral" | "success" | "warning" | "error"
+  }
 > = {
   InProgress: { label: "In Progress", variant: "warning" },
   Completed: { label: "Running", variant: "success" },

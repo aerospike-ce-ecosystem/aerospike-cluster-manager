@@ -29,8 +29,13 @@ interface K8sTemplateState {
 
   fetchTemplates: () => Promise<void>
   fetchTemplate: (name: string) => Promise<void>
-  createTemplate: (data: CreateK8sTemplateRequest) => Promise<K8sTemplateSummary>
-  updateTemplate: (name: string, data: UpdateK8sTemplateRequest) => Promise<void>
+  createTemplate: (
+    data: CreateK8sTemplateRequest,
+  ) => Promise<K8sTemplateSummary>
+  updateTemplate: (
+    name: string,
+    data: UpdateK8sTemplateRequest,
+  ) => Promise<void>
   deleteTemplate: (name: string) => Promise<void>
 }
 

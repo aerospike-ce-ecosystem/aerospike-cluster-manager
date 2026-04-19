@@ -9,11 +9,11 @@
 
 export interface SSEEvent<T = unknown> {
   /** Event type name (from `event:` field). Defaults to "message". */
-  event: string;
+  event: string
   /** Parsed JSON payload from the `data:` field. */
-  data: T;
+  data: T
   /** Event id from the `id:` field, if present. */
-  id?: string;
+  id?: string
 }
 
-export type SSEHandler<T = unknown> = (event: SSEEvent<T>) => void;
+export type SSEHandler<T = unknown> = (event: SSEEvent<T>) => void

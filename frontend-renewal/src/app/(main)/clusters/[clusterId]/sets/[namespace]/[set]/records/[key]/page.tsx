@@ -26,11 +26,7 @@ import {
 import { ConfirmDialog } from "@/components/common/ConfirmDialog"
 import { InlineAlert } from "@/components/common/InlineAlert"
 import { PageHeader } from "@/components/common/PageHeader"
-import {
-  deleteRecord,
-  getRecordDetail,
-  putRecord,
-} from "@/lib/api/records"
+import { deleteRecord, getRecordDetail, putRecord } from "@/lib/api/records"
 import type {
   AerospikeRecord,
   BinValue,

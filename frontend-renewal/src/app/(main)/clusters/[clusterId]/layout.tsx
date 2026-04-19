@@ -13,11 +13,16 @@ export default function ClusterLayout({ children, params }: LayoutProps) {
         aria-label="Breadcrumb"
         className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500"
       >
-        <Link href="/clusters" className="hover:text-gray-900 dark:hover:text-gray-50">
+        <Link
+          href="/clusters"
+          className="hover:text-gray-900 dark:hover:text-gray-50"
+        >
           Clusters
         </Link>
         <span aria-hidden="true">/</span>
-        <span className="font-mono text-gray-900 dark:text-gray-50">{params.clusterId}</span>
+        <span className="font-mono text-gray-900 dark:text-gray-50">
+          {params.clusterId}
+        </span>
       </nav>
       <ClusterTabs clusterId={params.clusterId} />
       {children}

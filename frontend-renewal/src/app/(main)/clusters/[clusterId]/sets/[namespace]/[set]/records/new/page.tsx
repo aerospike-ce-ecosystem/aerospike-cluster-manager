@@ -145,11 +145,7 @@ export default function NewRecordPage({ params }: PageProps) {
                 Back
               </Link>
             </Button>
-            <Button
-              onClick={handleSave}
-              isLoading={saving}
-              className="gap-1.5"
-            >
+            <Button onClick={handleSave} isLoading={saving} className="gap-1.5">
               <RiSaveLine aria-hidden className="size-4" />
               Create
             </Button>

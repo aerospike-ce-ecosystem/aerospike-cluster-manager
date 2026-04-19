@@ -18,11 +18,7 @@ interface RecordViewDialogProps {
   onClose: () => void
 }
 
-export function RecordDetailSections({
-  record,
-}: {
-  record: AerospikeRecord
-}) {
+export function RecordDetailSections({ record }: { record: AerospikeRecord }) {
   const binEntries = Object.entries(record.bins)
 
   return (
@@ -61,11 +57,7 @@ export function RecordDetailSections({
   )
 }
 
-export function RecordDetailContent({
-  record,
-}: {
-  record: AerospikeRecord
-}) {
+export function RecordDetailContent({ record }: { record: AerospikeRecord }) {
   return (
     <div className="max-h-[calc(80vh-60px)] overflow-auto">
       <RecordDetailSections record={record} />
@@ -77,7 +69,7 @@ export function RecordViewDialog({ record, onClose }: RecordViewDialogProps) {
   return (
     <Dialog open={!!record} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[80vh] gap-0 overflow-hidden p-0 sm:max-w-[620px]">
-        <DialogHeader className="space-y-0 border-b border-gray-200 px-5 pt-5 pb-3 dark:border-gray-800">
+        <DialogHeader className="space-y-0 border-b border-gray-200 px-5 pb-3 pt-5 dark:border-gray-800">
           <div className="flex items-center justify-between">
             <DialogTitle className="font-mono text-sm font-medium">
               Record Detail

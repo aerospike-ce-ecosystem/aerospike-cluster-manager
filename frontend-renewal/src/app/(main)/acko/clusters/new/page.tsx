@@ -86,7 +86,9 @@ export default function CreateAckoClusterPage() {
           setK8sNamespaces(ns)
           setForm((prev) => ({
             ...prev,
-            namespace: prev.namespace || (ns.includes("default") ? "default" : ns[0] ?? ""),
+            namespace:
+              prev.namespace ||
+              (ns.includes("default") ? "default" : (ns[0] ?? "")),
           }))
         })
         .catch((err) => {
@@ -105,7 +107,9 @@ export default function CreateAckoClusterPage() {
         }),
     ]).finally(() => {
       if (cancelled) return
-      setFetchError(errors.length > 0 ? `${errors.join(". ")}. Using defaults.` : null)
+      setFetchError(
+        errors.length > 0 ? `${errors.join(". ")}. Using defaults.` : null,
+      )
       setLoadingOptions(false)
     })
     return () => {

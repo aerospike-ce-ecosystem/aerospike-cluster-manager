@@ -73,10 +73,7 @@ export function FilterColumnPicker({
   return (
     <div className="w-[240px]">
       <div className="flex items-center gap-2 border-b border-gray-200 px-3 py-2 dark:border-gray-800">
-        <RiSearchLine
-          aria-hidden
-          className="size-3.5 shrink-0 text-gray-500"
-        />
+        <RiSearchLine aria-hidden className="size-3.5 shrink-0 text-gray-500" />
         <input
           ref={inputRef}
           type="text"
@@ -123,10 +120,7 @@ export function FilterColumnPicker({
                   onClose()
                 }}
               >
-                <Icon
-                  aria-hidden
-                  className={cx("size-3.5 shrink-0", color)}
-                />
+                <Icon aria-hidden className={cx("size-3.5 shrink-0", color)} />
                 <span className="truncate font-mono">{bin.name}</span>
                 <span className="ml-auto text-[10px] text-gray-400 dark:text-gray-600">
                   {bin.type}

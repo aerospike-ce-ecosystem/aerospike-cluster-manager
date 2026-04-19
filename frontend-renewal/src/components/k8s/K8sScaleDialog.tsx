@@ -61,8 +61,8 @@ export function K8sScaleDialog({
         <DialogHeader>
           <DialogTitle>Scale cluster</DialogTitle>
           <DialogDescription className="mt-1 text-sm">
-            Change the number of nodes for &quot;{clusterName}&quot;. Current size:{" "}
-            {currentSize}.
+            Change the number of nodes for &quot;{clusterName}&quot;. Current
+            size: {currentSize}.
           </DialogDescription>
         </DialogHeader>
 
@@ -90,7 +90,8 @@ export function K8sScaleDialog({
           />
           {size < currentSize && (
             <p className="text-xs text-amber-600 dark:text-amber-400">
-              Scaling down will remove nodes. Data may be lost if not replicated.
+              Scaling down will remove nodes. Data may be lost if not
+              replicated.
             </p>
           )}
           <InlineAlert message={error} />

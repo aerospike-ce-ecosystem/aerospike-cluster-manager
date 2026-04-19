@@ -56,7 +56,7 @@ const AccordionContent = React.forwardRef<
   <AccordionPrimitives.Content
     ref={forwardedRef}
     className={cx(
-      "transform-gpu data-[state=closed]:animate-accordionClose data-[state=open]:animate-accordionOpen",
+      "data-[state=closed]:animate-accordionClose data-[state=open]:animate-accordionOpen transform-gpu",
     )}
     {...props}
   >

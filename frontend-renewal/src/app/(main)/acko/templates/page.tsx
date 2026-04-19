@@ -52,11 +52,16 @@ export default function AckoTemplatesPage() {
             Cluster templates
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-500">
-            AerospikeClusterTemplate CRs — reusable shapes for creating clusters via ACKO.
+            AerospikeClusterTemplate CRs — reusable shapes for creating clusters
+            via ACKO.
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => void load()} isLoading={loading}>
+          <Button
+            variant="secondary"
+            onClick={() => void load()}
+            isLoading={loading}
+          >
             Refresh
           </Button>
           <Button variant="primary" asChild>
@@ -81,7 +86,9 @@ export default function AckoTemplatesPage() {
                 <TableHeaderCell>Image</TableHeaderCell>
                 <TableHeaderCell>Used by</TableHeaderCell>
                 <TableHeaderCell>Age</TableHeaderCell>
-                <TableHeaderCell className="text-right">Actions</TableHeaderCell>
+                <TableHeaderCell className="text-right">
+                  Actions
+                </TableHeaderCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -97,7 +104,10 @@ export default function AckoTemplatesPage() {
                 ))
               ) : !templates || templates.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center text-sm text-gray-500">
+                  <TableCell
+                    colSpan={6}
+                    className="py-8 text-center text-sm text-gray-500"
+                  >
                     No AerospikeClusterTemplates defined.
                   </TableCell>
                 </TableRow>
@@ -120,7 +130,9 @@ export default function AckoTemplatesPage() {
                     <TableCell className="text-right tabular-nums">
                       {t.size ?? "—"}
                     </TableCell>
-                    <TableCell className="font-mono text-xs">{t.image ?? "—"}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {t.image ?? "—"}
+                    </TableCell>
                     <TableCell>
                       {t.usedBy.length === 0 ? (
                         <span className="text-gray-500">—</span>
@@ -138,8 +150,14 @@ export default function AckoTemplatesPage() {
                       {t.age ?? "—"}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" asChild className="h-7 px-2 text-xs">
-                        <Link href={ackoSections.template(t.name)}>Details</Link>
+                      <Button
+                        variant="ghost"
+                        asChild
+                        className="h-7 px-2 text-xs"
+                      >
+                        <Link href={ackoSections.template(t.name)}>
+                          Details
+                        </Link>
                       </Button>
                     </TableCell>
                   </TableRow>

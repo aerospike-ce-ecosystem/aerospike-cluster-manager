@@ -114,7 +114,9 @@ export function Sidebar() {
   )
 
   const isActive = (href: string, exact = false) =>
-    exact ? pathname === href : pathname === href || pathname.startsWith(href + "/")
+    exact
+      ? pathname === href
+      : pathname === href || pathname.startsWith(href + "/")
 
   const expandedCluster = clusterList.find((c) =>
     isActive(`/clusters/${c.id}`),
@@ -129,7 +131,10 @@ export function Sidebar() {
         <aside className="flex grow flex-col gap-y-4 overflow-y-auto border-r border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-950">
           <BrandCard />
 
-          <nav aria-label="core navigation" className="flex flex-1 flex-col gap-y-1">
+          <nav
+            aria-label="core navigation"
+            className="flex flex-1 flex-col gap-y-1"
+          >
             <SectionLabel>Clusters</SectionLabel>
             <Accordion
               type="single"
@@ -183,7 +188,10 @@ export function Sidebar() {
                 focusRing,
               )}
             >
-              <RiCodeSSlashLine className="size-4 shrink-0" aria-hidden="true" />
+              <RiCodeSSlashLine
+                className="size-4 shrink-0"
+                aria-hidden="true"
+              />
               Cluster templates
             </Link>
           </nav>
@@ -239,7 +247,9 @@ function BrandCard() {
         <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-50">
           Aerospike
         </p>
-        <p className="truncate text-xs text-gray-500 dark:text-gray-400">Cluster Manager</p>
+        <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+          Cluster Manager
+        </p>
       </div>
     </Link>
   )
@@ -277,7 +287,9 @@ function ClusterNode({
 }) {
   const clusterActive = isActive(`/clusters/${cluster.id}`)
   const expandedNamespaces = cluster.namespaces
-    .filter((ns) => pathname.includes(`/clusters/${cluster.id}/sets/${ns.name}`))
+    .filter((ns) =>
+      pathname.includes(`/clusters/${cluster.id}/sets/${ns.name}`),
+    )
     .map((ns) => ns.name)
 
   return (
@@ -304,7 +316,7 @@ function ClusterNode({
       <AccordionContent className="pt-1">
         <ul className="flex flex-col gap-0.5">
           {cluster.namespaces.length === 0 && (
-            <li className="pl-5 py-1 text-xs italic text-gray-400 dark:text-gray-600">
+            <li className="py-1 pl-5 text-xs italic text-gray-400 dark:text-gray-600">
               no namespaces
             </li>
           )}
@@ -334,7 +346,9 @@ function NamespaceNode({
   pathname: string
   defaultOpen?: boolean
 }) {
-  const nsActive = pathname.includes(`/clusters/${clusterId}/sets/${namespace.name}`)
+  const nsActive = pathname.includes(
+    `/clusters/${clusterId}/sets/${namespace.name}`,
+  )
 
   return (
     <li>
@@ -360,7 +374,8 @@ function NamespaceNode({
               <span className="font-mono">{namespace.name}</span>
             </span>
             <span className="ml-2 shrink-0 text-[10px] text-gray-400 dark:text-gray-600">
-              {namespace.sets.length} {namespace.sets.length === 1 ? "set" : "sets"}
+              {namespace.sets.length}{" "}
+              {namespace.sets.length === 1 ? "set" : "sets"}
             </span>
           </AccordionTrigger>
           <AccordionContent className="pt-0.5">
@@ -372,7 +387,8 @@ function NamespaceNode({
               )}
               {namespace.sets.map((s) => {
                 const href = clusterSections.set(clusterId, namespace.name, s)
-                const active = pathname === href || pathname.startsWith(href + "/")
+                const active =
+                  pathname === href || pathname.startsWith(href + "/")
                 return (
                   <li key={s}>
                     <Link

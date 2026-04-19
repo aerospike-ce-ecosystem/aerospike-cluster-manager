@@ -97,9 +97,7 @@ export default function RecordBrowserPage({ params }: PageProps) {
   const [batchDialogOpen, setBatchDialogOpen] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editorMode, setEditorMode] = useState<"duplicate">("duplicate")
-  const [deleteTarget, setDeleteTarget] = useState<AerospikeRecord | null>(
-    null,
-  )
+  const [deleteTarget, setDeleteTarget] = useState<AerospikeRecord | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -375,10 +373,7 @@ export default function RecordBrowserPage({ params }: PageProps) {
     const host = currentConnection?.hosts?.[0] ?? "127.0.0.1"
     const port = currentConnection?.port ?? 3000
     const keysStr = selected
-      .map(
-        (r) =>
-          `        ("${decodedNs}", "${decodedSet}", "${r.key.pk}")`,
-      )
+      .map((r) => `        ("${decodedNs}", "${decodedSet}", "${r.key.pk}")`)
       .join(",\n")
 
     return `import asyncio
@@ -506,9 +501,7 @@ asyncio.run(main())`
               )}
               aria-label={`Select ${pkStr}`}
             >
-              {pks.has(pkStr) && (
-                <RiCheckLine aria-hidden className="size-3" />
-              )}
+              {pks.has(pkStr) && <RiCheckLine aria-hidden className="size-3" />}
             </button>
           )
         },
@@ -645,7 +638,7 @@ asyncio.run(main())`
   return (
     <div className="flex min-h-0 flex-col gap-0">
       {/* Breadcrumb + counts */}
-      <div className="border-b border-gray-200 px-3 py-2.5 dark:border-gray-800 sm:px-6">
+      <div className="border-b border-gray-200 px-3 py-2.5 sm:px-6 dark:border-gray-800">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2 sm:gap-4">
             <nav className="flex min-w-0 items-center gap-0.5 font-mono text-[13px]">
@@ -725,7 +718,7 @@ asyncio.run(main())`
 
       {/* Export bar */}
       {filterStore.conditions.length > 0 && records.length > 0 && (
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-gray-200 px-3 py-2 dark:border-gray-800 sm:px-6">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-gray-200 px-3 py-2 sm:px-6 dark:border-gray-800">
           <span className="text-xs text-gray-500 dark:text-gray-400">
             Export {formatNumber(records.length)} visible record
             {records.length === 1 ? "" : "s"}
@@ -754,7 +747,7 @@ asyncio.run(main())`
       )}
 
       {/* Table */}
-      <div className="relative mt-3 flex-1 min-w-0">
+      <div className="relative mt-3 min-w-0 flex-1">
         <DataTable
           data={records}
           columns={tableColumns}
@@ -818,7 +811,7 @@ asyncio.run(main())`
 
       {/* Bottom status bar */}
       {(records.length > 0 || total > 0) && (
-        <div className="flex w-full shrink-0 items-center border-t border-gray-200 bg-gray-50 px-4 py-1.5 dark:border-gray-800 dark:bg-gray-900/40 sm:px-6">
+        <div className="flex w-full shrink-0 items-center border-t border-gray-200 bg-gray-50 px-4 py-1.5 sm:px-6 dark:border-gray-800 dark:bg-gray-900/40">
           <div className="flex items-center gap-2">
             {executionTimeMs > 0 && (
               <div className="flex items-center gap-1 rounded bg-emerald-500/15 px-1.5 py-0.5 text-emerald-700 dark:text-emerald-400">

@@ -1,8 +1,8 @@
-"use client";
+"use client"
 
-import React from "react";
+import React from "react"
 
-import { Button } from "@/components/Button";
+import { Button } from "@/components/Button"
 import {
   Dialog,
   DialogContent,
@@ -10,23 +10,23 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/Dialog";
-import { Input } from "@/components/Input";
-import { Label } from "@/components/Label";
-import { ApiError } from "@/lib/api/client";
-import { uploadUdf } from "@/lib/api/udfs";
+} from "@/components/Dialog"
+import { Input } from "@/components/Input"
+import { Label } from "@/components/Label"
+import { ApiError } from "@/lib/api/client"
+import { uploadUdf } from "@/lib/api/udfs"
 
 interface RegisterUdfDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSuccess?: () => void;
-  connId: string;
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onSuccess?: () => void
+  connId: string
 }
 
 const INITIAL_STATE = {
   filename: "",
   content: "",
-};
+}
 
 export function RegisterUdfDialog({
   open,
@@ -34,58 +34,58 @@ export function RegisterUdfDialog({
   onSuccess,
   connId,
 }: RegisterUdfDialogProps) {
-  const [form, setForm] = React.useState(INITIAL_STATE);
-  const [error, setError] = React.useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [form, setForm] = React.useState(INITIAL_STATE)
+  const [error, setError] = React.useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = React.useState(false)
 
   const resetForm = () => {
-    setForm(INITIAL_STATE);
-    setError(null);
-  };
+    setForm(INITIAL_STATE)
+    setError(null)
+  }
 
   const handleOpenChange = (next: boolean) => {
-    if (!next) resetForm();
-    onOpenChange(next);
-  };
+    if (!next) resetForm()
+    onOpenChange(next)
+  }
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setError(null);
+    event.preventDefault()
+    setError(null)
 
-    const filename = form.filename.trim();
-    const content = form.content;
+    const filename = form.filename.trim()
+    const content = form.content
 
     if (!filename) {
-      setError("Filename is required.");
-      return;
+      setError("Filename is required.")
+      return
     }
     if (!filename.toLowerCase().endsWith(".lua")) {
-      setError("Filename must end with .lua.");
-      return;
+      setError("Filename must end with .lua.")
+      return
     }
     if (!content.trim()) {
-      setError("UDF content cannot be empty.");
-      return;
+      setError("UDF content cannot be empty.")
+      return
     }
 
-    setIsSubmitting(true);
+    setIsSubmitting(true)
     try {
-      await uploadUdf(connId, { filename, content });
-      resetForm();
-      onSuccess?.();
-      onOpenChange(false);
+      await uploadUdf(connId, { filename, content })
+      resetForm()
+      onSuccess?.()
+      onOpenChange(false)
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.detail || err.message);
+        setError(err.detail || err.message)
       } else if (err instanceof Error) {
-        setError(err.message);
+        setError(err.message)
       } else {
-        setError("Failed to register UDF.");
+        setError("Failed to register UDF.")
       }
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false)
     }
-  };
+  }
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -124,7 +124,7 @@ export function RegisterUdfDialog({
               onChange={(e) => setForm({ ...form, content: e.target.value })}
               rows={6}
               spellCheck={false}
-              className="block w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 font-mono text-sm text-gray-900 shadow-sm outline-none transition placeholder-gray-400 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-50 dark:placeholder-gray-500 dark:focus:ring-indigo-400/20"
+              className="block w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 font-mono text-sm text-gray-900 placeholder-gray-400 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-50 dark:placeholder-gray-500 dark:focus:ring-indigo-400/20"
               placeholder={`function example_fn(rec)\n  return rec.bin_name\nend`}
               required
             />
@@ -139,14 +139,18 @@ export function RegisterUdfDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" isLoading={isSubmitting} loadingText="Registering...">
+            <Button
+              type="submit"
+              isLoading={isSubmitting}
+              loadingText="Registering..."
+            >
               Register
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
-  );
+  )
 }
 
-export default RegisterUdfDialog;
+export default RegisterUdfDialog

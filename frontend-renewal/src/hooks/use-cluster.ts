@@ -3,67 +3,69 @@
  * Re-fetches whenever connId changes. Pass `null` / `undefined` to skip.
  */
 
-"use client";
+"use client"
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react"
 
-import { getCluster } from "@/lib/api/clusters";
-import type { ClusterInfo } from "@/lib/types/cluster";
+import { getCluster } from "@/lib/api/clusters"
+import type { ClusterInfo } from "@/lib/types/cluster"
 
 export interface UseClusterResult {
-  data: ClusterInfo | null;
-  error: Error | null;
-  isLoading: boolean;
-  refetch: () => Promise<void>;
+  data: ClusterInfo | null
+  error: Error | null
+  isLoading: boolean
+  refetch: () => Promise<void>
 }
 
-export function useCluster(connId: string | null | undefined): UseClusterResult {
-  const [data, setData] = useState<ClusterInfo | null>(null);
-  const [error, setError] = useState<Error | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(!!connId);
+export function useCluster(
+  connId: string | null | undefined,
+): UseClusterResult {
+  const [data, setData] = useState<ClusterInfo | null>(null)
+  const [error, setError] = useState<Error | null>(null)
+  const [isLoading, setIsLoading] = useState<boolean>(!!connId)
 
   const refetch = useCallback(async () => {
-    if (!connId) return;
-    setIsLoading(true);
-    setError(null);
+    if (!connId) return
+    setIsLoading(true)
+    setError(null)
     try {
-      const result = await getCluster(connId);
-      setData(result);
+      const result = await getCluster(connId)
+      setData(result)
     } catch (err) {
-      setError(err instanceof Error ? err : new Error(String(err)));
+      setError(err instanceof Error ? err : new Error(String(err)))
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  }, [connId]);
+  }, [connId])
 
   useEffect(() => {
     if (!connId) {
-      setData(null);
-      setError(null);
-      setIsLoading(false);
-      return;
+      setData(null)
+      setError(null)
+      setIsLoading(false)
+      return
     }
-    let cancelled = false;
-    setIsLoading(true);
-    (async () => {
+    let cancelled = false
+    setIsLoading(true)
+    ;(async () => {
       try {
-        const result = await getCluster(connId);
+        const result = await getCluster(connId)
         if (!cancelled) {
-          setData(result);
-          setError(null);
+          setData(result)
+          setError(null)
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err : new Error(String(err)));
+          setError(err instanceof Error ? err : new Error(String(err)))
         }
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) setIsLoading(false)
       }
-    })();
+    })()
     return () => {
-      cancelled = true;
-    };
-  }, [connId]);
+      cancelled = true
+    }
+  }, [connId])
 
-  return { data, error, isLoading, refetch };
+  return { data, error, isLoading, refetch }
 }

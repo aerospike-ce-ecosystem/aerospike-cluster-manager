@@ -140,7 +140,7 @@ export function QueryToolbar({
   const showBadge = viewMode !== "browse" && store.hasExecuted
 
   return (
-    <div className="space-y-0 border-b border-gray-200 bg-white/60 px-3 py-2 dark:border-gray-800 dark:bg-gray-950/40 sm:px-6">
+    <div className="space-y-0 border-b border-gray-200 bg-white/60 px-3 py-2 sm:px-6 dark:border-gray-800 dark:bg-gray-950/40">
       <div className="flex flex-wrap items-center gap-2">
         <RiEqualizerLine
           aria-hidden
@@ -167,7 +167,7 @@ export function QueryToolbar({
               value={store.primaryKey}
               onChange={(e) => store.setPrimaryKey(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleExecute()}
-              className="h-8 max-w-[320px] min-w-[160px] flex-1 text-xs"
+              className="h-8 min-w-[160px] max-w-[320px] flex-1 text-xs"
             />
             <Button
               onClick={handleExecute}
@@ -191,7 +191,9 @@ export function QueryToolbar({
             />
             <select
               value={predOp}
-              onChange={(e) => setPredOp(e.target.value as QueryPredicateOperator)}
+              onChange={(e) =>
+                setPredOp(e.target.value as QueryPredicateOperator)
+              }
               className="block h-8 w-[130px] appearance-none rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-900 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-50 dark:focus:border-indigo-700 dark:focus:ring-indigo-700/30"
             >
               {OPERATORS.map((op) => (
@@ -327,7 +329,10 @@ export function QueryToolbar({
         </div>
       )}
 
-      <InlineAlert message={store.error} className={store.error ? "mt-2" : ""} />
+      <InlineAlert
+        message={store.error}
+        className={store.error ? "mt-2" : ""}
+      />
     </div>
   )
 }

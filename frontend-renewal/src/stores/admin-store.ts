@@ -41,7 +41,11 @@ interface AdminState {
   fetchUsers: (connId: string) => Promise<void>
   fetchRoles: (connId: string) => Promise<void>
   createUser: (connId: string, data: CreateUserRequest) => Promise<void>
-  changePassword: (connId: string, username: string, password: string) => Promise<void>
+  changePassword: (
+    connId: string,
+    username: string,
+    password: string,
+  ) => Promise<void>
   deleteUser: (connId: string, username: string) => Promise<void>
   createRole: (connId: string, data: CreateRoleRequest) => Promise<void>
   deleteRole: (connId: string, name: string) => Promise<void>
@@ -69,7 +73,12 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
       set({ users, usersLoading: false, isSecurityDisabled: false })
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
-        set({ isSecurityDisabled: true, usersLoading: false, error: null, users: [] })
+        set({
+          isSecurityDisabled: true,
+          usersLoading: false,
+          error: null,
+          users: [],
+        })
         return
       }
       set({ error: errorMessage(err), usersLoading: false })
@@ -83,7 +92,12 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
       set({ roles, rolesLoading: false, isSecurityDisabled: false })
     } catch (err) {
       if (err instanceof ApiError && err.status === 403) {
-        set({ isSecurityDisabled: true, rolesLoading: false, error: null, roles: [] })
+        set({
+          isSecurityDisabled: true,
+          rolesLoading: false,
+          error: null,
+          roles: [],
+        })
         return
       }
       set({ error: errorMessage(err), rolesLoading: false })

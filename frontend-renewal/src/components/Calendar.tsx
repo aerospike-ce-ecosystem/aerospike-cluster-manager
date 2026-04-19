@@ -23,8 +23,7 @@ import {
 
 import { cx, focusRing } from "@/lib/utils"
 
-interface NavigationButtonProps
-  extends React.HTMLAttributes<HTMLButtonElement> {
+interface NavigationButtonProps extends React.HTMLAttributes<HTMLButtonElement> {
   onClick: () => void
   icon: React.ElementType
   disabled?: boolean
