@@ -1,5 +1,6 @@
 "use client"
 
+import { ackoSections } from "@/app/siteConfig"
 import { Badge } from "@/components/Badge"
 import { Button } from "@/components/Button"
 import { Card } from "@/components/Card"
@@ -14,6 +15,7 @@ import {
 } from "@/components/Table"
 import { listK8sTemplates } from "@/lib/api/k8s"
 import type { K8sTemplateSummary } from "@/lib/types/k8s"
+import Link from "next/link"
 import { useCallback, useEffect, useState } from "react"
 
 export default function AckoTemplatesPage() {
@@ -57,7 +59,9 @@ export default function AckoTemplatesPage() {
           <Button variant="secondary" onClick={() => void load()} isLoading={loading}>
             Refresh
           </Button>
-          <Button variant="primary">New template</Button>
+          <Button variant="primary" asChild>
+            <Link href={ackoSections.templateNew()}>New template</Link>
+          </Button>
         </div>
       </header>
 
@@ -101,9 +105,12 @@ export default function AckoTemplatesPage() {
                 templates.map((t) => (
                   <TableRow key={t.name}>
                     <TableCell>
-                      <span className="font-mono font-semibold text-gray-900 dark:text-gray-50">
+                      <Link
+                        href={ackoSections.template(t.name)}
+                        className="font-mono font-semibold text-gray-900 hover:text-indigo-600 dark:text-gray-50 dark:hover:text-indigo-400"
+                      >
                         {t.name}
-                      </span>
+                      </Link>
                       {t.description && (
                         <p className="truncate text-xs text-gray-500 dark:text-gray-400">
                           {t.description}
@@ -131,8 +138,8 @@ export default function AckoTemplatesPage() {
                       {t.age ?? "—"}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" className="h-7 px-2 text-xs">
-                        Edit
+                      <Button variant="ghost" asChild className="h-7 px-2 text-xs">
+                        <Link href={ackoSections.template(t.name)}>Details</Link>
                       </Button>
                     </TableCell>
                   </TableRow>

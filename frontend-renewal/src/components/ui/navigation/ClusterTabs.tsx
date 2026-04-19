@@ -2,12 +2,14 @@
 
 import { TabNavigation, TabNavigationLink } from "@/components/TabNavigation"
 import { clusterSections } from "@/app/siteConfig"
+import { useK8sClusters } from "@/hooks/use-k8s-clusters"
 import {
   RiCodeSSlashLine,
   RiDatabase2Line,
   RiFolder3Line,
   RiLayoutGridLine,
   RiShieldUserLine,
+  RiStackLine,
 } from "@remixicon/react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -16,6 +18,8 @@ type Props = { clusterId: string }
 
 export function ClusterTabs({ clusterId }: Props) {
   const pathname = usePathname()
+  const { data } = useK8sClusters()
+  const hasAcko = (data?.items ?? []).some((c) => c.connectionId === clusterId)
 
   const tabs = [
     {
@@ -44,6 +48,16 @@ export function ClusterTabs({ clusterId }: Props) {
       label: "UDFs",
       icon: RiCodeSSlashLine,
     },
+    // ACKO tab appears only when a matching AerospikeCluster CR exists.
+    ...(hasAcko
+      ? [
+          {
+            href: clusterSections.acko(clusterId),
+            label: "ACKO",
+            icon: RiStackLine,
+          },
+        ]
+      : []),
   ]
 
   const isActive = (href: string, exact?: boolean) =>
