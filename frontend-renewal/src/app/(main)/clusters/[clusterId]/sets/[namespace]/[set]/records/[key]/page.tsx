@@ -1,113 +1,333 @@
-import { Badge } from "@/components/Badge"
-import { Button } from "@/components/Button"
-import { Card } from "@/components/Card"
-import { clusterSections } from "@/app/siteConfig"
+"use client"
+
+import {
+  RiArrowLeftLine,
+  RiDeleteBin2Line,
+  RiPencilLine,
+  RiSaveLine,
+} from "@remixicon/react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useCallback, useEffect, useMemo, useState } from "react"
+
+import { clusterSections } from "@/app/siteConfig"
+import { Button } from "@/components/Button"
+import {
+  RecordEditorFields,
+  type BinEntry,
+} from "@/components/browser/RecordEditorDialog"
+import { RecordDetailSections } from "@/components/browser/RecordViewDialog"
+import {
+  buildBinEntriesFromRecord,
+  createEmptyBinEntry,
+  getErrorMessage,
+  parseBinValue,
+} from "@/components/browser/_utils"
+import { ConfirmDialog } from "@/components/common/ConfirmDialog"
+import { InlineAlert } from "@/components/common/InlineAlert"
+import { PageHeader } from "@/components/common/PageHeader"
+import {
+  deleteRecord,
+  getRecordDetail,
+  putRecord,
+} from "@/lib/api/records"
+import type {
+  AerospikeRecord,
+  BinValue,
+  RecordWriteRequest,
+} from "@/lib/types/record"
+import { useToastStore } from "@/stores/toast-store"
 
 type PageProps = {
-  params: { clusterId: string; namespace: string; set: string; key: string }
+  params: {
+    clusterId: string
+    namespace: string
+    set: string
+    key: string
+  }
+  searchParams: { intent?: string }
 }
 
-// Mirrors GET /api/connections/{connId}/records/{ns}/{set}/{key}
-type Bin = { name: string; type: string; value: string }
+type PageMode = "view" | "edit"
 
-const bins: Bin[] = [
-  { name: "email", type: "string", value: "alice@example.com" },
-  { name: "age", type: "integer", value: "29" },
-  { name: "is_active", type: "boolean", value: "true" },
-  { name: "tags", type: "list", value: '["early-access","beta"]' },
-  { name: "profile", type: "map", value: '{"plan":"pro","seats":5}' },
-]
+export default function RecordDetailPage({ params, searchParams }: PageProps) {
+  const { clusterId, namespace, set, key } = params
+  const { intent } = searchParams
+  const decodedNs = decodeURIComponent(namespace)
+  const decodedSet = decodeURIComponent(set)
+  const pk = decodeURIComponent(key)
 
-const meta = { generation: 3, ttl: 2_592_000, lastUpdate: "2026-04-17T02:12:19Z" }
+  const router = useRouter()
+  const initialMode: PageMode = intent === "edit" ? "edit" : "view"
 
-export default function RecordDetailPage({ params }: PageProps) {
-  const pk = decodeURIComponent(params.key)
+  const [record, setRecord] = useState<AerospikeRecord | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [mode, setMode] = useState<PageMode>(initialMode)
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+
+  const [editorPK, setEditorPK] = useState(pk)
+  const [editorTTL, setEditorTTL] = useState("0")
+  const [editorBins, setEditorBins] = useState<BinEntry[]>([
+    createEmptyBinEntry(),
+  ])
+  const [useCodeEditor, setUseCodeEditor] = useState<Record<string, boolean>>(
+    {},
+  )
+
+  const resetEditorFromRecord = useCallback(
+    (nextRecord: AerospikeRecord) => {
+      const nextBins = buildBinEntriesFromRecord(nextRecord)
+      setRecord(nextRecord)
+      setEditorPK(nextRecord.key.pk ?? pk)
+      setEditorTTL(String(nextRecord.meta.ttl))
+      setEditorBins(nextBins.length > 0 ? nextBins : [createEmptyBinEntry()])
+      setUseCodeEditor({})
+    },
+    [pk],
+  )
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    getRecordDetail(clusterId, {
+      ns: decodedNs,
+      set: decodedSet,
+      pk,
+    })
+      .then((next) => {
+        if (cancelled) return
+        resetEditorFromRecord(next)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setError(getErrorMessage(err))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [clusterId, decodedNs, decodedSet, pk, resetEditorFromRecord])
+
+  const addBin = useCallback(() => {
+    setEditorBins((prev) => [...prev, createEmptyBinEntry()])
+  }, [])
+
+  const removeBin = useCallback((id: string) => {
+    setEditorBins((prev) => prev.filter((bin) => bin.id !== id))
+  }, [])
+
+  const updateBin = useCallback(
+    (id: string, field: keyof BinEntry, value: string) => {
+      setEditorBins((prev) =>
+        prev.map((bin) => (bin.id === id ? { ...bin, [field]: value } : bin)),
+      )
+    },
+    [],
+  )
+
+  const backHref = clusterSections.set(clusterId, decodedNs, decodedSet)
+
+  const handleSave = useCallback(async () => {
+    if (!editorPK.trim()) {
+      useToastStore.getState().addToast("error", "Primary key is required")
+      return
+    }
+    setSaving(true)
+    try {
+      const binMap: Record<string, BinValue> = {}
+      for (const bin of editorBins) {
+        if (bin.name.trim()) {
+          binMap[bin.name.trim()] = parseBinValue(bin.value, bin.type)
+        }
+      }
+      const payload: RecordWriteRequest = {
+        key: { namespace: decodedNs, set: decodedSet, pk: editorPK.trim() },
+        bins: binMap,
+        ttl: Number.parseInt(editorTTL, 10) || 0,
+      }
+      const updated = await putRecord(clusterId, payload)
+      useToastStore.getState().addToast("success", "Record updated")
+      resetEditorFromRecord(updated)
+      setMode("view")
+    } catch (err) {
+      useToastStore.getState().addToast("error", getErrorMessage(err))
+    } finally {
+      setSaving(false)
+    }
+  }, [
+    clusterId,
+    decodedNs,
+    decodedSet,
+    editorBins,
+    editorPK,
+    editorTTL,
+    resetEditorFromRecord,
+  ])
+
+  const handleDelete = useCallback(async () => {
+    if (!record) return
+    setDeleting(true)
+    try {
+      await deleteRecord(clusterId, {
+        ns: decodedNs,
+        set: decodedSet,
+        pk: record.key.pk ?? pk,
+      })
+      useToastStore.getState().addToast("success", "Record deleted")
+      router.push(backHref)
+    } catch (err) {
+      useToastStore.getState().addToast("error", getErrorMessage(err))
+    } finally {
+      setDeleting(false)
+      setDeleteConfirmOpen(false)
+    }
+  }, [backHref, clusterId, decodedNs, decodedSet, pk, record, router])
+
+  const description = useMemo(
+    () => (
+      <span className="font-mono text-xs">
+        {decodedNs}
+        <span className="mx-1 text-gray-400 dark:text-gray-600">.</span>
+        {decodedSet}
+        <span className="mx-1 text-gray-400 dark:text-gray-600">/</span>
+        <span className="text-indigo-600 dark:text-indigo-400">{pk}</span>
+      </span>
+    ),
+    [decodedNs, decodedSet, pk],
+  )
+
   return (
     <main className="flex flex-col gap-6">
       <nav
         aria-label="Breadcrumb"
-        className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500"
+        className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400"
       >
         <Link
-          href={clusterSections.sets(params.clusterId)}
+          href={clusterSections.sets(clusterId)}
           className="hover:text-gray-900 dark:hover:text-gray-50"
         >
           Sets
         </Link>
         <span aria-hidden="true">/</span>
         <Link
-          href={clusterSections.set(params.clusterId, params.namespace, params.set)}
+          href={backHref}
           className="hover:text-gray-900 dark:hover:text-gray-50"
         >
           <span className="font-mono">
-            {params.namespace}.{params.set}
+            {decodedNs}.{decodedSet}
           </span>
         </Link>
         <span aria-hidden="true">/</span>
         <span className="font-mono text-gray-900 dark:text-gray-50">{pk}</span>
       </nav>
 
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <span className="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-500">
-            Record
-          </span>
-          <h1 className="mt-1 break-all font-mono text-lg font-semibold text-gray-900 sm:text-xl dark:text-gray-50">
-            {pk}
-          </h1>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="secondary">Duplicate</Button>
-          <Button variant="destructive">Delete</Button>
-          <Button variant="primary">Save changes</Button>
-        </div>
-      </header>
+      <PageHeader
+        title={pk}
+        description={description}
+        actions={
+          <>
+            <Button variant="secondary" asChild>
+              <Link href={backHref} className="gap-1.5">
+                <RiArrowLeftLine aria-hidden className="size-4" />
+                Back
+              </Link>
+            </Button>
+            {mode === "view" ? (
+              <>
+                <Button
+                  variant="destructive"
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  disabled={loading || !record}
+                  className="gap-1.5"
+                >
+                  <RiDeleteBin2Line aria-hidden className="size-4" />
+                  Delete
+                </Button>
+                <Button
+                  onClick={() => setMode("edit")}
+                  disabled={loading || !record}
+                  className="gap-1.5"
+                >
+                  <RiPencilLine aria-hidden className="size-4" />
+                  Edit
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    if (record) resetEditorFromRecord(record)
+                    setMode("view")
+                  }}
+                  disabled={saving}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSave}
+                  isLoading={saving}
+                  className="gap-1.5"
+                >
+                  <RiSaveLine aria-hidden className="size-4" />
+                  Save
+                </Button>
+              </>
+            )}
+          </>
+        }
+      />
 
-      <Card className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div>
-          <dt className="text-xs text-gray-500 dark:text-gray-500">Generation</dt>
-          <dd className="font-mono text-sm font-medium tabular-nums text-gray-900 dark:text-gray-50">
-            {meta.generation}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-gray-500 dark:text-gray-500">TTL</dt>
-          <dd className="font-mono text-sm font-medium tabular-nums text-gray-900 dark:text-gray-50">
-            {meta.ttl === -1 ? "never" : `${meta.ttl}s`}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-gray-500 dark:text-gray-500">Last update</dt>
-          <dd className="font-mono text-sm font-medium text-gray-900 dark:text-gray-50">
-            {meta.lastUpdate}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-gray-500 dark:text-gray-500">Bins</dt>
-          <dd className="font-mono text-sm font-medium tabular-nums text-gray-900 dark:text-gray-50">
-            {bins.length}
-          </dd>
-        </div>
-      </Card>
+      {error && <InlineAlert message={error} variant="error" />}
 
-      <Card className="p-0">
-        <ul className="flex flex-col divide-y divide-gray-200 dark:divide-gray-800">
-          {bins.map((b) => (
-            <li key={b.name} className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-start">
-              <div className="min-w-40 sm:w-56">
-                <p className="font-mono text-sm font-semibold text-gray-900 dark:text-gray-50">
-                  {b.name}
-                </p>
-                <Badge variant="neutral">{b.type}</Badge>
-              </div>
-              <pre className="flex-1 overflow-x-auto whitespace-pre-wrap break-all rounded bg-gray-50 p-3 font-mono text-xs text-gray-800 dark:bg-gray-900 dark:text-gray-200">
-                {b.value}
-              </pre>
-            </li>
-          ))}
-        </ul>
-      </Card>
+      {loading && !record && !error ? (
+        <div className="rounded-md border border-dashed border-gray-200 px-6 py-12 text-center text-sm text-gray-500 dark:border-gray-800 dark:text-gray-400">
+          Loading record…
+        </div>
+      ) : record ? (
+        <div className="rounded-md border border-gray-200 bg-white dark:border-gray-800 dark:bg-[#090E1A]">
+          {mode === "view" ? (
+            <RecordDetailSections record={record} />
+          ) : (
+            <RecordEditorFields
+              mode="edit"
+              pk={editorPK}
+              onPKChange={setEditorPK}
+              ttl={editorTTL}
+              onTTLChange={setEditorTTL}
+              bins={editorBins}
+              onAddBin={addBin}
+              onRemoveBin={removeBin}
+              onUpdateBin={updateBin}
+              useCodeEditor={useCodeEditor}
+              onToggleCodeEditor={(id) =>
+                setUseCodeEditor((prev) => ({ ...prev, [id]: !prev[id] }))
+              }
+              saving={saving}
+              record={record}
+              namespace={decodedNs}
+              setName={decodedSet}
+            />
+          )}
+        </div>
+      ) : null}
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onOpenChange={(next) => !deleting && setDeleteConfirmOpen(next)}
+        title="Delete Record"
+        description={`Delete record with PK "${pk}"? This cannot be undone.`}
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={handleDelete}
+        loading={deleting}
+      />
     </main>
   )
 }

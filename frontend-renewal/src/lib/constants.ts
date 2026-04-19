@@ -124,3 +124,25 @@ export const NO_VALUE_OPERATORS: FilterOperator[] = [
 export const DUAL_VALUE_OPERATORS: FilterOperator[] = ["between"]
 
 export const AEROSPIKE_IMAGES = ["aerospike:ce-8.1.1.1"] as const
+
+export const BIN_TYPE_COLORS: Record<BinType, string> = {
+  string: "bg-emerald-50 text-emerald-700 ring-emerald-600/30 dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-emerald-400/30",
+  integer: "bg-blue-50 text-blue-700 ring-blue-600/30 dark:bg-blue-400/10 dark:text-blue-400 dark:ring-blue-400/30",
+  float: "bg-violet-50 text-violet-700 ring-violet-600/30 dark:bg-violet-400/10 dark:text-violet-400 dark:ring-violet-400/30",
+  bool: "bg-amber-50 text-amber-700 ring-amber-600/30 dark:bg-amber-400/10 dark:text-amber-400 dark:ring-amber-400/30",
+  list: "bg-cyan-50 text-cyan-700 ring-cyan-600/30 dark:bg-cyan-400/10 dark:text-cyan-400 dark:ring-cyan-400/30",
+  map: "bg-pink-50 text-pink-700 ring-pink-600/30 dark:bg-pink-400/10 dark:text-pink-400 dark:ring-pink-400/30",
+  bytes: "bg-gray-50 text-gray-700 ring-gray-500/30 dark:bg-gray-400/10 dark:text-gray-300 dark:ring-gray-400/30",
+  geojson: "bg-rose-50 text-rose-700 ring-rose-600/30 dark:bg-rose-400/10 dark:text-rose-400 dark:ring-rose-400/30",
+}
+
+export const BIN_TYPE_BORDER_COLORS: Record<BinType, string> = {
+  string: "border-l-emerald-500/40",
+  integer: "border-l-blue-500/40",
+  float: "border-l-violet-500/40",
+  bool: "border-l-amber-500/40",
+  list: "border-l-cyan-500/40",
+  map: "border-l-pink-500/40",
+  bytes: "border-l-gray-400/20",
+  geojson: "border-l-rose-500/40",
+}
