@@ -3,13 +3,14 @@
 import { Badge } from "@/components/Badge"
 import { Button } from "@/components/Button"
 import { Card } from "@/components/Card"
+import { AddConnectionDialog } from "@/components/dialogs/AddConnectionDialog"
 import { clusterSections } from "@/app/siteConfig"
 import { useConnections } from "@/hooks/use-connections"
 import { useK8sClusters } from "@/hooks/use-k8s-clusters"
 import type { ConnectionProfileResponse } from "@/lib/types/connection"
 import type { K8sClusterSummary } from "@/lib/types/k8s"
 import Link from "next/link"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 
 type Row = {
   key: string
@@ -88,6 +89,8 @@ export default function ClustersPage() {
   const conn = useConnections()
   const k8s = useK8sClusters()
 
+  const [addConnOpen, setAddConnOpen] = useState(false)
+
   const rows = useMemo(
     () => mergeRows(conn.data, k8s.data?.items ?? null),
     [conn.data, k8s.data],
@@ -95,6 +98,10 @@ export default function ClustersPage() {
 
   const loading = conn.isLoading || k8s.isLoading
   const combinedError = conn.error ?? k8s.error
+
+  const handleConnectionCreated = () => {
+    conn.refetch()
+  }
 
   return (
     <main className="flex flex-col gap-6">
@@ -108,8 +115,12 @@ export default function ClustersPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary">Add Connection</Button>
-          <Button variant="primary">Create Cluster</Button>
+          <Button variant="secondary" onClick={() => setAddConnOpen(true)}>
+            Add Connection
+          </Button>
+          <Button variant="primary" asChild>
+            <Link href="/clusters/new">Create Cluster</Link>
+          </Button>
         </div>
       </header>
 
@@ -122,7 +133,7 @@ export default function ClustersPage() {
       {loading && rows.length === 0 ? (
         <SkeletonGrid />
       ) : rows.length === 0 ? (
-        <EmptyState />
+        <EmptyState onAddConnection={() => setAddConnOpen(true)} />
       ) : (
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {rows.map((r) => (
@@ -130,6 +141,12 @@ export default function ClustersPage() {
           ))}
         </section>
       )}
+
+      <AddConnectionDialog
+        open={addConnOpen}
+        onOpenChange={setAddConnOpen}
+        onSuccess={handleConnectionCreated}
+      />
     </main>
   )
 }
@@ -218,7 +235,7 @@ function SkeletonGrid() {
   )
 }
 
-function EmptyState() {
+function EmptyState({ onAddConnection }: { onAddConnection: () => void }) {
   return (
     <Card className="flex flex-col items-center gap-2 py-10 text-center">
       <h3 className="text-base font-semibold text-gray-900 dark:text-gray-50">
@@ -229,8 +246,12 @@ function EmptyState() {
         via ACKO.
       </p>
       <div className="flex gap-2 pt-2">
-        <Button variant="secondary">Add Connection</Button>
-        <Button variant="primary">Create Cluster</Button>
+        <Button variant="secondary" onClick={onAddConnection}>
+          Add Connection
+        </Button>
+        <Button variant="primary" asChild>
+          <Link href="/clusters/new">Create Cluster</Link>
+        </Button>
       </div>
     </Card>
   )
