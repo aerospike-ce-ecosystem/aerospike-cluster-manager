@@ -1,0 +1,47 @@
+# =============================================================================
+# Frontend (Next.js standalone) — port 3000
+# =============================================================================
+FROM node:22-alpine AS deps
+WORKDIR /app
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+FROM node:22-alpine AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY frontend/ .
+# Next.js `rewrites()` is evaluated at build time and baked into routes-manifest.json.
+# BACKEND_URL must be set here to the Service DNS the frontend will use at runtime.
+ARG BACKEND_URL=http://aerospike-ce-kubernetes-operator-ui-backend:80
+ENV BACKEND_URL=${BACKEND_URL}
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+
+# =============================================================================
+# Runtime
+# =============================================================================
+FROM node:22-alpine AS runtime
+
+RUN apk add --no-cache curl \
+    && addgroup -g 1001 -S appuser \
+    && adduser -u 1001 -S appuser -G appuser
+
+WORKDIR /app
+
+COPY --from=builder --chown=appuser:appuser /app/public ./public
+COPY --from=builder --chown=appuser:appuser /app/.next/standalone ./
+COPY --from=builder --chown=appuser:appuser /app/.next/static ./.next/static
+
+USER appuser
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=10s --timeout=5s --retries=3 --start-period=15s \
+    CMD curl -f http://localhost:3000/ || exit 1
+
+CMD ["node", "server.js"]
