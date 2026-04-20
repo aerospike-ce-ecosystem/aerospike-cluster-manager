@@ -28,13 +28,21 @@ def record_to_model(rec: Record) -> AerospikeRecord:
 
     digest_hex = digest.hex() if isinstance(digest, bytes | bytearray) else None
 
-    # meta can be a RecordMetadata NamedTuple (gen, ttl) or a dict
+    # meta can be a RecordMetadata NamedTuple (gen, ttl, optional last_update_time) or a dict
+    last_update_ms: int | None = None
     if meta is not None and hasattr(meta, "gen"):
         gen = meta.gen
         ttl = meta.ttl
+        # aerospike-py may expose last_update_time or last_update_ms depending on version/read policy
+        raw_lut = getattr(meta, "last_update_time", None) or getattr(meta, "last_update_ms", None)
+        if isinstance(raw_lut, int) and raw_lut > 0:
+            last_update_ms = raw_lut
     elif isinstance(meta, dict):
         gen = meta.get("gen", 0)
         ttl = meta.get("ttl", 0)
+        raw_lut = meta.get("last_update_time") or meta.get("last_update_ms")
+        if isinstance(raw_lut, int) and raw_lut > 0:
+            last_update_ms = raw_lut
     else:
         gen = 0
         ttl = 0
@@ -49,6 +57,7 @@ def record_to_model(rec: Record) -> AerospikeRecord:
         meta=RecordMeta(
             generation=gen,
             ttl=ttl,
+            lastUpdateMs=last_update_ms,
         ),
         bins=bins,
     )
