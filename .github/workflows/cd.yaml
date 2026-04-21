@@ -1,5 +1,16 @@
 name: CD
-# On push to main: builds multi-arch (amd64/arm64) container images and pushes to GHCR
+# On push to main: builds multi-arch (amd64/arm64) container images and pushes to GHCR.
+#
+# Builds four images per push:
+#   - ghcr.io/<repo>                    — combined all-in-one image (root Dockerfile, used by compose.yaml)
+#   - ghcr.io/<repo>-backend            — FastAPI backend only (Dockerfile.backend)
+#   - ghcr.io/<repo>-frontend           — Next.js frontend (Dockerfile.frontend)
+#   - ghcr.io/<repo>-frontend-renewal   — Next.js frontend-renewal (Dockerfile.frontend-renewal)
+#
+# The split images are what the ACKO UI deployments consume. Previously only the
+# combined image was built in CI and the split `-frontend-renewal:latest` tag had
+# to be pushed manually, which meant main commits (PR #214 onward) never reached
+# the running pod. Keep all four in the matrix so every main merge rolls forward.
 
 on:
   push:
@@ -15,12 +26,28 @@ env:
 
 jobs:
   build-and-push:
-    name: Build & Push Docker Image
+    name: Build & Push (${{ matrix.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
       packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: all
+            dockerfile: Dockerfile
+            suffix: ""
+          - name: backend
+            dockerfile: Dockerfile.backend
+            suffix: -backend
+          - name: frontend
+            dockerfile: Dockerfile.frontend
+            suffix: -frontend
+          - name: frontend-renewal
+            dockerfile: Dockerfile.frontend-renewal
+            suffix: -frontend-renewal
 
     steps:
       - uses: actions/checkout@v6
@@ -28,7 +55,7 @@ jobs:
       - name: Set lowercase image name
         run: |
           REPO="${GITHUB_REPOSITORY,,}"
-          echo "IMAGE=ghcr.io/${REPO}" >> "$GITHUB_ENV"
+          echo "IMAGE=ghcr.io/${REPO}${{ matrix.suffix }}" >> "$GITHUB_ENV"
 
       - name: Set up QEMU (for multi-arch builds)
         uses: docker/setup-qemu-action@v4
@@ -59,9 +86,10 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
+          file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: ${{ !startsWith(github.ref, 'refs/tags/') && 'type=gha' || '' }}
-          cache-to: ${{ !startsWith(github.ref, 'refs/tags/') && 'type=gha,mode=max' || '' }}
+          cache-from: ${{ !startsWith(github.ref, 'refs/tags/') && format('type=gha,scope={0}', matrix.name) || '' }}
+          cache-to: ${{ !startsWith(github.ref, 'refs/tags/') && format('type=gha,mode=max,scope={0}', matrix.name) || '' }}
