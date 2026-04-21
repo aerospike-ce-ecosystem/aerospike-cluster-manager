@@ -7,13 +7,30 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/Accordion"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/Dropdown"
 import { useConnections } from "@/hooks/use-connections"
 import { useK8sClusters } from "@/hooks/use-k8s-clusters"
 import { getCluster } from "@/lib/api/clusters"
 import type { ConnectionProfileResponse } from "@/lib/types/connection"
 import type { K8sClusterSummary } from "@/lib/types/k8s"
-import { cx, focusRing } from "@/lib/utils"
-import { RiCodeSSlashLine, RiFolder3Fill, RiStackLine } from "@remixicon/react"
+import { cx, focusInput, focusRing } from "@/lib/utils"
+import {
+  RiAddLine,
+  RiBox3Line,
+  RiCodeSSlashLine,
+  RiDatabase2Line,
+  RiExpandUpDownLine,
+  RiFolder3Fill,
+  RiStackLine,
+} from "@remixicon/react"
 import Image from "next/image"
 import Link from "next/link"
 import { useParams, usePathname } from "next/navigation"
@@ -112,63 +129,76 @@ export function Sidebar() {
       <nav className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-72 lg:flex-col">
         <aside className="flex grow flex-col gap-y-4 overflow-y-auto border-r border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-950">
           <BrandCard />
+          <WorkspaceSwitcher />
 
-          <nav aria-label="core navigation" className="flex flex-1 flex-col gap-y-1">
-            <SectionLabel>Clusters</SectionLabel>
+          <nav aria-label="core navigation" className="flex flex-1 flex-col">
             <Accordion
-              type="single"
-              collapsible
-              defaultValue={expandedCluster}
+              type="multiple"
+              defaultValue={["clusters", "acko"]}
               className="flex flex-col gap-0.5"
             >
-              {clusterList.map((c) => (
-                <ClusterNode
-                  key={c.id}
-                  cluster={c}
-                  pathname={pathname}
-                  isActive={isActive}
-                />
-              ))}
+              <GroupSection
+                value="clusters"
+                icon={RiDatabase2Line}
+                label="Clusters"
+              >
+                <Accordion
+                  type="single"
+                  collapsible
+                  defaultValue={expandedCluster}
+                  className="flex flex-col gap-0.5"
+                >
+                  {clusterList.map((c) => (
+                    <ClusterNode
+                      key={c.id}
+                      cluster={c}
+                      pathname={pathname}
+                      isActive={isActive}
+                    />
+                  ))}
+                </Accordion>
+                {loading && clusterList.length === 0 && (
+                  <span className="block py-1 pl-2 text-xs italic text-gray-400 dark:text-gray-600">
+                    Loading…
+                  </span>
+                )}
+                {!loading && clusterList.length === 0 && (
+                  <span className="block py-1 pl-2 text-xs italic text-gray-400 dark:text-gray-600">
+                    No clusters yet
+                  </span>
+                )}
+
+                <Link
+                  href="/clusters"
+                  className={cx(
+                    "mt-0.5 flex items-center gap-x-2.5 rounded-md py-1.5 pl-2 pr-2 text-sm font-medium transition",
+                    pathname === "/clusters"
+                      ? "text-indigo-600 dark:text-indigo-400"
+                      : "text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 hover:dark:bg-gray-900 hover:dark:text-gray-50",
+                    focusRing,
+                  )}
+                >
+                  <RiStackLine className="size-4 shrink-0" aria-hidden="true" />
+                  All clusters
+                </Link>
+              </GroupSection>
+
+              <GroupSection value="acko" icon={RiBox3Line} label="ACKO">
+                <Link
+                  href={siteConfig.baseLinks.ackoTemplates}
+                  className={cx(
+                    "flex items-center gap-x-2.5 rounded-md py-1.5 pl-2 pr-2 text-sm font-medium transition",
+                    isActive(siteConfig.baseLinks.ackoTemplates)
+                      ? "text-indigo-600 dark:text-indigo-400"
+                      : "text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 hover:dark:bg-gray-900 hover:dark:text-gray-50",
+                    focusRing,
+                  )}
+                >
+                  <RiCodeSSlashLine className="size-4 shrink-0" aria-hidden="true" />
+                  Cluster templates
+                </Link>
+              </GroupSection>
             </Accordion>
-            {loading && clusterList.length === 0 && (
-              <span className="px-2 py-1 text-xs italic text-gray-400 dark:text-gray-600">
-                Loading…
-              </span>
-            )}
-            {!loading && clusterList.length === 0 && (
-              <span className="px-2 py-1 text-xs italic text-gray-400 dark:text-gray-600">
-                No clusters yet
-              </span>
-            )}
-
-            <Link
-              href="/clusters"
-              className={cx(
-                "mt-1 flex items-center gap-x-2.5 rounded-md px-2 py-1.5 text-sm font-medium transition",
-                pathname === "/clusters"
-                  ? "text-indigo-600 dark:text-indigo-400"
-                  : "text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 hover:dark:bg-gray-900 hover:dark:text-gray-50",
-                focusRing,
-              )}
-            >
-              <RiStackLine className="size-4 shrink-0" aria-hidden="true" />
-              All clusters
-            </Link>
-
-            <SectionLabel className="mt-4">ACKO</SectionLabel>
-            <Link
-              href={siteConfig.baseLinks.ackoTemplates}
-              className={cx(
-                "flex items-center gap-x-2.5 rounded-md px-2 py-1.5 text-sm font-medium transition",
-                isActive(siteConfig.baseLinks.ackoTemplates)
-                  ? "text-indigo-600 dark:text-indigo-400"
-                  : "text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 hover:dark:bg-gray-900 hover:dark:text-gray-50",
-                focusRing,
-              )}
-            >
-              <RiCodeSSlashLine className="size-4 shrink-0" aria-hidden="true" />
-              Cluster templates
-            </Link>
           </nav>
           <div className="mt-auto">
             <UserProfileDesktop />
@@ -215,22 +245,144 @@ function BrandCard() {
   )
 }
 
-function SectionLabel({
-  className,
+// TODO(workspaces): UI-only placeholder. Wire up to real multi-workspace model:
+//   - backend: `/api/workspaces` (list / create / switch) and persist active workspace
+//   - scope resources (connections, K8s clusters, templates) to the selected workspace
+//   - replace hardcoded `mockWorkspaces` below with a `useWorkspaces()` hook
+//   - implement AddWorkspaceDialog
+const mockWorkspaces: Array<{
+  id: string
+  name: string
+  role: string
+  color: string
+}> = [
+  { id: "default", name: "Default", role: "Member", color: "#4F46E5" },
+]
+
+function WorkspaceSwitcher() {
+  const active = mockWorkspaces[0]
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className={cx(
+          "flex w-full items-center gap-3 rounded-md border border-gray-200 bg-white px-3 py-2 text-left transition hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-950 hover:dark:bg-gray-900",
+          focusInput,
+        )}
+        aria-label="Switch workspace"
+      >
+        <WorkspaceAvatar initials={initialsOf(active.name)} color={active.color} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-50">
+            {active.name}
+          </p>
+          <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+            {active.role}
+          </p>
+        </div>
+        <RiExpandUpDownLine
+          className="size-4 shrink-0 text-gray-500 dark:text-gray-500"
+          aria-hidden="true"
+        />
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent
+        align="start"
+        className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[260px]"
+      >
+        <DropdownMenuLabel>
+          Workspaces{" "}
+          <span className="font-normal text-gray-500 dark:text-gray-400">
+            ({mockWorkspaces.length})
+          </span>
+        </DropdownMenuLabel>
+        <DropdownMenuGroup>
+          {mockWorkspaces.map((ws) => (
+            <DropdownMenuItem
+              key={ws.id}
+              onSelect={(e) => {
+                e.preventDefault()
+                // TODO(workspaces): switch active workspace + persist + refetch scoped resources
+              }}
+              className="flex items-start gap-3 py-2"
+            >
+              <WorkspaceAvatar initials={initialsOf(ws.name)} color={ws.color} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-50">
+                  {ws.name}
+                </p>
+                <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                  {ws.role}
+                </p>
+              </div>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={(e) => {
+            e.preventDefault()
+            // TODO(workspaces): open AddWorkspaceDialog (create, invite members, set role)
+          }}
+          className="flex items-center gap-2 text-sm"
+        >
+          <RiAddLine className="size-4" aria-hidden="true" />
+          Add workspace
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function WorkspaceAvatar({ initials, color }: { initials: string; color: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="flex size-9 shrink-0 items-center justify-center rounded-md text-xs font-semibold text-white"
+      style={{ background: color }}
+    >
+      {initials}
+    </span>
+  )
+}
+
+function initialsOf(name: string): string {
+  if (!name) return "??"
+  const parts = name.split(/[-_ .:]/).filter(Boolean)
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+  return name.slice(0, 2).toUpperCase()
+}
+
+function GroupSection({
+  value,
+  icon: Icon,
+  label,
   children,
 }: {
-  className?: string
+  value: string
+  icon: React.ElementType
+  label: string
   children: React.ReactNode
 }) {
   return (
-    <span
-      className={cx(
-        "px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-widest text-gray-500 dark:text-gray-500",
-        className,
-      )}
-    >
-      {children}
-    </span>
+    <AccordionItem value={value} className="border-none">
+      <AccordionTrigger
+        className={cx(
+          "rounded-md px-2 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100 dark:text-gray-50 hover:dark:bg-gray-900",
+          focusRing,
+        )}
+      >
+        <span className="flex items-center gap-2.5">
+          <Icon className="size-5 shrink-0" aria-hidden="true" />
+          {label}
+        </span>
+      </AccordionTrigger>
+      <AccordionContent className="pb-1 pt-1">
+        <div className="ml-[11px] flex flex-col border-l border-gray-200 pl-2 dark:border-gray-800">
+          {children}
+        </div>
+      </AccordionContent>
+    </AccordionItem>
   )
 }
 
