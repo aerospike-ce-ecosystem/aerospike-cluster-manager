@@ -54,8 +54,8 @@ def generate_record_bins(i: int) -> dict[str, Any]:
     dbl_dec_part = i % 100
     dbl_val = float(f"{dbl_int_part}.{dbl_dec_part}")
 
-    # bin_bool: Boolean as integer (0 or 1)
-    bool_val = i % 2
+    # bin_bool: actual Python bool (Aerospike CE 5.6+ supports native bool bins)
+    bool_val = bool(i % 2)
 
     # bin_list: mixed types [int, string, double, int]
     list_val = [int_val, color, dbl_val, i % 3]

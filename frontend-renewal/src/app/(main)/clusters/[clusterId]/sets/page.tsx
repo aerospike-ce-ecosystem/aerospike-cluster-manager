@@ -4,6 +4,8 @@ import { Badge } from "@/components/Badge"
 import { Button } from "@/components/Button"
 import { Card } from "@/components/Card"
 import { Input } from "@/components/Input"
+import { CreateSampleDataDialog } from "@/components/dialogs/CreateSampleDataDialog"
+import { CreateSetDialog } from "@/components/dialogs/CreateSetDialog"
 import { clusterSections } from "@/app/siteConfig"
 import { useCluster } from "@/hooks/use-cluster"
 import type { NamespaceInfo, SetInfo } from "@/lib/types/cluster"
@@ -46,8 +48,11 @@ function nsStatusLabel(ns: NamespaceInfo): string {
 export default function SetsPage({ params }: PageProps) {
   const cluster = useCluster(params.clusterId)
   const [filter, setFilter] = useState("")
+  const [sampleOpen, setSampleOpen] = useState(false)
+  const [createSetNs, setCreateSetNs] = useState<string | null>(null)
 
   const namespaces = useMemo(() => cluster.data?.namespaces ?? [], [cluster.data])
+  const nsNames = useMemo(() => namespaces.map((n) => n.name), [namespaces])
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase()
@@ -78,7 +83,13 @@ export default function SetsPage({ params }: PageProps) {
           <span className="text-xs text-gray-500 dark:text-gray-500">
             {namespaces.length} / 2 max <span className="font-medium">(CE)</span>
           </span>
-          <Button variant="secondary">Sample data</Button>
+          <Button
+            variant="secondary"
+            onClick={() => setSampleOpen(true)}
+            disabled={nsNames.length === 0}
+          >
+            Sample data
+          </Button>
         </div>
       </header>
 
@@ -105,10 +116,33 @@ export default function SetsPage({ params }: PageProps) {
       ) : (
         <div className="flex flex-col gap-4">
           {filtered.map((ns) => (
-            <NamespaceCard key={ns.name} ns={ns} clusterId={params.clusterId} />
+            <NamespaceCard
+              key={ns.name}
+              ns={ns}
+              clusterId={params.clusterId}
+              onCreateSet={() => setCreateSetNs(ns.name)}
+            />
           ))}
         </div>
       )}
+
+      <CreateSampleDataDialog
+        open={sampleOpen}
+        onOpenChange={setSampleOpen}
+        connId={params.clusterId}
+        namespaces={nsNames}
+        onSuccess={() => cluster.refetch?.()}
+      />
+      <CreateSetDialog
+        open={createSetNs !== null}
+        onOpenChange={(o) => !o && setCreateSetNs(null)}
+        connId={params.clusterId}
+        namespace={createSetNs ?? ""}
+        onSuccess={() => {
+          setCreateSetNs(null)
+          cluster.refetch?.()
+        }}
+      />
     </main>
   )
 }
@@ -116,9 +150,11 @@ export default function SetsPage({ params }: PageProps) {
 function NamespaceCard({
   ns,
   clusterId,
+  onCreateSet,
 }: {
   ns: NamespaceInfo
   clusterId: string
+  onCreateSet: () => void
 }) {
   const severity = nsSeverity(ns)
   const accent =
@@ -205,6 +241,8 @@ function NamespaceCard({
           <SetChip key={s.name} clusterId={clusterId} namespace={ns.name} set={s} />
         ))}
         <button
+          type="button"
+          onClick={onCreateSet}
           className={cx(
             "inline-flex items-center gap-1 rounded-md border border-dashed border-indigo-300 px-2.5 py-1.5 text-xs font-medium text-indigo-600 transition",
             "hover:border-indigo-400 hover:bg-indigo-50 dark:border-indigo-900/60 dark:text-indigo-400 dark:hover:bg-indigo-950/30",
