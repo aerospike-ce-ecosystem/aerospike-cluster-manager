@@ -125,6 +125,24 @@ npm run dev                        # http://localhost:3000
 
 > The frontend dev server proxies `/api/*` requests to `http://localhost:8000`.
 
+### Local K8s / ACKO Development
+
+To exercise the K8s / ACKO UI (`/k8s/clusters`, `/k8s/templates`) against a real operator without deploying anything to a shared cluster, use `make run-local`:
+
+```bash
+make run-local          # kind (podman) + cert-manager + ACKO operator + Aerospike (compose.dev.yaml)
+```
+
+The command is idempotent and prints the exact backend/frontend start commands to run in separate terminals. It sets up:
+
+- kind cluster named `kind` → kubectl context `kind-kind` (1 control-plane + 3 workers with `topology.kubernetes.io/zone=zone-a/b/c`)
+- cert-manager and the ACKO operator via Helm (CRDs: `aerospikeclusters.acko.io`, `aerospikeclustertemplates.acko.io`)
+- Standalone Aerospike nodes on `localhost:14790/:14791/:14792` (for the non-K8s connection UI)
+
+Start the backend with `K8S_MANAGEMENT_ENABLED=true` and the frontend as usual; the backend's Kubernetes client picks up `~/.kube/config` automatically. Teardown with `make run-local-down`.
+
+Related targets: `make kind-up/down/status`, `make acko-install/uninstall/verify`.
+
 ## Features
 
 - **Connection Management** — Manage multiple Aerospike cluster connection profiles
