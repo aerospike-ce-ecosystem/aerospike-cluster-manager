@@ -148,6 +148,9 @@ try:
         RecordExistsError,
         RecordGenerationError,
         RecordNotFound,
+        # RustPanicError ships in aerospike-py >0.5.3 (PR aerospike-py#301).
+        # Remove the type-ignore once the dep version is bumped.
+        RustPanicError,  # type: ignore[attr-defined]
         ServerError,
     )
 
@@ -201,6 +204,27 @@ try:
     async def _cluster_error(_req: Request, exc: ClusterError) -> JSONResponse:
         logger.exception("Aerospike cluster error")
         return JSONResponse(status_code=503, content={"detail": "Connection error: unable to reach Aerospike cluster"})
+
+    @app.exception_handler(RustPanicError)
+    async def _rust_panic(_req: Request, exc: RustPanicError) -> JSONResponse:
+        # aerospike-py #280: a record on the cluster carries a particle type
+        # the native client cannot decode (commonly PYTHON_BLOB / JAVA_BLOB
+        # legacy data). The native panic was caught and surfaced; the backend
+        # process is alive but this request can't complete because aerospike-
+        # core's stream cannot resume after the panic.
+        logger.warning("Native panic surfaced as RustPanicError: %s", exc)
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": (
+                    "This record (or one in the result stream) contains a "
+                    "particle type the native client cannot decode "
+                    "(e.g. PYTHON_BLOB / JAVA_BLOB written by a legacy "
+                    "language-specific client). See aerospike-py issue #280."
+                ),
+                "error_kind": "rust_panic",
+            },
+        )
 
     @app.exception_handler(AerospikeError)
     async def _aerospike_error(_req: Request, exc: AerospikeError) -> JSONResponse:

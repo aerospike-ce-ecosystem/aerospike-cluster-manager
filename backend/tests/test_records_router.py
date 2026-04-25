@@ -102,3 +102,34 @@ class TestGetRecordDetail:
 
         assert response.status_code == 404
         assert response.json() == {"detail": "Record not found"}
+
+    async def test_rust_panic_returns_422(self, client: AsyncClient):
+        """aerospike-py #280: a record with a particle type the native client
+        cannot decode (e.g. PYTHON_BLOB / JAVA_BLOB legacy data) surfaces as
+        ``RustPanicError``. The global handler maps it to HTTP 422 so the UI
+        can show a "this record needs a legacy client" hint instead of crashing
+        the page."""
+        from aerospike_py.exception import RustPanicError
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(side_effect=RustPanicError("Rust panic in `AsyncClient.get`: unreachable code"))
+
+        with (
+            patch(
+                "aerospike_cluster_manager_api.dependencies.db.get_connection",
+                AsyncMock(return_value={"id": "conn-test"}),
+            ),
+            patch(
+                "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+                AsyncMock(return_value=mock_client),
+            ),
+        ):
+            response = await client.get(
+                "/api/records/conn-test/detail",
+                params={"ns": "test", "set": "demo", "pk": "legacy_blob"},
+            )
+
+        assert response.status_code == 422
+        body = response.json()
+        assert body["error_kind"] == "rust_panic"
+        assert "particle type" in body["detail"]

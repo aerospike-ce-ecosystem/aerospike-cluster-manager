@@ -73,7 +73,15 @@ async def get_records(
     set: str = "",
     pageSize: int = Query(25, ge=1, le=500),
 ) -> RecordListResponse:
-    """Retrieve records from a namespace and set (limited by pageSize)."""
+    """Retrieve records from a namespace and set (limited by pageSize).
+
+    Note: if any record in the scan stream contains a particle type the native
+    client cannot decode (e.g. PYTHON_BLOB / JAVA_BLOB written by a legacy
+    language-specific client — see aerospike-py issue #280), the underlying
+    aerospike-core stream is broken at that record and the whole request
+    surfaces as HTTP 422 (``RustPanicError``). Per-record skipping is not
+    available without an aerospike-core fork.
+    """
     set_total = await _get_set_object_count(client, ns, set)
 
     limit = min(pageSize, MAX_QUERY_RECORDS)
