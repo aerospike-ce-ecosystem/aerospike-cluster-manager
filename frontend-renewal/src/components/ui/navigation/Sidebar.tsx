@@ -210,8 +210,8 @@ function BrandCard({ active }: { active?: boolean }) {
       )}
     >
       <Image
-        src="/aerospike-logo.svg"
-        alt="Aerospike"
+        src="/acm-logo.svg"
+        alt="Aerospike Cluster Manager"
         width={36}
         height={36}
         className="size-9 shrink-0 rounded-lg"

@@ -42,8 +42,8 @@ export default function MobileSidebar() {
           <DrawerTitle>
             <span className="flex items-center gap-3">
               <Image
-                src="/aerospike-logo.svg"
-                alt="Aerospike"
+                src="/acm-logo.svg"
+                alt="Aerospike Cluster Manager"
                 width={28}
                 height={28}
                 className="rounded-md"
