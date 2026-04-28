@@ -8,7 +8,7 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "aerospike-py>=0.5.3",
+    "aerospike-py>=0.6.4",
     "aiosqlite>=0.21.0",
     "asyncpg>=0.30.0",
     "fastapi>=0.115.0",
