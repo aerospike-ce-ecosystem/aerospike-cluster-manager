@@ -69,7 +69,12 @@ app = FastAPI(
     # /api/docs is served below from self-hosted swagger-ui assets so the docs
     # page works in airgap / firewalled clusters that can't reach jsdelivr (#234).
     docs_url=None,
-    redoc_url="/api/redoc",
+    # Redoc is disabled — FastAPI's default /api/redoc loads redoc.standalone.js
+    # from cdn.jsdelivr.net and there is no maintained Python package that
+    # vendors it. /api/docs (Swagger UI) covers the same use case and is
+    # self-hosted, so disabling redoc avoids the airgap footgun without losing
+    # API-explorer functionality. Re-enable + vendor JS at build time if needed.
+    redoc_url=None,
     openapi_url="/api/openapi.json",
     lifespan=lifespan,
 )
