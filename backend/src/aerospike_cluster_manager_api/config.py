@@ -34,6 +34,12 @@ K8S_MANAGEMENT_ENABLED: bool = os.getenv("K8S_MANAGEMENT_ENABLED", "false").lowe
 # Security headers
 ENABLE_HSTS: bool = os.getenv("ENABLE_HSTS", "false").lower() in ("true", "1", "yes")
 CSP_REPORT_URI: str = os.getenv("CSP_REPORT_URI", "")
+# When disabled, the in-app Content-Security-Policy header is not emitted and
+# /api/docs falls back to FastAPI's default helper (CDN swagger-ui 5.x with
+# inline bootstrap). Operators with an upstream layer enforcing CSP, or those
+# whose browsers have unrestricted internet egress, can turn this off to lift
+# the swagger-init.js indirection and render OpenAPI 3.1 specs directly (#241).
+CSP_ENABLED: bool = os.getenv("CSP_ENABLED", "true").lower() in ("true", "1", "yes")
 
 # Trusted reverse-proxy addresses for X-Forwarded-For support
 TRUSTED_PROXIES: list[str] = [p.strip() for p in os.getenv("TRUSTED_PROXIES", "").split(",") if p.strip()]

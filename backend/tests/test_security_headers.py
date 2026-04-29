@@ -93,6 +93,30 @@ async def test_swagger_init_js_is_served_with_js_mime(client: AsyncClient):
 
 
 # ---------------------------------------------------------------------------
+# CSP_ENABLED toggle — disables in-app CSP and falls /api/docs back to FastAPI
+# default (CDN swagger-ui 5.x with inline init, full OpenAPI 3.1 support, #241)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_csp_disabled_strips_header_and_uses_cdn_docs(init_test_db):
+    """With CSP_ENABLED=false, no CSP header is emitted and /api/docs uses FastAPI's CDN-backed default."""
+    with patch("aerospike_cluster_manager_api.config.CSP_ENABLED", False):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            health = await ac.get("/api/health")
+            assert "Content-Security-Policy" not in health.headers
+
+            docs = await ac.get("/api/docs")
+            assert docs.status_code == 200
+            body = docs.text
+            # FastAPI default loads swagger-ui from jsdelivr CDN.
+            assert "cdn.jsdelivr.net/npm/swagger-ui-dist" in body
+            # And uses the inline bootstrap call (which our CSP would have blocked).
+            assert "SwaggerUIBundle({" in body
+
+
+# ---------------------------------------------------------------------------
 # Proxy-aware rate limit key function
 # ---------------------------------------------------------------------------
 

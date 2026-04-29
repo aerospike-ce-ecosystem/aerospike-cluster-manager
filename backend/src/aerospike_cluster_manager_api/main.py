@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
@@ -128,7 +129,23 @@ window.ui = SwaggerUIBundle({
 
 @app.get("/api/docs", include_in_schema=False)
 async def custom_swagger_ui() -> HTMLResponse:
-    """Self-hosted Swagger UI with no inline scripts (CSP-compliant under script-src 'self', #238)."""
+    """Swagger UI page.
+
+    With CSP_ENABLED=true (default): self-hosted assets + external
+    swagger-init.js so the page renders under strict `script-src 'self'`
+    (#238). The vendored swagger-ui is 4.15.5 and does not parse OpenAPI 3.1.
+
+    With CSP_ENABLED=false: FastAPI's default helper which loads swagger-ui
+    5.x from cdn.jsdelivr.net — full OpenAPI 3.1 support and no init.js
+    indirection (#241). Browsers fetch the assets directly, so this works
+    whenever the operator's workstation has internet egress, regardless of
+    whether the cluster's pods do.
+    """
+    if not config.CSP_ENABLED:
+        return get_swagger_ui_html(
+            openapi_url=app.openapi_url or "/api/openapi.json",
+            title=f"{app.title} - Swagger UI",
+        )
     return HTMLResponse(content=_SWAGGER_UI_HTML)
 
 
@@ -187,14 +204,16 @@ async def security_headers_middleware(request: Request, call_next: RequestRespon
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
 
-    csp = (
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'"
-    )
-    if config.CSP_REPORT_URI:
-        sanitized_uri = config.CSP_REPORT_URI.split(";")[0].strip()
-        if sanitized_uri:
-            csp += f"; report-uri {sanitized_uri}"
-    response.headers["Content-Security-Policy"] = csp
+    if config.CSP_ENABLED:
+        csp = (
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; font-src 'self'"
+        )
+        if config.CSP_REPORT_URI:
+            sanitized_uri = config.CSP_REPORT_URI.split(";")[0].strip()
+            if sanitized_uri:
+                csp += f"; report-uri {sanitized_uri}"
+        response.headers["Content-Security-Policy"] = csp
 
     if config.ENABLE_HSTS:
         response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
