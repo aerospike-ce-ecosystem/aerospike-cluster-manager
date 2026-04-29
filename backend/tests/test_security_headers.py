@@ -65,6 +65,34 @@ async def test_csp_report_uri(init_test_db):
 
 
 # ---------------------------------------------------------------------------
+# Swagger UI is CSP-compliant under script-src 'self' (#238)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_swagger_docs_has_no_inline_script(client: AsyncClient):
+    """/api/docs must not emit inline <script> blocks — CSP `script-src 'self'` blocks them (#238)."""
+    resp = await client.get("/api/docs")
+    assert resp.status_code == 200
+    body = resp.text
+    # Strict CSP must still apply on the docs page itself.
+    assert "script-src 'self'" in resp.headers["Content-Security-Policy"]
+    # The bootstrap call must come from an external script, not an inline block.
+    assert "SwaggerUIBundle({" not in body
+    assert '<script src="/api/docs/swagger-init.js"></script>' in body
+    assert '<script src="/api/docs/static/swagger-ui-bundle.js"></script>' in body
+
+
+@pytest.mark.anyio
+async def test_swagger_init_js_is_served_with_js_mime(client: AsyncClient):
+    """The bootstrap script must be served as application/javascript so the browser executes it."""
+    resp = await client.get("/api/docs/swagger-init.js")
+    assert resp.status_code == 200
+    assert resp.headers["Content-Type"].startswith("application/javascript")
+    assert "SwaggerUIBundle({" in resp.text
+
+
+# ---------------------------------------------------------------------------
 # Proxy-aware rate limit key function
 # ---------------------------------------------------------------------------
 

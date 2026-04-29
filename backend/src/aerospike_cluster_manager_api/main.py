@@ -6,7 +6,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
@@ -88,16 +87,55 @@ app.mount(
 )
 
 
+# FastAPI's get_swagger_ui_html() emits an inline <script> that calls
+# SwaggerUIBundle({...}). Our CSP sets `script-src 'self'`, which blocks any
+# inline script and leaves /api/docs blank in the browser (#238). The custom
+# HTML below mirrors FastAPI's layout but moves the bootstrap call to the
+# external /api/docs/swagger-init.js route below, so the page renders under
+# strict CSP without weakening it for the rest of the API surface.
+_SWAGGER_UI_HTML = """\
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link type="text/css" rel="stylesheet" href="/api/docs/static/swagger-ui.css">
+<link rel="shortcut icon" href="/api/docs/static/favicon-32x32.png">
+<title>Aerospike Cluster Manager API - Swagger UI</title>
+</head>
+<body>
+<div id="swagger-ui"></div>
+<script src="/api/docs/static/swagger-ui-bundle.js"></script>
+<script src="/api/docs/swagger-init.js"></script>
+</body>
+</html>
+"""
+
+_SWAGGER_INIT_JS = """\
+window.ui = SwaggerUIBundle({
+    url: '/api/openapi.json',
+    dom_id: '#swagger-ui',
+    layout: 'BaseLayout',
+    deepLinking: true,
+    showExtensions: true,
+    showCommonExtensions: true,
+    presets: [
+        SwaggerUIBundle.presets.apis,
+        SwaggerUIBundle.SwaggerUIStandalonePreset,
+    ],
+});
+"""
+
+
 @app.get("/api/docs", include_in_schema=False)
 async def custom_swagger_ui() -> HTMLResponse:
-    """Self-hosted Swagger UI — replaces FastAPI's default cdn.jsdelivr.net version."""
-    return get_swagger_ui_html(
-        openapi_url=app.openapi_url or "/api/openapi.json",
-        title=f"{app.title} - Swagger UI",
-        swagger_js_url="/api/docs/static/swagger-ui-bundle.js",
-        swagger_css_url="/api/docs/static/swagger-ui.css",
-        swagger_favicon_url="/api/docs/static/favicon-32x32.png",
-    )
+    """Self-hosted Swagger UI with no inline scripts (CSP-compliant under script-src 'self', #238)."""
+    return HTMLResponse(content=_SWAGGER_UI_HTML)
+
+
+@app.get("/api/docs/swagger-init.js", include_in_schema=False)
+async def swagger_ui_init_js() -> Response:
+    """SwaggerUIBundle bootstrap — split into its own JS file so CSP `script-src 'self'` permits it (#238)."""
+    return Response(content=_SWAGGER_INIT_JS, media_type="application/javascript")
 
 
 app.state.limiter = limiter
