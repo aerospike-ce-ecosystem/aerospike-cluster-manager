@@ -29,9 +29,11 @@ WORKDIR /app
 COPY --from=builder --chown=appuser:appuser /app/public ./public
 COPY --from=builder --chown=appuser:appuser /app/.next/standalone ./
 COPY --from=builder --chown=appuser:appuser /app/.next/static ./.next/static
-# Override the standalone-generated server.js with our custom one that
-# proxies /api/* to BACKEND_URL at runtime (uses node built-ins only).
-COPY --from=builder --chown=appuser:appuser /app/server.js ./server.js
+# Sidecar proxy: spawns the standalone-generated ./server.js as a child on an
+# internal loopback port and forwards /api/* to BACKEND_URL (resolved at
+# container start) while passing everything else (including /_next/static and
+# /public assets) through unchanged. Keeps Next.js's static-routing untouched.
+COPY --from=builder --chown=appuser:appuser /app/proxy.js ./proxy.js
 
 USER appuser
 
@@ -45,4 +47,4 @@ EXPOSE 3100
 HEALTHCHECK --interval=10s --timeout=5s --retries=3 --start-period=15s \
     CMD curl -f http://localhost:3100/ || exit 1
 
-CMD ["node", "server.js"]
+CMD ["node", "proxy.js"]

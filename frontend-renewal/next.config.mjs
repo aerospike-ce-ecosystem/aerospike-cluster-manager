@@ -20,10 +20,17 @@ const nextConfig = {
       },
     ];
   },
-  // /api/* is proxied to BACKEND_URL at runtime by ./server.js (Next.js
-  // `rewrites()` would otherwise be evaluated at `next build` time and bake
-  // BACKEND_URL into the routes manifest, breaking any release whose
-  // backend Service hostname differs from the build-time value).
+  // Production: /api/* is proxied to BACKEND_URL at runtime by ./proxy.js,
+  // not by Next.js rewrites (rewrites are evaluated at `next build` time and
+  // would bake BACKEND_URL into the routes manifest, breaking any release
+  // whose backend Service hostname differs from the build-time value).
+  // Dev: keep rewrites so `npm run dev` (next dev -p 3100) still proxies /api
+  // through to the backend on localhost:8000.
+  async rewrites() {
+    if (process.env.NODE_ENV === "production") return [];
+    const backendUrl = process.env.BACKEND_URL ?? "http://localhost:8000";
+    return [{ source: "/api/:path*", destination: `${backendUrl}/api/:path*` }];
+  },
 };
 
 export default nextConfig;
