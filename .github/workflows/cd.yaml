@@ -16,6 +16,7 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
+  workflow_dispatch:
 
 concurrency:
   group: cd-${{ github.ref }}
@@ -28,7 +29,7 @@ jobs:
   build-and-push:
     name: Build & Push (${{ matrix.name }})
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: write
@@ -91,5 +92,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: ${{ !startsWith(github.ref, 'refs/tags/') && format('type=gha,scope={0}', matrix.name) || '' }}
-          cache-to: ${{ !startsWith(github.ref, 'refs/tags/') && format('type=gha,mode=max,scope={0}', matrix.name) || '' }}
+          # Read main's cache for every event (tag, dispatch, branch). Without
+          # this, tag pushes do a cold multi-arch build via QEMU and the
+          # frontend-renewal job times out at 30 minutes (#239 release).
+          cache-from: type=gha,scope=${{ matrix.name }}
+          # Only main writes to the cache so tags don't churn it.
+          cache-to: ${{ github.ref == 'refs/heads/main' && format('type=gha,mode=max,scope={0}', matrix.name) || '' }}
