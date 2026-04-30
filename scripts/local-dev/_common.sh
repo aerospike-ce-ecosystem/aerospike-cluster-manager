@@ -38,8 +38,14 @@ export ACKO_FULLNAME_OVERRIDE="${ACKO_FULLNAME_OVERRIDE:-}"
 export ACKO_UI_ENABLED="${ACKO_UI_ENABLED:-false}"
 export ACKO_UI_LOCAL_BUILD="${ACKO_UI_LOCAL_BUILD:-false}"
 export ACKO_UI_IMAGE_TAG="${ACKO_UI_IMAGE_TAG:-latest}"
-export ACKO_UI_API_IMAGE="${ACKO_UI_API_IMAGE:-aerospike-cluster-manager-api}"
-export ACKO_UI_WEB_IMAGE="${ACKO_UI_WEB_IMAGE:-aerospike-cluster-manager-ui}"
+# Podman normalizes bare tags to `localhost/<name>`, and `kind load
+# image-archive` preserves whatever name the archive carries. Setting the
+# `localhost/` prefix here keeps the build tag, the in-archive name, and the
+# helm `image.repository` value (passed by acko-install.sh) in sync — without
+# it, the pod tries to pull `aerospike-cluster-manager-api:latest` from
+# Docker Hub and ends in ImagePullBackOff.
+export ACKO_UI_API_IMAGE="${ACKO_UI_API_IMAGE:-localhost/aerospike-cluster-manager-api}"
+export ACKO_UI_WEB_IMAGE="${ACKO_UI_WEB_IMAGE:-localhost/aerospike-cluster-manager-ui}"
 
 # Resolve repo root (scripts live at <repo>/scripts/local-dev/).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
