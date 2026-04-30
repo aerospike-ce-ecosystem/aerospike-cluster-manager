@@ -3,38 +3,14 @@
 import { Button } from "@/components/Button"
 import { Input } from "@/components/Input"
 import { Label } from "@/components/Label"
+import {
+  DEFAULT_ENV_VALUE,
+  ENV_LABEL_KEY,
+  type LabelEntry,
+} from "@/components/clusters/labels"
 import { cx } from "@/lib/utils"
 import { RiAddLine, RiDeleteBinLine } from "@remixicon/react"
 import React from "react"
-
-export type LabelEntry = { key: string; value: string }
-
-export const ENV_LABEL_KEY = "env"
-export const DEFAULT_ENV_VALUE = "default"
-
-export function labelsToEntries(labels: Record<string, string>): LabelEntry[] {
-  const entries: LabelEntry[] = [
-    { key: ENV_LABEL_KEY, value: labels[ENV_LABEL_KEY] ?? DEFAULT_ENV_VALUE },
-  ]
-  for (const [k, v] of Object.entries(labels)) {
-    if (k === ENV_LABEL_KEY) continue
-    entries.push({ key: k, value: v })
-  }
-  return entries
-}
-
-export function entriesToLabels(entries: LabelEntry[]): Record<string, string> {
-  const out: Record<string, string> = {}
-  for (const { key, value } of entries) {
-    const k = key.trim()
-    if (!k) continue
-    out[k] = value
-  }
-  if (!out[ENV_LABEL_KEY]) {
-    out[ENV_LABEL_KEY] = DEFAULT_ENV_VALUE
-  }
-  return out
-}
 
 interface LabelsEditorProps {
   value: LabelEntry[]

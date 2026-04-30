@@ -1,8 +1,8 @@
 "use client"
 
 import { Tooltip } from "@/components/Tooltip"
-import { ENV_LABEL_KEY } from "@/components/clusters/LabelsEditor"
 import { type EnvTone, getEnvTone } from "@/components/clusters/envTone"
+import { ENV_LABEL_KEY } from "@/components/clusters/labels"
 import { cx } from "@/lib/utils"
 
 interface LabelsCellProps {

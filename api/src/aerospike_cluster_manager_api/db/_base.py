@@ -33,18 +33,25 @@ class DatabaseBackend(Protocol):
     async def delete_connection(self, conn_id: str) -> bool: ...
 
 
-def _decode_json_column(value: Any, fallback: Any) -> Any:
-    """Decode a JSON-encoded text column. Returns ``fallback`` on missing/invalid input."""
-    if value is None:
-        return fallback
+def _decode_json_dict(value: object) -> dict[str, Any]:
+    """Decode a JSON-encoded text column to ``dict[str, Any]``.
+
+    Returns ``{}`` for missing / empty / malformed input or a non-dict JSON
+    payload. Accepts already-parsed ``dict`` (asyncpg with a JSONB type codec)
+    and passes it through. Designed for the labels column; do not reuse for
+    array-shaped JSON without revisiting the type narrowing.
+    """
+    if value is None or value == "":
+        return {}
+    if isinstance(value, dict):
+        return value
     if isinstance(value, str):
-        if not value:
-            return fallback
         try:
-            return json.loads(value)
+            parsed = json.loads(value)
         except json.JSONDecodeError:
-            return fallback
-    return value
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
 
 
 def row_to_profile(row: Any) -> ConnectionProfile:
@@ -64,8 +71,8 @@ def row_to_profile(row: Any) -> ConnectionProfile:
     # sqlite3.Row / asyncpg.Record use `key in row` for value membership, not column lookup;
     # explicit keys() is the documented way to check column presence.
     labels_raw = row["labels"] if "labels" in row.keys() else None  # noqa: SIM118
-    # Validator on ConnectionProfile.labels normalizes empty dicts to {"env":"default"}.
-    labels = _decode_json_column(labels_raw, {})
+    # ConnectionProfile.labels validator normalizes {} -> {"env": "default"}.
+    labels = _decode_json_dict(labels_raw)
     return ConnectionProfile(
         id=row["id"],
         name=row["name"],

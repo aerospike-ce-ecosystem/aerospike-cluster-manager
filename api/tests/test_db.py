@@ -229,6 +229,24 @@ class TestConnectionLabels:
         assert updated is not None
         assert updated.labels == {"env": "stage", "idc": "세종"}
 
+    async def test_env_label_is_lower_cased(self, init_test_db):
+        """Mixed-case env values normalize to lower-case so grouping is stable."""
+        now = datetime.now(UTC).isoformat()
+        conn = ConnectionProfile(
+            id="conn-mixed-case",
+            name="Mixed Case",
+            hosts=["10.0.0.1"],
+            port=3000,
+            color="#0097D3",
+            labels={"env": "  PROD  "},
+            createdAt=now,
+            updatedAt=now,
+        )
+        await db.create_connection(conn)
+        retrieved = await db.get_connection("conn-mixed-case")
+        assert retrieved is not None
+        assert retrieved.labels["env"] == "prod"
+
     async def test_update_without_labels_preserves_existing(self, init_test_db):
         now = datetime.now(UTC).isoformat()
         conn = ConnectionProfile(
@@ -245,6 +263,45 @@ class TestConnectionLabels:
         updated = await db.update_connection("conn-keep", {"name": "Renamed"})
         assert updated is not None
         assert updated.labels == {"env": "prod"}
+
+
+class TestSqliteMigration:
+    async def test_migration_is_idempotent(self, init_test_db):
+        """Calling init_db a second time over the same file must not fail or duplicate columns."""
+        from unittest.mock import patch
+
+        from aerospike_cluster_manager_api import db
+
+        path = init_test_db
+        # init_db has already been called once by the fixture; call it again.
+        with (
+            patch("aerospike_cluster_manager_api.config.ENABLE_POSTGRES", False),
+            patch("aerospike_cluster_manager_api.config.SQLITE_PATH", path),
+        ):
+            await db.init_db()
+        # Sanity: existing CRUD still works.
+        result = await db.get_all_connections()
+        assert isinstance(result, list)
+
+
+class TestEmptyKeyLabels:
+    async def test_blank_keys_dropped(self, init_test_db):
+        """Whitespace-only label keys are silently dropped."""
+        now = datetime.now(UTC).isoformat()
+        conn = ConnectionProfile(
+            id="conn-blanks",
+            name="Blanks",
+            hosts=["10.0.0.1"],
+            port=3000,
+            color="#0097D3",
+            labels={"env": "prod", "  ": "ignored", "": "also-ignored", "team": "ads"},
+            createdAt=now,
+            updatedAt=now,
+        )
+        await db.create_connection(conn)
+        retrieved = await db.get_connection("conn-blanks")
+        assert retrieved is not None
+        assert retrieved.labels == {"env": "prod", "team": "ads"}
 
 
 class TestCloseDb:

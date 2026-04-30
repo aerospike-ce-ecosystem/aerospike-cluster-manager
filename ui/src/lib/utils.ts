@@ -75,3 +75,19 @@ export const formatters: { [key: string]: any } = {
     }).format(number),
   unit: (number: number) => `${usNumberformatter(number)}`,
 }
+
+/**
+ * Convert ``#RRGGBB`` (or ``RRGGBB``) to a CSS rgba() string at the given alpha.
+ *
+ * Returns ``null`` for malformed input so callers can branch and fall back —
+ * silently echoing the original string would produce invalid CSS values that
+ * disappear without a trace.
+ */
+export function hexToRgba(hex: string, alpha: number): string | null {
+  const match = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex)
+  if (!match) return null
+  const r = parseInt(match[1], 16)
+  const g = parseInt(match[2], 16)
+  const b = parseInt(match[3], 16)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}

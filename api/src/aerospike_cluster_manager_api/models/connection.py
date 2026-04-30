@@ -6,7 +6,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 def _normalize_labels(v: object) -> dict[str, str]:
     """Coerce label input to a clean dict and ensure ``env`` is always present.
 
-    Empty/whitespace keys and values are dropped. ``env`` falls back to ``default``.
+    Empty/whitespace keys and values are dropped. The ``env`` value is forced
+    to lower-case so ``PROD`` and ``prod`` group identically in the UI; falls
+    back to ``default`` when missing.
     """
     if v is None:
         return {"env": "default"}
@@ -18,8 +20,8 @@ def _normalize_labels(v: object) -> dict[str, str]:
         if not k:
             continue
         labels[k] = str(val) if val is not None else ""
-    if not labels.get("env"):
-        labels["env"] = "default"
+    env = labels.get("env", "").strip().lower()
+    labels["env"] = env or "default"
     return labels
 
 
@@ -101,7 +103,14 @@ class TestConnectionRequest(BaseModel):
 
 
 class ConnectionProfileResponse(BaseModel):
-    """Connection profile without password — used in API responses."""
+    """Connection profile without password — used in API responses.
+
+    ``labels`` is intentionally not re-validated here: the only construction
+    path is :py:meth:`from_profile`, which receives an already-normalized
+    :class:`ConnectionProfile` (its own validator runs). A duplicate validator
+    would be dead code — and a misleading guarantee for any future caller
+    bypassing ``from_profile``.
+    """
 
     id: str
     name: str
@@ -114,11 +123,6 @@ class ConnectionProfileResponse(BaseModel):
     labels: dict[str, str] = Field(default_factory=lambda: {"env": "default"})
     createdAt: str
     updatedAt: str
-
-    @field_validator("labels", mode="before")
-    @classmethod
-    def _validate_labels(cls, v: object) -> dict[str, str]:
-        return _normalize_labels(v)
 
     @classmethod
     def from_profile(cls, profile: ConnectionProfile) -> ConnectionProfileResponse:
