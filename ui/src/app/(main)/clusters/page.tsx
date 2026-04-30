@@ -274,7 +274,7 @@ function EnvSection({
             tone.headerText,
           )}
         >
-          env / {env}
+          {env}
         </span>
         <span className="font-mono text-[11px] tabular-nums text-gray-500 dark:text-gray-500">
           {rows.length} {rows.length === 1 ? "cluster" : "clusters"}
@@ -434,7 +434,7 @@ function ClusterTable({
                     )}
                   </TableCell>
                   <TableCell>
-                    <LabelsCell labels={r.labels} hideEnv />
+                    <LabelsCell labels={r.labels} />
                   </TableCell>
                   <TableCell className="max-w-[260px]">
                     {r.description ? (
@@ -533,8 +533,7 @@ function ClusterCard({
         </div>
       </div>
 
-      {Object.keys(row.labels).filter((k) => k !== ENV_LABEL_KEY).length >
-        0 && <LabelsCell labels={row.labels} hideEnv />}
+      <LabelsCell labels={row.labels} />
 
       <AddressCopyCell
         hosts={row.hosts}
