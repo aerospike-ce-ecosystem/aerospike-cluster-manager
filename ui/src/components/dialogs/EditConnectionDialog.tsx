@@ -12,35 +12,50 @@ import {
   DialogTitle,
 } from "@/components/Dialog"
 import { ConnectionFormFields } from "@/components/dialogs/ConnectionFormFields"
-import { useConnectionForm } from "@/components/dialogs/useConnectionForm"
+import {
+  fromConnection,
+  useConnectionForm,
+} from "@/components/dialogs/useConnectionForm"
 import { ApiError } from "@/lib/api/client"
-import { createConnection } from "@/lib/api/connections"
+import { updateConnection } from "@/lib/api/connections"
+import type { ConnectionProfileResponse } from "@/lib/types/connection"
 
-interface AddConnectionDialogProps {
+interface EditConnectionDialogProps {
   open: boolean
+  connection: ConnectionProfileResponse | null
   onOpenChange: (open: boolean) => void
   onSuccess?: () => void
 }
 
-export function AddConnectionDialog({
+export function EditConnectionDialog({
   open,
+  connection,
   onOpenChange,
   onSuccess,
-}: AddConnectionDialogProps) {
-  const { form, setForm, validate, reset } = useConnectionForm()
+}: EditConnectionDialogProps) {
+  const { form, setForm, validate, hydrate } = useConnectionForm()
   const [error, setError] = React.useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
 
-  const handleOpenChange = (next: boolean) => {
-    if (!next) {
-      reset()
+  React.useEffect(() => {
+    if (open && connection) {
+      hydrate(fromConnection(connection))
       setError(null)
     }
+    // Depend on connection.id only — re-fetched profiles produce new object
+    // references but represent the same record, and we don't want to clobber
+    // the user's in-flight edits when an unrelated refetch happens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, connection?.id])
+
+  const handleOpenChange = (next: boolean) => {
+    if (!next) setError(null)
     onOpenChange(next)
   }
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (!connection) return
     setError(null)
 
     const result = validate()
@@ -51,8 +66,16 @@ export function AddConnectionDialog({
 
     setIsSubmitting(true)
     try {
-      await createConnection(result.payload)
-      reset()
+      // Edit dialog doesn't expose credential editing; only push the fields it
+      // actually edits to avoid clobbering an existing username/password.
+      await updateConnection(connection.id, {
+        name: result.payload.name,
+        hosts: result.payload.hosts,
+        port: result.payload.port,
+        color: result.payload.color,
+        description: result.payload.description,
+        labels: result.payload.labels,
+      })
       onSuccess?.()
       onOpenChange(false)
     } catch (err) {
@@ -61,7 +84,7 @@ export function AddConnectionDialog({
       } else if (err instanceof Error) {
         setError(err.message)
       } else {
-        setError("Failed to create connection.")
+        setError("Failed to update connection.")
       }
     } finally {
       setIsSubmitting(false)
@@ -73,9 +96,10 @@ export function AddConnectionDialog({
       <DialogContent>
         <form onSubmit={handleSubmit} className="flex flex-col gap-y-4">
           <DialogHeader>
-            <DialogTitle>Add connection</DialogTitle>
+            <DialogTitle>Edit connection</DialogTitle>
             <DialogDescription>
-              Register a new Aerospike cluster connection profile.
+              Update connection details and labels for grouping in the cluster
+              list.
             </DialogDescription>
           </DialogHeader>
 
@@ -85,7 +109,12 @@ export function AddConnectionDialog({
             </div>
           )}
 
-          <ConnectionFormFields form={form} setForm={setForm} idPrefix="conn" />
+          <ConnectionFormFields
+            form={form}
+            setForm={setForm}
+            idPrefix="edit-conn"
+            showCredentials={false}
+          />
 
           <DialogFooter>
             <Button
@@ -99,9 +128,9 @@ export function AddConnectionDialog({
             <Button
               type="submit"
               isLoading={isSubmitting}
-              loadingText="Creating..."
+              loadingText="Saving..."
             >
-              Create
+              Save
             </Button>
           </DialogFooter>
         </form>
@@ -110,4 +139,4 @@ export function AddConnectionDialog({
   )
 }
 
-export default AddConnectionDialog
+export default EditConnectionDialog

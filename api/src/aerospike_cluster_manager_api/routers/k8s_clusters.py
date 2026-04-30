@@ -443,6 +443,10 @@ async def create_k8s_cluster(body: CreateK8sClusterRequest) -> K8sClusterSummary
                 port=service_port,
                 clusterName=f"{body.namespace}/{body.name}",
                 color="#10B981",
+                # ACKO-managed clusters land in the `env=default` group until the
+                # user assigns a more specific value via Edit. Passed explicitly
+                # so the contract does not depend on the model validator's default.
+                labels={"env": "default"},
                 createdAt=now,
                 updatedAt=now,
             )

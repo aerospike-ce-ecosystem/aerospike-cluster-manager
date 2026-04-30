@@ -55,6 +55,7 @@ async def create_connection(request: Request, body: CreateConnectionRequest) -> 
         password=body.password,
         color=body.color,
         description=body.description,
+        labels=body.labels or {},
         createdAt=now,
         updatedAt=now,
     )

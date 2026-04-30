@@ -1,6 +1,6 @@
 /**
- * Connection-related types mirrored from backend Pydantic models.
- * See: backend/src/aerospike_cluster_manager_api/models/connection.py
+ * Connection-related types mirrored from API Pydantic models.
+ * See: api/src/aerospike_cluster_manager_api/models/connection.py
  */
 
 export type ConnectionErrorType =
@@ -34,6 +34,8 @@ export interface ConnectionProfileResponse {
   username?: string | null
   color: string
   description?: string | null
+  /** Always contains an ``env`` key after backend normalization (defaults to ``default``). */
+  labels: Record<string, string>
   createdAt: string
   updatedAt: string
 }
@@ -51,6 +53,7 @@ export interface CreateConnectionRequest {
   password?: string | null
   color?: string
   description?: string | null
+  labels?: Record<string, string> | null
 }
 
 export interface UpdateConnectionRequest {
@@ -62,6 +65,7 @@ export interface UpdateConnectionRequest {
   password?: string | null
   color?: string
   description?: string | null
+  labels?: Record<string, string> | null
 }
 
 export interface TestConnectionRequest {

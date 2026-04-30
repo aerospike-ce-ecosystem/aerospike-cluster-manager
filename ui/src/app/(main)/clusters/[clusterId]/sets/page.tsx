@@ -246,14 +246,20 @@ function NamespaceCard({
             No sets in this namespace yet.
           </span>
         )}
-        {ns.sets.map((s) => (
-          <SetChip
-            key={s.name}
-            clusterId={clusterId}
-            namespace={ns.name}
-            set={s}
-          />
-        ))}
+        {[...ns.sets]
+          .sort(
+            (a, b) =>
+              Number(b.objects > 0) - Number(a.objects > 0) ||
+              a.name.localeCompare(b.name),
+          )
+          .map((s) => (
+            <SetChip
+              key={s.name}
+              clusterId={clusterId}
+              namespace={ns.name}
+              set={s}
+            />
+          ))}
         <button
           type="button"
           onClick={onCreateSet}
@@ -279,12 +285,34 @@ function SetChip({
   namespace: string
   set: SetInfo
 }) {
+  const isEmpty = set.objects === 0
+  const baseClass =
+    "group inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition"
+  if (isEmpty) {
+    return (
+      <span
+        aria-disabled="true"
+        title="Empty set"
+        className={cx(
+          baseClass,
+          "cursor-not-allowed border-dashed border-gray-200 bg-gray-50 opacity-60 dark:border-gray-800 dark:bg-gray-950",
+        )}
+      >
+        <span className="font-mono text-gray-500 dark:text-gray-500">
+          {set.name}
+        </span>
+        <span className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-500 dark:bg-gray-900 dark:text-gray-500">
+          0
+        </span>
+      </span>
+    )
+  }
   return (
     <Link
       href={clusterSections.set(clusterId, namespace, set.name)}
       className={cx(
-        "group inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs transition",
-        "hover:border-indigo-300 hover:bg-indigo-50/50 dark:border-gray-800 dark:bg-gray-950 hover:dark:border-indigo-900/60 hover:dark:bg-indigo-950/20",
+        baseClass,
+        "border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/50 dark:border-gray-800 dark:bg-gray-950 hover:dark:border-indigo-900/60 hover:dark:bg-indigo-950/20",
       )}
     >
       <span className="font-mono text-gray-900 dark:text-gray-50">

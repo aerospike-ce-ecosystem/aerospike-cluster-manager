@@ -182,6 +182,128 @@ class TestDeleteConnection:
         assert any(p.id == "conn-other" for p in remaining)
 
 
+class TestConnectionLabels:
+    async def test_create_without_labels_defaults_to_env_default(self, init_test_db, sample_connection):
+        await db.create_connection(sample_connection)
+        retrieved = await db.get_connection(sample_connection.id)
+        assert retrieved is not None
+        assert retrieved.labels == {"env": "default"}
+
+    async def test_create_with_custom_labels_persists(self, init_test_db):
+        now = datetime.now(UTC).isoformat()
+        conn = ConnectionProfile(
+            id="conn-labeled",
+            name="Labeled",
+            hosts=["10.0.0.1"],
+            port=3000,
+            color="#0097D3",
+            labels={"env": "prod", "idc": "평촌"},
+            createdAt=now,
+            updatedAt=now,
+        )
+        await db.create_connection(conn)
+        retrieved = await db.get_connection("conn-labeled")
+        assert retrieved is not None
+        assert retrieved.labels == {"env": "prod", "idc": "평촌"}
+
+    async def test_create_without_env_label_auto_fills(self, init_test_db):
+        now = datetime.now(UTC).isoformat()
+        conn = ConnectionProfile(
+            id="conn-noenv",
+            name="No Env",
+            hosts=["10.0.0.1"],
+            port=3000,
+            color="#0097D3",
+            labels={"team": "ads"},
+            createdAt=now,
+            updatedAt=now,
+        )
+        await db.create_connection(conn)
+        retrieved = await db.get_connection("conn-noenv")
+        assert retrieved is not None
+        assert retrieved.labels == {"team": "ads", "env": "default"}
+
+    async def test_update_replaces_labels(self, init_test_db, sample_connection):
+        await db.create_connection(sample_connection)
+        updated = await db.update_connection(sample_connection.id, {"labels": {"env": "stage", "idc": "세종"}})
+        assert updated is not None
+        assert updated.labels == {"env": "stage", "idc": "세종"}
+
+    async def test_env_label_is_lower_cased(self, init_test_db):
+        """Mixed-case env values normalize to lower-case so grouping is stable."""
+        now = datetime.now(UTC).isoformat()
+        conn = ConnectionProfile(
+            id="conn-mixed-case",
+            name="Mixed Case",
+            hosts=["10.0.0.1"],
+            port=3000,
+            color="#0097D3",
+            labels={"env": "  PROD  "},
+            createdAt=now,
+            updatedAt=now,
+        )
+        await db.create_connection(conn)
+        retrieved = await db.get_connection("conn-mixed-case")
+        assert retrieved is not None
+        assert retrieved.labels["env"] == "prod"
+
+    async def test_update_without_labels_preserves_existing(self, init_test_db):
+        now = datetime.now(UTC).isoformat()
+        conn = ConnectionProfile(
+            id="conn-keep",
+            name="Keep",
+            hosts=["10.0.0.1"],
+            port=3000,
+            color="#0097D3",
+            labels={"env": "prod"},
+            createdAt=now,
+            updatedAt=now,
+        )
+        await db.create_connection(conn)
+        updated = await db.update_connection("conn-keep", {"name": "Renamed"})
+        assert updated is not None
+        assert updated.labels == {"env": "prod"}
+
+
+class TestSqliteMigration:
+    async def test_migration_is_idempotent(self, init_test_db):
+        """Calling init_db a second time over the same file must not fail or duplicate columns."""
+        from unittest.mock import patch
+
+        from aerospike_cluster_manager_api import db
+
+        path = init_test_db
+        # init_db has already been called once by the fixture; call it again.
+        with (
+            patch("aerospike_cluster_manager_api.config.ENABLE_POSTGRES", False),
+            patch("aerospike_cluster_manager_api.config.SQLITE_PATH", path),
+        ):
+            await db.init_db()
+        # Sanity: existing CRUD still works.
+        result = await db.get_all_connections()
+        assert isinstance(result, list)
+
+
+class TestEmptyKeyLabels:
+    async def test_blank_keys_dropped(self, init_test_db):
+        """Whitespace-only label keys are silently dropped."""
+        now = datetime.now(UTC).isoformat()
+        conn = ConnectionProfile(
+            id="conn-blanks",
+            name="Blanks",
+            hosts=["10.0.0.1"],
+            port=3000,
+            color="#0097D3",
+            labels={"env": "prod", "  ": "ignored", "": "also-ignored", "team": "ads"},
+            createdAt=now,
+            updatedAt=now,
+        )
+        await db.create_connection(conn)
+        retrieved = await db.get_connection("conn-blanks")
+        assert retrieved is not None
+        assert retrieved.labels == {"env": "prod", "team": "ads"}
+
+
 class TestCloseDb:
     async def test_close_sets_backend_to_none(self, init_test_db):
         """After close_db(), the module-level _backend should be None."""

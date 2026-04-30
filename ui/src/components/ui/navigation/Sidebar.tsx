@@ -29,9 +29,14 @@ import { useEffect, useMemo, useState } from "react"
 import MobileSidebar from "./MobileSidebar"
 import { UserProfileDesktop, UserProfileMobile } from "./UserProfile"
 
+type SidebarSet = {
+  name: string
+  objects: number
+}
+
 type NamespaceSummary = {
   name: string
-  sets: string[]
+  sets: SidebarSet[]
 }
 
 type ClusterSummary = {
@@ -58,7 +63,7 @@ function useClusterNamespaces(
         if (cancelled) return
         const summary = info.namespaces.map((ns) => ({
           name: ns.name,
-          sets: ns.sets.map((s) => s.name),
+          sets: ns.sets.map((s) => ({ name: s.name, objects: s.objects })),
         }))
         setMap((prev) => ({ ...prev, [activeClusterId]: summary }))
       } catch {
@@ -409,28 +414,54 @@ function NamespaceNode({
                   no sets
                 </li>
               )}
-              {namespace.sets.map((s) => {
-                const href = clusterSections.set(clusterId, namespace.name, s)
-                const active =
-                  pathname === href || pathname.startsWith(href + "/")
-                return (
-                  <li key={s}>
-                    <Link
-                      href={href}
-                      className={cx(
-                        "relative flex items-center rounded-md py-1 pl-10 pr-2 font-mono text-sm transition",
-                        "before:absolute before:left-[30px] before:top-1.5 before:h-4 before:w-0.5 before:rounded-sm",
-                        active
-                          ? "font-medium text-indigo-600 before:bg-indigo-500 dark:text-indigo-400"
-                          : "text-gray-600 before:bg-transparent hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 hover:dark:bg-gray-900 hover:dark:text-gray-50",
-                        focusRing,
-                      )}
-                    >
-                      {s}
-                    </Link>
-                  </li>
+              {[...namespace.sets]
+                .sort(
+                  (a, b) =>
+                    Number(b.objects > 0) - Number(a.objects > 0) ||
+                    a.name.localeCompare(b.name),
                 )
-              })}
+                .map((s) => {
+                  const href = clusterSections.set(
+                    clusterId,
+                    namespace.name,
+                    s.name,
+                  )
+                  const active =
+                    pathname === href || pathname.startsWith(href + "/")
+                  if (s.objects === 0) {
+                    return (
+                      <li key={s.name}>
+                        <span
+                          aria-disabled="true"
+                          title="Empty set"
+                          className={cx(
+                            "relative flex cursor-not-allowed items-center rounded-md py-1 pl-10 pr-2 font-mono text-sm",
+                            "text-gray-400 opacity-70 dark:text-gray-600",
+                          )}
+                        >
+                          {s.name}
+                        </span>
+                      </li>
+                    )
+                  }
+                  return (
+                    <li key={s.name}>
+                      <Link
+                        href={href}
+                        className={cx(
+                          "relative flex items-center rounded-md py-1 pl-10 pr-2 font-mono text-sm transition",
+                          "before:absolute before:left-[30px] before:top-1.5 before:h-4 before:w-0.5 before:rounded-sm",
+                          active
+                            ? "font-medium text-indigo-600 before:bg-indigo-500 dark:text-indigo-400"
+                            : "text-gray-600 before:bg-transparent hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 hover:dark:bg-gray-900 hover:dark:text-gray-50",
+                          focusRing,
+                        )}
+                      >
+                        {s.name}
+                      </Link>
+                    </li>
+                  )
+                })}
             </ul>
           </AccordionContent>
         </AccordionItem>

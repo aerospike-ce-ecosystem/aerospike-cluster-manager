@@ -33,18 +33,46 @@ class DatabaseBackend(Protocol):
     async def delete_connection(self, conn_id: str) -> bool: ...
 
 
+def _decode_json_dict(value: object) -> dict[str, Any]:
+    """Decode a JSON-encoded text column to ``dict[str, Any]``.
+
+    Returns ``{}`` for missing / empty / malformed input or a non-dict JSON
+    payload. Accepts already-parsed ``dict`` (asyncpg with a JSONB type codec)
+    and passes it through. Designed for the labels column; do not reuse for
+    array-shaped JSON without revisiting the type narrowing.
+    """
+    if value is None or value == "":
+        return {}
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
 def row_to_profile(row: Any) -> ConnectionProfile:
     """Convert a database row (dict-like) to a ConnectionProfile model.
 
     Works with both ``sqlite3.Row`` and ``asyncpg.Record`` since both
     support ``row["column_name"]`` access.
     """
-    hosts = row["hosts"]
-    if isinstance(hosts, str):
+    hosts_raw = row["hosts"]
+    if isinstance(hosts_raw, str):
         try:
-            hosts = json.loads(hosts)
+            hosts = json.loads(hosts_raw)
         except json.JSONDecodeError:
-            hosts = [hosts]
+            hosts = [hosts_raw]
+    else:
+        hosts = hosts_raw
+    # sqlite3.Row / asyncpg.Record use `key in row` for value membership, not column lookup;
+    # explicit keys() is the documented way to check column presence.
+    labels_raw = row["labels"] if "labels" in row.keys() else None  # noqa: SIM118
+    # ConnectionProfile.labels validator normalizes {} -> {"env": "default"}.
+    labels = _decode_json_dict(labels_raw)
     return ConnectionProfile(
         id=row["id"],
         name=row["name"],
@@ -55,6 +83,7 @@ def row_to_profile(row: Any) -> ConnectionProfile:
         password=row["password"],
         color=row["color"],
         description=row["description"],
+        labels=labels,
         createdAt=row["created_at"],
         updatedAt=row["updated_at"],
     )
@@ -82,6 +111,7 @@ def build_merged_profile(
         password=merged.get("password"),
         color=merged["color"],
         description=merged.get("description"),
+        labels=merged.get("labels") or {},
         createdAt=existing.createdAt,
         updatedAt=merged["updatedAt"],
     )

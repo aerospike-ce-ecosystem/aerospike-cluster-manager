@@ -141,6 +141,41 @@ class TestGetConnection:
         assert response.status_code == 404
 
 
+class TestConnectionLabels:
+    async def test_create_without_labels_returns_env_default(self, client: AsyncClient):
+        response = await client.post("/api/connections", json=CREATE_PAYLOAD)
+        assert response.status_code == 201
+        assert response.json()["labels"] == {"env": "default"}
+
+    async def test_create_with_labels_persists_and_normalizes_env(self, client: AsyncClient):
+        payload = {**CREATE_PAYLOAD, "labels": {"env": "prod", "idc": "평촌"}}
+        response = await client.post("/api/connections", json=payload)
+        assert response.status_code == 201
+        assert response.json()["labels"] == {"env": "prod", "idc": "평촌"}
+
+    async def test_create_without_env_key_auto_injects(self, client: AsyncClient):
+        payload = {**CREATE_PAYLOAD, "labels": {"team": "ads"}}
+        response = await client.post("/api/connections", json=payload)
+        assert response.status_code == 201
+        labels = response.json()["labels"]
+        assert labels["team"] == "ads"
+        assert labels["env"] == "default"
+
+    async def test_update_replaces_labels(self, client: AsyncClient):
+        create = await client.post("/api/connections", json=CREATE_PAYLOAD)
+        conn_id = create.json()["id"]
+        update = await client.put(f"/api/connections/{conn_id}", json={"labels": {"env": "stage"}})
+        assert update.status_code == 200
+        assert update.json()["labels"] == {"env": "stage"}
+
+    async def test_update_without_labels_preserves(self, client: AsyncClient):
+        create = await client.post("/api/connections", json={**CREATE_PAYLOAD, "labels": {"env": "prod"}})
+        conn_id = create.json()["id"]
+        update = await client.put(f"/api/connections/{conn_id}", json={"name": "Renamed"})
+        assert update.status_code == 200
+        assert update.json()["labels"] == {"env": "prod"}
+
+
 class TestUpdateConnection:
     async def test_update_fields(self, client: AsyncClient):
         # Create first
