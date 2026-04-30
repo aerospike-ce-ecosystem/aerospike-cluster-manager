@@ -3,6 +3,8 @@
 import { Badge } from "@/components/Badge"
 import { Button } from "@/components/Button"
 import { Card } from "@/components/Card"
+import { CreateRoleDialog } from "@/components/dialogs/CreateRoleDialog"
+import { CreateUserDialog } from "@/components/dialogs/CreateUserDialog"
 import { Input } from "@/components/Input"
 import {
   Table,
@@ -35,6 +37,8 @@ export default function AdminPage({ params }: PageProps) {
     error: null,
   })
   const [securityDisabled, setSecurityDisabled] = useState(false)
+  const [createUserOpen, setCreateUserOpen] = useState(false)
+  const [createRoleOpen, setCreateRoleOpen] = useState(false)
 
   const load = useCallback(async () => {
     setUsersState((s) => ({ ...s, loading: true, error: null }))
@@ -88,14 +92,26 @@ export default function AdminPage({ params }: PageProps) {
         <>
           <UsersSection
             state={usersState}
-            onCreate={() => {
-              /* TODO: CreateUserDialog */
-            }}
+            onCreate={() => setCreateUserOpen(true)}
           />
           <RolesSection
             state={rolesState}
-            onCreate={() => {
-              /* TODO: CreateRoleDialog */
+            onCreate={() => setCreateRoleOpen(true)}
+          />
+          <CreateUserDialog
+            clusterId={params.clusterId}
+            open={createUserOpen}
+            onOpenChange={setCreateUserOpen}
+            onCreated={() => {
+              void load()
+            }}
+          />
+          <CreateRoleDialog
+            clusterId={params.clusterId}
+            open={createRoleOpen}
+            onOpenChange={setCreateRoleOpen}
+            onCreated={() => {
+              void load()
             }}
           />
         </>
