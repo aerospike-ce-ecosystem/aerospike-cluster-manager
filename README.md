@@ -826,7 +826,7 @@ All environment variables with their defaults and descriptions. See `api/src/aer
 
 | Variable | Default | Description |
 |---|---|---|
-| `CORS_ORIGINS` | `http://localhost:3100` | Comma-separated list of allowed CORS origins (must include the UI URL) |
+| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:3100` | Comma-separated list of allowed CORS origins (must include the UI URL) |
 | `API_URL` | `http://localhost:8000` | API URL used by the UI proxy (`ui/proxy.js` in production, `next.config.mjs` rewrites in dev) |
 | `API_PORT` | `8000` | API port (compose files) |
 | `UI_PORT` | `3100` | UI port (compose files) |
