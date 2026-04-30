@@ -201,13 +201,15 @@ export function EditConnectionDialog({
             <Label htmlFor="edit-conn-description">
               Description (optional)
             </Label>
-            <Input
+            <textarea
               id="edit-conn-description"
               value={form.description}
               onChange={(e) =>
                 setForm({ ...form, description: e.target.value })
               }
-              placeholder="Notes about this cluster"
+              rows={3}
+              placeholder="Notes about this cluster — purpose, owner, runbook link, …"
+              className="block w-full resize-y rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 placeholder-gray-400 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-50 dark:placeholder-gray-500 dark:focus:ring-indigo-400/20"
             />
           </div>
 

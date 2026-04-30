@@ -375,6 +375,9 @@ function NameLink({ row }: { row: Row }) {
   )
 }
 
+const SECONDARY_HEADER =
+  "text-[10px] font-medium uppercase tracking-[0.18em] text-gray-400 dark:text-gray-600"
+
 function ClusterTable({
   rows,
   onEdit,
@@ -388,12 +391,17 @@ function ClusterTable({
         <Table>
           <TableHead>
             <TableRow>
+              <TableHeaderCell className={cx("w-10 px-3", SECONDARY_HEADER)}>
+                <span className="sr-only">Status</span>
+                <span aria-hidden="true">●</span>
+              </TableHeaderCell>
               <TableHeaderCell>Name</TableHeaderCell>
-              <TableHeaderCell>Status</TableHeaderCell>
-              <TableHeaderCell>Managed by</TableHeaderCell>
-              <TableHeaderCell>Labels</TableHeaderCell>
               <TableHeaderCell>Description</TableHeaderCell>
+              <TableHeaderCell>Labels</TableHeaderCell>
               <TableHeaderCell>Address</TableHeaderCell>
+              <TableHeaderCell className={cx("w-24", SECONDARY_HEADER)}>
+                Managed
+              </TableHeaderCell>
               <TableHeaderCell className="w-12 text-right" />
             </TableRow>
           </TableHead>
@@ -405,36 +413,18 @@ function ClusterTable({
                   key={r.key}
                   className="transition hover:bg-gray-50 dark:hover:bg-gray-900/40"
                 >
+                  <TableCell className="w-10 px-3">
+                    <span
+                      className={cx(
+                        "inline-block size-2.5 rounded-full",
+                        status.dot,
+                      )}
+                      aria-label={status.label}
+                      title={status.label}
+                    />
+                  </TableCell>
                   <TableCell>
                     <NameLink row={r} />
-                  </TableCell>
-                  <TableCell>
-                    <span className="inline-flex items-center gap-2">
-                      <span
-                        className={`size-2 rounded-full ${status.dot}`}
-                        aria-hidden="true"
-                      />
-                      <span className="text-xs uppercase tracking-wider text-gray-600 dark:text-gray-400">
-                        {status.label}
-                      </span>
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    {r.managedBy === "ACKO" ? (
-                      <Badge
-                        variant="default"
-                        className="uppercase tracking-wider"
-                      >
-                        ACKO
-                      </Badge>
-                    ) : (
-                      <span className="text-gray-600 dark:text-gray-400">
-                        Manual
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <LabelsCell labels={r.labels} />
                   </TableCell>
                   <TableCell className="max-w-[260px]">
                     {r.description ? (
@@ -451,11 +441,28 @@ function ClusterTable({
                     )}
                   </TableCell>
                   <TableCell>
+                    <LabelsCell labels={r.labels} />
+                  </TableCell>
+                  <TableCell>
                     <AddressCopyCell
                       hosts={r.hosts}
                       port={r.port}
                       fallback={r.k8sNamespace ?? "—"}
                     />
+                  </TableCell>
+                  <TableCell className="w-24">
+                    {r.managedBy === "ACKO" ? (
+                      <Badge
+                        variant="default"
+                        className="text-[10px] uppercase tracking-wider"
+                      >
+                        ACKO
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-gray-400 dark:text-gray-600">
+                        manual
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     {r.profile ? (
