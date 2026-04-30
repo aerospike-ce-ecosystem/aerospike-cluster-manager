@@ -14,49 +14,54 @@
 //   re-implementing what `start-server.js` already wires up. Keeping that file
 //   untouched and proxying in front of it is the only change-resistant
 //   contract Next.js exposes.
-const http = require("http");
-const https = require("https");
-const path = require("path");
-const { spawn } = require("child_process");
+const http = require("http")
+const https = require("https")
+const path = require("path")
+const { spawn } = require("child_process")
 
-const port = parseInt(process.env.PORT || "3100", 10);
-const hostname = process.env.HOSTNAME || "0.0.0.0";
-const apiUrl = process.env.API_URL || "http://localhost:8000";
-const internalPort = parseInt(process.env.NEXT_INTERNAL_PORT || String(port + 1), 10);
-const internalHost = "127.0.0.1";
+const port = parseInt(process.env.PORT || "3100", 10)
+const hostname = process.env.HOSTNAME || "0.0.0.0"
+const apiUrl = process.env.API_URL || "http://localhost:8000"
+const internalPort = parseInt(
+  process.env.NEXT_INTERNAL_PORT || String(port + 1),
+  10,
+)
+const internalHost = "127.0.0.1"
 
-let parsedApi;
+let parsedApi
 try {
-  parsedApi = new URL(apiUrl);
+  parsedApi = new URL(apiUrl)
 } catch (err) {
-  console.error(`Invalid API_URL=${apiUrl}: ${err.message}`);
-  process.exit(1);
+  console.error(`Invalid API_URL=${apiUrl}: ${err.message}`)
+  process.exit(1)
 }
-const apiIsHttps = parsedApi.protocol === "https:";
-const apiPort = parsedApi.port || (apiIsHttps ? 443 : 80);
-const apiLib = apiIsHttps ? https : http;
+const apiIsHttps = parsedApi.protocol === "https:"
+const apiPort = parsedApi.port || (apiIsHttps ? 443 : 80)
+const apiLib = apiIsHttps ? https : http
 
-const nextServerScript = path.join(__dirname, "server.js");
+const nextServerScript = path.join(__dirname, "server.js")
 const nextProcess = spawn(process.execPath, [nextServerScript], {
   cwd: __dirname,
   env: { ...process.env, PORT: String(internalPort), HOSTNAME: internalHost },
   stdio: "inherit",
-});
+})
 
 nextProcess.on("exit", (code, signal) => {
-  console.error(`Next.js standalone server exited (code=${code}, signal=${signal})`);
-  process.exit(code == null ? 1 : code);
-});
+  console.error(
+    `Next.js standalone server exited (code=${code}, signal=${signal})`,
+  )
+  process.exit(code == null ? 1 : code)
+})
 
 const forwardSignal = (sig) => {
-  if (!nextProcess.killed) nextProcess.kill(sig);
-};
-process.on("SIGTERM", () => forwardSignal("SIGTERM"));
-process.on("SIGINT", () => forwardSignal("SIGINT"));
+  if (!nextProcess.killed) nextProcess.kill(sig)
+}
+process.on("SIGTERM", () => forwardSignal("SIGTERM"))
+process.on("SIGINT", () => forwardSignal("SIGINT"))
 
 function proxyToApi(req, res) {
-  const headers = { ...req.headers };
-  delete headers.host;
+  const headers = { ...req.headers }
+  delete headers.host
 
   const proxyReq = apiLib.request(
     {
@@ -67,27 +72,29 @@ function proxyToApi(req, res) {
       headers,
     },
     (proxyRes) => {
-      res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
-      proxyRes.pipe(res);
+      res.writeHead(proxyRes.statusCode || 502, proxyRes.headers)
+      proxyRes.pipe(res)
     },
-  );
+  )
 
   proxyReq.on("error", (err) => {
-    console.error(`[api-proxy] ${req.method} ${req.url} -> ${apiUrl} failed: ${err.message}`);
+    console.error(
+      `[api-proxy] ${req.method} ${req.url} -> ${apiUrl} failed: ${err.message}`,
+    )
     if (!res.headersSent) {
-      res.writeHead(502, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Bad gateway", target: apiUrl }));
+      res.writeHead(502, { "Content-Type": "application/json" })
+      res.end(JSON.stringify({ error: "Bad gateway", target: apiUrl }))
     } else {
-      res.end();
+      res.end()
     }
-  });
+  })
 
-  req.on("aborted", () => proxyReq.destroy());
-  req.pipe(proxyReq);
+  req.on("aborted", () => proxyReq.destroy())
+  req.pipe(proxyReq)
 }
 
 function proxyToNext(req, res) {
-  const headers = { ...req.headers };
+  const headers = { ...req.headers }
 
   const proxyReq = http.request(
     {
@@ -98,39 +105,41 @@ function proxyToNext(req, res) {
       headers,
     },
     (proxyRes) => {
-      res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
-      proxyRes.pipe(res);
+      res.writeHead(proxyRes.statusCode || 502, proxyRes.headers)
+      proxyRes.pipe(res)
     },
-  );
+  )
 
   proxyReq.on("error", (err) => {
     console.error(
       `[next-proxy] ${req.method} ${req.url} -> ${internalHost}:${internalPort} failed: ${err.message}`,
-    );
+    )
     if (!res.headersSent) {
-      res.writeHead(503, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "UI not ready" }));
+      res.writeHead(503, { "Content-Type": "application/json" })
+      res.end(JSON.stringify({ error: "UI not ready" }))
     } else {
-      res.end();
+      res.end()
     }
-  });
+  })
 
-  req.on("aborted", () => proxyReq.destroy());
-  req.pipe(proxyReq);
+  req.on("aborted", () => proxyReq.destroy())
+  req.pipe(proxyReq)
 }
 
 const server = http.createServer((req, res) => {
   if (req.url && req.url.startsWith("/api/")) {
-    return proxyToApi(req, res);
+    return proxyToApi(req, res)
   }
-  return proxyToNext(req, res);
-});
+  return proxyToNext(req, res)
+})
 
-server.keepAliveTimeout = 65_000;
-server.headersTimeout = 66_000;
+server.keepAliveTimeout = 65_000
+server.headersTimeout = 66_000
 
 server.listen(port, hostname, () => {
-  console.log(`> Proxy listening on http://${hostname}:${port}`);
-  console.log(`> /api/* -> ${apiUrl}`);
-  console.log(`> rest    -> http://${internalHost}:${internalPort} (Next.js standalone)`);
-});
+  console.log(`> Proxy listening on http://${hostname}:${port}`)
+  console.log(`> /api/* -> ${apiUrl}`)
+  console.log(
+    `> rest    -> http://${internalHost}:${internalPort} (Next.js standalone)`,
+  )
+})
