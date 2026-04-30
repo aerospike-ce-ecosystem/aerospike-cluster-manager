@@ -5,6 +5,7 @@ import { Button } from "@/components/Button"
 import { Card } from "@/components/Card"
 import { Input } from "@/components/Input"
 import { Label } from "@/components/Label"
+import { RecordDetailSkeleton } from "@/components/skeletons/RecordDetailSkeleton"
 import { clusterSections } from "@/app/siteConfig"
 import { ApiError } from "@/lib/api/client"
 import { deleteRecord, getRecordDetail, putRecord } from "@/lib/api/records"
@@ -513,9 +514,7 @@ export default function RecordDetailPage({ params }: PageProps) {
       )}
 
       {isLoading && !record ? (
-        <Card className="py-10 text-center text-sm text-gray-500 dark:text-gray-500">
-          Loading record…
-        </Card>
+        <RecordDetailSkeleton />
       ) : !record ? (
         <Card className="py-10 text-center text-sm text-gray-500 dark:text-gray-500">
           Record not found.

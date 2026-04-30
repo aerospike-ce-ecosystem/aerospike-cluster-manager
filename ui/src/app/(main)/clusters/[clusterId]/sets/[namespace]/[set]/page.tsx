@@ -29,6 +29,7 @@ import {
 } from "@/components/Select"
 import { listIndexes } from "@/lib/api/indexes"
 import { filterRecords } from "@/lib/api/records"
+import { TableSkeleton } from "@/components/skeletons/TableSkeleton"
 import type { BinDataType } from "@/lib/types/query"
 import type { SecondaryIndex } from "@/lib/types/index"
 import type { AerospikeRecord } from "@/lib/types/record"
@@ -379,7 +380,10 @@ export default function RecordBrowserPage({ params }: PageProps) {
             </TableHead>
             <TableBody>
               {loading && !records ? (
-                <RecordSkeleton cols={Math.max(binColumns.length, 4) + 4} />
+                <TableSkeleton
+                  rows={6}
+                  cols={Math.max(binColumns.length, 4) + 4}
+                />
               ) : !records || records.length === 0 ? (
                 <TableRow>
                   <TableCell
@@ -516,22 +520,6 @@ function StatusBar({
         </Select>
       </div>
     </div>
-  )
-}
-
-function RecordSkeleton({ cols }: { cols: number }) {
-  return (
-    <>
-      {[0, 1, 2, 3, 4].map((r) => (
-        <TableRow key={r}>
-          {Array.from({ length: cols }).map((_, c) => (
-            <TableCell key={c}>
-              <div className="h-3 w-20 animate-pulse rounded bg-gray-100 dark:bg-gray-900" />
-            </TableCell>
-          ))}
-        </TableRow>
-      ))}
-    </>
   )
 }
 
