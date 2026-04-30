@@ -18,6 +18,7 @@ import {
   DEFAULT_ENV_VALUE,
   ENV_LABEL_KEY,
 } from "@/components/clusters/LabelsEditor"
+import { getEnvTone } from "@/components/clusters/envTone"
 import { AddConnectionDialog } from "@/components/dialogs/AddConnectionDialog"
 import { EditConnectionDialog } from "@/components/dialogs/EditConnectionDialog"
 import { clusterSections } from "@/app/siteConfig"
@@ -259,15 +260,26 @@ function EnvSection({
   view: ClustersView
   onEdit: (conn: ConnectionProfileResponse) => void
 }) {
+  const tone = getEnvTone(env)
   return (
-    <section className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <Badge variant="default" className="font-mono uppercase tracking-wider">
-          env={env}
-        </Badge>
-        <span className="text-xs text-gray-500 dark:text-gray-500">
+    <section className="flex flex-col gap-4">
+      <div className="flex items-center gap-3">
+        <span
+          aria-hidden="true"
+          className={cx("h-4 w-[3px] shrink-0 rounded-full", tone.accent)}
+        />
+        <span
+          className={cx(
+            "text-[11px] font-bold uppercase tracking-[0.22em]",
+            tone.headerText,
+          )}
+        >
+          env / {env}
+        </span>
+        <span className="font-mono text-[11px] tabular-nums text-gray-500 dark:text-gray-500">
           {rows.length} {rows.length === 1 ? "cluster" : "clusters"}
         </span>
+        <span aria-hidden="true" className={cx("h-px flex-1", tone.rule)} />
       </div>
       {view === "card" ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -422,7 +434,7 @@ function ClusterTable({
                     )}
                   </TableCell>
                   <TableCell>
-                    <LabelsCell labels={r.labels} />
+                    <LabelsCell labels={r.labels} hideEnv />
                   </TableCell>
                   <TableCell className="max-w-[260px]">
                     {r.description ? (
@@ -521,7 +533,8 @@ function ClusterCard({
         </div>
       </div>
 
-      <LabelsCell labels={row.labels} />
+      {Object.keys(row.labels).filter((k) => k !== ENV_LABEL_KEY).length >
+        0 && <LabelsCell labels={row.labels} hideEnv />}
 
       <AddressCopyCell
         hosts={row.hosts}
