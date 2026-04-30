@@ -5,7 +5,7 @@ This guide covers the Kubernetes cluster lifecycle management features of the Ae
 ## Prerequisites
 
 - Kubernetes cluster with the [Aerospike CE Kubernetes Operator](https://github.com/aerospike-ce-ecosystem/aerospike-ce-kubernetes-operator) installed.
-- `K8S_MANAGEMENT_ENABLED=true` environment variable set on the backend.
+- `K8S_MANAGEMENT_ENABLED=true` environment variable set on the api.
 - Service account with RBAC permissions for AerospikeCluster and AerospikeClusterTemplate CRDs (see [Architecture Guide](architecture.md)).
 
 ## Cluster Creation Wizard
@@ -300,7 +300,7 @@ The dialog shows the current HPA state including current/desired replicas and sc
 
 **Updating and deleting:**
 
-- Use the same dialog to update an existing HPA configuration. The backend automatically detects whether to create or replace.
+- Use the same dialog to update an existing HPA configuration. The API automatically detects whether to create or replace.
 - The delete button removes the HPA, reverting to manual scaling.
 
 **API endpoints:**

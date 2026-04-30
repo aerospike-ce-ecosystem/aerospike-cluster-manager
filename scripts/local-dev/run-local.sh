@@ -3,7 +3,7 @@
 #   1. kind cluster (podman provider)
 #   2. cert-manager + ACKO operator (helm)
 #   3. Standalone Aerospike (compose.dev.yaml) for non-K8s connection testing
-# backend/frontend are NOT started — instructions are printed for the developer.
+# api/ui are NOT started — instructions are printed for the developer.
 set -euo pipefail
 source "$(cd "$(dirname "$0")" && pwd)/_common.sh"
 
@@ -14,7 +14,7 @@ log "[1/N] Bootstrapping kind cluster..."
 bash "${REPO_ROOT}/scripts/local-dev/kind-up.sh"
 
 if [[ "${ACKO_UI_ENABLED}" == "true" && "${ACKO_UI_LOCAL_BUILD}" == "true" ]]; then
-  log "[UI] Building and loading 3 UI images into kind (ACKO_UI_LOCAL_BUILD=true)..."
+  log "[UI] Building and loading 2 UI images into kind (ACKO_UI_LOCAL_BUILD=true)..."
   bash "${REPO_ROOT}/scripts/local-dev/build-ui-images.sh"
 fi
 
@@ -41,14 +41,11 @@ if [[ "${ACKO_UI_ENABLED}" == "true" ]]; then
   cat <<EOF
 Port-forward the chart-bundled UI:
 
-  # frontend-renewal (Tremor rewrite)
-  kubectl port-forward -n ${ACKO_NAMESPACE} svc/${_ui_prefix}-ui-frontend-renewal 3100:3100
+  # web (Next.js)
+  kubectl port-forward -n ${ACKO_NAMESPACE} svc/${_ui_prefix}-ui-web 3100:3100
 
-  # legacy frontend
-  kubectl port-forward -n ${ACKO_NAMESPACE} svc/${_ui_prefix}-ui-frontend 3000:3000
-
-  # backend (if needed separately)
-  kubectl port-forward -n ${ACKO_NAMESPACE} svc/${_ui_prefix}-ui-backend 8000:80
+  # api (if needed separately)
+  kubectl port-forward -n ${ACKO_NAMESPACE} svc/${_ui_prefix}-ui-api 8000:80
 
 Then open http://localhost:3100/
 EOF
@@ -56,16 +53,16 @@ else
   cat <<EOF
 Next steps — open two terminals:
 
-  # Terminal A — backend
-  cd backend
+  # Terminal A — api
+  cd api
   K8S_MANAGEMENT_ENABLED=true \\
   AEROSPIKE_HOST=localhost AEROSPIKE_PORT=14790 \\
     uv run uvicorn aerospike_cluster_manager_api.main:app --reload
 
-  # Terminal B — frontend
-  cd frontend && npm run dev
+  # Terminal B — ui
+  cd ui && npm run dev
 
-Then open http://localhost:3000/k8s/clusters
+Then open http://localhost:3100/k8s/clusters
 EOF
 fi
 

@@ -93,15 +93,12 @@ if [[ "${ACKO_UI_ENABLED}" == "true" ]]; then
   if [[ "${ACKO_UI_LOCAL_BUILD}" == "true" ]]; then
     log "UI mode: ui.enabled=true with locally-built images (tag: ${ACKO_UI_IMAGE_TAG}, pullPolicy=Never)"
     _helm_args+=(
-      --set "ui.backend.image.repository=${ACKO_UI_BACKEND_IMAGE}"
-      --set "ui.backend.image.tag=${ACKO_UI_IMAGE_TAG}"
-      --set "ui.backend.image.pullPolicy=Never"
-      --set "ui.frontend.image.repository=${ACKO_UI_FRONTEND_IMAGE}"
-      --set "ui.frontend.image.tag=${ACKO_UI_IMAGE_TAG}"
-      --set "ui.frontend.image.pullPolicy=Never"
-      --set "ui.frontendRenewal.image.repository=${ACKO_UI_FRONTEND_RENEWAL_IMAGE}"
-      --set "ui.frontendRenewal.image.tag=${ACKO_UI_IMAGE_TAG}"
-      --set "ui.frontendRenewal.image.pullPolicy=Never"
+      --set "ui.api.image.repository=${ACKO_UI_API_IMAGE}"
+      --set "ui.api.image.tag=${ACKO_UI_IMAGE_TAG}"
+      --set "ui.api.image.pullPolicy=Never"
+      --set "ui.web.image.repository=${ACKO_UI_WEB_IMAGE}"
+      --set "ui.web.image.tag=${ACKO_UI_IMAGE_TAG}"
+      --set "ui.web.image.pullPolicy=Never"
     )
   else
     log "UI mode: ui.enabled=true with chart-default images (ghcr.io, tag: latest)"

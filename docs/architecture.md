@@ -12,13 +12,13 @@ The Aerospike Cluster Manager is a web-based GUI that provides two primary capab
 ```
 +------------------------------------------------------+
 |                  User's Browser                      |
-|  (Next.js 16 / React 19 / Tailwind / DaisyUI)       |
+|  UI  (Next.js 14 / React 18 / Tailwind / Tremor)    |
 +----------------------------+-------------------------+
                              |
                         HTTP / REST
                              |
 +----------------------------v-------------------------+
-|              Backend (FastAPI / Python 3.13)          |
+|              API (FastAPI / Python 3.13)              |
 |                                                      |
 |  +---------------+  +-----------------------------+  |
 |  | Data Routers  |  |    K8s Routers              |  |
@@ -65,14 +65,14 @@ The Aerospike Cluster Manager is a web-based GUI that provides two primary capab
 
 ## Component Roles
 
-### Frontend (Next.js 16)
+### UI (Next.js 14)
 
 - **App Router** pages under `src/app/` for each feature area (`/browser`, `/cluster`, `/k8s/clusters`, `/k8s/templates`, `/admin`, `/indexes`, `/udfs`, `/terminal`, `/settings`).
 - **Zustand stores** manage client-side state (`connection-store`, `k8s-cluster-store`, `browser-store`, `query-store`, `admin-store`, `metrics-store`, `filter-store`, `ui-store`, `toast-store`).
 - K8s features are conditionally shown based on whether `GET /api/k8s/clusters` returns a 404 (K8s disabled) or a successful response.
 - The **K8s cluster creation wizard** is a multi-step form with 11 steps (Step 0–10) covering creation mode, basic config, namespace/storage, monitoring, resources, ACL/security, rolling update, rack config, sidecars, advanced settings, and review.
 
-### Backend (FastAPI)
+### API (FastAPI)
 
 - **Data routers** communicate with Aerospike servers using `aerospike-py` (PyO3-based Python client).
 - **K8s routers** (`routers/k8s_clusters.py`) communicate with the Kubernetes API server using the official `kubernetes-client` Python library.
@@ -96,13 +96,13 @@ The Cluster Manager UI reads these status fields and displays them as dashboards
 
 ### K8s Cluster Creation (example)
 
-1. User fills out the multi-step wizard in the frontend.
-2. Frontend sends `POST /api/k8s/clusters` with the `CreateK8sClusterRequest` payload.
-3. Backend's `k8s_clusters.py` router validates the request and calls `build_cr()` to construct the AerospikeCluster CR manifest.
-4. Backend calls `k8s_client.create_cluster(namespace, cr)` which submits the CR to the Kubernetes API via `CustomObjectsApi.create_namespaced_custom_object()`.
+1. User fills out the multi-step wizard in the UI.
+2. UI sends `POST /api/k8s/clusters` with the `CreateK8sClusterRequest` payload.
+3. API's `k8s_clusters.py` router validates the request and calls `build_cr()` to construct the AerospikeCluster CR manifest.
+4. API calls `k8s_client.create_cluster(namespace, cr)` which submits the CR to the Kubernetes API via `CustomObjectsApi.create_namespaced_custom_object()`.
 5. The operator detects the new CR and begins reconciliation (creating StatefulSet, Services, etc.).
-6. The frontend polls `GET /api/k8s/clusters/{namespace}/{name}` to track the cluster phase as it transitions through `InProgress` -> `Completed`.
-7. If auto-connect was enabled, the backend also creates a connection profile pointing to the cluster's headless service DNS name (`<name>.<namespace>.svc.cluster.local`).
+6. The UI polls `GET /api/k8s/clusters/{namespace}/{name}` to track the cluster phase as it transitions through `InProgress` -> `Completed`.
+7. If auto-connect was enabled, the API also creates a connection profile pointing to the cluster's headless service DNS name (`<name>.<namespace>.svc.cluster.local`).
 
 ### CRD Schema
 
@@ -125,7 +125,7 @@ podman compose -f compose.yaml up --build
 
 ### Inside Kubernetes (with operator)
 
-When deployed inside a Kubernetes cluster alongside the Aerospike CE Operator, set `K8S_MANAGEMENT_ENABLED=true`. The backend automatically loads in-cluster Kubernetes config and uses the pod's service account for API access.
+When deployed inside a Kubernetes cluster alongside the Aerospike CE Operator, set `K8S_MANAGEMENT_ENABLED=true`. The API automatically loads in-cluster Kubernetes config and uses the pod's service account for API access.
 
 **Required RBAC permissions** for the service account:
 
@@ -182,7 +182,7 @@ The Aerospike Cluster Manager supports two database backends for persisting conn
 
 ### SQLite (Default)
 
-SQLite is the default database backend. It requires no external service and works out of the box. The backend creates the database file automatically on first startup.
+SQLite is the default database backend. It requires no external service and works out of the box. The API creates the database file automatically on first startup.
 
 - **WAL mode** is enabled for better read concurrency. Multiple readers can access the database simultaneously while a single writer holds a lock, making it suitable for typical single-instance deployments.
 - **File path** is configurable via the `SQLITE_PATH` environment variable (default: `./data/connections.db`).
@@ -205,7 +205,7 @@ The PostgreSQL connection pool is configurable via `DB_POOL_MIN_SIZE`, `DB_POOL_
 |----------|-------------------|
 | Single-instance deployment (standalone container, local dev) | SQLite |
 | High-availability with multiple replicas | PostgreSQL |
-| Kubernetes deployment with a single backend pod | SQLite |
+| Kubernetes deployment with a single API pod | SQLite |
 | Kubernetes deployment with horizontal scaling | PostgreSQL |
 | Minimal infrastructure / quick start | SQLite |
 
@@ -219,11 +219,11 @@ The PostgreSQL connection pool is configurable via `DB_POOL_MIN_SIZE`, `DB_POOL_
 | `SQLITE_PATH` | `./data/connections.db` | File path for the SQLite database (used when `ENABLE_POSTGRES` is `false`). |
 | `ENABLE_POSTGRES` | `false` | Set to `true` to use PostgreSQL instead of the default SQLite backend. |
 | `DATABASE_URL` | `postgresql://...@localhost:5432/aerospike_manager` | PostgreSQL connection string (only used when `ENABLE_POSTGRES=true`). |
-| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:3100` | Comma-separated allowed CORS origins. Must include the frontend URL. |
-| `LOG_LEVEL` | `INFO` | Backend log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`). |
+| `CORS_ORIGINS` | `http://localhost:3100` | Comma-separated allowed CORS origins. Must include the UI URL. |
+| `LOG_LEVEL` | `INFO` | API log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`). |
 | `LOG_FORMAT` | `text` | Log format: `text` for local dev, `json` for structured container logging. |
-| `HOST` | `0.0.0.0` | Backend bind address. |
-| `PORT` | `8000` | Backend bind port. |
+| `HOST` | `0.0.0.0` | API bind address. |
+| `PORT` | `8000` | API bind port. |
 
 ### Database Connection Pool
 
@@ -359,7 +359,7 @@ The PVC endpoint now returns two additional fields per PVC entry:
 | `boundPod` | `string?` | Name of the pod currently mounting this PVC, or `null` if no pod is bound |
 | `isOrphan` | `bool` | `true` if the PVC is in Bound status but no running pod in the cluster mounts it |
 
-The backend builds a PVC-to-pod mapping by inspecting the `volumes` spec of all pods matching the cluster's label selector. PVCs not found in any pod's volume list are flagged as orphans.
+The API builds a PVC-to-pod mapping by inspecting the `volumes` spec of all pods matching the cluster's label selector. PVCs not found in any pod's volume list are flagged as orphans.
 
 ### Cluster Health Response
 

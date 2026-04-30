@@ -1,31 +1,30 @@
 # =============================================================================
-# Stage 1: Frontend build
+# Stage 1: UI build (Next.js standalone + proxy.js sidecar)
 # =============================================================================
-FROM node:22-alpine AS frontend-deps
+FROM node:22-alpine AS ui-deps
 WORKDIR /app
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+COPY ui/package.json ui/package-lock.json ./
+RUN npm ci --legacy-peer-deps
 
-FROM node:22-alpine AS frontend-builder
+FROM node:22-alpine AS ui-builder
 WORKDIR /app
-COPY --from=frontend-deps /app/node_modules ./node_modules
-COPY frontend/ .
+COPY --from=ui-deps /app/node_modules ./node_modules
+COPY ui/ .
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV BACKEND_URL=http://localhost:8000
 RUN npm run build
 
 # =============================================================================
-# Stage 2: Backend build
+# Stage 2: API build
 # =============================================================================
-FROM python:3.14-slim AS backend-builder
+FROM python:3.14-slim AS api-builder
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-WORKDIR /app/backend
+WORKDIR /app/api
 
-COPY backend/pyproject.toml backend/uv.lock backend/README.md ./
+COPY api/pyproject.toml api/uv.lock api/README.md ./
 RUN uv sync --frozen --no-dev --no-install-project
 
-COPY backend/src/ src/
+COPY api/src/ src/
 RUN uv sync --frozen --no-dev
 
 # =============================================================================
@@ -46,13 +45,14 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-# Copy backend
-COPY --from=backend-builder /app/backend /app/backend
+# Copy api
+COPY --from=api-builder /app/api /app/api
 
-# Copy frontend (Next.js standalone)
-COPY --from=frontend-builder /app/public /app/frontend/public
-COPY --from=frontend-builder /app/.next/standalone /app/frontend
-COPY --from=frontend-builder /app/.next/static /app/frontend/.next/static
+# Copy ui (Next.js standalone + proxy.js sidecar)
+COPY --from=ui-builder /app/public /app/ui/public
+COPY --from=ui-builder /app/.next/standalone /app/ui
+COPY --from=ui-builder /app/.next/static /app/ui/.next/static
+COPY --from=ui-builder /app/proxy.js /app/ui/proxy.js
 
 # Copy entrypoint
 COPY entrypoint.sh /app/entrypoint.sh
@@ -71,8 +71,8 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV SQLITE_PATH=/app/data/connections.db
 
-# Frontend: 3000, Backend: 8000
-EXPOSE 3000 8000
+# UI: 3100, API: 8000
+EXPOSE 3100 8000
 
 HEALTHCHECK --interval=10s --timeout=5s --retries=3 --start-period=15s \
     CMD curl -f http://localhost:8000/api/health || exit 1

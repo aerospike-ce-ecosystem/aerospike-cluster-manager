@@ -14,48 +14,48 @@ repos:
       - id: check-toml
       - id: detect-private-key
 
-  # ── Python / Backend (ruff) ──────────────────────────────
+  # ── Python / API (ruff) ──────────────────────────────────
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.1
     hooks:
       - id: ruff
         args: ["--fix"]
-        files: ^backend/
+        files: ^api/
       - id: ruff-format
-        files: ^backend/
+        files: ^api/
 
-  # ── Python / Backend (pyright) ───────────────────────────
+  # ── Python / API (pyright) ───────────────────────────────
   - repo: local
     hooks:
       - id: pyright
         name: pyright
-        entry: bash -c 'cd backend && uv run pyright src/'
+        entry: bash -c 'cd api && uv run pyright src/'
         language: system
-        files: ^backend/src/.*\.py$
+        files: ^api/src/.*\.py$
         types: [python]
         pass_filenames: false
 
-  # ── Frontend (eslint + prettier + tsc) ──────────────────
+  # ── UI (eslint + prettier + tsc) ─────────────────────────
   - repo: local
     hooks:
       - id: eslint
         name: eslint
-        entry: bash -c 'args=(); for f in "$@"; do args+=("${f#frontend/}"); done; cd frontend && ./node_modules/.bin/eslint --fix "${args[@]}"' --
+        entry: bash -c 'args=(); for f in "$@"; do args+=("${f#ui/}"); done; cd ui && ./node_modules/.bin/eslint --fix "${args[@]}"' --
         language: system
-        files: ^frontend/src/.*\.(ts|tsx)$
+        files: ^ui/src/.*\.(ts|tsx)$
         types: [file]
 
       - id: prettier
         name: prettier
-        entry: bash -c 'args=(); for f in "$@"; do args+=("${f#frontend/}"); done; cd frontend && ./node_modules/.bin/prettier --write "${args[@]}"' --
+        entry: bash -c 'args=(); for f in "$@"; do args+=("${f#ui/}"); done; cd ui && ./node_modules/.bin/prettier --write "${args[@]}"' --
         language: system
-        files: ^frontend/.*\.(ts|tsx|json|md|css)$
+        files: ^ui/.*\.(ts|tsx|json|md|css)$
         types: [file]
 
       - id: tsc
         name: tsc (type-check)
-        entry: bash -c 'cd frontend && npx tsc --noEmit'
+        entry: bash -c 'cd ui && npx tsc --noEmit'
         language: system
-        files: ^frontend/src/.*\.(ts|tsx)$
+        files: ^ui/src/.*\.(ts|tsx)$
         types: [file]
         pass_filenames: false

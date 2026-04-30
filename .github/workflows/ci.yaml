@@ -1,5 +1,5 @@
 name: CI
-# On PR/push: runs backend tests (pytest) + frontend tests/build (vitest + next build) + pre-commit checks
+# On PR/push: runs API tests (pytest) + UI lint/build (next build) + pre-commit checks
 
 on:
   push:
@@ -32,21 +32,21 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: ui/package-lock.json
 
-      - name: Install frontend dependencies
-        run: npm ci
-        working-directory: frontend
+      - name: Install UI dependencies
+        run: npm ci --legacy-peer-deps
+        working-directory: ui
 
       - uses: pre-commit/action@v3.0.1
 
-  backend:
-    name: Backend Test
+  api:
+    name: API Test
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
       run:
-        working-directory: backend
+        working-directory: api
     steps:
       - uses: actions/checkout@v6
 
@@ -70,13 +70,13 @@ jobs:
       - name: Run tests
         run: uv run pytest tests/ -v --tb=short
 
-  frontend:
-    name: Frontend Test & Build
+  ui:
+    name: UI Test & Build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
       run:
-        working-directory: frontend
+        working-directory: ui
     steps:
       - uses: actions/checkout@v6
 
@@ -85,10 +85,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: ui/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: TypeScript type check
         run: npm run type-check
@@ -98,9 +98,6 @@ jobs:
 
       - name: Format check
         run: npm run format:check
-
-      - name: Unit tests
-        run: npm run test
 
       - name: Build
         run: npm run build
