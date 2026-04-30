@@ -388,10 +388,19 @@ function ClusterTable({
   return (
     <Card className="p-0">
       <TableRoot>
-        <Table>
+        <Table className="table-fixed">
+          <colgroup>
+            <col className="w-12" />
+            <col className="w-[220px]" />
+            <col className="w-[280px]" />
+            <col className="w-[260px]" />
+            <col className="w-[220px]" />
+            <col className="w-24" />
+            <col className="w-20" />
+          </colgroup>
           <TableHead>
             <TableRow>
-              <TableHeaderCell className={cx("w-10 px-3", SECONDARY_HEADER)}>
+              <TableHeaderCell className={cx("px-3", SECONDARY_HEADER)}>
                 <span className="sr-only">Status</span>
                 <span aria-hidden="true">●</span>
               </TableHeaderCell>
@@ -399,10 +408,10 @@ function ClusterTable({
               <TableHeaderCell>Description</TableHeaderCell>
               <TableHeaderCell>Labels</TableHeaderCell>
               <TableHeaderCell>Address</TableHeaderCell>
-              <TableHeaderCell className={cx("w-24", SECONDARY_HEADER)}>
+              <TableHeaderCell className={SECONDARY_HEADER}>
                 Managed
               </TableHeaderCell>
-              <TableHeaderCell className="w-12 text-right" />
+              <TableHeaderCell className="text-right" />
             </TableRow>
           </TableHead>
           <TableBody>

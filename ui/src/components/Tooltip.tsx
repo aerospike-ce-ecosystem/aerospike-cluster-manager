@@ -61,12 +61,14 @@ const Tooltip = React.forwardRef<
               sideOffset={sideOffset}
               align="center"
               className={cx(
-                // base
-                "max-w-60 select-none rounded-md px-2.5 py-1.5 text-sm leading-5 shadow-md",
-                // text color
-                "text-gray-50 dark:text-gray-900",
-                // background color
-                "bg-gray-900 dark:bg-gray-50",
+                // base — refined card-like surface (lifted, light background)
+                "z-50 max-w-md select-none rounded-lg px-3 py-2 text-xs leading-relaxed",
+                // typography
+                "font-medium text-gray-700 dark:text-gray-200",
+                // surface — white card in light, near-black in dark, with hairline border + ring + soft layered shadow
+                "border border-gray-200/80 bg-white dark:border-gray-800 dark:bg-gray-900",
+                "ring-1 ring-black/[0.04] dark:ring-white/[0.04]",
+                "shadow-[0_10px_30px_-10px_rgba(15,23,42,0.18),0_4px_6px_-4px_rgba(15,23,42,0.08)] dark:shadow-[0_10px_30px_-10px_rgba(0,0,0,0.6),0_4px_6px_-4px_rgba(0,0,0,0.4)]",
                 // transition
                 "will-change-[transform,opacity]",
                 "data-[side=bottom]:animate-slideDownAndFade data-[side=left]:animate-slideLeftAndFade data-[side=right]:animate-slideRightAndFade data-[side=top]:animate-slideUpAndFade data-[state=closed]:animate-hide",
@@ -77,9 +79,9 @@ const Tooltip = React.forwardRef<
               {content}
               {showArrow ? (
                 <TooltipPrimitives.Arrow
-                  className="border-none fill-gray-900 dark:fill-gray-50"
+                  className="fill-white drop-shadow-[0_1px_0_rgb(229_231_235)] dark:fill-gray-900 dark:drop-shadow-[0_1px_0_rgb(31_41_55)]"
                   width={12}
-                  height={7}
+                  height={6}
                   aria-hidden="true"
                 />
               ) : null}
