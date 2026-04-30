@@ -1,16 +1,12 @@
 name: CD
 # On push to main: builds multi-arch (amd64/arm64) container images and pushes to GHCR.
 #
-# Builds four images per push:
-#   - ghcr.io/<repo>                    — combined all-in-one image (root Dockerfile, used by compose.yaml)
-#   - ghcr.io/<repo>-backend            — FastAPI backend only (Dockerfile.backend)
-#   - ghcr.io/<repo>-frontend           — Next.js frontend (Dockerfile.frontend)
-#   - ghcr.io/<repo>-frontend-renewal   — Next.js frontend-renewal (Dockerfile.frontend-renewal)
+# Builds three images per push:
+#   - ghcr.io/<repo>          — combined all-in-one image (root Dockerfile, used by compose.yaml)
+#   - ghcr.io/<repo>-api      — FastAPI API only (Dockerfile.api)
+#   - ghcr.io/<repo>-ui       — Next.js UI (Dockerfile.ui)
 #
-# The split images are what the ACKO UI deployments consume. Previously only the
-# combined image was built in CI and the split `-frontend-renewal:latest` tag had
-# to be pushed manually, which meant main commits (PR #214 onward) never reached
-# the running pod. Keep all four in the matrix so every main merge rolls forward.
+# The split images are what the ACKO UI deployments consume.
 
 on:
   push:
@@ -40,15 +36,12 @@ jobs:
           - name: all
             dockerfile: Dockerfile
             suffix: ""
-          - name: backend
-            dockerfile: Dockerfile.backend
-            suffix: -backend
-          - name: frontend
-            dockerfile: Dockerfile.frontend
-            suffix: -frontend
-          - name: frontend-renewal
-            dockerfile: Dockerfile.frontend-renewal
-            suffix: -frontend-renewal
+          - name: api
+            dockerfile: Dockerfile.api
+            suffix: -api
+          - name: ui
+            dockerfile: Dockerfile.ui
+            suffix: -ui
 
     steps:
       - uses: actions/checkout@v6
@@ -94,7 +87,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           # Read main's cache for every event (tag, dispatch, branch). Without
           # this, tag pushes do a cold multi-arch build via QEMU and the
-          # frontend-renewal job times out at 30 minutes (#239 release).
+          # ui job times out at 30 minutes (#239 release).
           cache-from: type=gha,scope=${{ matrix.name }}
           # Only main writes to the cache so tags don't churn it.
           cache-to: ${{ github.ref == 'refs/heads/main' && format('type=gha,mode=max,scope={0}', matrix.name) || '' }}

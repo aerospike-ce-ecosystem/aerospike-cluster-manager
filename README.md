@@ -40,8 +40,8 @@ Browse, create, edit, duplicate and delete records with server-side limiting and
 
 | Layer | Stack |
 |---|---|
-| **Frontend** | Next.js 16, React 19, TypeScript, Tailwind CSS 4, DaisyUI 5, Zustand, TanStack Table, Recharts, Monaco Editor |
-| **Backend** | Python 3.13, FastAPI, Uvicorn, Pydantic |
+| **UI**  | Next.js 14, React 18, TypeScript, Tailwind CSS 3.4, Tremor Raw, Zustand, recharts, Monaco Editor |
+| **API** | Python 3.13, FastAPI, Uvicorn, Pydantic |
 | **Database** | Aerospike Server Enterprise 8.0 |
 | **Infra** | Podman Compose, uv (Python), npm (Node.js) |
 
@@ -103,27 +103,27 @@ cp .env.example .env
 podman compose -f compose.yaml up --build
 ```
 
-- Frontend: http://localhost:3100
-- Backend API: http://localhost:8000
+- UI:  http://localhost:3100
+- API: http://localhost:8000
 - Aerospike: internal network only (use `podman exec -it aerospike-tools aql -h aerospike-node-1`)
 
 ### Local Development
 
-**Backend:**
+**API:**
 ```bash
-cd backend
+cd api
 uv sync                            # Install dependencies
 uv run uvicorn aerospike_cluster_manager_api.main:app --reload
 ```
 
-**Frontend:**
+**UI:**
 ```bash
-cd frontend
+cd ui
 npm install                        # Install dependencies
 npm run dev                        # http://localhost:3000
 ```
 
-> The frontend dev server proxies `/api/*` requests to `http://localhost:8000`.
+> The UI dev server proxies `/api/*` requests to `http://localhost:8000`.
 
 ### Local K8s / ACKO Development
 
@@ -133,13 +133,13 @@ To exercise the K8s / ACKO UI (`/k8s/clusters`, `/k8s/templates`) against a real
 make run-local          # kind (podman) + cert-manager + ACKO operator + Aerospike (compose.dev.yaml)
 ```
 
-The command is idempotent and prints the exact backend/frontend start commands to run in separate terminals. It sets up:
+The command is idempotent and prints the exact api/ui start commands to run in separate terminals. It sets up:
 
 - kind cluster named `kind` → kubectl context `kind-kind` (1 control-plane + 3 workers with `topology.kubernetes.io/zone=zone-a/b/c`)
 - cert-manager and the ACKO operator via Helm (CRDs: `aerospikeclusters.acko.io`, `aerospikeclustertemplates.acko.io`)
 - Standalone Aerospike nodes on `localhost:14790/:14791/:14792` (for the non-K8s connection UI)
 
-Start the backend with `K8S_MANAGEMENT_ENABLED=true` and the frontend as usual; the backend's Kubernetes client picks up `~/.kube/config` automatically. Teardown with `make run-local-down`.
+Start the api with `K8S_MANAGEMENT_ENABLED=true` and the ui as usual; the api's Kubernetes client picks up `~/.kube/config` automatically. Teardown with `make run-local-down`.
 
 Related targets: `make kind-up/down/status`, `make acko-install/uninstall/verify`.
 
@@ -195,7 +195,7 @@ Related targets: `make kind-up/down/status`, `make acko-install/uninstall/verify
   - Bandwidth throttling and validation policy configuration
   - Service metadata for headless and pod services
   - Extended wizard fields: nodeSelector, tolerations, hostNetwork, multiPodPerHost, imagePullSecrets, serviceAccountName, terminationGracePeriod, validationPolicy
-  - Extended backend API fields: sidecars, initContainers, securityContext, topologySpreadConstraints
+  - Extended API fields: sidecars, initContainers, securityContext, topologySpreadConstraints
   - Multi-volume storage support: configure multiple independent PVC volumes per namespace with different StorageClasses, sizes, and mount paths
   - Sidecar & init container wizard: add custom sidecar and init containers with full configuration (image, command, args, env, volume mounts, resources)
   - Topology spread constraints UI: distribute pods across zones/nodes via wizard and edit dialog (maxSkew, topologyKey, whenUnsatisfiable, labelSelector matchLabels)
@@ -390,7 +390,7 @@ All data management endpoints are prefixed with `/api` and require a `{conn_id}`
 |---|---|---|
 | `POST` | `/api/sample-data/{conn_id}` | Generate sample records with optional indexes and UDFs |
 
-> Interactive API documentation (Swagger UI) is available at `http://localhost:8000/docs` when the backend is running.
+> Interactive API documentation (Swagger UI) is available at `http://localhost:8000/docs` when the api is running.
 
 ## K8s Cluster Management
 
@@ -651,7 +651,7 @@ Common use cases include:
 | `GET` | `/api/k8s/secrets` | List K8s Secrets (for ACL picker) |
 | `GET` | `/api/k8s/nodes` | List K8s nodes with zone/region info (for rack config) |
 
-All K8s endpoints are gated by the `K8S_MANAGEMENT_ENABLED` configuration flag. When disabled, a 404 is returned so the frontend can hide K8s features gracefully.
+All K8s endpoints are gated by the `K8S_MANAGEMENT_ENABLED` configuration flag. When disabled, a 404 is returned so the UI can hide K8s features gracefully.
 
 ### Extended Pod Status Fields
 
@@ -663,7 +663,7 @@ The pod status response now includes additional fields for richer cluster monito
 | `readinessGateSatisfied` | `bool` | Whether the `acko.io/aerospike-ready` readiness gate is satisfied |
 | `unstableSince` | `string` | ISO timestamp of when the pod first became NotReady (reset when Ready) |
 
-### Extended Backend API Fields
+### Extended API Fields
 
 The create/update cluster requests support additional pod-level fields:
 
@@ -738,26 +738,26 @@ Cluster creation and update requests now support additional storage-level fields
 
 ```
 aerospike-cluster-manager/
-├── backend/                # FastAPI REST API
+├── api/                    # FastAPI REST API
 │   ├── src/aerospike_cluster_manager_api/
 │   │   ├── main.py         # App entry point
 │   │   ├── models/         # Pydantic models (incl. k8s_cluster.py)
 │   │   ├── routers/        # API endpoints (incl. k8s_clusters.py)
 │   │   ├── k8s_client.py   # Kubernetes API client
 │   │   └── mock_data/      # Dev mock data
-│   ├── Dockerfile
 │   └── pyproject.toml
-├── frontend/               # Next.js App Router
+├── ui/                     # Next.js 14 App Router (Tremor-based)
 │   ├── src/
 │   │   ├── app/            # Pages & routing
-│   │   │   └── k8s/        # K8s cluster & template management pages
-│   │   ├── components/     # UI components
-│   │   │   └── k8s/        # K8s-specific components (wizard, cards, dialogs, event timeline, config drift, reconciliation health)
-│   │   ├── stores/         # Zustand state (incl. k8s-cluster-store.ts)
+│   │   ├── components/     # Tremor primitives + dialogs + navigation
+│   │   ├── stores/         # Zustand state
 │   │   ├── hooks/          # Custom hooks
-│   │   └── lib/            # API client, utils, types, validations
-│   ├── Dockerfile
+│   │   └── lib/            # API client, utils, types
+│   ├── proxy.js            # Production sidecar: forwards /api/* to API_URL
 │   └── package.json
+├── Dockerfile              # Multi-stage: combined api+ui image
+├── Dockerfile.api          # Standalone api image
+├── Dockerfile.ui           # Standalone ui image
 ├── compose.yaml            # Full stack (all containers)
 ├── compose.dev.yaml        # Aerospike only (for local dev)
 └── .env.example
@@ -768,7 +768,7 @@ aerospike-cluster-manager/
 ### Testing
 
 ```bash
-cd frontend
+cd ui
 npm run test              # Unit tests (Vitest)
 npm run test:coverage     # With coverage report
 npm run test:e2e          # E2E tests (Playwright)
@@ -777,14 +777,14 @@ npm run test:e2e          # E2E tests (Playwright)
 ### Code Quality
 
 ```bash
-# Frontend
-cd frontend
+# UI
+cd ui
 npm run lint              # ESLint
 npm run format:check      # Prettier check
 npm run type-check        # TypeScript
 
-# Backend
-cd backend
+# API
+cd api
 uv run ruff check src     # Lint
 uv run ruff format src    # Format
 
@@ -794,7 +794,7 @@ pre-commit run --all-files
 
 ## Environment Variables
 
-All environment variables with their defaults and descriptions. See `backend/src/aerospike_cluster_manager_api/config.py` for the backend source of truth.
+All environment variables with their defaults and descriptions. See `api/src/aerospike_cluster_manager_api/config.py` for the api source of truth.
 
 ### Aerospike Connection
 
@@ -807,8 +807,8 @@ All environment variables with their defaults and descriptions. See `backend/src
 
 | Variable | Default | Description |
 |---|---|---|
-| `SQLITE_PATH` | `./data/connections.db` | SQLite database file path. SQLite is the default backend -- no external database required |
-| `ENABLE_POSTGRES` | `false` | Set to `true` to use PostgreSQL instead of the default SQLite backend |
+| `SQLITE_PATH` | `./data/connections.db` | SQLite database file path. SQLite is the default database backend -- no external database required |
+| `ENABLE_POSTGRES` | `false` | Set to `true` to use PostgreSQL instead of the default SQLite database |
 | `DATABASE_URL` | `postgresql://aerospike:aerospike@localhost:5432/aerospike_manager` | PostgreSQL connection string (only used when `ENABLE_POSTGRES=true`) |
 | `DB_POOL_MIN_SIZE` | `2` | Minimum number of connections in the database connection pool |
 | `DB_POOL_MAX_SIZE` | `10` | Maximum number of connections in the database connection pool |
@@ -826,28 +826,28 @@ All environment variables with their defaults and descriptions. See `backend/src
 
 | Variable | Default | Description |
 |---|---|---|
-| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:3100` | Comma-separated list of allowed CORS origins (must include the frontend URL) |
-| `BACKEND_URL` | `http://localhost:8000` | Backend URL used by the frontend proxy |
-| `BACKEND_PORT` | `8000` | Backend API port (compose files) |
-| `FRONTEND_PORT` | `3100` | Frontend port (compose files) |
-| `HOST` | `0.0.0.0` | Backend bind address |
-| `PORT` | `8000` | Backend bind port |
+| `CORS_ORIGINS` | `http://localhost:3100` | Comma-separated list of allowed CORS origins (must include the UI URL) |
+| `API_URL` | `http://localhost:8000` | API URL used by the UI proxy (`ui/proxy.js` in production, `next.config.mjs` rewrites in dev) |
+| `API_PORT` | `8000` | API port (compose files) |
+| `UI_PORT` | `3100` | UI port (compose files) |
+| `HOST` | `0.0.0.0` | API bind address |
+| `PORT` | `8000` | API bind port |
 
 ### Logging
 
 | Variable | Default | Description |
 |---|---|---|
-| `LOG_LEVEL` | `INFO` | Backend log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+| `LOG_LEVEL` | `INFO` | API log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 | `LOG_FORMAT` | `text` | Log output format: `text` for local dev, `json` for structured container logging |
 
 ## Production Deployment
 
 ### Single Container Deployment
 
-The project includes a multi-stage `Dockerfile` that bundles both the frontend (Next.js standalone) and backend (FastAPI/Uvicorn) into a single container image. The container runs as a non-root user (`appuser`) and exposes two ports:
+The project includes a multi-stage `Dockerfile` that bundles both the UI (Next.js standalone via `proxy.js` sidecar) and API (FastAPI/Uvicorn) into a single container image. The container runs as a non-root user (`appuser`) and exposes two ports:
 
-- **Port 3000** — Frontend (Next.js)
-- **Port 8000** — Backend API (Uvicorn)
+- **Port 3100** — UI (Next.js standalone)
+- **Port 8000** — API (Uvicorn)
 
 ```bash
 # Build the container image
@@ -855,7 +855,7 @@ podman build -t aerospike-cluster-manager .
 
 # Run with SQLite (default — no extra services needed)
 podman run -d \
-  -p 3100:3000 \
+  -p 3100:3100 \
   -p 8000:8000 \
   -v ~/.aerospike-cluster-manager:/app/data:U \
   aerospike-cluster-manager
@@ -906,8 +906,8 @@ podman compose -f compose.yaml -f compose-pg.yaml up --build
 
 When deploying behind a reverse proxy (Nginx, Traefik, etc.) or Kubernetes Ingress, route traffic to both services:
 
-- `/` and all static assets to the frontend on port 3000
-- `/api/*` to the backend on port 8000
+- `/` and all static assets to the UI on port 3100
+- `/api/*` to the API on port 8000
 
 Example Nginx configuration:
 

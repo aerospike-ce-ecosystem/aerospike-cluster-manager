@@ -30,8 +30,8 @@ jobs:
             You are an AI planning agent for the **aerospike-cluster-manager** project.
 
             ## Project Context
-            - **Backend**: FastAPI (Python 3.13) in `backend/`, uv package manager, ruff linter
-            - **Frontend**: Next.js 16 (React 19) in `frontend/`, Radix/shadcn/ui, Tailwind 4, DaisyUI 5, Zustand state management
+            - **API**: FastAPI (Python 3.13) in `api/`, uv package manager, ruff linter
+            - **UI**:  Next.js 16 (React 19) in `ui/`, Radix/shadcn/ui, Tailwind 4, DaisyUI 5, Zustand state management
             - **Build**: Conventional Commits format
 
             ## Task
@@ -51,8 +51,8 @@ jobs:
             - Implementation Strategy (numbered steps)
             - Risk Assessment (breaking changes, test coverage, dependencies)
             - Verification checklist:
-              - Backend: `uv run ruff check src/`, `uv run pytest tests/ -v`
-              - Frontend: `npm run type-check`, `npm run lint`, `npm run build`
+              - API: `uv run ruff check src/`, `uv run pytest tests/ -v`
+              - UI:  `npm run type-check`, `npm run lint`, `npm run build`
 
             5. After posting, add `plan-complete` label: `gh issue edit ${{ github.event.issue.number }} --add-label "plan-complete"`
 

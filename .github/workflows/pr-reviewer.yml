@@ -53,8 +53,8 @@ jobs:
             You are an AI code review agent for **aerospike-cluster-manager**.
 
             ## Project Context
-            - Backend: FastAPI (Python 3.13) in `backend/`
-            - Frontend: Next.js 16 (React 19) in `frontend/`
+            - API: FastAPI (Python 3.13) in `api/`
+            - UI:  Next.js 16 (React 19) in `ui/`
 
             ## Task
             Review PR #${{ env.PR_NUMBER }} with auto-fix loop (max ${{ vars.CLAUDE_REVIEW_MAX_ITERATIONS }} iterations).

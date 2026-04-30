@@ -341,8 +341,8 @@ When scaling from a single-instance deployment to a multi-replica setup, you may
 To simplify a deployment by removing the PostgreSQL dependency:
 
 1. Export connection profiles from the UI using the export feature.
-2. Stop the backend and remove the `ENABLE_POSTGRES` and `DATABASE_URL` environment variables (or set `ENABLE_POSTGRES=false`).
-3. Restart the backend -- it will create a fresh SQLite database.
+2. Stop the api and remove the `ENABLE_POSTGRES` and `DATABASE_URL` environment variables (or set `ENABLE_POSTGRES=false`).
+3. Restart the api -- it will create a fresh SQLite database.
 4. Import the connection profiles via the UI.
 
 ## Split-Brain Detection
@@ -376,7 +376,7 @@ To simplify a deployment by removing the PostgreSQL dependency:
 
 2. **Transient issue resolved** -- If the underlying issue has been fixed (e.g., a missing secret was created, a node came back online), click the **Reset Circuit Breaker** button on the reconciliation health card or call the API directly:
    ```bash
-   curl -X POST http://<backend>/api/k8s/clusters/<namespace>/<name>/reset-circuit-breaker
+   curl -X POST http://<api>/api/k8s/clusters/<namespace>/<name>/reset-circuit-breaker
    ```
 
 3. **Persistent configuration error** -- If the circuit breaker keeps tripping after reset, the CR likely has a configuration that the operator cannot reconcile. Check the operator pod logs for detailed error messages and fix the CR spec.
@@ -400,7 +400,7 @@ To simplify a deployment by removing the PostgreSQL dependency:
 
 ## General Tips
 
-- **Check backend logs** -- The backend logs detailed error information. Set `LOG_LEVEL=DEBUG` for verbose output.
+- **Check api logs** -- The API logs detailed error information. Set `LOG_LEVEL=DEBUG` for verbose output.
 - **Use the health endpoint** -- `GET /api/health?detail=true` returns component-level health status including database connectivity.
 - **Verify environment variables** -- Many issues stem from misconfigured environment variables. Double-check `K8S_MANAGEMENT_ENABLED`, `DATABASE_URL`, and `CORS_ORIGINS`. See the [Architecture Guide](./architecture.md#environment-configuration) for the full variable reference.
 - **Inspect Kubernetes events** -- The events timeline in the UI (or `kubectl get events`) provides operator-level diagnostic information.

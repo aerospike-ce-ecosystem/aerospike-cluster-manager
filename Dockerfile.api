@@ -1,0 +1,47 @@
+# =============================================================================
+# API (FastAPI) — standalone image
+# =============================================================================
+FROM python:3.14-slim AS builder
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+WORKDIR /app/api
+
+COPY api/pyproject.toml api/uv.lock api/README.md ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+COPY api/src/ src/
+RUN uv sync --frozen --no-dev
+
+# =============================================================================
+# Runtime
+# =============================================================================
+FROM python:3.14-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+WORKDIR /app
+
+COPY --from=builder /app/api /app/api
+
+RUN groupadd --gid 1001 appuser \
+    && useradd --uid 1001 --gid appuser --shell /bin/false --create-home appuser \
+    && mkdir -p /app/data \
+    && chown -R appuser:appuser /app \
+    && chmod 755 /app/data
+
+USER appuser
+
+ENV SQLITE_PATH=/app/data/connections.db
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=10s --timeout=5s --retries=3 --start-period=15s \
+    CMD curl -f http://localhost:8000/api/health || exit 1
+
+WORKDIR /app/api
+CMD ["uv", "run", "--no-dev", "uvicorn", "aerospike_cluster_manager_api.main:app", \
+     "--host", "0.0.0.0", "--port", "8000"]

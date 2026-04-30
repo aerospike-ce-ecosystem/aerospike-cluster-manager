@@ -115,13 +115,13 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # ── Backend + Frontend (single container) ──────────────────────────
+  # ── API + UI (single container) ────────────────────────────────────
   aerospike-cluster-manager:
     container_name: aerospike-cluster-manager
     build: .
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
-      - "${FRONTEND_PORT:-3100}:3000"
+      - "${API_PORT:-8000}:8000"
+      - "${UI_PORT:-3100}:3100"
     environment:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3100}
       - HOST=0.0.0.0

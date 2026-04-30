@@ -19,28 +19,27 @@ export CERT_MANAGER_VERSION="${CERT_MANAGER_VERSION:-v1.15.3}"
 export ACKO_NAMESPACE="${ACKO_NAMESPACE:-aerospike-operator}"
 # Release name MUST equal the chart name. The chart's fullname helper returns
 # the release name when it already contains the chart name, so UI resource
-# names match the BACKEND_URL baked into the frontend-renewal image at build
-# time (`http://aerospike-ce-kubernetes-operator-ui-backend:80`). A shorter
-# release name produces `aerospike-operator-aerospike-ce-kubernetes-operator-*`
-# which (a) breaks the baked BACKEND_URL and (b) exceeds the 63-char Service
-# name limit. See Dockerfile.frontend-renewal for the baked URL.
+# names match the API_URL baked into the ui image at build time
+# (`http://aerospike-ce-kubernetes-operator-ui-api:80`). A shorter release
+# name produces `aerospike-operator-aerospike-ce-kubernetes-operator-*` which
+# (a) breaks the baked API_URL and (b) exceeds the 63-char Service name
+# limit. See Dockerfile.ui for the baked URL.
 export ACKO_RELEASE="${ACKO_RELEASE:-aerospike-ce-kubernetes-operator}"
 export ACKO_CRDS_RELEASE="${ACKO_CRDS_RELEASE:-aerospike-ce-kubernetes-operator-crds}"
 export ACKO_CHART_VERSION="${ACKO_CHART_VERSION:-0.1.2}"
 # Empty by default so the chart's natural naming wins. Set a non-empty value
-# only with ACKO_UI_LOCAL_BUILD=true + a matching --build-arg BACKEND_URL.
+# only with ACKO_UI_LOCAL_BUILD=true + a matching --build-arg API_URL.
 export ACKO_FULLNAME_OVERRIDE="${ACKO_FULLNAME_OVERRIDE:-}"
 
 # UI (chart-bundled) — opt-in. When true, run-local passes ui.enabled=true and
-# the chart pulls the 3 images from ghcr (public). Override
+# the chart pulls the 2 images (api + ui) from ghcr (public). Override
 # ACKO_UI_LOCAL_BUILD=true to build images from this repo's Dockerfiles and
 # `kind load` them instead (useful for testing uncommitted UI changes).
 export ACKO_UI_ENABLED="${ACKO_UI_ENABLED:-false}"
 export ACKO_UI_LOCAL_BUILD="${ACKO_UI_LOCAL_BUILD:-false}"
 export ACKO_UI_IMAGE_TAG="${ACKO_UI_IMAGE_TAG:-latest}"
-export ACKO_UI_BACKEND_IMAGE="${ACKO_UI_BACKEND_IMAGE:-aerospike-cluster-manager-backend}"
-export ACKO_UI_FRONTEND_IMAGE="${ACKO_UI_FRONTEND_IMAGE:-aerospike-cluster-manager-frontend}"
-export ACKO_UI_FRONTEND_RENEWAL_IMAGE="${ACKO_UI_FRONTEND_RENEWAL_IMAGE:-aerospike-cluster-manager-frontend-renewal}"
+export ACKO_UI_API_IMAGE="${ACKO_UI_API_IMAGE:-aerospike-cluster-manager-api}"
+export ACKO_UI_WEB_IMAGE="${ACKO_UI_WEB_IMAGE:-aerospike-cluster-manager-ui}"
 
 # Resolve repo root (scripts live at <repo>/scripts/local-dev/).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

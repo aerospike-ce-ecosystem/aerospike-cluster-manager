@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# Build the 3 Aerospike Cluster Manager UI images locally and load them into
+# Build the 2 Aerospike Cluster Manager UI images locally and load them into
 # the kind cluster. Used by run-local when ACKO_UI_ENABLED=true.
 #
 # Images produced (tag defaults to ${ACKO_UI_IMAGE_TAG}, default 'local'):
-#   - ${ACKO_UI_BACKEND_IMAGE}:${ACKO_UI_IMAGE_TAG}
-#   - ${ACKO_UI_FRONTEND_IMAGE}:${ACKO_UI_IMAGE_TAG}
-#   - ${ACKO_UI_FRONTEND_RENEWAL_IMAGE}:${ACKO_UI_IMAGE_TAG}
+#   - ${ACKO_UI_API_IMAGE}:${ACKO_UI_IMAGE_TAG}
+#   - ${ACKO_UI_WEB_IMAGE}:${ACKO_UI_IMAGE_TAG}
 set -euo pipefail
 source "$(cd "$(dirname "$0")" && pwd)/_common.sh"
 
@@ -29,8 +28,7 @@ build_and_load() {
   ok "${image}:${tag} loaded"
 }
 
-build_and_load "${ACKO_UI_BACKEND_IMAGE}"          "Dockerfile.backend"
-build_and_load "${ACKO_UI_FRONTEND_IMAGE}"         "Dockerfile.frontend"
-build_and_load "${ACKO_UI_FRONTEND_RENEWAL_IMAGE}" "Dockerfile.frontend-renewal"
+build_and_load "${ACKO_UI_API_IMAGE}" "Dockerfile.api"
+build_and_load "${ACKO_UI_WEB_IMAGE}" "Dockerfile.ui"
 
-ok "All 3 UI images built and loaded into kind"
+ok "All 2 UI images built and loaded into kind"
