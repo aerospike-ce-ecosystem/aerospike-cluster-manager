@@ -39,6 +39,7 @@ export function LabelsCell({ labels, maxVisible = 3 }: LabelsCellProps) {
             </div>
           }
           side="top"
+          triggerAsChild
         >
           <button
             type="button"

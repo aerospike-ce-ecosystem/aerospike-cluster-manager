@@ -77,6 +77,7 @@ export function AddressCopyCell({
             : `Copy seed list (${formatted.length} host${formatted.length === 1 ? "" : "s"})`
         }
         side="top"
+        triggerAsChild
       >
         <button
           type="button"
