@@ -1,40 +1,40 @@
 .sisyphus
 
-# === Frontend (Next.js) ===
-frontend/node_modules/
-frontend/.next/
-frontend/out/
-frontend/coverage/
-frontend/test-results/
-frontend/playwright-report/
-frontend/.pnp
-frontend/.pnp.*
-frontend/.yarn/*
-!frontend/.yarn/patches
-!frontend/.yarn/plugins
-!frontend/.yarn/releases
-!frontend/.yarn/versions
-frontend/.vercel
-frontend/*.tsbuildinfo
-frontend/next-env.d.ts
-frontend/.env*
+# === UI (Next.js) ===
+ui/node_modules/
+ui/.next/
+ui/out/
+ui/coverage/
+ui/test-results/
+ui/playwright-report/
+ui/.pnp
+ui/.pnp.*
+ui/.yarn/*
+!ui/.yarn/patches
+!ui/.yarn/plugins
+!ui/.yarn/releases
+!ui/.yarn/versions
+ui/.vercel
+ui/*.tsbuildinfo
+ui/next-env.d.ts
+ui/.env*
 
-# === Backend (Python / uv) ===
-backend/.venv/
-backend/__pycache__/
-backend/**/__pycache__/
-backend/*.egg-info/
-backend/src/*.egg-info/
-backend/.env*
+# === API (Python / uv) ===
+api/.venv/
+api/__pycache__/
+api/**/__pycache__/
+api/*.egg-info/
+api/src/*.egg-info/
+api/.env*
 
 # === Claude Code ===
 .claude/settings.json
 .claude/skills/playwright-cli/
 
 # === Data / Artifacts ===
-backend/data/
-frontend/e2e/screenshots/
-frontend/e2e/test-results/
+api/data/
+ui/e2e/screenshots/
+ui/e2e/test-results/
 
 # === Common ===
 .DS_Store
