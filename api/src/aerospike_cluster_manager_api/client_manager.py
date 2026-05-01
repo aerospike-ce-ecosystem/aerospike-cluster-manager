@@ -12,10 +12,14 @@ from typing import Any
 
 import aerospike_py
 from aerospike_py.exception import AerospikeError
+from opentelemetry import trace
 
 from aerospike_cluster_manager_api import config, db
+from aerospike_cluster_manager_api.observability import make_instruments
 from aerospike_cluster_manager_api.services.info_cache import info_cache
 from aerospike_cluster_manager_api.utils import parse_host_port
+
+_tracer = trace.get_tracer("aerospike_cluster_manager_api.client_manager")
 
 
 class ClientManager:
@@ -23,6 +27,8 @@ class ClientManager:
         self._clients: dict[str, aerospike_py.AsyncClient] = {}
         self._global_lock = asyncio.Lock()
         self._conn_locks: dict[str, asyncio.Lock] = {}
+        # Instruments are NoOps when OTel is disabled — safe to bind eagerly.
+        self._instruments = make_instruments()
 
     async def _get_conn_lock(self, conn_id: str) -> asyncio.Lock:
         """Return the per-connection lock, creating one if needed."""
@@ -48,14 +54,24 @@ class ClientManager:
                 as_config["user"] = profile.username
                 as_config["password"] = profile.password
 
-            client = aerospike_py.AsyncClient(as_config)
-            await client.connect()
+            with _tracer.start_as_current_span(
+                "asm.aerospike.client.connect",
+                attributes={
+                    "asm.connection.id": conn_id,
+                    "asm.connection.host_count": len(hosts),
+                },
+            ):
+                client = aerospike_py.AsyncClient(as_config)
+                await client.connect()
 
             old = self._clients.get(conn_id)
             if old is not None:
                 with contextlib.suppress(AerospikeError, OSError):
                     await old.close()
             self._clients[conn_id] = client
+            self._instruments["active_aerospike_connections"].add(
+                1, attributes={"asm.connection.id": conn_id}
+            )
 
             return client
 
@@ -67,18 +83,27 @@ class ClientManager:
             async with self._global_lock:
                 self._conn_locks.pop(conn_id, None)
             if client is not None:
-                with contextlib.suppress(AerospikeError, OSError):
+                with _tracer.start_as_current_span(
+                    "asm.aerospike.client.close",
+                    attributes={"asm.connection.id": conn_id},
+                ), contextlib.suppress(AerospikeError, OSError):
                     await client.close()
+                self._instruments["active_aerospike_connections"].add(
+                    -1, attributes={"asm.connection.id": conn_id}
+                )
 
     async def close_all(self) -> None:
         info_cache.clear()
         async with self._global_lock:
             clients = list(self._clients.values())
+            count = len(clients)
             self._clients.clear()
             self._conn_locks.clear()
         for client in clients:
             with contextlib.suppress(AerospikeError, OSError):
                 await client.close()
+        if count:
+            self._instruments["active_aerospike_connections"].add(-count)
 
 
 client_manager = ClientManager()

@@ -5,9 +5,17 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import time
 import uuid
 
+from opentelemetry import trace
+
+from aerospike_cluster_manager_api.observability import make_instruments
+
 logger = logging.getLogger(__name__)
+
+_tracer = trace.get_tracer("aerospike_cluster_manager_api.events.broker")
+_instruments = make_instruments()
 
 
 class EventBroker:
@@ -58,12 +66,16 @@ class EventBroker:
             queue: asyncio.Queue = asyncio.Queue(maxsize=self._queue_size)
             self._subscribers[sub_id] = (queue, event_types)
             logger.debug("SSE subscriber %s registered (total: %d)", sub_id, len(self._subscribers))
-            return sub_id, queue
+        _instruments["active_sse_subscribers"].add(1)
+        return sub_id, queue
 
     async def unsubscribe(self, subscriber_id: str) -> None:
+        removed = False
         async with self._lock:
-            self._subscribers.pop(subscriber_id, None)
+            removed = self._subscribers.pop(subscriber_id, None) is not None
             logger.debug("SSE subscriber %s removed (total: %d)", subscriber_id, len(self._subscribers))
+        if removed:
+            _instruments["active_sse_subscribers"].add(-1)
 
     async def publish(self, event: dict) -> None:
         """Publish *event* to all matching subscribers.
@@ -74,14 +86,26 @@ class EventBroker:
         async with self._lock:
             subscribers = list(self._subscribers.items())
 
-        for _sub_id, (queue, types) in subscribers:
-            if types and event_type not in types:
-                continue
-            if queue.full():
-                with contextlib.suppress(asyncio.QueueEmpty):
-                    queue.get_nowait()  # drop oldest
-            with contextlib.suppress(asyncio.QueueFull):
-                queue.put_nowait(event)
+        with _tracer.start_as_current_span(
+            "asm.events.broadcast",
+            attributes={
+                "asm.event.type": event_type,
+                "asm.event.subscribers": len(subscribers),
+            },
+        ):
+            start = time.monotonic()
+            for _sub_id, (queue, types) in subscribers:
+                if types and event_type not in types:
+                    continue
+                if queue.full():
+                    with contextlib.suppress(asyncio.QueueEmpty):
+                        queue.get_nowait()  # drop oldest
+                with contextlib.suppress(asyncio.QueueFull):
+                    queue.put_nowait(event)
+            _instruments["event_broadcast_duration_ms"].record(
+                (time.monotonic() - start) * 1000,
+                attributes={"asm.event.type": event_type},
+            )
 
 
 # Module-level singleton

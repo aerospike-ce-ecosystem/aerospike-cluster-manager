@@ -11,12 +11,14 @@ import secrets
 import time
 
 from aerospike_py.exception import AerospikeError, IndexFoundError
+from opentelemetry import trace
 
 from aerospike_cluster_manager_api.constants import POLICY_WRITE
 from aerospike_cluster_manager_api.models.sample_data import CreateSampleDataResponse
 from aerospike_cluster_manager_api.sample_data_generator import SAMPLE_INDEXES, generate_record_bins
 
 logger = logging.getLogger(__name__)
+_tracer = trace.get_tracer("aerospike_cluster_manager_api.services.sample_data")
 
 
 async def create_sample_records(
@@ -38,15 +40,30 @@ async def create_sample_records(
     # 1. Insert records — track per-record failures instead of aborting
     records_created = 0
     records_failed = 0
-    for i in range(1, record_count + 1):
-        key_tuple = (namespace, set_name, i)
-        bins = generate_record_bins(i)
-        try:
-            await client.put(key_tuple, bins, policy=POLICY_WRITE)
-            records_created += 1
-        except AerospikeError:
-            records_failed += 1
-            logger.exception("Failed to write sample record %d to %s.%s", i, namespace, set_name)
+    with _tracer.start_as_current_span(
+        "asm.sample_data.generate",
+        attributes={
+            "asm.namespace": namespace,
+            "asm.set": set_name,
+            "asm.record_count": record_count,
+            "asm.create_indexes": create_indexes,
+        },
+    ) as parent_span:
+        with _tracer.start_as_current_span(
+            "asm.sample_data.batch",
+            attributes={"asm.batch.size": record_count},
+        ):
+            for i in range(1, record_count + 1):
+                key_tuple = (namespace, set_name, i)
+                bins = generate_record_bins(i)
+                try:
+                    await client.put(key_tuple, bins, policy=POLICY_WRITE)
+                    records_created += 1
+                except AerospikeError:
+                    records_failed += 1
+                    logger.exception("Failed to write sample record %d to %s.%s", i, namespace, set_name)
+        parent_span.set_attribute("asm.records.created", records_created)
+        parent_span.set_attribute("asm.records.failed", records_failed)
 
     # Short random suffix to avoid name collisions across multiple invocations.
     suffix = secrets.token_hex(3)  # e.g. "a3f2b1"
