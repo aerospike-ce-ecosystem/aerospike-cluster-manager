@@ -1,6 +1,5 @@
 import logging
 import time
-import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -21,6 +20,7 @@ from aerospike_cluster_manager_api.client_manager import client_manager
 from aerospike_cluster_manager_api.events.broker import broker
 from aerospike_cluster_manager_api.events.collector import collector
 from aerospike_cluster_manager_api.logging_config import setup_logging
+from aerospike_cluster_manager_api.middleware.trace_id import TraceIDMiddleware
 from aerospike_cluster_manager_api.rate_limit import limiter
 from aerospike_cluster_manager_api.routers import (
     admin_roles,
@@ -175,18 +175,21 @@ app.add_middleware(
 
 @app.middleware("http")
 async def request_logging_middleware(request: Request, call_next: RequestResponseEndpoint) -> Response:
-    request_id = request.headers.get("X-Request-ID", uuid.uuid4().hex[:16])
+    # TraceIDMiddleware (registered below) runs as the outermost layer and
+    # populates request_id_var before this handler executes. It also owns
+    # the X-Request-ID response header — do NOT set it here.
     start = time.monotonic()
     response = await call_next(request)
     elapsed_ms = (time.monotonic() - start) * 1000
-    response.headers["X-Request-ID"] = request_id
+    # The structured `request_id` JSON field (populated by RequestIDFilter)
+    # is the source of truth for log correlation; no need to repeat it in
+    # the message text.
     logger.info(
-        "%s %s %d %.1fms request_id=%s",
+        "%s %s %d %.1fms",
         request.method,
         request.url.path,
         response.status_code,
         elapsed_ms,
-        request_id,
     )
     return response
 
@@ -219,6 +222,14 @@ async def security_headers_middleware(request: Request, call_next: RequestRespon
         response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
 
     return response
+
+
+# TraceIDMiddleware is registered AFTER all other middleware (CORS, SlowAPI,
+# request_logging, security_headers) so that — given Starlette's reverse-add
+# semantics where the last middleware added is the outermost layer — it reads
+# or generates X-Request-ID and stores it in the ContextVar BEFORE any inner
+# middleware or route handler runs, and echoes the header on the way out.
+app.add_middleware(TraceIDMiddleware)
 
 
 # ---------------------------------------------------------------------------
