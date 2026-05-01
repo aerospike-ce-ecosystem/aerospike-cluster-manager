@@ -8,16 +8,29 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "aerospike-py>=0.6.4",
+    "aerospike-py[otel]>=0.6.4",
     "aiosqlite>=0.21.0",
     "asyncpg>=0.30.0",
     "fastapi>=0.115.0",
     "kubernetes>=31.0.0",
     "python-json-logger>=3.0.0",
+    "pyyaml>=6.0",
     "slowapi>=0.1.9",
     "sse-starlette>=2.0.0",
     "swagger-ui-bundle>=1.1.0",
     "uvicorn[standard]>=0.34.0",
+    # OpenTelemetry — disabled at runtime via OTEL_SDK_DISABLED=true (default).
+    # All exporter/sampler/resource configuration goes through OTel SDK
+    # standard environment variables; no extra wrappers in this codebase.
+    # No upper bound on minor versions — opentelemetry releases SDK and
+    # instrumentation packages on the same cadence and renovate can bump
+    # them in lockstep.
+    "opentelemetry-api>=1.30.0",
+    "opentelemetry-sdk>=1.30.0",
+    "opentelemetry-exporter-otlp>=1.30.0",
+    "opentelemetry-instrumentation-fastapi>=0.51b0",
+    "opentelemetry-instrumentation-asyncpg>=0.51b0",
+    "opentelemetry-instrumentation-logging>=0.51b0",
 ]
 
 [tool.uv]

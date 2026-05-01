@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
+from opentelemetry import trace
 from pydantic import BaseModel, Field
 
 from aerospike_cluster_manager_api import config, db
@@ -66,6 +67,7 @@ from aerospike_cluster_manager_api.services.k8s_service import (
 )
 
 logger = logging.getLogger(__name__)
+_tracer = trace.get_tracer("aerospike_cluster_manager_api.routers.k8s_clusters")
 
 
 def _require_k8s() -> None:
@@ -92,24 +94,30 @@ def _map_k8s_error(e: K8sApiError) -> HTTPException:
 
 
 def _k8s_endpoint(operation: str):
-    """Decorator that wraps K8s endpoint handlers with standard error handling.
+    """Decorator that wraps K8s endpoint handlers with standard error handling
+    and an OTel span named after the *operation* string.
 
     Catches HTTPException (re-raises), K8sApiError (maps to HTTPException),
-    and general Exception (logs and raises 500).
+    and general Exception (logs and raises 500). The span name is
+    ``asm.k8s.<slug>`` where slug is the operation lowercased with spaces
+    turned into dots — e.g. "create Kubernetes cluster" → "asm.k8s.create.kubernetes.cluster".
     """
+
+    span_name = "asm.k8s." + operation.lower().replace(" ", ".")
 
     def decorator(func):
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
-            try:
-                return await func(*args, **kwargs)
-            except HTTPException:
-                raise
-            except K8sApiError as e:
-                raise _map_k8s_error(e) from e
-            except Exception as e:
-                logger.exception("Failed to %s", operation)
-                raise HTTPException(status_code=500, detail=f"Failed to {operation}") from e
+            with _tracer.start_as_current_span(span_name, attributes={"asm.k8s.operation": operation}):
+                try:
+                    return await func(*args, **kwargs)
+                except HTTPException:
+                    raise
+                except K8sApiError as e:
+                    raise _map_k8s_error(e) from e
+                except Exception as e:
+                    logger.exception("Failed to %s", operation)
+                    raise HTTPException(status_code=500, detail=f"Failed to {operation}") from e
 
         return wrapper
 

@@ -155,6 +155,8 @@ Related targets: `make kind-up/down/status`, `make acko-install/uninstall/verify
 - **UDF Management** — Lua UDF upload/delete
 - **AQL Terminal** — Web-based AQL command execution
 - **Prometheus Metrics** — Cluster metrics export
+- **OpenTelemetry Observability** — Traces, metrics, and logs via standard OTel SDK env vars; HTTP server, asyncpg, and aerospike-py spans auto-emit. See [docs/observability.md](docs/observability.md).
+- **Pluggable Logging Handlers** — Forward logs to NELO, Datadog, Loki, or any ``logging.Handler`` via ``LOG_HANDLERS=module:Class`` (or entry-point alias) without forking the image. See [docs/logging.md](docs/logging.md).
 - **Sample Data Generator** — Generate deterministic sample records with optional indexes and UDFs
 - **K8s Cluster Management** — Full lifecycle management of Aerospike clusters on Kubernetes (see below)
   - ACL/Security configuration with role and user management via wizard
