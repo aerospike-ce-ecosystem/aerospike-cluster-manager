@@ -42,7 +42,8 @@ Browse, create, edit, duplicate and delete records with server-side limiting and
 |---|---|
 | **UI**  | Next.js 14, React 18, TypeScript, Tailwind CSS 3.4, Tremor Raw, Zustand, recharts, Monaco Editor |
 | **API** | Python 3.13, FastAPI, Uvicorn, Pydantic |
-| **Database** | Aerospike Server Community Edition 8.1.x |
+| **App metadata** | SQLite (default, file-based) / PostgreSQL (optional, set `ENABLE_POSTGRES=true`) — stores connection profiles & UI state |
+| **Managed target** | Aerospike Server Community Edition 8.x |
 | **Infra** | Podman Compose, uv (Python), npm (Node.js) |
 
 ## Quick Start
