@@ -21,6 +21,7 @@ from aerospike_cluster_manager_api.events.broker import broker
 from aerospike_cluster_manager_api.events.collector import collector
 from aerospike_cluster_manager_api.logging_config import setup_logging
 from aerospike_cluster_manager_api.middleware.trace_id import TraceIDMiddleware
+from aerospike_cluster_manager_api.observability import setup_observability
 from aerospike_cluster_manager_api.rate_limit import limiter
 from aerospike_cluster_manager_api.routers import (
     admin_roles,
@@ -39,6 +40,11 @@ from aerospike_cluster_manager_api.routers import (
 if config.K8S_MANAGEMENT_ENABLED:
     from aerospike_cluster_manager_api.routers import k8s_clusters
 
+# OTel must initialize BEFORE setup_logging so LoggingInstrumentor can patch
+# the LogRecord factory before the first log line is emitted. Both calls are
+# no-ops when their respective env vars are at their defaults
+# (OTEL_SDK_DISABLED=true / LOG_HANDLERS empty / LOGGING_CONFIG_FILE empty).
+setup_observability()
 setup_logging(config.LOG_LEVEL, config.LOG_FORMAT)
 logger = logging.getLogger(__name__)
 
@@ -387,6 +393,23 @@ for r in _routers:
 
 app.include_router(v1_router)
 app.include_router(api_router)
+
+# FastAPIInstrumentor wraps every route handler with a server span. The
+# wiring is a no-op when OTel is disabled (NoOp tracer). We exclude the
+# health and docs endpoints from instrumentation because they're high-volume
+# and uninteresting for tracing — only the /api/v1/* business surface and
+# /api/* legacy aliases produce useful spans.
+try:
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
+    FastAPIInstrumentor.instrument_app(
+        app,
+        excluded_urls="/api/health,/api/docs.*,/api/openapi.json",
+    )
+except ImportError:
+    # OTel deps are required at install time; this guard only catches an
+    # explicitly broken environment.
+    logger.warning("opentelemetry-instrumentation-fastapi not available; HTTP server spans disabled")
 
 
 @app.get("/api/health")

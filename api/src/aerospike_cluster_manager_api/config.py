@@ -66,3 +66,27 @@ K8S_LOG_TIMEOUT: int = _get_int("K8S_LOG_TIMEOUT", 30)
 SSE_ENABLED: bool = os.getenv("SSE_ENABLED", "true").lower() in ("true", "1", "yes")
 SSE_HEARTBEAT_INTERVAL: int = _get_int("SSE_HEARTBEAT_INTERVAL", 15)  # seconds between heartbeat pings
 SSE_MAX_CONNECTIONS: int = _get_int("SSE_MAX_CONNECTIONS", 50)  # max concurrent SSE subscribers
+
+# ---------------------------------------------------------------------------
+# OpenTelemetry — exporter/sampler/resource configuration goes through OTel
+# SDK standard env vars (OTEL_EXPORTER_OTLP_*, OTEL_TRACES_SAMPLER, ...). The
+# only knob this module surfaces is the on/off toggle (OTEL_SDK_DISABLED is
+# the SDK's own switch — we just read it here for visibility).
+# ---------------------------------------------------------------------------
+OTEL_ENABLED: bool = os.getenv("OTEL_SDK_DISABLED", "true").lower() not in ("true", "1", "yes")
+
+# ---------------------------------------------------------------------------
+# Pluggable log handlers
+# ---------------------------------------------------------------------------
+# Comma-separated list of "module:Class" specs (or entry-point names registered
+# under the "aerospike_cluster_manager.log_handlers" group). Each handler is
+# instantiated with no arguments and is expected to self-configure from its own
+# environment variables (e.g. pynelo's NELO_HOST / NELO_PROJECT_TOKEN). Failure
+# to load a single handler is logged and skipped — it does not abort startup or
+# remove other handlers.
+LOG_HANDLERS: str = os.getenv("LOG_HANDLERS", "")
+
+# When set, the file at this path is loaded as a YAML/JSON dictConfig and given
+# full control over logging configuration. LOG_LEVEL / LOG_FORMAT / LOG_HANDLERS
+# are ignored in this mode — the dictConfig is authoritative.
+LOGGING_CONFIG_FILE: str = os.getenv("LOGGING_CONFIG_FILE", "")
