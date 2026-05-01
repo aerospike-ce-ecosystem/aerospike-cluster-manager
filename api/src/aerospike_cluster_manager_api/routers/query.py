@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import time
 
-from aerospike_py.exception import RecordNotFound
+from aerospike_py.exception import AerospikeError, RecordNotFound
 from fastapi import APIRouter, HTTPException
 
 from aerospike_cluster_manager_api.constants import MAX_QUERY_RECORDS, POLICY_QUERY, POLICY_READ
@@ -66,7 +66,17 @@ async def execute_query(body: QueryRequest, client: AerospikeClient) -> QueryRes
     # the true number of records examined by the server.
     effective_limit = min(body.maxRecords or MAX_QUERY_RECORDS, MAX_QUERY_RECORDS)
     policy = {**POLICY_QUERY, "max_records": effective_limit}
-    raw_results = await q.results(policy)
+    # See issue #259: empty / sparse namespaces can make the underlying scan raise.
+    # Treat as no records rather than 500.
+    try:
+        raw_results = await q.results(policy)
+    except AerospikeError:
+        logger.exception(
+            "Query failed for ns=%s set=%s; returning empty result",
+            body.namespace,
+            body.set,
+        )
+        raw_results = []
 
     elapsed_ms = int((time.monotonic() - start_time) * 1000)
 

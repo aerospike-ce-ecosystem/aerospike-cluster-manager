@@ -7,7 +7,9 @@ export interface CreateSampleDataRequest {
 
 export interface CreateSampleDataResponse {
   recordsCreated: number
+  recordsFailed: number
   indexesCreated: string[]
   indexesSkipped: string[]
+  indexesFailed: string[]
   elapsedMs: number
 }

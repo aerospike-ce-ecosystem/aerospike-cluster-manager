@@ -236,6 +236,27 @@ app.add_middleware(TraceIDMiddleware)
 # Global exception handlers for aerospike-py errors
 # ---------------------------------------------------------------------------
 
+
+def _internal_error_response(message: str) -> JSONResponse:
+    """Build a 500 JSON response that surfaces requestId + the underlying error.
+
+    Issues #257 and #260 specifically asked for log-correlation context in 500
+    bodies. TraceIDMiddleware populates ``request_id_var`` for the duration of
+    every request, so the handler can read it without a dependency on
+    request.state.
+    """
+    from aerospike_cluster_manager_api.middleware.trace_id import REQUEST_ID_HEADER, request_id_var
+
+    request_id = request_id_var.get()
+    body: dict[str, str] = {"detail": "An internal server error occurred", "error": message}
+    if request_id and request_id != "-":
+        body["requestId"] = request_id
+    response = JSONResponse(status_code=500, content=body)
+    if request_id and request_id != "-":
+        response.headers[REQUEST_ID_HEADER] = request_id
+    return response
+
+
 try:
     from aerospike_py.exception import (
         AdminError,
@@ -291,7 +312,7 @@ try:
                 },
             )
         logger.warning("Unrecognized ServerError: %s", msg)
-        return JSONResponse(status_code=500, content={"detail": "An internal server error occurred"})
+        return _internal_error_response(msg)
 
     @app.exception_handler(AerospikeTimeoutError)
     async def _timeout_error(_req: Request, exc: AerospikeTimeoutError) -> JSONResponse:
@@ -326,7 +347,7 @@ try:
     @app.exception_handler(AerospikeError)
     async def _aerospike_error(_req: Request, exc: AerospikeError) -> JSONResponse:
         logger.exception("Aerospike error")
-        return JSONResponse(status_code=500, content={"detail": "An internal server error occurred"})
+        return _internal_error_response(str(exc))
 
 except ImportError:
     pass

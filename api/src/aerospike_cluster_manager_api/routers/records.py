@@ -87,7 +87,16 @@ async def get_records(
     limit = min(pageSize, MAX_QUERY_RECORDS)
     policy = {**POLICY_QUERY, "max_records": limit}
     q = client.query(ns, set)
-    raw_results = await q.results(policy)
+    # Empty / sparse namespaces can make the underlying scan raise
+    # (issue #259). Treat those as "no records" and return an empty page rather
+    # than the opaque 500 the user sees today. RustPanicError (#280) is *not*
+    # caught here — that's a real per-stream blocker handled by its dedicated
+    # 422 exception handler.
+    try:
+        raw_results = await q.results(policy)
+    except AerospikeError:
+        logger.exception("Query failed for ns=%s set=%s; returning empty page", ns, set)
+        raw_results = []
 
     records = [record_to_model(r) for r in raw_results]
 
@@ -240,7 +249,15 @@ async def get_filtered_records(
     if body.filters:
         policy["filter_expression"] = build_expression(body.filters)
 
-    raw_results = await q.results(policy)
+    try:
+        raw_results = await q.results(policy)
+    except AerospikeError:
+        logger.exception(
+            "Filtered query failed for ns=%s set=%s; returning empty page",
+            body.namespace,
+            body.set,
+        )
+        raw_results = []
 
     elapsed_ms = int((time.monotonic() - start_time) * 1000)
     returned = len(raw_results)

@@ -14,8 +14,10 @@ class CreateSampleDataRequest(BaseModel):
 
 class CreateSampleDataResponse(BaseModel):
     records_created: int = Field(alias="recordsCreated")
+    records_failed: int = Field(default=0, alias="recordsFailed")
     indexes_created: list[str] = Field(default_factory=list, alias="indexesCreated")
     indexes_skipped: list[str] = Field(default_factory=list, alias="indexesSkipped")
+    indexes_failed: list[str] = Field(default_factory=list, alias="indexesFailed")
     elapsed_ms: int = Field(alias="elapsedMs")
 
     model_config = {"populate_by_name": True}

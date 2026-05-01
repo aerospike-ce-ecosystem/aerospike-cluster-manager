@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
+from aerospike_py.exception import AerospikeError, IndexFoundError, IndexNotFound
 from fastapi import APIRouter, HTTPException, Query
 from starlette.responses import Response
 
@@ -17,6 +18,17 @@ router = APIRouter(prefix="/indexes", tags=["indexes"])
 
 _STATE_MAP = {"RW": "ready", "WO": "building", "D": "error"}
 _TYPE_MAP = {"numeric": "numeric", "string": "string", "geo2dsphere": "geo2dsphere"}
+
+
+async def _index_exists(client: Any, namespace: str, name: str) -> bool:
+    """Best-effort sindex-list check used to recover from spurious errors that
+    fire after the underlying create/drop already committed (issue #260)."""
+    try:
+        sindex_raw = await client.info_random_node(info_sindex(namespace))
+    except AerospikeError:
+        logger.debug("Failed to verify index existence for %s.%s", namespace, name, exc_info=True)
+        return False
+    return any(rec.get("indexname", rec.get("index_name")) == name for rec in parse_records(sindex_raw))
 
 
 @router.get(
@@ -58,15 +70,34 @@ async def get_indexes(client: AerospikeClient) -> list[SecondaryIndex]:
     description="Create a new secondary index on a specified namespace, set, and bin.",
 )
 async def create_index(body: CreateIndexRequest, client: AerospikeClient) -> SecondaryIndex:
-    """Create a new secondary index on a specified namespace, set, and bin."""
-    if body.type == "numeric":
-        await client.index_integer_create(body.namespace, body.set, body.bin, body.name)
-    elif body.type == "string":
-        await client.index_string_create(body.namespace, body.set, body.bin, body.name)
-    elif body.type == "geo2dsphere":
-        await client.index_geo2dsphere_create(body.namespace, body.set, body.bin, body.name)
-    else:
-        raise HTTPException(status_code=400, detail=f"Unsupported index type: {body.type}")
+    """Create a new secondary index on a specified namespace, set, and bin.
+
+    aerospike-py internally calls ``IndexTask.wait_till_complete`` after the
+    server has accepted the create. That wait can fail (timeout, connection
+    blip) even though the index is now present — so the original implementation
+    returned 500 for an actually-successful create, which corrupts client
+    retry/rollback logic (issue #260). When the create raises, we re-check the
+    sindex list and treat a present index as success (state=building).
+    """
+    try:
+        if body.type == "numeric":
+            await client.index_integer_create(body.namespace, body.set, body.bin, body.name)
+        elif body.type == "string":
+            await client.index_string_create(body.namespace, body.set, body.bin, body.name)
+        elif body.type == "geo2dsphere":
+            await client.index_geo2dsphere_create(body.namespace, body.set, body.bin, body.name)
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported index type: {body.type}")
+    except IndexFoundError:
+        raise
+    except AerospikeError:
+        if not await _index_exists(client, body.namespace, body.name):
+            raise
+        logger.warning(
+            "Index %s.%s create raised after success; verified existence and reporting 201",
+            body.namespace,
+            body.name,
+        )
 
     return SecondaryIndex(
         name=body.name,
@@ -89,6 +120,21 @@ async def delete_index(
     name: str = Query(..., min_length=1),
     ns: str = Query(..., min_length=1),
 ) -> Response:
-    """Remove a secondary index by name from the specified namespace."""
-    await client.index_remove(ns, name)
+    """Remove a secondary index by name from the specified namespace.
+
+    Same idempotency guard as ``create_index`` (issue #260): if the drop call
+    raises but the index is already gone, treat the operation as successful.
+    """
+    try:
+        await client.index_remove(ns, name)
+    except IndexNotFound:
+        raise
+    except AerospikeError:
+        if await _index_exists(client, ns, name):
+            raise
+        logger.warning(
+            "Index %s.%s remove raised after success; verified absence and reporting 204",
+            ns,
+            name,
+        )
     return Response(status_code=204)
