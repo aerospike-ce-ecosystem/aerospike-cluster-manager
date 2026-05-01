@@ -183,6 +183,5 @@ def _resolve_handler(spec: str, ep_cache: dict[str, type[logging.Handler]]) -> t
     if spec in ep_cache:
         return ep_cache[spec]
     raise ValueError(
-        f"unknown handler {spec!r}: not a 'module:Class' spec and not in "
-        f"entry-points group {ENTRY_POINT_GROUP!r}"
+        f"unknown handler {spec!r}: not a 'module:Class' spec and not in entry-points group {ENTRY_POINT_GROUP!r}"
     )

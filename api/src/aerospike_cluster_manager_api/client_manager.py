@@ -69,9 +69,7 @@ class ClientManager:
                 with contextlib.suppress(AerospikeError, OSError):
                     await old.close()
             self._clients[conn_id] = client
-            self._instruments["active_aerospike_connections"].add(
-                1, attributes={"asm.connection.id": conn_id}
-            )
+            self._instruments["active_aerospike_connections"].add(1, attributes={"asm.connection.id": conn_id})
 
             return client
 
@@ -83,14 +81,15 @@ class ClientManager:
             async with self._global_lock:
                 self._conn_locks.pop(conn_id, None)
             if client is not None:
-                with _tracer.start_as_current_span(
-                    "asm.aerospike.client.close",
-                    attributes={"asm.connection.id": conn_id},
-                ), contextlib.suppress(AerospikeError, OSError):
+                with (
+                    _tracer.start_as_current_span(
+                        "asm.aerospike.client.close",
+                        attributes={"asm.connection.id": conn_id},
+                    ),
+                    contextlib.suppress(AerospikeError, OSError),
+                ):
                     await client.close()
-                self._instruments["active_aerospike_connections"].add(
-                    -1, attributes={"asm.connection.id": conn_id}
-                )
+                self._instruments["active_aerospike_connections"].add(-1, attributes={"asm.connection.id": conn_id})
 
     async def close_all(self) -> None:
         info_cache.clear()

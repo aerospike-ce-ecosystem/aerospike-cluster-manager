@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import MagicMock
 
 import pytest
@@ -71,7 +72,7 @@ def test_setup_logging_clears_existing_handlers(monkeypatch):
 class _FakeHandler(logging.Handler):
     """A minimal Handler with a no-arg constructor used by LOG_HANDLERS tests."""
 
-    instances: list[_FakeHandler] = []  # type: ignore[name-defined]
+    instances: ClassVar[list[_FakeHandler]] = []  # type: ignore[name-defined]
 
     def __init__(self) -> None:
         super().__init__()
@@ -102,9 +103,7 @@ def test_log_handlers_module_class_spec(monkeypatch):
 def test_log_handlers_invalid_spec_does_not_abort_startup(monkeypatch):
     """A bad spec must logger.error + skip; the good handler in the same list must still load."""
     monkeypatch.delenv("LOGGING_CONFIG_FILE", raising=False)
-    monkeypatch.setenv(
-        "LOG_HANDLERS", "no_such_module:NotAClass,_fake_handler_pkg:_FakeHandler"
-    )
+    monkeypatch.setenv("LOG_HANDLERS", "no_such_module:NotAClass,_fake_handler_pkg:_FakeHandler")
     _install_fake_handler_module(monkeypatch)
     _FakeHandler.instances.clear()
 
