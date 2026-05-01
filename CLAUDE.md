@@ -6,6 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Aerospike Cluster Manager — A full-stack GUI management tool for Aerospike Community Edition. Built with FastAPI API + Next.js UI, orchestrated via podman Compose.
 
+## Project Goals
+
+1. GUI for managing Aerospike CE clusters.
+2. **aerospike-py exerciser**: real-world usage testbed for [aerospike-py](https://github.com/aerospike-ce-ecosystem/aerospike-py). When you hit a bug, perf bottleneck, or DX issue, file it at `aerospike-py/issues` with a minimal repro and version info, then leave a `# TODO(aerospike-py#NNN)` near the workaround.
+
 ## Commands
 
 ### Full Stack (podman)
