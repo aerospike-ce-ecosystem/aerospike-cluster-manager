@@ -27,6 +27,7 @@ from typing import Any
 from opentelemetry import metrics, trace
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry.sdk._logs import LoggerProvider
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
@@ -118,6 +119,12 @@ def setup_observability() -> bool:
     # attribute injection (otelTraceID/otelSpanID).
     LoggingInstrumentor().instrument(set_logging_format=False)
     AsyncPGInstrumentor().instrument()
+    # FastAPIInstrumentor must be invoked before the FastAPI app is constructed
+    # in main.py — setup_observability() runs at module import time, before
+    # `app = FastAPI(...)`, so the global instrument() form patches every app
+    # created afterwards. Without this, no HTTP request spans are produced and
+    # asyncpg child spans float without an HTTP parent (see #264).
+    FastAPIInstrumentor().instrument()
 
     _initialized = True
     logger.info("OpenTelemetry providers initialized")
