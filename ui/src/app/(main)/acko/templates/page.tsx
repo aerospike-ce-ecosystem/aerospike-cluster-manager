@@ -130,7 +130,10 @@ export default function AckoTemplatesPage() {
                         {t.name}
                       </span>
                       {t.description && (
-                        <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                        <p
+                          title={t.description}
+                          className="truncate text-xs text-gray-500 dark:text-gray-400"
+                        >
                           {t.description}
                         </p>
                       )}
@@ -158,7 +161,12 @@ export default function AckoTemplatesPage() {
                       {t.age ?? "—"}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" className="h-7 px-2 text-xs">
+                      <Button
+                        variant="ghost"
+                        disabled
+                        title="Edit is not yet implemented"
+                        className="h-7 px-2 text-xs"
+                      >
                         Edit
                       </Button>
                     </TableCell>

@@ -54,7 +54,10 @@ export function ClusterCard({
               </span>
             )}
           </div>
-          <h3 className="mt-2 truncate font-mono text-base font-semibold text-gray-900 dark:text-gray-50">
+          <h3
+            title={row.displayName}
+            className="mt-2 truncate font-mono text-base font-semibold text-gray-900 dark:text-gray-50"
+          >
             {row.displayName}
           </h3>
           {row.description && (

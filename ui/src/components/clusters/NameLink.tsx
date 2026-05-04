@@ -15,6 +15,7 @@ export function NameLink({ row }: { row: ClusterRow }) {
     return (
       <Link
         href={clusterSections.overview(row.connId)}
+        title={row.displayName}
         className={cx(
           "block truncate font-mono font-medium text-gray-900 transition hover:text-indigo-700 dark:text-gray-50 dark:hover:text-indigo-300",
           focusRing,
@@ -25,7 +26,10 @@ export function NameLink({ row }: { row: ClusterRow }) {
     )
   }
   return (
-    <span className="block truncate font-mono font-medium text-gray-500 dark:text-gray-500">
+    <span
+      title={row.displayName}
+      className="block truncate font-mono font-medium text-gray-500 dark:text-gray-500"
+    >
       {row.displayName}
     </span>
   )

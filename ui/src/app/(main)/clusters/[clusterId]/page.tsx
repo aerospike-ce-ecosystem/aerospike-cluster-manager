@@ -144,10 +144,16 @@ export default function ClusterOverview({ params }: PageProps) {
                       aria-hidden="true"
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-mono text-sm font-semibold text-gray-900 dark:text-gray-50">
+                      <p
+                        title={n.name}
+                        className="truncate font-mono text-sm font-semibold text-gray-900 dark:text-gray-50"
+                      >
                         {n.name}
                       </p>
-                      <p className="truncate font-mono text-xs text-gray-500 dark:text-gray-500">
+                      <p
+                        title={`${n.address}:${n.port}`}
+                        className="truncate font-mono text-xs text-gray-500 dark:text-gray-500"
+                      >
                         {n.address}:{n.port}
                       </p>
                     </div>

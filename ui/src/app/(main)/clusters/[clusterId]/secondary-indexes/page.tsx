@@ -186,6 +186,8 @@ export default function SecondaryIndexesPage({ params }: PageProps) {
                           <TableCell className="text-right">
                             <Button
                               variant="ghost"
+                              disabled
+                              title="Drop is not yet implemented"
                               className="h-7 px-2 text-xs"
                             >
                               Drop

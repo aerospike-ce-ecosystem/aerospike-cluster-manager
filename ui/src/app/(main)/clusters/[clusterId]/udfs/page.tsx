@@ -154,7 +154,12 @@ export default function UdfsPage({ params }: PageProps) {
                       {u.hash}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" className="h-7 px-2 text-xs">
+                      <Button
+                        variant="ghost"
+                        disabled
+                        title="Remove is not yet implemented"
+                        className="h-7 px-2 text-xs"
+                      >
                         Remove
                       </Button>
                     </TableCell>
