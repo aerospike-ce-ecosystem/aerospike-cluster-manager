@@ -139,7 +139,10 @@ function renderBin(v: unknown, name: string): React.ReactNode {
   }
   const s = String(v)
   return (
-    <span className="font-mono text-xs text-gray-900 dark:text-gray-50">
+    <span
+      title={s}
+      className="block max-w-[20rem] truncate font-mono text-xs text-gray-900 dark:text-gray-50"
+    >
       {s}
     </span>
   )
@@ -367,7 +370,7 @@ export default function RecordBrowserPage({ params }: PageProps) {
           <Table>
             <TableHead>
               <TableRow>
-                <TableHeaderCell className="sticky left-0 z-10 bg-white dark:bg-[#090E1A]">
+                <TableHeaderCell className="sticky left-0 z-20 bg-white dark:bg-[#090E1A]">
                   Primary key
                 </TableHeaderCell>
                 <TableHeaderCell className="text-right">Gen</TableHeaderCell>
