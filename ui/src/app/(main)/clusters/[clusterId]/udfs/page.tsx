@@ -14,6 +14,7 @@ import {
   TableRoot,
   TableRow,
 } from "@/components/Table"
+import { mapApiError } from "@/lib/api/error-mapping"
 import { listUdfs } from "@/lib/api/udfs"
 import { logFetchError } from "@/lib/api/log"
 import type { UDFModule } from "@/lib/types/udf"
@@ -35,7 +36,7 @@ export default function UdfsPage({ params }: PageProps) {
       setUdfs(data)
     } catch (err) {
       logFetchError("udfs", err)
-      setError(err instanceof Error ? err.message : String(err))
+      setError(mapApiError(err).message)
     } finally {
       setLoading(false)
     }

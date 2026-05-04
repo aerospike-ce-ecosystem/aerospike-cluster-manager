@@ -16,7 +16,7 @@ import {
   TableRow,
 } from "@/components/Table"
 import { listRoles, listUsers } from "@/lib/api/admin"
-import { ApiError } from "@/lib/api/client"
+import { mapApiError } from "@/lib/api/error-mapping"
 import { logFetchError } from "@/lib/api/log"
 import type { AerospikeRole, AerospikeUser } from "@/lib/types/admin"
 import { RiShieldKeyholeLine } from "@remixicon/react"
@@ -54,16 +54,21 @@ export default function AdminPage({ params }: PageProps) {
       setRolesState({ data: roles, loading: false, error: null })
     } catch (err) {
       logFetchError("admin", err)
-      if (err instanceof ApiError && err.status === 403) {
-        // Backend EE_MSG: "Security is not enabled. Add a 'security { }' block ..."
+      const mapped = mapApiError(err)
+      // Admin endpoints refuse access either because security is off (CE
+      // default) or the connecting user lacks ACL — both surface as the
+      // same explanatory card here.
+      if (
+        mapped.kind === "security-disabled" ||
+        mapped.kind === "permission-denied"
+      ) {
         setSecurityDisabled(true)
         setUsersState({ data: null, loading: false, error: null })
         setRolesState({ data: null, loading: false, error: null })
         return
       }
-      const message = err instanceof Error ? err.message : String(err)
-      setUsersState({ data: null, loading: false, error: message })
-      setRolesState({ data: null, loading: false, error: message })
+      setUsersState({ data: null, loading: false, error: mapped.message })
+      setRolesState({ data: null, loading: false, error: mapped.message })
     }
   }, [params.clusterId])
 

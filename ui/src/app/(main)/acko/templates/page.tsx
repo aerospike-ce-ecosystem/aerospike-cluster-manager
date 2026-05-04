@@ -13,6 +13,7 @@ import {
   TableRoot,
   TableRow,
 } from "@/components/Table"
+import { mapApiError } from "@/lib/api/error-mapping"
 import { listK8sTemplates } from "@/lib/api/k8s"
 import { logFetchError } from "@/lib/api/log"
 import type { K8sTemplateSummary } from "@/lib/types/k8s"
@@ -31,7 +32,7 @@ export default function AckoTemplatesPage() {
       setTemplates(data)
     } catch (err) {
       logFetchError("templates", err)
-      setError(err instanceof Error ? err.message : String(err))
+      setError(mapApiError(err).message)
     } finally {
       setLoading(false)
     }

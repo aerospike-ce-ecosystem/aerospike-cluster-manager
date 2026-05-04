@@ -14,6 +14,7 @@ import {
   TableRoot,
   TableRow,
 } from "@/components/Table"
+import { mapApiError } from "@/lib/api/error-mapping"
 import { listIndexes } from "@/lib/api/indexes"
 import { logFetchError } from "@/lib/api/log"
 import type { SecondaryIndex, SecondaryIndexState } from "@/lib/types/index"
@@ -45,7 +46,7 @@ export default function SecondaryIndexesPage({ params }: PageProps) {
       setIndexes(data)
     } catch (err) {
       logFetchError("sindex", err)
-      setError(err instanceof Error ? err.message : String(err))
+      setError(mapApiError(err).message)
     } finally {
       setLoading(false)
     }

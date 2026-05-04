@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/Select"
+import { mapApiError } from "@/lib/api/error-mapping"
 import { listIndexes } from "@/lib/api/indexes"
 import { logFetchError } from "@/lib/api/log"
 import { filterRecords } from "@/lib/api/records"
@@ -190,7 +191,7 @@ export default function RecordBrowserPage({ params }: PageProps) {
         })
       } catch (err) {
         logFetchError("records", err)
-        setError(err instanceof Error ? err.message : String(err))
+        setError(mapApiError(err).message)
       } finally {
         setLoading(false)
       }
