@@ -127,23 +127,27 @@ const CommandBarCommand = React.forwardRef<HTMLButtonElement, CommandProps>(
     }: CommandProps,
     ref,
   ) => {
+    // Keep the latest `action` in a ref so changing closures don't re-bind
+    // the document-level keydown listener every render.
+    const actionRef = React.useRef(action)
+    actionRef.current = action
+
+    const shortcutKey = shortcut.shortcut
+
     React.useEffect(() => {
+      if (disabled) return
       const handleKeyDown = (event: KeyboardEvent) => {
-        if (event.key === shortcut.shortcut) {
+        if (event.key === shortcutKey) {
           event.preventDefault()
           event.stopPropagation()
-          action()
+          void actionRef.current()
         }
       }
-
-      if (!disabled) {
-        document.addEventListener("keydown", handleKeyDown)
-      }
-
+      document.addEventListener("keydown", handleKeyDown)
       return () => {
         document.removeEventListener("keydown", handleKeyDown)
       }
-    }, [action, shortcut, disabled])
+    }, [shortcutKey, disabled])
 
     return (
       <span

@@ -42,17 +42,22 @@ export function useEventStream<T = unknown>(
     if (!enabled) return
     if (typeof window === "undefined") return
 
+    let cancelled = false
     let sub: EventSubscription | null = null
     try {
       sub = subscribeEvents<T>({
         types,
-        onOpen: () => setConnected(true),
+        onOpen: () => {
+          if (!cancelled) setConnected(true)
+        },
         onError: (err) => {
+          if (cancelled) return
           logFetchError("event-stream", err)
           setError(err)
           setConnected(false)
         },
         onMessage: (event) => {
+          if (cancelled) return
           setLastEvent(event)
           handlerRef.current?.(event)
         },
@@ -60,10 +65,11 @@ export function useEventStream<T = unknown>(
     } catch (err) {
       // subscribeEvents throws on SSR — already guarded above, but be safe.
       logFetchError("event-stream", err)
-      setError(err as Event)
+      if (!cancelled) setError(err as Event)
     }
 
     return () => {
+      cancelled = true
       sub?.close()
       setConnected(false)
     }
