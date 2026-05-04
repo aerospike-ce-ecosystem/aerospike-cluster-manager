@@ -20,10 +20,7 @@ export type ApiErrorKind =
   | { kind: "unreachable"; message: string }
   | { kind: "generic"; message: string }
 
-const SECURITY_DISABLED_MARKERS = [
-  "security is not enabled",
-  "ee_msg",
-] as const
+const SECURITY_DISABLED_MARKERS = ["security is not enabled", "ee_msg"] as const
 
 function looksLikeSecurityDisabled(detail: string): boolean {
   const lower = detail.toLowerCase()
