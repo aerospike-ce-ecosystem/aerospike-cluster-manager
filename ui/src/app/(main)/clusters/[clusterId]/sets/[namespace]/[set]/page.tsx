@@ -180,7 +180,8 @@ export default function RecordBrowserPage({ params }: PageProps) {
           namespace: params.namespace,
           set: params.set,
           pageSize: size,
-          primaryKey: pk || null,
+          pkPattern: pk || null,
+          pkMatchMode: target.pkMatchMode,
           filters: filters ?? null,
         })
         setRecords(resp.records)
@@ -547,6 +548,7 @@ function StatusBar({
 
 function draftEquals(a: FilterDraft, b: FilterDraft): boolean {
   if (a.pk !== b.pk) return false
+  if (a.pkMatchMode !== b.pkMatchMode) return false
   if (a.logic !== b.logic) return false
   if (a.conditions.length !== b.conditions.length) return false
   for (let i = 0; i < a.conditions.length; i++) {

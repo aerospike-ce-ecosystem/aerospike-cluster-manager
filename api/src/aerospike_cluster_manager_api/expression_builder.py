@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable
+from typing import Literal
 
 from aerospike_py import exp
 
@@ -14,6 +15,26 @@ from aerospike_cluster_manager_api.models.query import (
     FilterGroup,
     FilterOperator,
 )
+
+# POSIX REG_ICASE — case-insensitive matching. aerospike-py forwards the int
+# straight to the server's POSIX regex engine.
+REGEX_FLAG_ICASE = 2
+
+
+class InvalidPkPatternError(ValueError):
+    """Raised when a user-supplied PK regex/prefix pattern is malformed."""
+
+
+def _validate_pattern(pattern: str) -> None:
+    """Catch the common syntactic regex errors (unbalanced brackets / parens,
+    dangling quantifiers) before the pattern reaches the server. Python's
+    regex grammar is more permissive than POSIX in places, but rejecting
+    the structural majority on the API side beats letting the user see an
+    empty result with no signal that their pattern was the problem."""
+    try:
+        re.compile(pattern)
+    except re.error as e:
+        raise InvalidPkPatternError(f"Invalid regex pattern: {e}") from e
 
 
 def _bin_accessor(bin_name: str, bin_type: BinDataType) -> dict:
@@ -77,14 +98,22 @@ def _build_condition(cond: FilterCondition) -> dict:
 
     if op == FilterOperator.CONTAINS:
         pattern = f".*{re.escape(str(cond.value))}.*"
-        return exp.regex_compare(pattern, 2, exp.string_bin(bin_name))
+        return exp.regex_compare(pattern, REGEX_FLAG_ICASE, exp.string_bin(bin_name))
 
     if op == FilterOperator.NOT_CONTAINS:
         pattern = f".*{re.escape(str(cond.value))}.*"
-        return exp.not_(exp.regex_compare(pattern, 2, exp.string_bin(bin_name)))
+        return exp.not_(exp.regex_compare(pattern, REGEX_FLAG_ICASE, exp.string_bin(bin_name)))
 
     if op == FilterOperator.REGEX:
-        return exp.regex_compare(str(cond.value), 2, exp.string_bin(bin_name))
+        regex = str(cond.value)
+        _validate_pattern(regex)
+        return exp.regex_compare(regex, REGEX_FLAG_ICASE, exp.string_bin(bin_name))
+
+    if op == FilterOperator.PK_PREFIX:
+        return build_pk_filter_expression(str(cond.value), "prefix")
+
+    if op == FilterOperator.PK_REGEX:
+        return build_pk_filter_expression(str(cond.value), "regex")
 
     if op == FilterOperator.EXISTS:
         return exp.bin_exists(bin_name)
@@ -115,3 +144,31 @@ def build_expression(group: FilterGroup) -> dict:
     if group.logic == "and":
         return exp.and_(*exprs)
     return exp.or_(*exprs)
+
+
+def build_pk_filter_expression(pattern: str, mode: Literal["prefix", "regex"]) -> dict:
+    """Build a regex_compare expression that matches against the record's
+    primary key (user key) instead of a bin.
+
+    Notes:
+    - PK is digest-indexed in Aerospike — this expression runs as a server-side
+      filter over a full set scan. There is no PK B-tree prefix index.
+    - Records written without ``POLICY_KEY_SEND`` do not store the user key
+      and therefore never match.
+    - ``prefix`` mode escapes the pattern and anchors with ``^``. ``regex``
+      mode passes the pattern through verbatim.
+    """
+    if mode == "prefix":
+        # re.escape produces a known-valid pattern; no validation needed.
+        regex_pattern = f"^{re.escape(pattern)}.*"
+    elif mode == "regex":
+        _validate_pattern(pattern)
+        regex_pattern = pattern
+    else:
+        raise ValueError(f"Unsupported PK match mode: {mode!r}")
+
+    return exp.regex_compare(
+        regex_pattern,
+        REGEX_FLAG_ICASE,
+        exp.key(exp.EXP_TYPE_STRING),
+    )
