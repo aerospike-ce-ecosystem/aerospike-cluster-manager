@@ -7,6 +7,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/Accordion"
+import { Tooltip } from "@/components/Tooltip"
 import { useConnections } from "@/hooks/use-connections"
 import { useK8sClusters } from "@/hooks/use-k8s-clusters"
 import { getCluster } from "@/lib/api/clusters"
@@ -210,7 +211,6 @@ function BrandCard({ active }: { active?: boolean }) {
     <Link
       href="/clusters"
       aria-label="All clusters"
-      title="All clusters"
       className={cx(
         "flex items-center gap-3 rounded-md px-2 py-1.5 transition",
         active
@@ -311,24 +311,25 @@ function ClusterNode({
             : "text-gray-700 dark:text-gray-400",
         )}
       >
-        <Link
-          href={`/clusters/${cluster.id}`}
-          title={cluster.name}
-          className={cx(
-            "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium",
-            focusRing,
-          )}
-        >
-          <RiStackLine className="size-4 shrink-0" aria-hidden="true" />
-          <span className="min-w-0 flex-1 truncate font-mono">
-            {displayName}
-          </span>
-          {cluster.managedBy === "ACKO" && (
-            <span className="shrink-0 rounded bg-indigo-50 px-1.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400">
-              ACKO
+        <Tooltip content={cluster.name} side="right" triggerAsChild>
+          <Link
+            href={`/clusters/${cluster.id}`}
+            className={cx(
+              "flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium",
+              focusRing,
+            )}
+          >
+            <RiStackLine className="size-4 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate font-mono">
+              {displayName}
             </span>
-          )}
-        </Link>
+            {cluster.managedBy === "ACKO" && (
+              <span className="shrink-0 rounded bg-indigo-50 px-1.5 text-[10px] font-semibold uppercase tracking-wider text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400">
+                ACKO
+              </span>
+            )}
+          </Link>
+        </Tooltip>
         <AccordionPrimitives.Trigger
           aria-label={`Toggle ${displayName} namespaces`}
           className={cx(
@@ -431,16 +432,21 @@ function NamespaceNode({
                   if (s.objects === 0) {
                     return (
                       <li key={s.name}>
-                        <span
-                          aria-disabled="true"
-                          title="Empty set"
-                          className={cx(
-                            "relative flex cursor-not-allowed items-center rounded-md py-1 pl-10 pr-2 font-mono text-sm",
-                            "text-gray-400 opacity-70 dark:text-gray-600",
-                          )}
+                        <Tooltip
+                          content="Empty set"
+                          side="right"
+                          triggerAsChild
                         >
-                          {s.name}
-                        </span>
+                          <span
+                            aria-disabled="true"
+                            className={cx(
+                              "relative flex cursor-not-allowed items-center rounded-md py-1 pl-10 pr-2 font-mono text-sm",
+                              "text-gray-400 opacity-70 dark:text-gray-600",
+                            )}
+                          >
+                            {s.name}
+                          </span>
+                        </Tooltip>
                       </li>
                     )
                   }

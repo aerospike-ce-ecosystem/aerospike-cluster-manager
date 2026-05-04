@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/Button"
 import { Input } from "@/components/Input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/Popover"
+import { Tooltip } from "@/components/Tooltip"
 import {
   Select,
   SelectContent,
@@ -405,14 +406,19 @@ function ConditionChip({
   return (
     <div className="flex items-center gap-1.5">
       {leadingLogic && (
-        <button
-          type="button"
-          onClick={onToggleLogic}
-          title={`Switch to ${leadingLogic === "and" ? "OR" : "AND"} logic`}
-          className="inline-flex h-6 items-center rounded bg-gray-100 px-1.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-gray-600 hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800"
+        <Tooltip
+          content={`Switch to ${leadingLogic === "and" ? "OR" : "AND"} logic`}
+          side="top"
+          triggerAsChild
         >
-          {leadingLogic}
-        </button>
+          <button
+            type="button"
+            onClick={onToggleLogic}
+            className="inline-flex h-6 items-center rounded bg-gray-100 px-1.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-gray-600 hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800"
+          >
+            {leadingLogic}
+          </button>
+        </Tooltip>
       )}
       <Popover open={editing} onOpenChange={onOpenChange}>
         <PopoverTrigger asChild>
