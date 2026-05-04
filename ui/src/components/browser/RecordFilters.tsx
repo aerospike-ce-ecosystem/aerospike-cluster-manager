@@ -9,6 +9,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { Button } from "@/components/Button"
+import { InfoBanner } from "@/components/InfoBanner"
 import { Input } from "@/components/Input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/Popover"
 import { Tooltip } from "@/components/Tooltip"
@@ -29,9 +30,16 @@ import type {
   BinDataType,
   FilterCondition,
   FilterOperator,
+  PkMatchMode,
 } from "@/lib/types/query"
 import type { BinValue } from "@/lib/types/record"
 import { cx } from "@/lib/utils"
+
+const PK_PLACEHOLDER_BY_MODE: Record<PkMatchMode, string> = {
+  exact: "Primary key...",
+  prefix: "Prefix (e.g., user_)",
+  regex: "Regex (e.g., ^acct[0-9]+$)",
+}
 
 export interface FilterDraftCondition extends FilterCondition {
   id: string
@@ -40,12 +48,13 @@ export interface FilterDraftCondition extends FilterCondition {
 
 export interface FilterDraft {
   pk: string
+  pkMatchMode: PkMatchMode
   logic: "and" | "or"
   conditions: FilterDraftCondition[]
 }
 
 export function emptyFilterDraft(): FilterDraft {
-  return { pk: "", logic: "and", conditions: [] }
+  return { pk: "", pkMatchMode: "exact", logic: "and", conditions: [] }
 }
 
 export function draftHasFilters(draft: FilterDraft): boolean {
@@ -109,6 +118,11 @@ export function RecordFilters({
 
   const updatePk = useCallback(
     (pk: string) => onChange({ ...draft, pk }),
+    [draft, onChange],
+  )
+
+  const updatePkMatchMode = useCallback(
+    (pkMatchMode: PkMatchMode) => onChange({ ...draft, pkMatchMode }),
     [draft, onChange],
   )
 
@@ -177,13 +191,32 @@ export function RecordFilters({
           <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-500">
             PK
           </span>
+          <Select
+            value={draft.pkMatchMode}
+            onValueChange={(v) => updatePkMatchMode(v as PkMatchMode)}
+          >
+            <SelectTrigger
+              className="h-8 w-[88px] text-xs"
+              aria-label="PK match mode"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="exact">Exact</SelectItem>
+              <SelectItem value="prefix">Prefix</SelectItem>
+              <SelectItem value="regex">Regex</SelectItem>
+            </SelectContent>
+          </Select>
           <Input
             type="search"
             value={draft.pk}
             onChange={(e) => updatePk(e.target.value)}
             onKeyDown={handleApplyKey}
-            placeholder="Primary key..."
-            className="sm:w-60"
+            placeholder={PK_PLACEHOLDER_BY_MODE[draft.pkMatchMode]}
+            className={cx(
+              "sm:w-60",
+              draft.pkMatchMode !== "exact" && "font-mono",
+            )}
           />
         </div>
 
@@ -267,6 +300,14 @@ export function RecordFilters({
           </div>
         )}
       </div>
+
+      {draft.pkMatchMode !== "exact" && (
+        <InfoBanner title="PK pattern search uses a full set scan">
+          PK is digest-indexed, so prefix/regex matching falls back to a
+          server-side regex over every record. Only records written with
+          POLICY_KEY_SEND (user key persisted) are eligible to match.
+        </InfoBanner>
+      )}
 
       {availableBins.length === 0 && !pickerOpen && (
         <p className="text-[11px] text-gray-500 dark:text-gray-500">

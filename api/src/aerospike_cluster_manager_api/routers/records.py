@@ -4,6 +4,7 @@ import logging
 import time
 from typing import Any, Literal
 
+from aerospike_py import exp
 from aerospike_py.exception import AerospikeError, RecordNotFound
 from aerospike_py.types import WriteMeta
 from fastapi import APIRouter, HTTPException, Query
@@ -19,7 +20,10 @@ from aerospike_cluster_manager_api.constants import (
 )
 from aerospike_cluster_manager_api.converters import record_to_model
 from aerospike_cluster_manager_api.dependencies import AerospikeClient
-from aerospike_cluster_manager_api.expression_builder import build_expression
+from aerospike_cluster_manager_api.expression_builder import (
+    build_expression,
+    build_pk_filter_expression,
+)
 from aerospike_cluster_manager_api.info_parser import aggregate_node_kv, aggregate_set_records, safe_int
 from aerospike_cluster_manager_api.models.query import FilteredQueryRequest, FilteredQueryResponse
 from aerospike_cluster_manager_api.models.record import (
@@ -199,19 +203,24 @@ async def get_filtered_records(
     """Scan records with optional expression filters and pagination."""
     start_time = time.monotonic()
 
-    # PK lookup short-circuit. Falls back to the alternate particle type on
-    # NOT_FOUND when pk_type=auto so numeric-string keys (stored as STRING)
-    # are still found even though auto's heuristic resolves them as INTEGER.
-    if body.primary_key:
+    # Resolve PK lookup target. `pk_pattern` is the canonical field; the
+    # legacy `primary_key` field is still accepted for backward compatibility.
+    pk_target = body.pk_pattern or body.primary_key
+
+    # PK lookup short-circuit (exact mode). Falls back to the alternate
+    # particle type on NOT_FOUND when pk_type=auto so numeric-string keys
+    # (stored as STRING) are still found even though auto's heuristic resolves
+    # them as INTEGER. Prefix/regex modes skip this branch and run a scan.
+    if pk_target and body.pk_match_mode == "exact":
         if not body.set:
             raise HTTPException(status_code=400, detail="Set is required for primary key lookup")
 
-        resolved = resolve_pk(body.primary_key, body.pk_type)
+        resolved = resolve_pk(pk_target, body.pk_type)
         try:
             raw_result = await get_with_pk_fallback(
                 client,
                 (body.namespace, body.set, resolved),
-                body.primary_key,
+                pk_target,
                 body.pk_type,
                 POLICY_READ,
             )
@@ -250,7 +259,14 @@ async def get_filtered_records(
     # cannot be obtained without a separate count-only scan (which would
     # double cluster load) — `totalEstimated=True` plus a lower-bound
     # `total` are reported instead. See issue #284.
-    has_filters = body.filters is not None or body.predicate is not None
+    pk_expr: dict | None = None
+    if pk_target is not None:
+        if body.pk_match_mode == "prefix":
+            pk_expr = build_pk_filter_expression(pk_target, "prefix")
+        elif body.pk_match_mode == "regex":
+            pk_expr = build_pk_filter_expression(pk_target, "regex")
+
+    has_filters = body.filters is not None or body.predicate is not None or pk_expr is not None
     fetch_limit = min(
         body.max_records or MAX_QUERY_RECORDS,
         MAX_QUERY_RECORDS,
@@ -258,8 +274,13 @@ async def get_filtered_records(
     )
 
     policy: dict[str, Any] = {**POLICY_QUERY, "max_records": fetch_limit}
-    if body.filters:
-        policy["filter_expression"] = build_expression(body.filters)
+    bin_expr = build_expression(body.filters) if body.filters else None
+    if bin_expr is not None and pk_expr is not None:
+        policy["filter_expression"] = exp.and_(pk_expr, bin_expr)
+    elif pk_expr is not None:
+        policy["filter_expression"] = pk_expr
+    elif bin_expr is not None:
+        policy["filter_expression"] = bin_expr
 
     try:
         raw_results = await q.results(policy)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable
+from typing import Literal
 
 from aerospike_py import exp
 
@@ -14,6 +15,12 @@ from aerospike_cluster_manager_api.models.query import (
     FilterGroup,
     FilterOperator,
 )
+
+# POSIX regex compile flags accepted by exp.regex_compare. aerospike-py does
+# not yet expose named constants for these so we declare the values we use.
+# Existing bin-targeted regex paths already pass `2` (REG_ICASE).
+REGEX_FLAG_NONE = 0
+REGEX_FLAG_ICASE = 2  # POSIX REG_ICASE — case-insensitive matching
 
 
 def _bin_accessor(bin_name: str, bin_type: BinDataType) -> dict:
@@ -86,6 +93,12 @@ def _build_condition(cond: FilterCondition) -> dict:
     if op == FilterOperator.REGEX:
         return exp.regex_compare(str(cond.value), 2, exp.string_bin(bin_name))
 
+    if op == FilterOperator.PK_PREFIX:
+        return build_pk_filter_expression(str(cond.value), "prefix")
+
+    if op == FilterOperator.PK_REGEX:
+        return build_pk_filter_expression(str(cond.value), "regex")
+
     if op == FilterOperator.EXISTS:
         return exp.bin_exists(bin_name)
 
@@ -115,3 +128,29 @@ def build_expression(group: FilterGroup) -> dict:
     if group.logic == "and":
         return exp.and_(*exprs)
     return exp.or_(*exprs)
+
+
+def build_pk_filter_expression(pattern: str, mode: Literal["prefix", "regex"]) -> dict:
+    """Build a regex_compare expression that matches against the record's
+    primary key (user key) instead of a bin.
+
+    Notes:
+    - PK is digest-indexed in Aerospike — this expression runs as a server-side
+      filter over a full set scan. There is no PK B-tree prefix index.
+    - Records written without ``POLICY_KEY_SEND`` do not store the user key
+      and therefore never match.
+    - ``prefix`` mode escapes the pattern and anchors with ``^``. ``regex``
+      mode passes the pattern through verbatim.
+    """
+    if mode == "prefix":
+        regex_pattern = f"^{re.escape(pattern)}.*"
+    elif mode == "regex":
+        regex_pattern = pattern
+    else:
+        raise ValueError(f"Unsupported PK match mode: {mode!r}")
+
+    return exp.regex_compare(
+        regex_pattern,
+        REGEX_FLAG_ICASE,
+        exp.key(exp.EXP_TYPE_STRING),
+    )

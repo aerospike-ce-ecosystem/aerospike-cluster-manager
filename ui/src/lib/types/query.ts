@@ -54,6 +54,22 @@ export type FilterOperator =
   | "is_false"
   | "geo_within"
   | "geo_contains"
+  | "pk_prefix"
+  | "pk_regex"
+
+/**
+ * PK match modes for the top-level pkPattern field on FilteredQueryRequest.
+ * - "exact": single-record client.get short-circuit (no scan).
+ * - "prefix" / "regex": full set scan + server-side regex_compare on the
+ *   record's user key. Only matches records written with POLICY_KEY_SEND.
+ */
+export type PkMatchMode = "exact" | "prefix" | "regex"
+
+/**
+ * Sentinel bin name for FilterCondition entries that target the primary key
+ * via pk_prefix / pk_regex operators. Mirrors PK_BIN_PLACEHOLDER on the API.
+ */
+export const PK_BIN_PLACEHOLDER = "__pk__"
 
 export type BinDataType =
   | "integer"
@@ -88,6 +104,10 @@ export interface FilteredQueryRequest {
   pageSize?: number
   primaryKey?: string | null
   pkType?: PkType
+  /** PK pattern; canonical replacement for primaryKey. */
+  pkPattern?: string | null
+  /** Match mode for pkPattern. Defaults to "exact" when omitted. */
+  pkMatchMode?: PkMatchMode
 }
 
 export interface FilteredQueryResponse {

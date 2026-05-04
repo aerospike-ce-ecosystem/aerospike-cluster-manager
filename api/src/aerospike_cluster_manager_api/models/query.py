@@ -3,9 +3,16 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .record import AerospikeRecord, BinValue
+
+# Placeholder bin name used when a FilterCondition targets the primary key
+# (operators PK_PREFIX / PK_REGEX). The bin field on FilterCondition is
+# required (min_length=1) for serialization, but PK operators use exp.key()
+# instead of any bin accessor — this sentinel makes the intent explicit and
+# is rejected when paired with non-PK operators.
+PK_BIN_PLACEHOLDER = "__pk__"
 
 
 class QueryPredicate(BaseModel):
@@ -56,6 +63,13 @@ class FilterOperator(StrEnum):
     IS_FALSE = "is_false"
     GEO_WITHIN = "geo_within"
     GEO_CONTAINS = "geo_contains"
+    PK_PREFIX = "pk_prefix"
+    PK_REGEX = "pk_regex"
+
+
+# Operators that target the record's primary key via exp.key() rather than a
+# bin accessor. The condition's `bin` field is ignored (must be the placeholder).
+PK_OPERATORS: frozenset[FilterOperator] = frozenset({FilterOperator.PK_PREFIX, FilterOperator.PK_REGEX})
 
 
 class BinDataType(StrEnum):
@@ -71,11 +85,28 @@ class BinDataType(StrEnum):
 class FilterCondition(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    bin: str = Field(min_length=1, max_length=15)
+    bin: str = Field(min_length=1, max_length=255)
     operator: FilterOperator
     value: BinValue | None = None
     value2: BinValue | None = None
     bin_type: BinDataType = Field(default=BinDataType.STRING, alias="binType")
+
+    @model_validator(mode="after")
+    def _validate_pk_operator_pairing(self) -> FilterCondition:
+        """Enforce that PK operators only appear with the PK placeholder bin,
+        and conversely that the placeholder is reserved for PK operators.
+        Bin names are normally <=15 chars; the placeholder is checked here
+        so the regular field-length cap can be relaxed without losing safety."""
+        is_pk_op = self.operator in PK_OPERATORS
+        is_pk_bin = self.bin == PK_BIN_PLACEHOLDER
+        if is_pk_op != is_pk_bin:
+            raise ValueError(
+                f"Operator {self.operator!r} requires bin={PK_BIN_PLACEHOLDER!r} "
+                f"and that placeholder is only valid with PK operators."
+            )
+        if not is_pk_op and len(self.bin) > 15:
+            raise ValueError("bin must be at most 15 characters")
+        return self
 
 
 class FilterGroup(BaseModel):
@@ -97,6 +128,13 @@ class FilteredQueryRequest(BaseModel):
     primary_key: str | None = Field(default=None, max_length=1024, alias="primaryKey")
     # Particle type for primary_key resolution. "auto" retries alternate type on NOT_FOUND.
     pk_type: Literal["auto", "string", "int", "bytes"] = Field(default="auto", alias="pkType")
+    # PK pattern + match mode. When pk_match_mode is "exact", behaves like
+    # primary_key (single-record client.get). For "prefix"/"regex", the scan
+    # path is taken and a regex_compare(exp.key(STRING)) expression is composed
+    # with body.filters via AND. Resolution: pk_pattern preferred over the
+    # legacy primary_key field; both are accepted for backward compatibility.
+    pk_pattern: str | None = Field(default=None, max_length=4096, alias="pkPattern")
+    pk_match_mode: Literal["exact", "prefix", "regex"] = Field(default="exact", alias="pkMatchMode")
 
 
 class FilteredQueryResponse(BaseModel):
