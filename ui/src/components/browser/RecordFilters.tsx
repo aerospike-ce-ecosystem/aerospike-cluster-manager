@@ -199,9 +199,11 @@ export function RecordFilters({
                 "dark:border-gray-700 dark:text-gray-400 dark:hover:border-gray-600 dark:hover:bg-gray-900 dark:hover:text-gray-50",
               )}
               title={
-                availableBins.length === 0
-                  ? "No secondary indexes found — create an index to enable filtering"
-                  : `${availableBins.length} indexed bin(s) available`
+                pickerOpen
+                  ? undefined
+                  : availableBins.length === 0
+                    ? "No secondary indexes found — create an index to enable filtering"
+                    : `${availableBins.length} indexed bin(s) available`
               }
             >
               {availableBins.length > 0 ? (
@@ -265,7 +267,7 @@ export function RecordFilters({
         )}
       </div>
 
-      {availableBins.length === 0 && (
+      {availableBins.length === 0 && !pickerOpen && (
         <p className="text-[11px] text-gray-500 dark:text-gray-500">
           Bin filters require a ready secondary index on this namespace/set. Use
           the Indexes tab to create one. Primary-key lookup above works without
