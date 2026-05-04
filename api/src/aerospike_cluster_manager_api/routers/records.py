@@ -241,11 +241,23 @@ async def get_filtered_records(
     if body.select_bins:
         q.select(*body.select_bins)
 
-    # Build policy with server-side max_records limit to prevent OOM
+    # Build policy with server-side max_records limit to prevent OOM.
+    #
+    # For paginated filter queries we fetch ONE extra record beyond the page
+    # size so we can detect "is there at least one more record" without an
+    # extra round trip. The fetched +1 record is dropped before responding.
+    # This makes `hasMore` accurate. The true `total` for filter-mode queries
+    # cannot be obtained without a separate count-only scan (which would
+    # double cluster load) — `totalEstimated=True` plus a lower-bound
+    # `total` are reported instead. See issue #284.
     has_filters = body.filters is not None or body.predicate is not None
-    effective_limit = min(body.max_records or MAX_QUERY_RECORDS, MAX_QUERY_RECORDS, body.page_size)
+    fetch_limit = min(
+        body.max_records or MAX_QUERY_RECORDS,
+        MAX_QUERY_RECORDS,
+        body.page_size + 1,
+    )
 
-    policy: dict[str, Any] = {**POLICY_QUERY, "max_records": effective_limit}
+    policy: dict[str, Any] = {**POLICY_QUERY, "max_records": fetch_limit}
     if body.filters:
         policy["filter_expression"] = build_expression(body.filters)
 
@@ -260,6 +272,10 @@ async def get_filtered_records(
         raw_results = []
 
     elapsed_ms = int((time.monotonic() - start_time) * 1000)
+    fetched = len(raw_results)
+    has_more = fetched > body.page_size
+    if has_more:
+        raw_results = raw_results[: body.page_size]
     returned = len(raw_results)
 
     records = [record_to_model(r) for r in raw_results]
@@ -269,9 +285,9 @@ async def get_filtered_records(
     # reflect the true number of records scanned by the Aerospike server.
     # For unfiltered scans we use the info command to get the real set size.
     if has_filters:
-        set_total = returned
+        set_total = returned + (1 if has_more else 0)  # lower bound
         scanned = returned  # lower bound; actual server-side scan may be higher
-        total_estimated = False
+        total_estimated = True
     else:
         set_total = await _get_set_object_count(client, body.namespace, body.set or "")
         scanned = set_total  # info-based: represents all objects in the set
@@ -282,7 +298,7 @@ async def get_filtered_records(
         total=set_total,
         page=1,
         pageSize=body.page_size,
-        hasMore=set_total > returned,
+        hasMore=has_more,
         executionTimeMs=elapsed_ms,
         scannedRecords=scanned,
         returnedRecords=returned,
