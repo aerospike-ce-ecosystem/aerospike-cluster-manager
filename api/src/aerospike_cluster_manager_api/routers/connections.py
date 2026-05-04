@@ -42,7 +42,7 @@ async def list_connections(
     if workspace_id is not None:
         ws = await db.get_workspace(workspace_id)
         if not ws:
-            raise HTTPException(status_code=400, detail=f"Workspace '{workspace_id}' not found")
+            raise HTTPException(status_code=404, detail=f"Workspace '{workspace_id}' not found")
     profiles = await db.get_all_connections(workspace_id)
     return [ConnectionProfileResponse.from_profile(p) for p in profiles]
 
@@ -53,7 +53,7 @@ async def create_connection(request: Request, body: CreateConnectionRequest) -> 
     """Create a new Aerospike connection profile."""
     workspace_id = body.workspaceId or DEFAULT_WORKSPACE_ID
     if not await db.get_workspace(workspace_id):
-        raise HTTPException(status_code=400, detail=f"Workspace '{workspace_id}' not found")
+        raise HTTPException(status_code=404, detail=f"Workspace '{workspace_id}' not found")
     now = datetime.now(UTC).isoformat()
     conn = ConnectionProfile(
         id=f"conn-{uuid.uuid4().hex[:12]}",
@@ -92,7 +92,7 @@ async def update_connection(
     if "workspaceId" in update_data and update_data["workspaceId"] is not None:
         target_ws = update_data["workspaceId"]
         if not await db.get_workspace(target_ws):
-            raise HTTPException(status_code=400, detail=f"Workspace '{target_ws}' not found")
+            raise HTTPException(status_code=404, detail=f"Workspace '{target_ws}' not found")
     conn = await db.update_connection(conn_id, update_data)
     if not conn:
         raise HTTPException(status_code=404, detail=f"Connection '{conn_id}' not found")

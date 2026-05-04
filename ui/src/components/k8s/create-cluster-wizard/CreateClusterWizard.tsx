@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react"
 
 import { Button } from "@/components/Button"
 import { ApiError } from "@/lib/api/client"
+import { useUiStore } from "@/stores/ui-store"
 import {
   createK8sCluster,
   getK8sTemplate,
@@ -353,6 +354,10 @@ export function CreateClusterWizard() {
     setSubmitting(true)
     try {
       const payload = cleanupPayload(form)
+      // Attach the auto-created connection to the workspace the user is
+      // currently viewing — otherwise the new cluster only appears after
+      // they switch back to Default.
+      payload.workspaceId = useUiStore.getState().currentWorkspaceId
       await createK8sCluster(payload)
       router.push("/clusters")
     } catch (err) {

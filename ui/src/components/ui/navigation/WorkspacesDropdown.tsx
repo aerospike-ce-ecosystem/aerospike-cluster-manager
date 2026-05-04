@@ -70,10 +70,13 @@ export function WorkspacesDropdown() {
   // Reconcile the persisted currentWorkspaceId against the live list once
   // workspaces load — if the saved id no longer exists (e.g. it was deleted
   // in another session), fall back to the default so the rest of the UI
-  // doesn't filter on an orphan id.
+  // doesn't filter on an orphan id. Skip when we're already on the default;
+  // otherwise a backend race that yields a list missing ws-default would
+  // re-fire the setter on every refetch.
   React.useEffect(() => {
     if (!data) return
     if (data.length === 0) return
+    if (currentWorkspaceId === DEFAULT_WORKSPACE_ID) return
     if (!data.some((w) => w.id === currentWorkspaceId)) {
       setCurrentWorkspaceId(DEFAULT_WORKSPACE_ID)
     }

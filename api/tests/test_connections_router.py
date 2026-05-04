@@ -215,7 +215,7 @@ class TestConnectionWorkspaces:
     async def test_create_with_unknown_workspace_id_rejected(self, client: AsyncClient):
         payload = {**CREATE_PAYLOAD, "workspaceId": "ws-missing"}
         response = await client.post("/api/connections", json=payload)
-        assert response.status_code == 400
+        assert response.status_code == 404
 
     async def test_list_filters_by_workspace_id(self, client: AsyncClient):
         # Set up: two workspaces, one connection in each
@@ -235,7 +235,7 @@ class TestConnectionWorkspaces:
 
     async def test_list_unknown_workspace_id_rejected(self, client: AsyncClient):
         response = await client.get("/api/connections?workspace_id=ws-missing")
-        assert response.status_code == 400
+        assert response.status_code == 404
 
     async def test_update_moves_connection_between_workspaces(self, client: AsyncClient):
         ws_resp = await client.post("/api/workspaces", json={"name": "team-b"})
@@ -258,7 +258,7 @@ class TestConnectionWorkspaces:
             f"/api/connections/{conn_id}",
             json={"workspaceId": "ws-missing"},
         )
-        assert update.status_code == 400
+        assert update.status_code == 404
 
 
 class TestDeleteConnection:

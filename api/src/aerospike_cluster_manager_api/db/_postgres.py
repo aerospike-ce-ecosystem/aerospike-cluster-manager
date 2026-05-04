@@ -279,8 +279,18 @@ async def update_workspace(workspace_id: str, data: dict) -> Workspace | None:
 
 
 async def delete_workspace(workspace_id: str) -> bool:
+    """Delete a workspace by id, refusing to delete the built-in default.
+
+    The ``is_default = FALSE`` clause is defense-in-depth: the router already
+    rejects deletes of the default workspace with HTTP 400, but enforcing
+    it at the DB layer guarantees the invariant holds even if a future
+    caller bypasses the router (refactor, internal task, direct tests).
+    """
     pool = _get_pool()
-    result = await pool.execute("DELETE FROM workspaces WHERE id = $1", workspace_id)
+    result = await pool.execute(
+        "DELETE FROM workspaces WHERE id = $1 AND is_default = FALSE",
+        workspace_id,
+    )
     return result == "DELETE 1"
 
 

@@ -153,3 +153,17 @@ class TestDeleteWorkspace:
     async def test_delete_not_found(self, client: AsyncClient):
         response = await client.delete("/api/workspaces/ws-missing")
         assert response.status_code == 404
+
+
+class TestDeleteWorkspaceDbGuard:
+    """Defense-in-depth: even direct db.delete_workspace() must not delete the default."""
+
+    async def test_db_layer_refuses_to_delete_default(self, init_test_db):
+        from aerospike_cluster_manager_api import db
+
+        deleted = await db.delete_workspace("ws-default")
+        assert deleted is False
+        # The default workspace must still exist after the failed delete.
+        ws = await db.get_workspace("ws-default")
+        assert ws is not None
+        assert ws.isDefault is True

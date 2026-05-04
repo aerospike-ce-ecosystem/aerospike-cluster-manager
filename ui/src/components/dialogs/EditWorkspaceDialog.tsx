@@ -11,8 +11,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/Dialog"
-import { Input } from "@/components/Input"
-import { Label } from "@/components/Label"
+import { WorkspaceFormFields } from "@/components/dialogs/WorkspaceFormFields"
+import {
+  fromWorkspace,
+  useWorkspaceForm,
+} from "@/components/dialogs/useWorkspaceForm"
 import { ApiError } from "@/lib/api/client"
 import { deleteWorkspace, updateWorkspace } from "@/lib/api/workspaces"
 import type { WorkspaceResponse } from "@/lib/types/workspace"
@@ -25,9 +28,6 @@ interface EditWorkspaceDialogProps {
   onDeleted?: (id: string) => void
 }
 
-const TEXTAREA_CLASSES =
-  "block w-full resize-y rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 placeholder-gray-400 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-50 dark:placeholder-gray-500 dark:focus:ring-indigo-400/20"
-
 export function EditWorkspaceDialog({
   workspace,
   open,
@@ -35,9 +35,7 @@ export function EditWorkspaceDialog({
   onSaved,
   onDeleted,
 }: EditWorkspaceDialogProps) {
-  const [name, setName] = React.useState("")
-  const [color, setColor] = React.useState("#6366F1")
-  const [description, setDescription] = React.useState("")
+  const { form, setForm, validate, hydrate } = useWorkspaceForm()
   const [error, setError] = React.useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [isDeleting, setIsDeleting] = React.useState(false)
@@ -45,12 +43,10 @@ export function EditWorkspaceDialog({
   // Re-hydrate the form whenever a different workspace is opened.
   React.useEffect(() => {
     if (workspace) {
-      setName(workspace.name)
-      setColor(workspace.color)
-      setDescription(workspace.description ?? "")
+      hydrate(fromWorkspace(workspace))
       setError(null)
     }
-  }, [workspace])
+  }, [workspace, hydrate])
 
   const handleOpenChange = (next: boolean) => {
     if (!next) {
@@ -64,19 +60,15 @@ export function EditWorkspaceDialog({
     if (!workspace) return
     setError(null)
 
-    const trimmedName = name.trim()
-    if (!trimmedName) {
-      setError("Name is required.")
+    const result = validate()
+    if (!result.ok) {
+      setError(result.error)
       return
     }
 
     setIsSubmitting(true)
     try {
-      const saved = await updateWorkspace(workspace.id, {
-        name: trimmedName,
-        color,
-        description: description.trim() || null,
-      })
+      const saved = await updateWorkspace(workspace.id, result.payload)
       onSaved?.(saved)
       onOpenChange(false)
     } catch (err) {
@@ -135,42 +127,11 @@ export function EditWorkspaceDialog({
             </div>
           )}
 
-          <div className="flex flex-col gap-y-1.5">
-            <Label htmlFor="ws-edit-name">Name</Label>
-            <Input
-              id="ws-edit-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          </div>
-
-          <div className="flex flex-col gap-y-1.5">
-            <Label htmlFor="ws-edit-color">Color</Label>
-            <div className="flex items-center gap-x-3">
-              <Input
-                id="ws-edit-color"
-                type="color"
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
-                className="h-9 w-16 cursor-pointer p-1"
-              />
-              <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
-                {color}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-y-1.5">
-            <Label htmlFor="ws-edit-description">Description</Label>
-            <textarea
-              id="ws-edit-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-              className={TEXTAREA_CLASSES}
-            />
-          </div>
+          <WorkspaceFormFields
+            form={form}
+            setForm={setForm}
+            idPrefix="ws-edit"
+          />
 
           <DialogFooter className="sm:justify-between">
             {!workspace.isDefault ? (

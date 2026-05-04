@@ -166,14 +166,14 @@ _row_to_workspace = row_to_workspace
 async def get_all_connections(workspace_id: str | None = None) -> list[ConnectionProfile]:
     conn = _get_conn()
     if workspace_id is not None:
-        cursor = conn.execute(
+        async with conn.execute(
             "SELECT * FROM connections WHERE workspace_id = ? ORDER BY created_at",
             (workspace_id,),
-        )
+        ) as cursor:
+            rows = await cursor.fetchall()
     else:
-        cursor = conn.execute("SELECT * FROM connections ORDER BY created_at")
-    async with cursor as cur:
-        rows = await cur.fetchall()
+        async with conn.execute("SELECT * FROM connections ORDER BY created_at") as cursor:
+            rows = await cursor.fetchall()
     return [_row_to_profile(row) for row in rows]
 
 
@@ -309,16 +309,24 @@ async def create_workspace(ws: Workspace) -> None:
 
 
 async def update_workspace(workspace_id: str, data: dict) -> Workspace | None:
+    """Atomic read-modify-write under a BEGIN IMMEDIATE write lock.
+
+    Mirrors the Postgres ``SELECT ... FOR UPDATE`` invariant: the SELECT
+    and UPDATE must run inside the same transaction so a concurrent
+    writer cannot overwrite our merged result with stale data.
+    """
     db_conn = _get_conn()
-    async with db_conn.execute("SELECT * FROM workspaces WHERE id = ?", (workspace_id,)) as cursor:
-        row = await cursor.fetchone()
-    if not row:
-        return None
-
-    existing = _row_to_workspace(row)
-    updated = build_merged_workspace(existing, data)
-
+    await db_conn.execute("BEGIN IMMEDIATE")
     try:
+        async with db_conn.execute("SELECT * FROM workspaces WHERE id = ?", (workspace_id,)) as cursor:
+            row = await cursor.fetchone()
+        if not row:
+            await db_conn.rollback()
+            return None
+
+        existing = _row_to_workspace(row)
+        updated = build_merged_workspace(existing, data)
+
         await db_conn.execute(
             """UPDATE workspaces
                    SET name = ?, color = ?, description = ?, updated_at = ?
@@ -340,9 +348,19 @@ async def update_workspace(workspace_id: str, data: dict) -> Workspace | None:
 
 
 async def delete_workspace(workspace_id: str) -> bool:
+    """Delete a workspace by id, refusing to delete the built-in default.
+
+    The ``is_default = 0`` clause is defense-in-depth: the router already
+    rejects deletes of the default workspace with HTTP 400, but enforcing
+    it at the DB layer guarantees the invariant holds even if a future
+    caller bypasses the router (refactor, internal task, direct tests).
+    """
     db_conn = _get_conn()
     try:
-        cursor = await db_conn.execute("DELETE FROM workspaces WHERE id = ?", (workspace_id,))
+        cursor = await db_conn.execute(
+            "DELETE FROM workspaces WHERE id = ? AND is_default = 0",
+            (workspace_id,),
+        )
         await db_conn.commit()
     except Exception:
         await db_conn.rollback()
