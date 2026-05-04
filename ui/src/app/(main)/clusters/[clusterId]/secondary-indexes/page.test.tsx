@@ -47,7 +47,9 @@ describe("SecondaryIndexesPage — error / empty / loading separation (#270 regr
   })
 
   it("keeps previously loaded rows visible when a refresh fails", async () => {
-    mocked.mockResolvedValueOnce(FIXTURE).mockRejectedValueOnce(new Error("boom"))
+    mocked
+      .mockResolvedValueOnce(FIXTURE)
+      .mockRejectedValueOnce(new Error("boom"))
 
     render(<SecondaryIndexesPage params={PARAMS} />)
 

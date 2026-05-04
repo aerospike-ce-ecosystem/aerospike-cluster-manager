@@ -40,7 +40,9 @@ describe("UdfsPage — error / empty / loading separation (#270 regression)", ()
   })
 
   it("keeps previously loaded rows visible when a refresh fails", async () => {
-    mocked.mockResolvedValueOnce(FIXTURE).mockRejectedValueOnce(new Error("boom"))
+    mocked
+      .mockResolvedValueOnce(FIXTURE)
+      .mockRejectedValueOnce(new Error("boom"))
 
     render(<UdfsPage params={PARAMS} />)
 

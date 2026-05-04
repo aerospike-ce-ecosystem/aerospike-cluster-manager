@@ -47,7 +47,9 @@ describe("AckoTemplatesPage — error / empty / loading separation (#270 regress
   })
 
   it("keeps previously loaded rows visible when a refresh fails (stale-data preservation)", async () => {
-    mocked.mockResolvedValueOnce(FIXTURE).mockRejectedValueOnce(new Error("boom"))
+    mocked
+      .mockResolvedValueOnce(FIXTURE)
+      .mockRejectedValueOnce(new Error("boom"))
 
     render(<AckoTemplatesPage />)
 
