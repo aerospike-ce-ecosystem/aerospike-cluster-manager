@@ -13,7 +13,7 @@ import { deleteRecord, getRecordDetail, putRecord } from "@/lib/api/records"
 import type { AerospikeRecord, BinValue, PkType } from "@/lib/types/record"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 type PageProps = {
   params: { clusterId: string; namespace: string; set: string; key: string }
@@ -275,8 +275,15 @@ export default function RecordDetailPage({ params }: PageProps) {
       })
   }
 
+  // Keep the latest cancellation signal in a ref so handleSave's
+  // post-PUT reload can be canceled when the user navigates away mid-save.
+  // Without this, an old PUT's getRecordDetail can resolve onto a different
+  // record's page and overwrite its state.
+  const loadSignalRef = useRef<{ cancelled: boolean }>({ cancelled: false })
+
   useEffect(() => {
     const signal = { cancelled: false }
+    loadSignalRef.current = signal
     loadRecord(signal)
     return () => {
       signal.cancelled = true
@@ -410,7 +417,7 @@ export default function RecordDetailPage({ params }: PageProps) {
       })
       setIsEditing(false)
       setDrafts([])
-      await loadRecord()
+      await loadRecord(loadSignalRef.current)
     } catch (err) {
       logFetchError("record-save", err)
       if (err instanceof ApiError) setError(err.detail || err.message)
