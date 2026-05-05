@@ -86,7 +86,11 @@ export function AddWorkspaceDialog({
             </div>
           )}
 
-          <WorkspaceFormFields form={form} setForm={setForm} idPrefix="ws-add" />
+          <WorkspaceFormFields
+            form={form}
+            setForm={setForm}
+            idPrefix="ws-add"
+          />
 
           <DialogFooter>
             <Button
