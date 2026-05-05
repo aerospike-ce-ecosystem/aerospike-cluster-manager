@@ -19,6 +19,47 @@ if (typeof Element !== "undefined") {
   }
 }
 
+// Node 25's experimental localStorage shadows jsdom's implementation but is
+// not initialised in vitest's worker, leaving `localStorage.setItem` as a
+// non-callable shape. Replace with a dead-simple in-memory polyfill so
+// zustand persist works under vitest.
+function makeMemoryStorage(): Storage {
+  const map = new Map<string, string>()
+  return {
+    get length() {
+      return map.size
+    },
+    clear: () => map.clear(),
+    getItem: (key) => map.get(key) ?? null,
+    key: (i) => Array.from(map.keys())[i] ?? null,
+    removeItem: (key) => {
+      map.delete(key)
+    },
+    setItem: (key, value) => {
+      map.set(key, String(value))
+    },
+  }
+}
+
+if (typeof window !== "undefined") {
+  const desc = Object.getOwnPropertyDescriptor(window, "localStorage")
+  const ls = window.localStorage as Storage | undefined
+  if (!ls || typeof ls.setItem !== "function" || (desc && desc.configurable)) {
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: makeMemoryStorage(),
+    })
+  }
+  const sd = Object.getOwnPropertyDescriptor(window, "sessionStorage")
+  const ss = window.sessionStorage as Storage | undefined
+  if (!ss || typeof ss.setItem !== "function" || (sd && sd.configurable)) {
+    Object.defineProperty(window, "sessionStorage", {
+      configurable: true,
+      value: makeMemoryStorage(),
+    })
+  }
+}
+
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()

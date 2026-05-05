@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react"
 
 import { Button } from "@/components/Button"
 import { ApiError } from "@/lib/api/client"
+import { useClusterSelectorStore } from "@/stores/cluster-selector-store"
 import { useUiStore } from "@/stores/ui-store"
 import {
   createK8sCluster,
@@ -449,6 +450,8 @@ export function CreateClusterWizard() {
         </div>
       )}
 
+      <ActiveClusterHint visible={isLastStep} />
+
       <div className="flex justify-between">
         <Button variant="secondary" onClick={goBack} disabled={submitting}>
           {step === 0 ? "Cancel" : "Back"}
@@ -473,5 +476,24 @@ export function CreateClusterWizard() {
         )}
       </div>
     </div>
+  )
+}
+
+function ActiveClusterHint({ visible }: { visible: boolean }) {
+  const registry = useClusterSelectorStore((s) => s.registry)
+  const currentClusterId = useClusterSelectorStore((s) => s.currentClusterId)
+  if (!visible || !registry) return null
+  const active =
+    registry.clusters.find((c) => c.id === currentClusterId) ??
+    registry.clusters.find((c) => c.id === registry.defaultClusterId) ??
+    registry.clusters[0]
+  if (!active) return null
+  return (
+    <p className="text-xs text-gray-500 dark:text-gray-400">
+      Creating in:{" "}
+      <span className="font-semibold text-gray-700 dark:text-gray-300">
+        {active.displayName}
+      </span>
+    </p>
   )
 }
