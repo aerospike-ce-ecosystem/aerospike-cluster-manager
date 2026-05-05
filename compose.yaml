@@ -116,12 +116,13 @@ services:
     restart: unless-stopped
 
   # ── API + UI (single container) ────────────────────────────────────
-  aerospike-cluster-manager:
-    container_name: aerospike-cluster-manager
-    build: .
+  aerospike-cluster-manager-api:
+    container_name: aerospike-cluster-manager-api
+    build:
+      context: .
+      dockerfile: Dockerfile.api
     ports:
       - "${API_PORT:-8000}:8000"
-      - "${UI_PORT:-3100}:3100"
     environment:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3100}
       - HOST=0.0.0.0
@@ -140,6 +141,20 @@ services:
     depends_on:
       aerospike-node-1:
         condition: service_healthy
+
+  aerospike-cluster-manager-web:
+    container_name: aerospike-cluster-manager-web
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    ports:
+      - "${UI_PORT:-3100}:3100"
+    environment:
+      - API_URL=http://aerospike-cluster-manager-api:8000
+    depends_on:
+      aerospike-cluster-manager-api:
+        condition: service_healthy
+    restart: unless-stopped
       aerospike-node-2:
         condition: service_healthy
       aerospike-node-3:

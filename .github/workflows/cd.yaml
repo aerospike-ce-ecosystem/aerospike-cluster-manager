@@ -2,9 +2,8 @@ name: CD
 # On push to main: builds multi-arch (amd64/arm64) container images and pushes to GHCR.
 #
 # Builds three images per push:
-#   - ghcr.io/<repo>          — combined all-in-one image (root Dockerfile, used by compose.yaml)
 #   - ghcr.io/<repo>-api      — FastAPI API only (Dockerfile.api)
-#   - ghcr.io/<repo>-ui       — Next.js UI (Dockerfile.ui)
+#   - ghcr.io/<repo>-web      — Next.js Web frontend (Dockerfile.web)
 #
 # The split images are what the ACKO UI deployments consume.
 
@@ -33,15 +32,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: all
-            dockerfile: Dockerfile
-            suffix: ""
           - name: api
             dockerfile: Dockerfile.api
             suffix: -api
-          - name: ui
-            dockerfile: Dockerfile.ui
-            suffix: -ui
+          - name: web
+            dockerfile: Dockerfile.web
+            suffix: -web
 
     steps:
       - uses: actions/checkout@v6
