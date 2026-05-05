@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -20,6 +21,7 @@ from aerospike_cluster_manager_api.client_manager import client_manager
 from aerospike_cluster_manager_api.events.broker import broker
 from aerospike_cluster_manager_api.events.collector import collector
 from aerospike_cluster_manager_api.logging_config import setup_logging
+from aerospike_cluster_manager_api.middleware.oidc_auth import OIDCAuthMiddleware
 from aerospike_cluster_manager_api.middleware.trace_id import TraceIDMiddleware
 from aerospike_cluster_manager_api.observability import setup_observability
 from aerospike_cluster_manager_api.rate_limit import limiter
@@ -179,6 +181,18 @@ app.add_middleware(
 # Request logging middleware
 # ---------------------------------------------------------------------------
 
+# Matches ``access_token=...`` (and a few common JWT-like query keys) in a
+# URL query string. We log the path + (optionally) query, and SSE clients
+# pass JWTs as ``?access_token=`` because EventSource cannot send Authorization
+# headers — masking before logging keeps tokens out of access logs.
+_SENSITIVE_QS_RE = re.compile(r"(access_token|id_token|token)=[^&\s]+", re.IGNORECASE)
+
+
+def _mask_query_string(qs: str) -> str:
+    if not qs:
+        return qs
+    return _SENSITIVE_QS_RE.sub(lambda m: f"{m.group(1)}=***", qs)
+
 
 @app.middleware("http")
 async def request_logging_middleware(request: Request, call_next: RequestResponseEndpoint) -> Response:
@@ -191,10 +205,12 @@ async def request_logging_middleware(request: Request, call_next: RequestRespons
     # The structured `request_id` JSON field (populated by RequestIDFilter)
     # is the source of truth for log correlation; no need to repeat it in
     # the message text.
+    masked_qs = _mask_query_string(request.url.query)
+    path_for_log = f"{request.url.path}?{masked_qs}" if masked_qs else request.url.path
     logger.info(
         "%s %s %d %.1fms",
         request.method,
-        request.url.path,
+        path_for_log,
         response.status_code,
         elapsed_ms,
     )
@@ -231,11 +247,30 @@ async def security_headers_middleware(request: Request, call_next: RequestRespon
     return response
 
 
+# OIDCAuthMiddleware is added BEFORE TraceIDMiddleware so the runtime
+# layering becomes (outermost → innermost): TraceID → OIDC → security_headers
+# → request_logging → CORS → SlowAPI. That way every authenticated request
+# already has a request_id in scope when the JWT verifier logs, and CORS
+# preflight responses are still produced even when the bearer token is
+# missing/invalid (the OIDC dispatch short-circuits OPTIONS so CORSMiddleware
+# downstream answers the preflight).
+if config.OIDC_ENABLED:
+    app.add_middleware(
+        OIDCAuthMiddleware,
+        enabled=True,
+        issuer_url=config.OIDC_ISSUER_URL,
+        audience=config.OIDC_AUDIENCE,
+        required_roles=config.OIDC_REQUIRED_ROLES,
+        exclude_paths=config.OIDC_EXCLUDE_PATHS,
+        jwks_cache_ttl_seconds=config.OIDC_JWKS_CACHE_TTL_SECONDS,
+    )
+
 # TraceIDMiddleware is registered AFTER all other middleware (CORS, SlowAPI,
-# request_logging, security_headers) so that — given Starlette's reverse-add
-# semantics where the last middleware added is the outermost layer — it reads
-# or generates X-Request-ID and stores it in the ContextVar BEFORE any inner
-# middleware or route handler runs, and echoes the header on the way out.
+# request_logging, security_headers, OIDC) so that — given Starlette's
+# reverse-add semantics where the last middleware added is the outermost
+# layer — it reads or generates X-Request-ID and stores it in the ContextVar
+# BEFORE any inner middleware or route handler runs, and echoes the header on
+# the way out.
 app.add_middleware(TraceIDMiddleware)
 
 

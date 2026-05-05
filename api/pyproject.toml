@@ -31,6 +31,8 @@ dependencies = [
     "opentelemetry-instrumentation-fastapi>=0.51b0",
     "opentelemetry-instrumentation-asyncpg>=0.51b0",
     "opentelemetry-instrumentation-logging>=0.51b0",
+    "httpx>=0.28.1",
+    "python-jose[cryptography]>=3.3,<4",
 ]
 
 [tool.uv]

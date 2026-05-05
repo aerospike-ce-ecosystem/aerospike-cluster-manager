@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
+import re
 
 
 def _get_int(name: str, default: int) -> int:
@@ -12,6 +14,42 @@ def _get_int(name: str, default: int) -> int:
         return int(raw)
     except ValueError:
         raise ValueError(f"Environment variable {name} must be an integer, got: {raw!r}") from None
+
+
+_DURATION_RE = re.compile(r"^(?P<value>\d+)(?P<unit>[smhd]?)$")
+
+
+def _parse_duration_seconds(raw: str, default_seconds: int) -> int:
+    """Accept ``"600"``, ``"10m"``, ``"1h"``, ``"2d"`` and return seconds.
+
+    Bare integers are treated as seconds. Empty/None falls back to ``default_seconds``.
+    """
+    if raw is None or raw == "":
+        return default_seconds
+    candidate = raw.strip().lower()
+    m = _DURATION_RE.match(candidate)
+    if not m:
+        raise ValueError(f"Invalid duration {raw!r}; expected forms like '600', '10m', '1h', '2d'")
+    value = int(m.group("value"))
+    unit = m.group("unit") or "s"
+    multiplier = {"s": 1, "m": 60, "h": 3600, "d": 86400}[unit]
+    return value * multiplier
+
+
+def _parse_str_list(raw: str | None) -> list[str]:
+    """Parse a CSV or JSON array string into a list of stripped, non-empty entries."""
+    if raw is None or raw.strip() == "":
+        return []
+    raw = raw.strip()
+    if raw.startswith("["):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON list: {raw!r}") from e
+        if not isinstance(parsed, list):
+            raise ValueError(f"Expected JSON list, got {type(parsed).__name__}: {raw!r}")
+        return [str(x).strip() for x in parsed if str(x).strip()]
+    return [item.strip() for item in raw.split(",") if item.strip()]
 
 
 CORS_ORIGINS: list[str] = [
@@ -90,3 +128,24 @@ LOG_HANDLERS: str = os.getenv("LOG_HANDLERS", "")
 # full control over logging configuration. LOG_LEVEL / LOG_FORMAT / LOG_HANDLERS
 # are ignored in this mode — the dictConfig is authoritative.
 LOGGING_CONFIG_FILE: str = os.getenv("LOGGING_CONFIG_FILE", "")
+
+# ---------------------------------------------------------------------------
+# OIDC / Keycloak native JWT verification (Phase 0 contracts C-4, C-6, C-7)
+# ---------------------------------------------------------------------------
+# When OIDC_ENABLED=false the middleware is a no-op (still installed but
+# returns immediately) so non-prod and unit-test deployments need no Keycloak.
+OIDC_ENABLED: bool = os.getenv("OIDC_ENABLED", "false").lower() in ("true", "1", "yes")
+# Keycloak realm root, e.g. https://keycloak.example.com/realms/acko. The
+# middleware appends /.well-known/openid-configuration to discover jwks_uri.
+OIDC_ISSUER_URL: str = os.getenv("OIDC_ISSUER_URL", "")
+# Single audience claim contract C-4: tokens from the SPA carry aud=acko-api.
+OIDC_AUDIENCE: str = os.getenv("OIDC_AUDIENCE", "acko-api")
+# CSV ("acko:dev,acko:prod") or JSON list ("[\"acko:dev\"]"). Empty = auth-only,
+# no role check. Resolved against decoded["realm_access"]["roles"].
+OIDC_REQUIRED_ROLES: list[str] = _parse_str_list(os.getenv("OIDC_REQUIRED_ROLES"))
+# JWKS cache TTL. Accepts duration string ("10m") or bare seconds ("600").
+OIDC_JWKS_CACHE_TTL_SECONDS: int = _parse_duration_seconds(os.getenv("OIDC_JWKS_CACHE_TTL", "10m"), default_seconds=600)
+# Paths that bypass auth entirely (exact match). Helm values may override.
+OIDC_EXCLUDE_PATHS: list[str] = _parse_str_list(
+    os.getenv("OIDC_EXCLUDE_PATHS", "/api/health,/api/openapi.json,/api/docs")
+) or ["/api/health", "/api/openapi.json", "/api/docs"]
