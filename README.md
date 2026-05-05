@@ -108,6 +108,8 @@ podman compose -f compose.yaml up --build
 - API: http://localhost:8000
 - Aerospike: internal network only (use `podman exec -it aerospike-tools aql -h aerospike-node-1`)
 
+> Multi-cluster + Keycloak OIDC mode (`KEYCLOAK_ISSUER_URL`, `OIDC_AUDIENCE=acko-api`, JWKS-based JWT verification): see [ACKO multi-cluster docs](https://github.com/aerospike-ce-ecosystem/aerospike-ce-kubernetes-operator/blob/main/docs/multi-cluster-keycloak.md).
+
 ### Local Development
 
 **API:**
