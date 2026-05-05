@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from aerospike_cluster_manager_api.models.workspace import DEFAULT_WORKSPACE_ID
+
 
 def _normalize_labels(v: object) -> dict[str, str]:
     """Coerce label input to a clean dict and ensure ``env`` is always present.
@@ -51,6 +53,7 @@ class ConnectionProfile(BaseModel):
     color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
     description: str | None = None
     labels: dict[str, str] = Field(default_factory=lambda: {"env": "default"})
+    workspaceId: str = DEFAULT_WORKSPACE_ID
     createdAt: str
     updatedAt: str
 
@@ -79,6 +82,10 @@ class CreateConnectionRequest(BaseModel):
     color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$", default="#0097D3")
     description: str | None = None
     labels: dict[str, str] | None = None
+    # When None, the router falls back to the built-in default workspace
+    # (DEFAULT_WORKSPACE_ID). Pre-existing clients that omit the field stay
+    # backward-compatible.
+    workspaceId: str | None = None
 
 
 class UpdateConnectionRequest(BaseModel):
@@ -93,6 +100,7 @@ class UpdateConnectionRequest(BaseModel):
     color: str | None = Field(None, pattern=r"^#[0-9a-fA-F]{6}$")
     description: str | None = None
     labels: dict[str, str] | None = None
+    workspaceId: str | None = None
 
 
 class TestConnectionRequest(BaseModel):
@@ -121,6 +129,7 @@ class ConnectionProfileResponse(BaseModel):
     color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
     description: str | None = None
     labels: dict[str, str] = Field(default_factory=lambda: {"env": "default"})
+    workspaceId: str = DEFAULT_WORKSPACE_ID
     createdAt: str
     updatedAt: str
 

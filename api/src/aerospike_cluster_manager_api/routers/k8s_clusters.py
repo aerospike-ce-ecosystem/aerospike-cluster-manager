@@ -46,6 +46,7 @@ from aerospike_cluster_manager_api.models.k8s_cluster import (
     UpdateK8sClusterRequest,
     UpdateK8sTemplateRequest,
 )
+from aerospike_cluster_manager_api.models.workspace import DEFAULT_WORKSPACE_ID
 from aerospike_cluster_manager_api.services.k8s_service import (
     build_cr,
     build_template_cr,
@@ -443,6 +444,14 @@ async def create_k8s_cluster(body: CreateK8sClusterRequest) -> K8sClusterSummary
             service_host = f"{body.name}.{body.namespace}.svc.cluster.local"
             service_port = 3000
 
+            # Honour the workspace the user was operating in when they hit
+            # "Create Cluster". Fall back to the built-in default if the
+            # field is missing (legacy clients) or points at a workspace that
+            # was deleted between request and reconcile.
+            target_workspace_id = body.workspace_id or DEFAULT_WORKSPACE_ID
+            if not await db.get_workspace(target_workspace_id):
+                target_workspace_id = DEFAULT_WORKSPACE_ID
+
             now = datetime.now(UTC).isoformat()
             conn = ConnectionProfile(
                 id=f"conn-{uuid.uuid4().hex[:12]}",
@@ -455,12 +464,18 @@ async def create_k8s_cluster(body: CreateK8sClusterRequest) -> K8sClusterSummary
                 # user assigns a more specific value via Edit. Passed explicitly
                 # so the contract does not depend on the model validator's default.
                 labels={"env": "default"},
+                workspaceId=target_workspace_id,
                 createdAt=now,
                 updatedAt=now,
             )
             await db.create_connection(conn)
             connection_id = conn.id
-            logger.info("Auto-created connection profile for K8s cluster %s/%s", body.namespace, body.name)
+            logger.info(
+                "Auto-created connection profile for K8s cluster %s/%s in workspace %s",
+                body.namespace,
+                body.name,
+                target_workspace_id,
+            )
         except Exception:
             auto_connect_warning = f"Cluster created but auto-connect failed for {body.namespace}/{body.name}"
             logger.warning("Failed to auto-create connection for %s/%s", body.namespace, body.name, exc_info=True)

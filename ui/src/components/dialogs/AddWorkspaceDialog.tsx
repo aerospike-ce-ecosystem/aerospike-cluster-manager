@@ -11,27 +11,26 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/Dialog"
-import { ConnectionFormFields } from "@/components/dialogs/ConnectionFormFields"
-import { useConnectionForm } from "@/components/dialogs/useConnectionForm"
+import { WorkspaceFormFields } from "@/components/dialogs/WorkspaceFormFields"
+import { useWorkspaceForm } from "@/components/dialogs/useWorkspaceForm"
 import { ApiError } from "@/lib/api/client"
-import { createConnection } from "@/lib/api/connections"
-import { useUiStore } from "@/stores/ui-store"
+import { createWorkspace } from "@/lib/api/workspaces"
+import type { WorkspaceResponse } from "@/lib/types/workspace"
 
-interface AddConnectionDialogProps {
+interface AddWorkspaceDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSuccess?: () => void
+  onSuccess?: (ws: WorkspaceResponse) => void
 }
 
-export function AddConnectionDialog({
+export function AddWorkspaceDialog({
   open,
   onOpenChange,
   onSuccess,
-}: AddConnectionDialogProps) {
-  const { form, setForm, validate, reset } = useConnectionForm()
+}: AddWorkspaceDialogProps) {
+  const { form, setForm, validate, reset } = useWorkspaceForm()
   const [error, setError] = React.useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
-  const currentWorkspaceId = useUiStore((s) => s.currentWorkspaceId)
 
   const handleOpenChange = (next: boolean) => {
     if (!next) {
@@ -53,12 +52,9 @@ export function AddConnectionDialog({
 
     setIsSubmitting(true)
     try {
-      await createConnection({
-        ...result.payload,
-        workspaceId: currentWorkspaceId,
-      })
+      const created = await createWorkspace(result.payload)
       reset()
-      onSuccess?.()
+      onSuccess?.(created)
       onOpenChange(false)
     } catch (err) {
       if (err instanceof ApiError) {
@@ -66,7 +62,7 @@ export function AddConnectionDialog({
       } else if (err instanceof Error) {
         setError(err.message)
       } else {
-        setError("Failed to create connection.")
+        setError("Failed to create workspace.")
       }
     } finally {
       setIsSubmitting(false)
@@ -78,9 +74,9 @@ export function AddConnectionDialog({
       <DialogContent>
         <form onSubmit={handleSubmit} className="flex flex-col gap-y-4">
           <DialogHeader>
-            <DialogTitle>Add connection</DialogTitle>
+            <DialogTitle>Add workspace</DialogTitle>
             <DialogDescription>
-              Register a new Aerospike cluster connection profile.
+              Group Aerospike clusters managed by your team into a workspace.
             </DialogDescription>
           </DialogHeader>
 
@@ -90,7 +86,11 @@ export function AddConnectionDialog({
             </div>
           )}
 
-          <ConnectionFormFields form={form} setForm={setForm} idPrefix="conn" />
+          <WorkspaceFormFields
+            form={form}
+            setForm={setForm}
+            idPrefix="ws-add"
+          />
 
           <DialogFooter>
             <Button
@@ -99,14 +99,14 @@ export function AddConnectionDialog({
               onClick={() => handleOpenChange(false)}
               disabled={isSubmitting}
             >
-              Cancel
+              Go back
             </Button>
             <Button
               type="submit"
               isLoading={isSubmitting}
               loadingText="Creating..."
             >
-              Create
+              Add workspace
             </Button>
           </DialogFooter>
         </form>
@@ -115,4 +115,4 @@ export function AddConnectionDialog({
   )
 }
 
-export default AddConnectionDialog
+export default AddWorkspaceDialog

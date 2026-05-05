@@ -492,6 +492,8 @@ export interface CreateK8sClusterRequest {
   rackConfig?: RackAwareConfig | null
   enableDynamicConfig?: boolean
   autoConnect?: boolean
+  /** Workspace to attach the auto-created connection to. Defaults to the built-in default workspace when omitted. */
+  workspaceId?: string | null
   networkPolicy?: NetworkAccessConfig | null
   k8sNodeBlockList?: string[] | null
   podScheduling?: PodSchedulingConfig | null

@@ -36,6 +36,8 @@ export interface ConnectionProfileResponse {
   description?: string | null
   /** Always contains an ``env`` key after backend normalization (defaults to ``default``). */
   labels: Record<string, string>
+  /** Workspace this connection belongs to. Defaults to ``ws-default`` server-side. */
+  workspaceId: string
   createdAt: string
   updatedAt: string
 }
@@ -54,6 +56,8 @@ export interface CreateConnectionRequest {
   color?: string
   description?: string | null
   labels?: Record<string, string> | null
+  /** When omitted, the backend assigns the connection to the default workspace. */
+  workspaceId?: string | null
 }
 
 export interface UpdateConnectionRequest {
@@ -66,6 +70,8 @@ export interface UpdateConnectionRequest {
   color?: string
   description?: string | null
   labels?: Record<string, string> | null
+  /** Set to move the connection into a different workspace. */
+  workspaceId?: string | null
 }
 
 export interface TestConnectionRequest {

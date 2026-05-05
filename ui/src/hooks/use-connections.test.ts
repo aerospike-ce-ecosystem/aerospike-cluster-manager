@@ -20,6 +20,7 @@ const FIXTURE: ConnectionProfileResponse[] = [
     port: 3000,
     color: "#4f46e5",
     labels: { env: "default" },
+    workspaceId: "ws-default",
     createdAt: "2026-05-04T00:00:00Z",
     updatedAt: "2026-05-04T00:00:00Z",
   },

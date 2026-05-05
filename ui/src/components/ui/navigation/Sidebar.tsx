@@ -14,6 +14,7 @@ import { getCluster } from "@/lib/api/clusters"
 import type { ConnectionProfileResponse } from "@/lib/types/connection"
 import type { K8sClusterSummary } from "@/lib/types/k8s"
 import { cx, focusRing } from "@/lib/utils"
+import { useUiStore } from "@/stores/ui-store"
 import * as AccordionPrimitives from "@radix-ui/react-accordion"
 import {
   RiArrowDownSLine,
@@ -29,6 +30,7 @@ import { useParams, usePathname } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import MobileSidebar from "./MobileSidebar"
 import { UserProfileDesktop, UserProfileMobile } from "./UserProfile"
+import { WorkspacesDropdown } from "./WorkspacesDropdown"
 
 type SidebarSet = {
   name: string
@@ -85,9 +87,11 @@ function buildClusterList(
   connections: ConnectionProfileResponse[] | null,
   k8s: K8sClusterSummary[] | null,
   nsByConn: Record<string, NamespaceSummary[]>,
+  workspaceId: string,
 ): ClusterSummary[] {
   const list: ClusterSummary[] = []
   for (const c of connections ?? []) {
+    if (c.workspaceId !== workspaceId) continue
     const linked = k8s?.find((k) => k.connectionId === c.id)
     list.push({
       id: c.id,
@@ -105,10 +109,30 @@ export function Sidebar() {
   const conn = useConnections()
   const k8s = useK8sClusters()
   const nsByConn = useClusterNamespaces(params?.clusterId ?? null)
+  const currentWorkspaceId = useUiStore((s) => s.currentWorkspaceId)
+  const setCurrentWorkspaceId = useUiStore((s) => s.setCurrentWorkspaceId)
+
+  // When the user navigates directly to a cluster URL whose connection lives
+  // in a different workspace than the one currently selected (e.g. opening a
+  // shared link), follow the URL: switch the persisted workspace so the
+  // cluster is visible in the sidebar drill-down.
+  useEffect(() => {
+    if (!params?.clusterId || !conn.data) return
+    const target = conn.data.find((c) => c.id === params.clusterId)
+    if (target && target.workspaceId !== currentWorkspaceId) {
+      setCurrentWorkspaceId(target.workspaceId)
+    }
+  }, [params?.clusterId, conn.data, currentWorkspaceId, setCurrentWorkspaceId])
 
   const clusterList = useMemo(
-    () => buildClusterList(conn.data, k8s.data?.items ?? null, nsByConn),
-    [conn.data, k8s.data, nsByConn],
+    () =>
+      buildClusterList(
+        conn.data,
+        k8s.data?.items ?? null,
+        nsByConn,
+        currentWorkspaceId,
+      ),
+    [conn.data, k8s.data, nsByConn, currentWorkspaceId],
   )
 
   const isActive = (href: string, exact = false) =>
@@ -128,6 +152,7 @@ export function Sidebar() {
       <nav className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-72 lg:flex-col">
         <aside className="flex grow flex-col gap-y-4 overflow-y-auto border-r border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-950">
           <BrandCard active={pathname === "/clusters"} />
+          <WorkspacesDropdown />
 
           <nav aria-label="core navigation" className="flex flex-1 flex-col">
             <Accordion

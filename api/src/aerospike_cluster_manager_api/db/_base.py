@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from typing import Any, Protocol, runtime_checkable
 
 from aerospike_cluster_manager_api.models.connection import ConnectionProfile
+from aerospike_cluster_manager_api.models.workspace import DEFAULT_WORKSPACE_ID, Workspace
 
 
 @runtime_checkable
@@ -22,7 +23,7 @@ class DatabaseBackend(Protocol):
 
     async def check_health(self) -> bool: ...
 
-    async def get_all_connections(self) -> list[ConnectionProfile]: ...
+    async def get_all_connections(self, workspace_id: str | None = None) -> list[ConnectionProfile]: ...
 
     async def get_connection(self, conn_id: str) -> ConnectionProfile | None: ...
 
@@ -31,6 +32,18 @@ class DatabaseBackend(Protocol):
     async def update_connection(self, conn_id: str, data: dict) -> ConnectionProfile | None: ...
 
     async def delete_connection(self, conn_id: str) -> bool: ...
+
+    async def get_all_workspaces(self) -> list[Workspace]: ...
+
+    async def get_workspace(self, workspace_id: str) -> Workspace | None: ...
+
+    async def create_workspace(self, ws: Workspace) -> None: ...
+
+    async def update_workspace(self, workspace_id: str, data: dict) -> Workspace | None: ...
+
+    async def delete_workspace(self, workspace_id: str) -> bool: ...
+
+    async def count_connections_in_workspace(self, workspace_id: str) -> int: ...
 
 
 def _decode_json_dict(value: object) -> dict[str, Any]:
@@ -73,6 +86,7 @@ def row_to_profile(row: Any) -> ConnectionProfile:
     labels_raw = row["labels"] if "labels" in row.keys() else None  # noqa: SIM118
     # ConnectionProfile.labels validator normalizes {} -> {"env": "default"}.
     labels = _decode_json_dict(labels_raw)
+    workspace_id = row["workspace_id"] if "workspace_id" in row.keys() else None  # noqa: SIM118
     return ConnectionProfile(
         id=row["id"],
         name=row["name"],
@@ -84,8 +98,43 @@ def row_to_profile(row: Any) -> ConnectionProfile:
         color=row["color"],
         description=row["description"],
         labels=labels,
+        workspaceId=workspace_id or DEFAULT_WORKSPACE_ID,
         createdAt=row["created_at"],
         updatedAt=row["updated_at"],
+    )
+
+
+def row_to_workspace(row: Any) -> Workspace:
+    """Convert a database row (dict-like) to a Workspace model."""
+    return Workspace(
+        id=row["id"],
+        name=row["name"],
+        color=row["color"],
+        description=row["description"] if "description" in row.keys() else None,  # noqa: SIM118
+        isDefault=bool(row["is_default"]),
+        createdAt=row["created_at"],
+        updatedAt=row["updated_at"],
+    )
+
+
+def build_merged_workspace(
+    existing: Workspace,
+    data: dict[str, Any],
+) -> Workspace:
+    """Merge update data into an existing workspace, refreshing ``updatedAt``."""
+    merged = existing.model_dump()
+    merged.update(data)
+    merged["updatedAt"] = datetime.now(UTC).isoformat()
+    return Workspace(
+        id=existing.id,
+        name=merged["name"],
+        color=merged["color"],
+        description=merged.get("description"),
+        # is_default is intentionally never overwritten through update — only
+        # the migration sets it. Preserves the built-in default flag.
+        isDefault=existing.isDefault,
+        createdAt=existing.createdAt,
+        updatedAt=merged["updatedAt"],
     )
 
 
@@ -112,6 +161,7 @@ def build_merged_profile(
         color=merged["color"],
         description=merged.get("description"),
         labels=merged.get("labels") or {},
+        workspaceId=merged.get("workspaceId") or DEFAULT_WORKSPACE_ID,
         createdAt=existing.createdAt,
         updatedAt=merged["updatedAt"],
     )

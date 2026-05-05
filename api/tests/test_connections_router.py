@@ -206,6 +206,61 @@ class TestUpdateConnection:
         assert response.status_code == 404
 
 
+class TestConnectionWorkspaces:
+    async def test_create_without_workspace_id_uses_default(self, client: AsyncClient):
+        response = await client.post("/api/connections", json=CREATE_PAYLOAD)
+        assert response.status_code == 201
+        assert response.json()["workspaceId"] == "ws-default"
+
+    async def test_create_with_unknown_workspace_id_rejected(self, client: AsyncClient):
+        payload = {**CREATE_PAYLOAD, "workspaceId": "ws-missing"}
+        response = await client.post("/api/connections", json=payload)
+        assert response.status_code == 404
+
+    async def test_list_filters_by_workspace_id(self, client: AsyncClient):
+        # Set up: two workspaces, one connection in each
+        ws_resp = await client.post("/api/workspaces", json={"name": "team-a"})
+        team_a = ws_resp.json()["id"]
+
+        await client.post("/api/connections", json={**CREATE_PAYLOAD, "workspaceId": "ws-default"})
+        await client.post("/api/connections", json={**CREATE_PAYLOAD, "workspaceId": team_a})
+
+        default_list = (await client.get("/api/connections?workspace_id=ws-default")).json()
+        team_a_list = (await client.get(f"/api/connections?workspace_id={team_a}")).json()
+
+        assert all(c["workspaceId"] == "ws-default" for c in default_list)
+        assert all(c["workspaceId"] == team_a for c in team_a_list)
+        assert len(default_list) >= 1
+        assert len(team_a_list) >= 1
+
+    async def test_list_unknown_workspace_id_rejected(self, client: AsyncClient):
+        response = await client.get("/api/connections?workspace_id=ws-missing")
+        assert response.status_code == 404
+
+    async def test_update_moves_connection_between_workspaces(self, client: AsyncClient):
+        ws_resp = await client.post("/api/workspaces", json={"name": "team-b"})
+        team_b = ws_resp.json()["id"]
+        create = await client.post("/api/connections", json=CREATE_PAYLOAD)
+        conn_id = create.json()["id"]
+
+        update = await client.put(
+            f"/api/connections/{conn_id}",
+            json={"workspaceId": team_b},
+        )
+        assert update.status_code == 200
+        assert update.json()["workspaceId"] == team_b
+
+    async def test_update_with_unknown_workspace_id_rejected(self, client: AsyncClient):
+        create = await client.post("/api/connections", json=CREATE_PAYLOAD)
+        conn_id = create.json()["id"]
+
+        update = await client.put(
+            f"/api/connections/{conn_id}",
+            json={"workspaceId": "ws-missing"},
+        )
+        assert update.status_code == 404
+
+
 class TestDeleteConnection:
     async def test_delete_returns_204(self, client: AsyncClient):
         create_resp = await client.post("/api/connections", json=CREATE_PAYLOAD)

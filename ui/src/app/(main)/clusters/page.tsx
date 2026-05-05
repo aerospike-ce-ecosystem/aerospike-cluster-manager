@@ -24,10 +24,17 @@ export default function ClustersPage() {
     useState<ConnectionProfileResponse | null>(null)
   const view = useUiStore((s) => s.clustersView)
   const setView = useUiStore((s) => s.setClustersView)
+  const currentWorkspaceId = useUiStore((s) => s.currentWorkspaceId)
+
+  const filteredConnections = useMemo(
+    () =>
+      conn.data?.filter((c) => c.workspaceId === currentWorkspaceId) ?? null,
+    [conn.data, currentWorkspaceId],
+  )
 
   const rows = useMemo(
-    () => mergeRows(conn.data, k8s.data?.items ?? null),
-    [conn.data, k8s.data],
+    () => mergeRows(filteredConnections, k8s.data?.items ?? null),
+    [filteredConnections, k8s.data],
   )
   const groups = useMemo(() => groupByEnv(rows), [rows])
 

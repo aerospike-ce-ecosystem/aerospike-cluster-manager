@@ -12,6 +12,7 @@ from fastapi import Depends, HTTPException, Path
 from aerospike_cluster_manager_api import db
 from aerospike_cluster_manager_api.client_manager import client_manager
 from aerospike_cluster_manager_api.models.connection import ConnectionProfile
+from aerospike_cluster_manager_api.models.workspace import Workspace
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,22 @@ async def _get_verified_connection(conn_id: str = Path()) -> str:
     if not conn:
         raise HTTPException(status_code=404, detail=f"Connection '{conn_id}' not found")
     return conn_id
+
+
+async def _get_verified_workspace(workspace_id: str = Path()) -> str:
+    """Verify that a workspace exists (path parameter) and return its id."""
+    ws = await db.get_workspace(workspace_id)
+    if not ws:
+        raise HTTPException(status_code=404, detail=f"Workspace '{workspace_id}' not found")
+    return workspace_id
+
+
+async def _get_workspace(workspace_id: str = Path()) -> Workspace:
+    """Fetch and return the full ``Workspace`` for path parameter ``workspace_id``."""
+    ws = await db.get_workspace(workspace_id)
+    if not ws:
+        raise HTTPException(status_code=404, detail=f"Workspace '{workspace_id}' not found")
+    return ws
 
 
 async def _get_connection_profile(conn_id: str = Path()) -> ConnectionProfile:
@@ -58,3 +75,9 @@ AerospikeClient = Annotated[aerospike_py.AsyncClient, Depends(_get_client)]
 
 VerifiedConnectionProfile = Annotated[ConnectionProfile, Depends(_get_connection_profile)]
 """Inject a full ``ConnectionProfile`` looked up from the path ``conn_id``."""
+
+VerifiedWorkspaceId = Annotated[str, Depends(_get_verified_workspace)]
+"""Inject a verified workspace id from the path."""
+
+VerifiedWorkspace = Annotated[Workspace, Depends(_get_workspace)]
+"""Inject a full ``Workspace`` looked up from the path ``workspace_id``."""

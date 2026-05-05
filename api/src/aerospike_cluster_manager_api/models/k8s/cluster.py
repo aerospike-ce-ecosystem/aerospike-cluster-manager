@@ -120,6 +120,15 @@ class CreateK8sClusterRequest(BaseModel):
     rack_config: RackAwareConfig | None = Field(default=None, alias="rackConfig")
     enable_dynamic_config: bool = Field(default=False, alias="enableDynamicConfig")
     auto_connect: bool = Field(default=True, alias="autoConnect")
+    workspace_id: str | None = Field(
+        default=None,
+        alias="workspaceId",
+        description=(
+            "Workspace to attach the auto-created connection to. When None or "
+            "the workspace doesn't exist, the connection lands in the built-in "
+            "default workspace."
+        ),
+    )
     network_policy: NetworkAccessConfig | None = Field(default=None, alias="networkPolicy")
     k8s_node_block_list: list[str] | None = Field(default=None, alias="k8sNodeBlockList")
     pod_scheduling: PodSchedulingConfig | None = Field(

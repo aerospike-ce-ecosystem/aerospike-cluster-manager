@@ -14,6 +14,7 @@ import { RiCodeSSlashLine, RiMenuLine, RiStackLine } from "@remixicon/react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { WorkspacesDropdown } from "./WorkspacesDropdown"
 
 const navigation = [
   { name: "Clusters", href: siteConfig.baseLinks.clusters, icon: RiStackLine },
@@ -60,6 +61,9 @@ export default function MobileSidebar() {
           </DrawerTitle>
         </DrawerHeader>
         <DrawerBody>
+          <div className="mb-4">
+            <WorkspacesDropdown />
+          </div>
           <nav
             aria-label="core mobile navigation"
             className="flex flex-1 flex-col"

@@ -15,6 +15,7 @@ from aerospike_cluster_manager_api.db._base import DatabaseBackend
 
 if TYPE_CHECKING:
     from aerospike_cluster_manager_api.models.connection import ConnectionProfile
+    from aerospike_cluster_manager_api.models.workspace import Workspace
 
 _backend: types.ModuleType | None = None
 
@@ -47,8 +48,13 @@ async def check_health() -> bool:
     return await _get_backend().check_health()
 
 
-async def get_all_connections() -> list[ConnectionProfile]:
-    return await _get_backend().get_all_connections()
+# ---------------------------------------------------------------------------
+# Connections
+# ---------------------------------------------------------------------------
+
+
+async def get_all_connections(workspace_id: str | None = None) -> list[ConnectionProfile]:
+    return await _get_backend().get_all_connections(workspace_id)
 
 
 async def get_connection(conn_id: str) -> ConnectionProfile | None:
@@ -65,3 +71,32 @@ async def update_connection(conn_id: str, data: dict) -> ConnectionProfile | Non
 
 async def delete_connection(conn_id: str) -> bool:
     return await _get_backend().delete_connection(conn_id)
+
+
+# ---------------------------------------------------------------------------
+# Workspaces
+# ---------------------------------------------------------------------------
+
+
+async def get_all_workspaces() -> list[Workspace]:
+    return await _get_backend().get_all_workspaces()
+
+
+async def get_workspace(workspace_id: str) -> Workspace | None:
+    return await _get_backend().get_workspace(workspace_id)
+
+
+async def create_workspace(ws: Workspace) -> None:
+    await _get_backend().create_workspace(ws)
+
+
+async def update_workspace(workspace_id: str, data: dict) -> Workspace | None:
+    return await _get_backend().update_workspace(workspace_id, data)
+
+
+async def delete_workspace(workspace_id: str) -> bool:
+    return await _get_backend().delete_workspace(workspace_id)
+
+
+async def count_connections_in_workspace(workspace_id: str) -> int:
+    return await _get_backend().count_connections_in_workspace(workspace_id)

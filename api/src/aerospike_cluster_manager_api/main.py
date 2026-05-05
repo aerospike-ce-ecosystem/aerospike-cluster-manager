@@ -35,6 +35,7 @@ from aerospike_cluster_manager_api.routers import (
     records,
     sample_data,
     udfs,
+    workspaces,
 )
 
 if config.K8S_MANAGEMENT_ENABLED:
@@ -368,6 +369,7 @@ except ImportError:
 #   - New clients can target /api/v1/... for explicit versioning
 
 _routers = [
+    workspaces.router,
     connections.router,
     clusters.router,
     records.router,

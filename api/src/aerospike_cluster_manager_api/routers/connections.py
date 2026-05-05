@@ -9,7 +9,7 @@ from typing import Any
 
 import aerospike_py
 from aerospike_py.exception import AerospikeError, AerospikeTimeoutError, ClusterError
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from starlette.responses import Response
 
 from aerospike_cluster_manager_api import db
@@ -25,6 +25,7 @@ from aerospike_cluster_manager_api.models.connection import (
     TestConnectionRequest,
     UpdateConnectionRequest,
 )
+from aerospike_cluster_manager_api.models.workspace import DEFAULT_WORKSPACE_ID
 from aerospike_cluster_manager_api.rate_limit import limiter
 from aerospike_cluster_manager_api.utils import parse_host_port
 
@@ -34,9 +35,15 @@ router = APIRouter(prefix="/connections", tags=["connections"])
 
 
 @router.get("", summary="List connections", description="Retrieve all saved Aerospike connection profiles.")
-async def list_connections() -> list[ConnectionProfileResponse]:
-    """Retrieve all saved Aerospike connection profiles."""
-    profiles = await db.get_all_connections()
+async def list_connections(
+    workspace_id: str | None = Query(default=None, description="Filter by workspace id."),
+) -> list[ConnectionProfileResponse]:
+    """Retrieve all saved Aerospike connection profiles, optionally filtered by workspace."""
+    if workspace_id is not None:
+        ws = await db.get_workspace(workspace_id)
+        if not ws:
+            raise HTTPException(status_code=404, detail=f"Workspace '{workspace_id}' not found")
+    profiles = await db.get_all_connections(workspace_id)
     return [ConnectionProfileResponse.from_profile(p) for p in profiles]
 
 
@@ -44,6 +51,9 @@ async def list_connections() -> list[ConnectionProfileResponse]:
 @limiter.limit("10/minute")
 async def create_connection(request: Request, body: CreateConnectionRequest) -> ConnectionProfileResponse:
     """Create a new Aerospike connection profile."""
+    workspace_id = body.workspaceId or DEFAULT_WORKSPACE_ID
+    if not await db.get_workspace(workspace_id):
+        raise HTTPException(status_code=404, detail=f"Workspace '{workspace_id}' not found")
     now = datetime.now(UTC).isoformat()
     conn = ConnectionProfile(
         id=f"conn-{uuid.uuid4().hex[:12]}",
@@ -56,6 +66,7 @@ async def create_connection(request: Request, body: CreateConnectionRequest) -> 
         color=body.color,
         description=body.description,
         labels=body.labels or {},
+        workspaceId=workspace_id,
         createdAt=now,
         updatedAt=now,
     )
@@ -78,6 +89,10 @@ async def update_connection(
 ) -> ConnectionProfileResponse:
     """Update an existing connection profile with new settings."""
     update_data = body.model_dump(exclude_unset=True, by_alias=False)
+    if "workspaceId" in update_data and update_data["workspaceId"] is not None:
+        target_ws = update_data["workspaceId"]
+        if not await db.get_workspace(target_ws):
+            raise HTTPException(status_code=404, detail=f"Workspace '{target_ws}' not found")
     conn = await db.update_connection(conn_id, update_data)
     if not conn:
         raise HTTPException(status_code=404, detail=f"Connection '{conn_id}' not found")
