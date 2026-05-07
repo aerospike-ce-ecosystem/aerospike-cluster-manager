@@ -21,7 +21,11 @@ from aerospike_cluster_manager_api.db._base import (
     row_to_workspace,
 )
 from aerospike_cluster_manager_api.models.connection import ConnectionProfile
-from aerospike_cluster_manager_api.models.workspace import DEFAULT_WORKSPACE_ID, Workspace
+from aerospike_cluster_manager_api.models.workspace import (
+    DEFAULT_WORKSPACE_ID,
+    SYSTEM_OWNER_ID,
+    Workspace,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +55,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
     color       TEXT NOT NULL DEFAULT '#6366F1',
     description TEXT,
     is_default  INTEGER NOT NULL DEFAULT 0,
+    owner_id    TEXT NOT NULL DEFAULT 'system',
     created_at  TEXT NOT NULL,
     updated_at  TEXT NOT NULL
 );
@@ -83,18 +88,33 @@ async def _apply_migrations(conn: aiosqlite.Connection) -> None:
         await conn.execute("ALTER TABLE connections ADD COLUMN workspace_id TEXT")
         await conn.commit()
 
+    # workspaces.owner_id (issue #307 — Phase 0b). Idempotent: only ALTER
+    # when the column is missing. SQLite does not support
+    # ``ADD COLUMN IF NOT EXISTS`` until 3.35; inspect ``PRAGMA table_info``
+    # explicitly so the migration is safe to re-run on every startup.
+    # Existing rows backfill to ``'system'`` via the column default — the
+    # workspace ACL treats that as accessible to any authenticated caller
+    # (legacy single-tenant semantics).
+    async with conn.execute("PRAGMA table_info(workspaces)") as cursor:
+        ws_columns = {row[1] for row in await cursor.fetchall()}
+    if "owner_id" not in ws_columns:
+        logger.info("Migrating SQLite: adding workspaces.owner_id column")
+        await conn.execute("ALTER TABLE workspaces ADD COLUMN owner_id TEXT NOT NULL DEFAULT 'system'")
+        await conn.commit()
+
     # Seed the built-in default workspace and back-fill any pre-existing
     # connections. Idempotent: INSERT OR IGNORE / UPDATE WHERE NULL.
     now = datetime.now(UTC).isoformat()
     await conn.execute(
         """INSERT OR IGNORE INTO workspaces
-               (id, name, color, description, is_default, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 1, ?, ?)""",
+               (id, name, color, description, is_default, owner_id, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 1, ?, ?, ?)""",
         (
             DEFAULT_WORKSPACE_ID,
             "Default",
             "#6366F1",
             "Default workspace",
+            SYSTEM_OWNER_ID,
             now,
             now,
         ),
@@ -286,18 +306,40 @@ async def get_workspace(workspace_id: str) -> Workspace | None:
     return _row_to_workspace(row) if row else None
 
 
+async def get_workspaces_owned_by(owner_id: str) -> list[Workspace]:
+    """Return workspaces visible to ``owner_id``.
+
+    Visibility = ``ownerId == owner_id`` OR ``ownerId == 'system'``. The
+    second leg keeps the built-in default and any pre-migration rows
+    accessible to every authenticated caller, matching the ACL contract
+    in the ownership ADR. Default workspace sorts first so the UI can
+    pick a stable initial selection without an extra query.
+    """
+    conn = _get_conn()
+    async with conn.execute(
+        """SELECT * FROM workspaces
+               WHERE owner_id = ? OR owner_id = ?
+               ORDER BY is_default DESC, created_at""",
+        (owner_id, SYSTEM_OWNER_ID),
+    ) as cursor:
+        rows = await cursor.fetchall()
+    return [_row_to_workspace(row) for row in rows]
+
+
 async def create_workspace(ws: Workspace) -> None:
     db_conn = _get_conn()
     try:
         await db_conn.execute(
-            """INSERT INTO workspaces (id, name, color, description, is_default, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO workspaces
+                   (id, name, color, description, is_default, owner_id, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 ws.id,
                 ws.name,
                 ws.color,
                 ws.description,
                 1 if ws.isDefault else 0,
+                ws.ownerId,
                 ws.createdAt,
                 ws.updatedAt,
             ),

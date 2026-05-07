@@ -10,7 +10,11 @@ from datetime import UTC, datetime
 from typing import Any, Protocol, runtime_checkable
 
 from aerospike_cluster_manager_api.models.connection import ConnectionProfile
-from aerospike_cluster_manager_api.models.workspace import DEFAULT_WORKSPACE_ID, Workspace
+from aerospike_cluster_manager_api.models.workspace import (
+    DEFAULT_WORKSPACE_ID,
+    SYSTEM_OWNER_ID,
+    Workspace,
+)
 
 
 @runtime_checkable
@@ -36,6 +40,8 @@ class DatabaseBackend(Protocol):
     async def get_all_workspaces(self) -> list[Workspace]: ...
 
     async def get_workspace(self, workspace_id: str) -> Workspace | None: ...
+
+    async def get_workspaces_owned_by(self, owner_id: str) -> list[Workspace]: ...
 
     async def create_workspace(self, ws: Workspace) -> None: ...
 
@@ -105,13 +111,22 @@ def row_to_profile(row: Any) -> ConnectionProfile:
 
 
 def row_to_workspace(row: Any) -> Workspace:
-    """Convert a database row (dict-like) to a Workspace model."""
+    """Convert a database row (dict-like) to a Workspace model.
+
+    ``owner_id`` falls back to :data:`SYSTEM_OWNER_ID` when the column is
+    absent (defensive — both backends migrate the column on init_db, but
+    tests that build legacy rows by hand exercise this path).
+    """
+    # sqlite3.Row / asyncpg.Record use `key in row` for value membership,
+    # not column lookup; explicit keys() is the documented way.
+    owner_id = row["owner_id"] if "owner_id" in row.keys() else None  # noqa: SIM118
     return Workspace(
         id=row["id"],
         name=row["name"],
         color=row["color"],
         description=row["description"] if "description" in row.keys() else None,  # noqa: SIM118
         isDefault=bool(row["is_default"]),
+        ownerId=owner_id or SYSTEM_OWNER_ID,
         createdAt=row["created_at"],
         updatedAt=row["updated_at"],
     )
@@ -121,7 +136,14 @@ def build_merged_workspace(
     existing: Workspace,
     data: dict[str, Any],
 ) -> Workspace:
-    """Merge update data into an existing workspace, refreshing ``updatedAt``."""
+    """Merge update data into an existing workspace, refreshing ``updatedAt``.
+
+    ``isDefault`` and ``ownerId`` are explicitly held constant: neither
+    field is mutable through the update path. ``isDefault`` only flips at
+    migration time, and ``ownerId`` transfers are out of scope per the
+    workspace ownership ADR. Defense-in-depth: even if a future caller
+    smuggles the keys into ``data``, we never honour them.
+    """
     merged = existing.model_dump()
     merged.update(data)
     merged["updatedAt"] = datetime.now(UTC).isoformat()
@@ -133,6 +155,8 @@ def build_merged_workspace(
         # is_default is intentionally never overwritten through update — only
         # the migration sets it. Preserves the built-in default flag.
         isDefault=existing.isDefault,
+        # ownerId is read-only after creation. No transfers in Phase 2.
+        ownerId=existing.ownerId,
         createdAt=existing.createdAt,
         updatedAt=merged["updatedAt"],
     )

@@ -14,6 +14,7 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
+from aerospike_cluster_manager_api.dependencies import _resolve_caller_owner_id
 from aerospike_cluster_manager_api.main import app
 
 
@@ -21,6 +22,14 @@ from aerospike_cluster_manager_api.main import app
 async def _noop_lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """No-op lifespan — the database is managed by the init_test_db fixture."""
     yield
+
+
+def _override_caller(owner_id: str) -> None:
+    app.dependency_overrides[_resolve_caller_owner_id] = lambda: owner_id
+
+
+def _clear_caller_override() -> None:
+    app.dependency_overrides.pop(_resolve_caller_owner_id, None)
 
 
 @pytest.fixture()
@@ -366,3 +375,76 @@ class TestTestConnection:
         call_args = mock_cls.call_args[0][0]
         assert call_args["user"] == "admin"
         assert call_args["password"] == "secret"
+
+
+class TestCrossOwnerWorkspaceAccess:
+    """Phase 2 ACL — connections endpoints reject cross-owner workspace ids
+    with 404 to avoid leaking workspace existence."""
+
+    async def test_create_with_other_owners_workspace_id_rejected(self, client: AsyncClient):
+        # Owner A creates a workspace
+        _override_caller("user-a")
+        try:
+            ws_resp = await client.post("/api/workspaces", json={"name": "a-only", "color": "#FF8800"})
+            a_ws_id = ws_resp.json()["id"]
+        finally:
+            _clear_caller_override()
+
+        # Owner B tries to attach a connection to A's workspace
+        _override_caller("user-b")
+        try:
+            response = await client.post(
+                "/api/connections",
+                json={**CREATE_PAYLOAD, "workspaceId": a_ws_id},
+            )
+            assert response.status_code == 404
+        finally:
+            _clear_caller_override()
+
+    async def test_list_with_other_owners_workspace_id_returns_404(self, client: AsyncClient):
+        _override_caller("user-a")
+        try:
+            ws_resp = await client.post("/api/workspaces", json={"name": "a-only", "color": "#FF8800"})
+            a_ws_id = ws_resp.json()["id"]
+        finally:
+            _clear_caller_override()
+
+        _override_caller("user-b")
+        try:
+            response = await client.get(f"/api/connections?workspace_id={a_ws_id}")
+            assert response.status_code == 404
+        finally:
+            _clear_caller_override()
+
+    async def test_default_workspace_remains_writable_by_any_caller(self, client: AsyncClient):
+        """The synthetic ``system`` owner means the default is shared. Any
+        authenticated caller can create connections in it."""
+        _override_caller("user-anyone")
+        try:
+            response = await client.post("/api/connections", json=CREATE_PAYLOAD)
+            assert response.status_code == 201
+            assert response.json()["workspaceId"] == "ws-default"
+        finally:
+            _clear_caller_override()
+
+    async def test_update_to_other_owners_workspace_id_rejected(self, client: AsyncClient):
+        _override_caller("user-a")
+        try:
+            ws_resp = await client.post("/api/workspaces", json={"name": "a-only", "color": "#FF8800"})
+            a_ws_id = ws_resp.json()["id"]
+        finally:
+            _clear_caller_override()
+
+        # Owner B creates a connection (default workspace) then tries to move
+        # it to A's workspace.
+        _override_caller("user-b")
+        try:
+            create = await client.post("/api/connections", json=CREATE_PAYLOAD)
+            conn_id = create.json()["id"]
+            update = await client.put(
+                f"/api/connections/{conn_id}",
+                json={"workspaceId": a_ws_id},
+            )
+            assert update.status_code == 404
+        finally:
+            _clear_caller_override()

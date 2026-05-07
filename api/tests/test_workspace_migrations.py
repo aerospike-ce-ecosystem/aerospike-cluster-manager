@@ -9,7 +9,10 @@ from unittest.mock import patch
 import aiosqlite
 
 from aerospike_cluster_manager_api import db
-from aerospike_cluster_manager_api.models.workspace import DEFAULT_WORKSPACE_ID
+from aerospike_cluster_manager_api.models.workspace import (
+    DEFAULT_WORKSPACE_ID,
+    SYSTEM_OWNER_ID,
+)
 
 
 class TestDefaultWorkspaceSeed:
@@ -81,3 +84,109 @@ class TestConnectionBackfill:
         assert conn_profile is not None
         assert conn_profile.workspaceId == DEFAULT_WORKSPACE_ID
         assert any(w.id == DEFAULT_WORKSPACE_ID and w.isDefault for w in workspaces)
+
+
+class TestWorkspaceOwnerIdMigration:
+    """Phase 0b — workspaces.owner_id ALTER + ``DEFAULT 'system'`` backfill.
+
+    Together these guarantee:
+
+    * The default workspace always lands with ``ownerId='system'`` after a
+      fresh init_db (system sentinel grants any caller access).
+    * A pre-existing workspaces row that predates the column gets the
+      ``'system'`` value via the column DEFAULT — no data migration code.
+    * The ALTER is idempotent: a re-run on a DB that already has the
+      column does nothing, and the existing rows keep their values.
+    * New rows can carry a real OIDC sub as ``ownerId``.
+    """
+
+    async def test_default_workspace_owner_is_system_after_init(self, init_test_db):
+        ws = await db.get_workspace(DEFAULT_WORKSPACE_ID)
+        assert ws is not None
+        assert ws.ownerId == SYSTEM_OWNER_ID
+
+    async def test_pre_existing_workspace_row_backfilled_to_system(self, tmp_path):
+        db_path = str(tmp_path / "legacy-ws.db")
+
+        # Build a legacy workspaces table without owner_id and seed one row.
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.execute(
+                """CREATE TABLE workspaces (
+                    id          TEXT PRIMARY KEY,
+                    name        TEXT NOT NULL,
+                    color       TEXT NOT NULL DEFAULT '#6366F1',
+                    description TEXT,
+                    is_default  INTEGER NOT NULL DEFAULT 0,
+                    created_at  TEXT NOT NULL,
+                    updated_at  TEXT NOT NULL
+                )"""
+            )
+            await conn.execute(
+                """CREATE TABLE connections (
+                    id           TEXT PRIMARY KEY,
+                    name         TEXT NOT NULL,
+                    hosts        TEXT NOT NULL,
+                    port         INTEGER NOT NULL DEFAULT 3000,
+                    cluster_name TEXT,
+                    username     TEXT,
+                    password     TEXT,
+                    color        TEXT NOT NULL DEFAULT '#0097D3',
+                    description  TEXT,
+                    labels       TEXT,
+                    workspace_id TEXT,
+                    created_at   TEXT NOT NULL,
+                    updated_at   TEXT NOT NULL
+                )"""
+            )
+            now = datetime.now(UTC).isoformat()
+            await conn.execute(
+                """INSERT INTO workspaces (id, name, color, is_default, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                ("ws-legacy-1", "legacy", "#123456", 0, now, now),
+            )
+            await conn.commit()
+
+        with (
+            patch("aerospike_cluster_manager_api.config.ENABLE_POSTGRES", False),
+            patch("aerospike_cluster_manager_api.config.SQLITE_PATH", db_path),
+        ):
+            await db.init_db()
+            try:
+                ws = await db.get_workspace("ws-legacy-1")
+            finally:
+                await db.close_db()
+
+        assert ws is not None
+        # The migration's ``DEFAULT 'system'`` backfilled the legacy row.
+        assert ws.ownerId == SYSTEM_OWNER_ID
+
+    async def test_alter_is_idempotent(self, init_test_db):
+        """Running the SQLite migration twice on a DB that already has the
+        column must be a no-op (no error, no schema change, no data loss)."""
+        # Re-init the same DB — _apply_migrations runs again.
+        await db.close_db()
+        with (
+            patch("aerospike_cluster_manager_api.config.ENABLE_POSTGRES", False),
+            patch("aerospike_cluster_manager_api.config.SQLITE_PATH", init_test_db),
+        ):
+            await db.init_db()
+            ws = await db.get_workspace(DEFAULT_WORKSPACE_ID)
+        assert ws is not None
+        assert ws.ownerId == SYSTEM_OWNER_ID
+
+    async def test_new_row_carries_real_owner_id(self, init_test_db):
+        from aerospike_cluster_manager_api.models.workspace import Workspace
+
+        now = datetime.now(UTC).isoformat()
+        ws = Workspace(
+            id="ws-team-real",
+            name="real",
+            color="#123456",
+            ownerId="user-real",
+            createdAt=now,
+            updatedAt=now,
+        )
+        await db.create_workspace(ws)
+        fetched = await db.get_workspace("ws-team-real")
+        assert fetched is not None
+        assert fetched.ownerId == "user-real"

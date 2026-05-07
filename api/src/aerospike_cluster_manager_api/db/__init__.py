@@ -86,6 +86,10 @@ async def get_workspace(workspace_id: str) -> Workspace | None:
     return await _get_backend().get_workspace(workspace_id)
 
 
+async def get_workspaces_owned_by(owner_id: str) -> list[Workspace]:
+    return await _get_backend().get_workspaces_owned_by(owner_id)
+
+
 async def create_workspace(ws: Workspace) -> None:
     await _get_backend().create_workspace(ws)
 
