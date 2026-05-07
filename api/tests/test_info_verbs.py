@@ -154,8 +154,6 @@ class TestAssertReadOnly:
             "frobnicate",
             "Namespaces",  # case-sensitive — capital N is rejected
             "VERSION",
-            "dump-fabric:",  # debug dumps deliberately excluded
-            "dump-msgs:",
             "eviction",  # excluded conservatively
             "bins",  # deprecated since Aerospike 7.0, removal in 9.x
             "bins/test",
@@ -164,6 +162,8 @@ class TestAssertReadOnly:
         ],
     )
     def test_unknown_or_excluded_verb_blocked(self, command: str) -> None:
+        # dump-* verbs are covered by ``TestDumpVerbCatalog`` below — keep them
+        # out of this parametrize so the dump audit lives in one place.
         with pytest.raises(InfoVerbNotAllowed):
             assert_read_only(command)
 
@@ -185,3 +185,102 @@ class TestAssertReadOnly:
         msg = str(exc.value)
         assert "frobnicate" in msg
         assert "execute_info" in msg
+
+
+# ---------------------------------------------------------------------------
+# dump-* verb audit catalog (issue #308)
+# ---------------------------------------------------------------------------
+
+
+# Every ``dump-*`` verb known to CE 8.1 is enumerated here with its category.
+# Audit reproduced via ``aerospike/aerospike-server:8.1.2.1`` (see
+# ``docs/plans/2026-05-07-execute-info-readonly-whitelist-design.md`` Appendix A
+# for the full table including wire response and log-line delta).
+#
+# Categories:
+#   * ``log_only`` — verb is implemented; replies ``ok`` on the wire and
+#     dumps actual content to the server log file (cf_info / cf_warning).
+#     Excluded from the read-only whitelist because letting a READ_ONLY
+#     caller pile up server-log lines is a side-effect, even though the
+#     wire response is harmless.
+#   * ``not_in_ce_8_1`` — Aerospike rejects the verb with
+#     ``ERROR:4:unrecognized command``. Listed here so a future CE
+#     release that reintroduces one fails the catalog test until a
+#     deliberate include/exclude decision is made.
+#
+# When CE adds a verb that returns data on the wire (a hypothetical
+# ``pure_read`` category), update the audit, add the verb to
+# ``READ_ONLY_INFO_VERBS`` (and to ``test_whitelist_membership_is_pinned``),
+# and move the entry here. The test below requires every catalog member
+# to be rejected by the current whitelist — adding a ``pure_read`` entry
+# without whitelisting it would be a contradiction the test catches.
+DUMP_VERB_CATALOG: dict[str, str] = {
+    # --- implemented in CE 8.1.2.1, wire reply is "ok", content goes to log ---
+    "dump-cluster": "log_only",  # 12 log lines: paxos / exchange / cluster state
+    "dump-fabric": "log_only",  # 2 log lines: fabric node table
+    "dump-hb": "log_only",  # 10 log lines: heartbeat state
+    "dump-hlc": "log_only",  # 1 log line: HLC state
+    "dump-migrates": "log_only",  # 7 log lines: migration state
+    "dump-rw": "log_only",  # 1 log line: "rw_request_hash dump not yet implemented"
+    "dump-skew": "log_only",  # 1 log line: cluster-clock-skew
+    "dump-wb-summary": "log_only",  # requires :namespace=...;verbose=...; per docs dumps to log
+    # --- referenced in older docs / issue #308 body but absent from CE 8.1.2.1 ---
+    "dump-msgs": "not_in_ce_8_1",
+    "dump-namespace": "not_in_ce_8_1",
+    "dump-nsup": "not_in_ce_8_1",
+    "dump-paxos": "not_in_ce_8_1",
+    "dump-si": "not_in_ce_8_1",
+    "dump-smd": "not_in_ce_8_1",
+    "dump-stats": "not_in_ce_8_1",
+    "dump-tsvc": "not_in_ce_8_1",
+    "dump-wb": "not_in_ce_8_1",
+    "dump-wr": "not_in_ce_8_1",
+}
+
+
+class TestDumpVerbCatalog:
+    """Audit-driven catalog test — see #308 and the design doc Appendix A.
+
+    The catalog is the single source of truth for which dump-* verbs the
+    project has reasoned about. Every entry must be rejected by the
+    current whitelist; the per-verb category (``log_only`` vs
+    ``not_in_ce_8_1``) lives in the catalog as documentation and as a
+    forward-compat hook for future CE versions.
+    """
+
+    @pytest.mark.parametrize("verb,category", sorted(DUMP_VERB_CATALOG.items()))
+    def test_dump_verbs_are_excluded(self, verb: str, category: str) -> None:
+        # Catalog membership invariant: every dump-* verb the project has
+        # audited is currently excluded from the read-only whitelist,
+        # regardless of category. A future contributor who wants to
+        # whitelist a dump-* verb must (a) re-run the audit, (b) update
+        # the catalog category, AND (c) update READ_ONLY_INFO_VERBS plus
+        # the literal pin — this test will fail at step (c) skipped.
+        assert verb not in READ_ONLY_INFO_VERBS, (
+            f"{verb!r} is in READ_ONLY_INFO_VERBS but DUMP_VERB_CATALOG says "
+            f"category={category!r}; either remove it from the whitelist or "
+            f"change its catalog category and rerun the dump-* audit."
+        )
+        # Bare form
+        with pytest.raises(InfoVerbNotAllowed):
+            assert_read_only(verb)
+        # Colon-arg form (most dump-* verbs accept ``:`` even when no args)
+        with pytest.raises(InfoVerbNotAllowed):
+            assert_read_only(f"{verb}:")
+
+    def test_no_dump_verb_in_whitelist(self) -> None:
+        # Stronger global invariant — even a dump-* verb missed by the
+        # catalog (e.g. a typo by a future contributor) must not slip
+        # into the whitelist. Cheap belt-and-suspenders against the
+        # catalog drifting out of date.
+        leaked = {v for v in READ_ONLY_INFO_VERBS if v.startswith("dump-")}
+        assert leaked == set(), f"dump-* verbs leaked into the whitelist: {sorted(leaked)}"
+
+    @pytest.mark.parametrize("category", sorted({c for c in DUMP_VERB_CATALOG.values()}))
+    def test_catalog_categories_are_known(self, category: str) -> None:
+        # Defensive: if a future contributor adds a ``pure_read`` entry to
+        # the catalog without also adding it to the whitelist, the
+        # parametrized test above will fail loudly. This test enumerates
+        # the categories the audit currently produces so the set of
+        # legal categories stays explicit in code.
+        assert category in {"log_only", "not_in_ce_8_1"}

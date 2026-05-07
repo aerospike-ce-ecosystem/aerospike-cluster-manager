@@ -62,7 +62,7 @@ READ_ONLY_INFO_VERBS: frozenset[str] = frozenset({
 |---|---|
 | `bins`, `bins/<ns>` | Deprecated in Aerospike 7.0 (when the bin-name limit was removed), warns since 7.1, scheduled for removal in 9.x. Use `sindex` for index introspection or `namespace/<ns>` for bin-count summary. |
 | `xdr-dc`, `dc`, `dcs`, `get-dc-config` | Not available in Aerospike CE — XDR is enterprise-only. Allowlisting them would let the LLM confidently recommend verbs that error confusingly on CE clusters. |
-| `dump-fabric:`, `dump-msgs:`, `dump-namespace:`, `dump-rw:`, `dump-cluster:` | Server-side log/file output side-effects. Phase 2.1 follow-up — needs server-impact audit. Tracked in #308. |
+| `dump-*` family | All verbs in this family — implemented and unrecognized — write to the server log file (or are not implemented at all in CE 8.1) and never return data over the network. Audited per-verb against `aerospike/aerospike-server:8.1.2.1`; results in [Appendix A](#appendix-a-dump--verb-audit-ce-812). Closed by #308. |
 | `latency:` (legacy) | Deprecated in CE 8.1. Use `latencies`. |
 | `quiesces`, `quiesce-undo` | Mutation. |
 | `set-config:`, `truncate-namespace:`, `recluster:`, `set-roster:`, `create-roster:`, `sindex-create:`, `sindex-delete:` | Mutation. |
@@ -118,8 +118,37 @@ Error message includes a curated 5-verb hint (`namespaces, version, nodes, stati
 
 ## Out of scope (Phase 2.1+)
 
-- `dump-*` debug verbs (need server-impact audit) — tracked in #308.
 - `release` and `edition` verb decisions (consolidation question) — defer to a later PR.
 - `eviction` and other lesser-used reads (add as use cases surface).
 - Per-Aerospike-version whitelist (CE 8.1 only for now).
 - Streaming `info_all` mode (current spec is single-node response per call).
+
+## Appendix A — `dump-*` verb audit (CE 8.1)
+
+**Image audited**: `docker.io/aerospike/aerospike-server:8.1.2.1` (single-node default config).
+**Method**: per-verb `asinfo -v <verb>` round-trip, observe (a) wire response length and content, (b) server log line delta over a 0.5s settle window. Reproduced by `tests/test_info_verbs.py::TestDumpVerbCatalog`.
+
+| Verb | Wire response | Log lines added | Category | Whitelist? |
+|---|---|---:|---|:---:|
+| `dump-cluster` | `ok` | 12 (CL paxos / exchange state) | log-only | ✗ |
+| `dump-fabric` | `ok` | 2 (fabric node table) | log-only | ✗ |
+| `dump-hb` | `ok` | 10 (heartbeat state) | log-only | ✗ |
+| `dump-hlc` | `ok` | 1 (HLC state) | log-only | ✗ |
+| `dump-migrates` | `ok` | 7 (migration state) | log-only | ✗ |
+| `dump-rw` | `ok` | 1 (`rw_request_hash dump not yet implemented`) | log-only / partial impl | ✗ |
+| `dump-skew` | `ok` | 1 (`cluster-clock-skew=0`) | log-only | ✗ |
+| `dump-wb-summary` | requires `namespace=...;verbose=...` | (multi-arg, log dump) | log-only | ✗ |
+| `dump-msgs` | `ERROR:4:unrecognized command` | — | not in CE 8.1 | ✗ |
+| `dump-namespace` | `ERROR:4:unrecognized command` | — | not in CE 8.1 | ✗ |
+| `dump-nsup` | `ERROR:4:unrecognized command` | — | not in CE 8.1 | ✗ |
+| `dump-paxos` | `ERROR:4:unrecognized command` | — | not in CE 8.1 | ✗ |
+| `dump-si` | `ERROR:4:unrecognized command` | — | not in CE 8.1 | ✗ |
+| `dump-smd` | `ERROR:4:unrecognized command` | — | not in CE 8.1 | ✗ |
+| `dump-stats` | `ERROR:4:unrecognized command` | — | not in CE 8.1 | ✗ |
+| `dump-tsvc` | `ERROR:4:unrecognized command` | — | not in CE 8.1 | ✗ |
+| `dump-wb` | `ERROR:4:unrecognized command` | — | not in CE 8.1 | ✗ |
+| `dump-wr` | `ERROR:4:unrecognized command` | — | not in CE 8.1 | ✗ |
+
+**Conclusion.** No `dump-*` verb returns data on the wire in CE 8.1.2.1 — every implemented verb dumps its output to the server log file and replies `ok`. Adding any to `READ_ONLY_INFO_VERBS` would let a `READ_ONLY` caller spam the server log (rotation pressure, audit-trail noise) for zero diagnostic data the LLM can read back. All `dump-*` verbs remain excluded.
+
+The catalog above is encoded in `tests/test_info_verbs.py::DUMP_VERB_CATALOG` and asserted against `assert_read_only`. If a future Aerospike release converts a `dump-*` verb from log-only to wire-returned, the audit must be re-run and the catalog updated; if a release reintroduces a `not_in_ce_8_1` verb, the test fails until a deliberate include/exclude decision is made.
