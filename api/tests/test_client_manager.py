@@ -1,4 +1,4 @@
-"""Unit tests for ClientManager — verifies tend_interval and per-connection lock concurrency."""
+"""Unit tests for ClientManager -- verifies tend_interval and per-connection lock concurrency."""
 
 from __future__ import annotations
 
@@ -7,7 +7,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from aerospike_cluster_manager_api.client_manager import ClientManager
+from aerospike_cluster_manager_api.client_manager import (
+    _SESSION_CTXVAR,
+    ClientManager,
+)
 
 
 @pytest.fixture()
@@ -114,7 +117,12 @@ class TestClientManagerConcurrency:
             assert result_slow is slow_client
 
     async def test_close_client_cleans_up_lock(self, mock_db_profile):
-        """close_client() should remove the per-connection lock entry."""
+        """close_client() should remove the per-connection lock entry.
+
+        REST callers have ``session_id=None`` so the cache key is
+        ``(None, conn_id)`` -- see #303 for the per-session keying
+        rationale.
+        """
         mock_client = AsyncMock()
         mock_client.is_connected.return_value = True
 
@@ -124,8 +132,132 @@ class TestClientManagerConcurrency:
         ):
             mgr = ClientManager()
             await mgr.get_client("conn-1")
-            assert "conn-1" in mgr._conn_locks
+            assert (None, "conn-1") in mgr._conn_locks
 
             await mgr.close_client("conn-1")
-            assert "conn-1" not in mgr._conn_locks
-            assert "conn-1" not in mgr._clients
+            assert (None, "conn-1") not in mgr._conn_locks
+            assert (None, "conn-1") not in mgr._clients
+
+
+class TestClientManagerSessionKeying:
+    """Per-session cache keying -- Stream B / #303.
+
+    The MCP registry decorator stashes the session id on
+    ``_SESSION_CTXVAR`` before the tool body runs. The same conn_id seen
+    from two different sessions must produce two separate cached
+    AsyncClient instances; closing one must not evict the other.
+
+    The REST API path (``session_id=None``) is the regression check --
+    every existing test in this file implicitly exercises it, but we
+    add an explicit assertion here so a future refactor can't quietly
+    repurpose the ``None`` slot.
+    """
+
+    async def test_two_sessions_same_conn_get_separate_clients(self, mock_db_profile):
+        clients = [AsyncMock(name="client-A"), AsyncMock(name="client-B")]
+        for c in clients:
+            c.is_connected.return_value = True
+
+        with patch(
+            "aerospike_cluster_manager_api.client_manager.aerospike_py.AsyncClient",
+            side_effect=clients,
+        ):
+            mgr = ClientManager()
+
+            token_a = _SESSION_CTXVAR.set("session-A")
+            try:
+                client_a = await mgr.get_client("conn-1")
+            finally:
+                _SESSION_CTXVAR.reset(token_a)
+
+            token_b = _SESSION_CTXVAR.set("session-B")
+            try:
+                client_b = await mgr.get_client("conn-1")
+            finally:
+                _SESSION_CTXVAR.reset(token_b)
+
+            assert client_a is not client_b
+            assert ("session-A", "conn-1") in mgr._clients
+            assert ("session-B", "conn-1") in mgr._clients
+
+    async def test_close_client_only_evicts_callers_own_session(self, mock_db_profile):
+        clients = [AsyncMock(name="client-A"), AsyncMock(name="client-B")]
+        for c in clients:
+            c.is_connected.return_value = True
+
+        with patch(
+            "aerospike_cluster_manager_api.client_manager.aerospike_py.AsyncClient",
+            side_effect=clients,
+        ):
+            mgr = ClientManager()
+
+            token_a = _SESSION_CTXVAR.set("session-A")
+            try:
+                await mgr.get_client("conn-1")
+            finally:
+                _SESSION_CTXVAR.reset(token_a)
+
+            token_b = _SESSION_CTXVAR.set("session-B")
+            try:
+                await mgr.get_client("conn-1")
+                # Session B disconnects -- must not touch session A's slot.
+                await mgr.close_client("conn-1")
+            finally:
+                _SESSION_CTXVAR.reset(token_b)
+
+            assert ("session-A", "conn-1") in mgr._clients
+            assert ("session-B", "conn-1") not in mgr._clients
+
+    async def test_rest_path_session_id_none_shares_one_slot(self, mock_db_profile):
+        """Two REST callers (both session_id=None) share one cache slot.
+
+        Regression net for the existing REST routers -- Phase 1 behaviour
+        must be preserved when the contextvar is at its default.
+        """
+        mock_client = AsyncMock()
+        mock_client.is_connected.return_value = True
+
+        with patch(
+            "aerospike_cluster_manager_api.client_manager.aerospike_py.AsyncClient",
+            return_value=mock_client,
+        ) as mock_cls:
+            mgr = ClientManager()
+            # ``_SESSION_CTXVAR`` defaults to None -- no set() needed.
+            r1 = await mgr.get_client("conn-rest")
+            r2 = await mgr.get_client("conn-rest")
+
+            mock_cls.assert_called_once()
+            assert r1 is r2
+            assert (None, "conn-rest") in mgr._clients
+
+    async def test_close_session_evicts_only_that_session(self, mock_db_profile):
+        clients = [AsyncMock(name=f"c-{i}") for i in range(3)]
+        for c in clients:
+            c.is_connected.return_value = True
+
+        with patch(
+            "aerospike_cluster_manager_api.client_manager.aerospike_py.AsyncClient",
+            side_effect=clients,
+        ):
+            mgr = ClientManager()
+
+            for sid in ("session-A", "session-B"):
+                token = _SESSION_CTXVAR.set(sid)
+                try:
+                    await mgr.get_client("conn-shared")
+                finally:
+                    _SESSION_CTXVAR.reset(token)
+
+            # REST path has its own slot.
+            await mgr.get_client("conn-shared")
+
+            await mgr.close_session("session-A")
+
+            assert ("session-A", "conn-shared") not in mgr._clients
+            assert ("session-B", "conn-shared") in mgr._clients
+            assert (None, "conn-shared") in mgr._clients
+
+    async def test_close_session_rejects_none(self):
+        mgr = ClientManager()
+        with pytest.raises(ValueError, match="non-None session id"):
+            await mgr.close_session(None)  # type: ignore[arg-type]

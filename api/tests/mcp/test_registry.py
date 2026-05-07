@@ -308,3 +308,141 @@ def test_reset_for_tests_clears_registry() -> None:
     assert len(registered_tools()) == 1
     _reset_for_tests()
     assert registered_tools() == []
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 / #303 -- Context plumbing into client_manager._SESSION_CTXVAR
+# ---------------------------------------------------------------------------
+
+
+async def test_wrapped_does_not_leak_ctx_into_body(full_profile: None) -> None:
+    """Tool authors never see ``ctx`` -- the contract from
+    ``docs/plans/2026-05-07-mcp-context-contract.md`` "Tool body
+    invariant". The wrapper extracts everything from FastMCP's
+    :class:`Context` and applies gates before delegating; the inner
+    function's signature stays pure data.
+    """
+    received: dict[str, object] = {}
+
+    @tool(category="record", mutation=False)
+    async def echo(value: str) -> str:
+        # Body intentionally captures locals to inspect what got passed in.
+        # If ``ctx`` ever leaks here, this dict will surface it.
+        received["value"] = value
+        received["locals"] = dict(locals())
+        return value
+
+    result = await echo(value="hello")
+    assert result == "hello"
+    assert received["value"] == "hello"
+    # Body's local namespace must not contain ``ctx``.
+    assert "ctx" not in received["locals"]
+
+
+async def test_wrapped_signature_exposes_ctx_for_fastmcp(full_profile: None) -> None:
+    """FastMCP's ``Tool.from_function`` introspects the wrapped callable
+    via :func:`typing.get_type_hints` to find a ``Context``-typed param.
+    The wrapper must surface ``ctx: Context`` even though the inner
+    function does not declare it -- otherwise FastMCP cannot inject the
+    per-call context and #303's session-scoping silently fails.
+    """
+    import inspect
+    import typing
+
+    from mcp.server.fastmcp import Context
+    from mcp.server.fastmcp.utilities.context_injection import find_context_parameter
+
+    @tool(category="record", mutation=False)
+    async def take_one(value: str) -> str:
+        return value
+
+    sig = inspect.signature(take_one)
+    assert "value" in sig.parameters
+    assert "ctx" in sig.parameters
+    assert sig.parameters["ctx"].annotation is Context
+
+    hints = typing.get_type_hints(take_one)
+    assert hints.get("ctx") is Context
+    assert find_context_parameter(take_one) == "ctx"
+
+
+async def test_wrapped_sets_session_contextvar_from_ctx(full_profile: None) -> None:
+    """The wrapper must stash ``ctx``'s session id onto
+    :data:`client_manager._SESSION_CTXVAR` before calling the body, so
+    ``client_manager.get_client(conn_id)`` sees the right session and
+    returns a per-session cache slot. After the body returns, the
+    contextvar must be reset to its previous value (no leak across
+    calls sharing an event loop).
+    """
+    from unittest.mock import MagicMock
+
+    from aerospike_cluster_manager_api import client_manager as cm_mod
+
+    seen: dict[str, object] = {}
+
+    @tool(category="record", mutation=False)
+    async def probe() -> str:
+        seen["session_id_inside"] = cm_mod._SESSION_CTXVAR.get()
+        return "ok"
+
+    # Build a fake Context with a session attribute. The wrapper uses
+    # ``id(ctx.session)`` (via ``_ctx_session_id``) to derive a stable
+    # per-session string -- see ``mcp/registry._ctx_session_id``.
+    fake_session = MagicMock(name="server-session")
+    fake_ctx = MagicMock(spec=["session", "client_id"])
+    fake_ctx.session = fake_session
+    fake_ctx.client_id = None
+
+    # Sentinel: contextvar must be back to None after the call.
+    assert cm_mod._SESSION_CTXVAR.get() is None
+    result = await probe(ctx=fake_ctx)
+    assert result == "ok"
+
+    # Inside the body, the contextvar matched our fake session.
+    inside = seen["session_id_inside"]
+    assert isinstance(inside, str)
+    assert inside.startswith("session-")
+    assert hex(id(fake_session))[2:] in inside
+
+    # Outside, the contextvar was reset.
+    assert cm_mod._SESSION_CTXVAR.get() is None
+
+
+async def test_wrapped_with_no_ctx_leaves_session_id_none(full_profile: None) -> None:
+    """Tests / direct callers can invoke the wrapped form without ``ctx``;
+    the contextvar then defaults to ``None`` (the REST API path).
+    """
+    from aerospike_cluster_manager_api import client_manager as cm_mod
+
+    seen: dict[str, object] = {}
+
+    @tool(category="record", mutation=False)
+    async def probe() -> str:
+        seen["session_id_inside"] = cm_mod._SESSION_CTXVAR.get()
+        return "ok"
+
+    await probe()
+    assert seen["session_id_inside"] is None
+    assert cm_mod._SESSION_CTXVAR.get() is None
+
+
+async def test_wrapped_resets_ctxvar_on_exception(full_profile: None) -> None:
+    """Even when the body raises, the contextvar must be reset so the
+    next call (which may be a REST call on the same event loop) does
+    not inherit the prior session id.
+    """
+    from unittest.mock import MagicMock
+
+    from aerospike_cluster_manager_api import client_manager as cm_mod
+
+    @tool(category="record", mutation=False)
+    async def boom() -> str:
+        raise RuntimeError("nope")
+
+    fake_ctx = MagicMock(spec=["session", "client_id"])
+    fake_ctx.session = MagicMock()
+    fake_ctx.client_id = None
+
+    with pytest.raises(RuntimeError, match="nope"):
+        await boom(ctx=fake_ctx)
+    assert cm_mod._SESSION_CTXVAR.get() is None
