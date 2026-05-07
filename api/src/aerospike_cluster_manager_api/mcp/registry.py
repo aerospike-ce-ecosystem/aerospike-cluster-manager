@@ -93,9 +93,12 @@ def _ctx_session_id(ctx: Context | None) -> str | None:
         return None
     # ``ctx.session`` raises if the request context is not bound (e.g. a
     # bare Context constructed in a unit test). Treat that as "no session".
+    # Narrow the catch to the same family ``ctx.client_id`` uses below so
+    # an unrelated FastMCP refactor that raises a different exception isn't
+    # silently masked into "no session".
     try:
         session = ctx.session
-    except Exception:  # pragma: no cover -- defensive
+    except (AttributeError, ValueError, LookupError, RuntimeError):  # pragma: no cover -- defensive
         session = None
     if session is not None:
         return f"session-{id(session):x}"
@@ -229,6 +232,14 @@ def tool(
 
         is_async = inspect.iscoroutinefunction(func)
 
+        # ``ctx`` carries a default of ``None`` so direct callers (tests
+        # exercising the wrapper without FastMCP) can omit it. FastMCP's
+        # ``find_context_parameter`` (resolved via the synthesised
+        # ``__signature__`` below) inspects the *annotation* (``Context``),
+        # not the default, so this default does not interfere with
+        # injection in versions pinned today. If a future FastMCP rejects
+        # defaulted Context params, ``test_wrapped_signature_exposes_ctx_for_fastmcp``
+        # will fail and force a re-evaluation.
         async def wrapped(*args: Any, ctx: Context | None = None, **kwargs: Any) -> Any:
             # 1. Profile gate (Phase 1, unchanged) -- purely deployment-level.
             #    Run BEFORE setting the session contextvar so a rejected
