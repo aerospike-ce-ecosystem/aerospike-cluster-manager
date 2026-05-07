@@ -609,9 +609,21 @@ class K8sClient:
             raise self._wrap_api_exception(e) from e
 
     def _read_pod_log_sync(
-        self, namespace: str, pod_name: str, container: str | None = None, tail_lines: int = 500
+        self,
+        namespace: str,
+        pod_name: str,
+        container: str | None = None,
+        tail_lines: int = 500,
+        since_seconds: int | None = None,
     ) -> str:
-        """Read logs from a pod."""
+        """Read logs from a pod.
+
+        ``since_seconds`` (when set) restricts the response to log lines
+        emitted within that many seconds before the request, mirroring
+        the Kubernetes API's ``sinceSeconds`` query parameter. Combined
+        with ``tail_lines``, the K8s API returns the intersection: the
+        last ``tail_lines`` of the lines emitted within ``since_seconds``.
+        """
         logger.debug("_read_pod_log_sync(namespace=%s, pod=%s)", namespace, pod_name)
         self._ensure_initialized()
         try:
@@ -623,6 +635,8 @@ class K8sClient:
             }
             if container:
                 kwargs["container"] = container
+            if since_seconds is not None:
+                kwargs["since_seconds"] = since_seconds
             return cast(str, self._get_core_api().read_namespaced_pod_log(**kwargs))
         except Exception as e:
             raise self._wrap_api_exception(e) from e
@@ -710,9 +724,21 @@ class K8sClient:
         return await asyncio.to_thread(self._get_pod_pvc_map_sync, namespace, label_selector)
 
     async def read_pod_log(
-        self, namespace: str, pod_name: str, container: str | None = None, tail_lines: int = 500
+        self,
+        namespace: str,
+        pod_name: str,
+        container: str | None = None,
+        tail_lines: int = 500,
+        since_seconds: int | None = None,
     ) -> str:
-        return await asyncio.to_thread(self._read_pod_log_sync, namespace, pod_name, container, tail_lines)
+        return await asyncio.to_thread(
+            self._read_pod_log_sync,
+            namespace,
+            pod_name,
+            container,
+            tail_lines,
+            since_seconds,
+        )
 
     # ------------------------------------------------------------------
     # HPA sync helpers
