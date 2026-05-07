@@ -47,6 +47,8 @@ WRITE_TOOLS: frozenset[str] = frozenset(
         "truncate_set",
         "execute_info",
         "execute_info_on_node",
+        # K8s — patches AerospikeCluster CR ``spec.size``; gated under READ_ONLY.
+        "scale_k8s_cluster",
     }
 )
 

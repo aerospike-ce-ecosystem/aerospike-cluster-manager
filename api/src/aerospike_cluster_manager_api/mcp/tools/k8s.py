@@ -1,0 +1,334 @@
+"""MCP tools for Kubernetes-managed AerospikeCluster CRs (Phase 2 -- #305).
+
+Five tools that wrap :mod:`aerospike_cluster_manager_api.k8s_client` and the
+helpers in :mod:`aerospike_cluster_manager_api.services.k8s_service`:
+
+* ``list_k8s_clusters`` -- enumerate AerospikeCluster CRs (read)
+* ``get_k8s_pods`` -- pod status for a cluster (read)
+* ``get_k8s_events`` -- recent K8s events for a cluster, bounded by
+  ``since_minutes`` (read)
+* ``scale_k8s_cluster`` -- patch ``spec.size`` (mutation; gated under
+  ``READ_ONLY``)
+* ``get_k8s_logs`` -- bounded log snapshot for a pod (read)
+
+Design notes (per ADR ``docs/plans/2026-05-07-k8s-mcp-tools-contract.md``):
+
+* ``cluster_id`` is ``"<namespace>/<name>"`` -- same convention used by the
+  ``K8sClusterSummary.id`` field and the REST router.
+* All five tools accept an optional ``workspace_id`` so the Phase 0a
+  registry workspace gate (which fires on ``conn_id`` *or* ``workspace_id``
+  parameter names) wires up uniformly. The tool body itself does not
+  re-check ownership -- the registry decorator is authoritative.
+* When ``K8S_MANAGEMENT_ENABLED=false`` every tool raises
+  ``MCPToolError(code="unavailable")`` immediately; no K8s client is
+  initialised. The flag is checked at call time (not import time) so the
+  same module loads cleanly in K8s-disabled deployments.
+* ``since_minutes``, ``since_seconds`` and ``tail_lines`` have hard upper
+  bounds (1440 / 3600 / 1000 respectively); out-of-range values raise
+  ``MCPToolError(code="invalid_argument")``.
+* ``K8sApiError`` propagates via the registry decorator's
+  :func:`map_aerospike_errors` context manager, which translates 404 ->
+  ``not_found``, 403 -> ``access_denied``, 409 -> ``conflict``, other 4xx ->
+  ``invalid_argument``, 5xx -> ``internal_error``.
+* No cluster create / delete tools -- those high-blast-radius actions stay
+  in the REST surface (see ADR "Out of scope").
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+from aerospike_cluster_manager_api import config
+from aerospike_cluster_manager_api.k8s_client import k8s_client
+from aerospike_cluster_manager_api.mcp import serializers
+from aerospike_cluster_manager_api.mcp.errors import MCPToolError
+from aerospike_cluster_manager_api.mcp.registry import tool
+from aerospike_cluster_manager_api.models.k8s_cluster import (
+    K8sClusterEvent,
+    K8sClusterSummary,
+    K8sPodStatus,
+)
+from aerospike_cluster_manager_api.services import k8s_service
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Bounds (per ADR section "Param decisions")
+# ---------------------------------------------------------------------------
+
+_MAX_SINCE_MINUTES = 1440  # 24h ceiling for event windows
+_MAX_SINCE_SECONDS = 3600  # 1h ceiling for log windows
+_MAX_TAIL_LINES = 1000  # cap on log lines returned per call
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _assert_k8s_enabled() -> None:
+    """Reject the call early when K8s management is disabled at config time.
+
+    Called at the top of every K8s tool body. Without this check, the
+    underlying ``k8s_client`` would attempt to load in-cluster config /
+    kubeconfig and surface a confusing ``RuntimeError`` to the LLM instead
+    of a stable ``unavailable`` code. The flag is read live (not snapshotted
+    at import) so test fixtures can flip it via ``monkeypatch``.
+    """
+    if not config.K8S_MANAGEMENT_ENABLED:
+        raise MCPToolError(
+            "Kubernetes management is not enabled on this deployment; "
+            "set K8S_MANAGEMENT_ENABLED=true to expose the K8s tools.",
+            code="unavailable",
+        )
+
+
+def _parse_cluster_id(cluster_id: str) -> tuple[str, str]:
+    """Split ``"<namespace>/<name>"`` into ``(namespace, name)``.
+
+    Raises ``MCPToolError(code="invalid_argument")`` on malformed input --
+    the message includes the expected format so the LLM can recover.
+    """
+    if not isinstance(cluster_id, str) or "/" not in cluster_id:
+        raise MCPToolError(
+            f"cluster_id must be '<namespace>/<name>', got {cluster_id!r}",
+            code="invalid_argument",
+        )
+    namespace, _, name = cluster_id.partition("/")
+    if not namespace or not name or "/" in name:
+        raise MCPToolError(
+            f"cluster_id must be '<namespace>/<name>', got {cluster_id!r}",
+            code="invalid_argument",
+        )
+    return namespace, name
+
+
+def _check_bound(value: int, *, max_value: int, name: str) -> None:
+    """Validate that ``value`` is within ``[1, max_value]``."""
+    if value < 1 or value > max_value:
+        raise MCPToolError(
+            f"{name} must be between 1 and {max_value}, got {value}",
+            code="invalid_argument",
+        )
+
+
+def _workspace_label_selector(workspace_id: str | None) -> str | None:
+    """Build a label selector that filters CRs by workspace label.
+
+    ``workspace_id=None`` returns ``None`` so the underlying call lists
+    every CR the caller can see. Existing CRs without the label are
+    invisible to a workspace-scoped lookup -- matching the REST API
+    behaviour established by PR #297.
+    """
+    if workspace_id is None:
+        return None
+    return f"acm.aerospike.com/workspace={workspace_id}"
+
+
+# ---------------------------------------------------------------------------
+# Tool wrappers
+# ---------------------------------------------------------------------------
+
+
+@tool(category="k8s", mutation=False)
+async def list_k8s_clusters(workspace_id: str | None = None) -> list[dict[str, Any]]:
+    """List AerospikeCluster CRs visible to the caller.
+
+    Returns a list of ``K8sClusterSummary`` dicts (camelCase keys per the
+    REST OpenAPI shape: ``connectionId``, ``failedReconcileCount``,
+    ``templateDrifted``).
+
+    With ``workspace_id`` set the listing is restricted to CRs labelled
+    ``acm.aerospike.com/workspace=<workspace_id>``. With ``workspace_id=None``
+    (default) every visible CR is returned, including legacy CRs that
+    pre-date workspace labelling.
+    """
+    _assert_k8s_enabled()
+    label_selector = _workspace_label_selector(workspace_id)
+    items, _ = await k8s_client.list_clusters(label_selector=label_selector)
+    summaries = [k8s_service.extract_summary(item) for item in items]
+    return [serializers.k8s_cluster_summary(s) for s in summaries]
+
+
+@tool(category="k8s", mutation=False)
+async def get_k8s_pods(
+    cluster_id: str,
+    workspace_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return pod status for an AerospikeCluster CR.
+
+    ``cluster_id`` is ``"<namespace>/<name>"`` as returned by
+    ``list_k8s_clusters``. Cross-workspace access (when ``workspace_id`` is
+    supplied) is rejected with ``code=workspace_mismatch`` by the registry
+    gate before the tool body runs.
+
+    Returns a list of ``K8sPodStatus`` dicts (camelCase keys: ``isReady``,
+    ``podIP``, ``hostIP``, ``rackId``, etc.).
+    """
+    _assert_k8s_enabled()
+    namespace, name = _parse_cluster_id(cluster_id)
+    pods_raw = await k8s_client.list_pods(
+        namespace,
+        f"app.kubernetes.io/name=aerospike-cluster,app.kubernetes.io/instance={name}",
+    )
+    pods = [K8sPodStatus(**p) for p in pods_raw]
+    return [serializers.k8s_pod(p) for p in pods]
+
+
+@tool(category="k8s", mutation=False)
+async def get_k8s_events(
+    cluster_id: str,
+    workspace_id: str | None = None,
+    since_minutes: int = 30,
+) -> list[dict[str, Any]]:
+    """Return Kubernetes events involving an AerospikeCluster CR.
+
+    Bounded by ``since_minutes`` (default 30, max 1440). Events older than
+    the window are dropped; ``invalid_argument`` is raised for values
+    outside ``[1, 1440]``.
+
+    Returns a list of ``K8sClusterEvent`` dicts with the operator-specific
+    ``category`` field populated (Rolling Restart / Configuration /
+    Scaling / etc.) so the LLM can group events without re-running the
+    classifier.
+    """
+    _assert_k8s_enabled()
+    _check_bound(since_minutes, max_value=_MAX_SINCE_MINUTES, name="since_minutes")
+    namespace, name = _parse_cluster_id(cluster_id)
+
+    field_selector = f"involvedObject.name={name},involvedObject.kind=AerospikeCluster"
+    events_raw = await k8s_client.list_events(namespace, field_selector)
+
+    # Filter to the requested time window. ``lastTimestamp`` is RFC3339
+    # from ``_list_events_sync``; fall back to ``firstTimestamp`` when the
+    # event has not been seen since (single occurrence).
+    cutoff = datetime.now(UTC) - timedelta(minutes=since_minutes)
+    filtered = []
+    for raw in events_raw:
+        ts_str = raw.get("lastTimestamp") or raw.get("firstTimestamp")
+        if ts_str:
+            try:
+                ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+            except ValueError:
+                ts = None
+            if ts is not None and ts < cutoff:
+                continue
+        filtered.append(raw)
+
+    events = [K8sClusterEvent(**e) for e in filtered]
+    for event in events:
+        event.category = k8s_service.categorize_event(event.reason)
+    return [serializers.k8s_event(e) for e in events]
+
+
+@tool(category="k8s", mutation=True)
+async def scale_k8s_cluster(
+    cluster_id: str,
+    size: int,
+    workspace_id: str | None = None,
+) -> dict[str, Any]:
+    """Patch ``spec.size`` on an AerospikeCluster CR.
+
+    Returns ``{"clusterId": str, "previousSize": int, "newSize": int}`` --
+    deliberately small so the LLM can confirm the patch landed without
+    having to parse a full cluster snapshot.
+
+    CE caps cluster size at 8 nodes; the operator's webhook enforces the
+    ceiling and returns ``conflict`` (mapped from a 409 K8s API error)
+    when exceeded.
+
+    Mutation: requires ``ACM_MCP_ACCESS_PROFILE=full``; returns
+    ``code=access_denied`` under READ_ONLY.
+    """
+    _assert_k8s_enabled()
+    if size < 1:
+        raise MCPToolError(
+            f"size must be >= 1, got {size}",
+            code="invalid_argument",
+        )
+    namespace, name = _parse_cluster_id(cluster_id)
+
+    # Read previous size first so the response carries an audit-style diff.
+    current = await k8s_client.get_cluster(namespace, name)
+    previous_size = int(current.get("spec", {}).get("size", 0) or 0)
+
+    patch = {"spec": {"size": size}}
+    result = await k8s_client.patch_cluster(namespace, name, patch)
+    new_size = int(result.get("spec", {}).get("size", size) or size)
+
+    # Use a non-aliased camelCase form directly so the response matches the
+    # ADR shape regardless of Pydantic round-trips.
+    return {
+        "clusterId": cluster_id,
+        "previousSize": previous_size,
+        "newSize": new_size,
+    }
+
+
+@tool(category="k8s", mutation=False)
+async def get_k8s_logs(
+    cluster_id: str,
+    pod_name: str,
+    workspace_id: str | None = None,
+    since_seconds: int = 300,
+    tail_lines: int = 200,
+) -> dict[str, Any]:
+    """Return a bounded log snapshot for a pod inside an AerospikeCluster.
+
+    ``pod_name`` must belong to the named cluster -- pods labelled
+    ``app.kubernetes.io/instance=<cluster-name>``. Cross-cluster pod
+    access is rejected with ``code=not_found``.
+
+    ``since_seconds`` is currently informational (the underlying client
+    reads the last ``tail_lines`` lines via the K8s API; future versions
+    can switch to ``sinceSeconds``-based truncation). It is still bounds-
+    checked so callers cannot pass arbitrarily large values.
+
+    Bounds: ``since_seconds`` <= 3600, ``tail_lines`` <= 1000. Out-of-range
+    values raise ``invalid_argument``.
+
+    Returns ``{"podName": str, "lines": list[str], "truncated": bool}``.
+    ``truncated`` is true when the pod returned at least ``tail_lines``
+    lines (so older history was elided by the K8s API).
+    """
+    _assert_k8s_enabled()
+    _check_bound(since_seconds, max_value=_MAX_SINCE_SECONDS, name="since_seconds")
+    _check_bound(tail_lines, max_value=_MAX_TAIL_LINES, name="tail_lines")
+    namespace, name = _parse_cluster_id(cluster_id)
+
+    cluster_pods = await k8s_client.list_pods(namespace, f"app.kubernetes.io/instance={name}")
+    pod_names = {p["name"] for p in cluster_pods}
+    if pod_name not in pod_names:
+        raise MCPToolError(
+            f"Pod '{pod_name}' does not belong to cluster '{cluster_id}'",
+            code="not_found",
+        )
+
+    raw_logs = await k8s_client.read_pod_log(namespace, pod_name, tail_lines=tail_lines)
+    # ``read_namespaced_pod_log`` returns a single string; split into lines
+    # so the LLM gets a structured payload it can iterate over.
+    lines = raw_logs.splitlines() if raw_logs else []
+    truncated = len(lines) >= tail_lines
+    return {
+        "podName": pod_name,
+        "lines": lines,
+        "truncated": truncated,
+    }
+
+
+# Re-export the model classes for tests / introspection. Without these the
+# test file would have to reach into ``models.k8s_cluster`` directly which
+# couples the test to the model layout rather than the tool surface.
+__all__ = [
+    "K8sClusterEvent",
+    "K8sClusterSummary",
+    "K8sPodStatus",
+    "get_k8s_events",
+    "get_k8s_logs",
+    "get_k8s_pods",
+    "list_k8s_clusters",
+    "scale_k8s_cluster",
+]

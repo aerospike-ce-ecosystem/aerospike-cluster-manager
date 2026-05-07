@@ -21,6 +21,7 @@ from aerospike_cluster_manager_api.mcp.tools import (  # noqa: F401  — import 
     cluster_info,
     connections,
     info_commands,
+    k8s,
     query,
     records,
 )
