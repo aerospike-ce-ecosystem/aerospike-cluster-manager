@@ -282,10 +282,10 @@ async def get_k8s_logs(
     ``app.kubernetes.io/instance=<cluster-name>``. Cross-cluster pod
     access is rejected with ``code=not_found``.
 
-    ``since_seconds`` is currently informational (the underlying client
-    reads the last ``tail_lines`` lines via the K8s API; future versions
-    can switch to ``sinceSeconds``-based truncation). It is still bounds-
-    checked so callers cannot pass arbitrarily large values.
+    ``since_seconds`` and ``tail_lines`` combine on the K8s API side:
+    the response is the intersection (last ``tail_lines`` lines emitted
+    within ``since_seconds`` of the request). This matches the Kubernetes
+    ``sinceSeconds`` semantics. Both are bounds-checked.
 
     Bounds: ``since_seconds`` <= 3600, ``tail_lines`` <= 1000. Out-of-range
     values raise ``invalid_argument``.
@@ -307,7 +307,12 @@ async def get_k8s_logs(
             code="not_found",
         )
 
-    raw_logs = await k8s_client.read_pod_log(namespace, pod_name, tail_lines=tail_lines)
+    raw_logs = await k8s_client.read_pod_log(
+        namespace,
+        pod_name,
+        tail_lines=tail_lines,
+        since_seconds=since_seconds,
+    )
     # ``read_namespaced_pod_log`` returns a single string; split into lines
     # so the LLM gets a structured payload it can iterate over.
     lines = raw_logs.splitlines() if raw_logs else []

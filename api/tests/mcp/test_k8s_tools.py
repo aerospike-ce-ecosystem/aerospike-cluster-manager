@@ -321,6 +321,7 @@ class TestGetK8sLogs:
     async def test_happy_path_returns_lines_and_truncated_flag(self, k8s_enabled: None) -> None:
         from aerospike_cluster_manager_api.mcp.tools import k8s as k8s_tools
 
+        read_pod_log_mock = AsyncMock(return_value="line1\nline2\nline3")
         with (
             patch.object(
                 k8s_tools.k8s_client,
@@ -330,14 +331,28 @@ class TestGetK8sLogs:
             patch.object(
                 k8s_tools.k8s_client,
                 "read_pod_log",
-                new=AsyncMock(return_value="line1\nline2\nline3"),
+                new=read_pod_log_mock,
             ),
         ):
-            result = await k8s_tools.get_k8s_logs(cluster_id="default/cl", pod_name="cl-0-0", tail_lines=10)
+            result = await k8s_tools.get_k8s_logs(
+                cluster_id="default/cl",
+                pod_name="cl-0-0",
+                tail_lines=10,
+                since_seconds=120,
+            )
 
         assert result["podName"] == "cl-0-0"
         assert result["lines"] == ["line1", "line2", "line3"]
         assert result["truncated"] is False
+        # Both bound-checked params must reach the K8s client; previously
+        # ``since_seconds`` was bounds-checked but never threaded through
+        # (#305 follow-up).
+        read_pod_log_mock.assert_awaited_once_with(
+            "default",
+            "cl-0-0",
+            tail_lines=10,
+            since_seconds=120,
+        )
 
     async def test_truncated_flag_set_when_at_limit(self, k8s_enabled: None) -> None:
         from aerospike_cluster_manager_api.mcp.tools import k8s as k8s_tools
