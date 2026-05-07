@@ -31,6 +31,7 @@ from typing import Any
 import aerospike_py
 
 from aerospike_cluster_manager_api.info_verbs import InfoVerbNotAllowed
+from aerospike_cluster_manager_api.k8s_client import K8sApiError
 from aerospike_cluster_manager_api.predicate import UnknownPredicateOperator
 from aerospike_cluster_manager_api.services.clusters_service import (
     NamespaceConfigError,
@@ -138,6 +139,23 @@ def map_aerospike_errors(
         # verb, not escalate, so ``invalid_argument`` (not ``access_denied``)
         # is the right signal.
         raise MCPToolError(str(e), code="invalid_argument") from e
+    except K8sApiError as e:
+        # K8s API errors carry an HTTP-style status code from the underlying
+        # kubernetes-client ``ApiException``. Translate to the MCP code family
+        # used by the rest of this module so AI clients see stable wire codes
+        # (404 -> ``not_found``, 403 -> ``access_denied``, 409 -> ``conflict``,
+        # other 4xx -> ``invalid_argument``, 5xx -> ``internal_error``).
+        if e.status == 404:
+            raise MCPToolError(str(e), code="not_found") from e
+        if e.status == 403:
+            raise MCPToolError(str(e), code="access_denied") from e
+        if e.status == 409:
+            raise MCPToolError(str(e), code="conflict") from e
+        if 400 <= e.status < 500:
+            raise MCPToolError(str(e), code="invalid_argument") from e
+        # 5xx -- surface as internal_error so OTel records and operators can
+        # follow up; the message keeps the underlying detail.
+        raise MCPToolError(str(e), code="internal_error") from e
     except (
         ConnectionNotFoundError,
         WorkspaceNotFoundError,

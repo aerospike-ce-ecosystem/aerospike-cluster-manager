@@ -40,6 +40,12 @@ def test_build_mcp_app_registers_all_phase1_tools() -> None:
     assert "execute_info" in names
     assert "execute_info_on_node" in names
     assert "execute_info_read_only" in names
+    # 5 K8s (Phase 2, #305)
+    assert "list_k8s_clusters" in names
+    assert "get_k8s_pods" in names
+    assert "get_k8s_events" in names
+    assert "scale_k8s_cluster" in names
+    assert "get_k8s_logs" in names
 
     assert len(names) == EXPECTED_TOOL_COUNT, f"expected {EXPECTED_TOOL_COUNT} tools, got {len(names)}: {sorted(names)}"
 

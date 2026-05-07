@@ -122,6 +122,33 @@ def serialize_records(records: Iterable[Record]) -> list[dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
+# K8s helpers (Phase 2 -- #305)
+# ---------------------------------------------------------------------------
+#
+# The K8s MCP tools return existing Pydantic models (``K8sClusterSummary``,
+# ``K8sPodStatus``, ``K8sClusterEvent``) that the REST routers also emit.
+# These helpers are thin wrappers around ``model_dump(by_alias=True)`` so the
+# wire shape (camelCase keys: ``connectionId``, ``isReady``, ``podIP``)
+# matches the OpenAPI doc -- what the LLM sees through MCP equals what it
+# would see calling the REST API directly.
+
+
+def k8s_cluster_summary(model: Any) -> dict[str, Any]:
+    """Convert a ``K8sClusterSummary`` instance to a JSON-safe dict."""
+    return model.model_dump(by_alias=True)
+
+
+def k8s_pod(model: Any) -> dict[str, Any]:
+    """Convert a ``K8sPodStatus`` instance to a JSON-safe dict."""
+    return model.model_dump(by_alias=True)
+
+
+def k8s_event(model: Any) -> dict[str, Any]:
+    """Convert a ``K8sClusterEvent`` instance to a JSON-safe dict."""
+    return model.model_dump(by_alias=True)
+
+
+# ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 

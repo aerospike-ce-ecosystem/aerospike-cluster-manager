@@ -34,6 +34,7 @@ from aerospike_cluster_manager_api.mcp.tools import (  # noqa: F401
     cluster_info,
     connections,
     info_commands,
+    k8s,
     query,
     records,
 )
@@ -42,8 +43,8 @@ from aerospike_cluster_manager_api.mcp.tools import (  # noqa: F401
 # Tool count constant — replaces the magic number ``21`` everywhere.
 # ---------------------------------------------------------------------------
 
-EXPECTED_TOOL_COUNT: int = 22
-"""Total number of MCP tools registered by Phase 1 + the read-only info follow-up.
+EXPECTED_TOOL_COUNT: int = 27
+"""Total number of MCP tools registered by Phase 1 + read-only info + Phase 2 K8s.
 
 Breakdown:
 * 8 connection tools (create, get, update, delete, list, connect, disconnect,
@@ -52,6 +53,8 @@ Breakdown:
 * 7 record (get, exists, create, update, delete, delete_bin, truncate_set)
 * 1 query
 * 3 info commands (execute_info, execute_info_on_node, execute_info_read_only)
+* 5 K8s (list_k8s_clusters, get_k8s_pods, get_k8s_events, scale_k8s_cluster,
+  get_k8s_logs) -- Phase 2, #305
 """
 
 

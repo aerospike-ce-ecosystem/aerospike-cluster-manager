@@ -141,6 +141,25 @@ async def test_execute_info_read_only_works_under_read_only(read_only_profile: N
     assert out["response"] == "test;bar"
 
 
+async def test_scale_k8s_cluster_blocked_under_read_only(
+    read_only_profile: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``scale_k8s_cluster`` patches ``spec.size``, so it is a write tool --
+    READ_ONLY must reject it with ``access_denied`` BEFORE the K8s client is
+    touched. We flip ``K8S_MANAGEMENT_ENABLED`` on so the gate is exercised
+    rather than the unavailable path; the access gate fires first."""
+    from aerospike_cluster_manager_api import config as app_config
+    from aerospike_cluster_manager_api.mcp.tools import k8s as k8s_tools
+
+    monkeypatch.setattr(app_config, "K8S_MANAGEMENT_ENABLED", True)
+
+    with pytest.raises(MCPToolError) as exc_info:
+        await k8s_tools.scale_k8s_cluster(cluster_id="default/cl", size=3)
+    assert exc_info.value.code == "access_denied"
+    assert "scale_k8s_cluster" in str(exc_info.value)
+
+
 async def test_execute_info_read_only_unwhitelisted_verb_yields_invalid_argument(
     read_only_profile: None,
 ) -> None:
