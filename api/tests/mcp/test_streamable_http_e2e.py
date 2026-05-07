@@ -150,6 +150,11 @@ def mcp_app(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("ACM_MCP_ENABLED", "true")
     monkeypatch.setenv("ACM_MCP_ALLOW_ANONYMOUS", "true")
     monkeypatch.delenv("ACM_MCP_TOKEN", raising=False)
+    # Pin the mount path to the default ``/mcp`` so a developer's shell
+    # env that exports ``ACM_MCP_PATH=/api/mcp`` (or similar) cannot leak
+    # into the reloaded config and cause the hard-coded ``/mcp/`` POST
+    # path below to 404.
+    monkeypatch.delenv("ACM_MCP_PATH", raising=False)
     monkeypatch.setenv("OIDC_ENABLED", "false")
 
     from aerospike_cluster_manager_api import config as _config
