@@ -33,7 +33,10 @@ from aerospike_cluster_manager_api.models.connection import (
     TestConnectionRequest,
     UpdateConnectionRequest,
 )
-from aerospike_cluster_manager_api.models.workspace import DEFAULT_WORKSPACE_ID
+from aerospike_cluster_manager_api.models.workspace import (
+    DEFAULT_WORKSPACE_ID,
+    SYSTEM_OWNER_ID,
+)
 from aerospike_cluster_manager_api.utils import parse_host_port
 
 logger = logging.getLogger(__name__)
@@ -84,16 +87,39 @@ class TestConnectionResult(NamedTuple):
 # ---------------------------------------------------------------------------
 
 
-async def list_connections(workspace_id: str | None) -> list[ConnectionProfileResponse]:
+async def _assert_workspace_visible(workspace_id: str, caller_owner_id: str | None) -> None:
+    """Raise :class:`WorkspaceNotFoundError` if the workspace is missing or invisible.
+
+    ``caller_owner_id`` is ``None`` for legacy callers that have not yet
+    been threaded through the ACL (none in Phase 0b — every path passes
+    a real value). When provided, visibility is the same rule the
+    workspaces service applies: ``ownerId == caller`` OR
+    ``ownerId == 'system'``. Treating "exists but you don't own it" as a
+    plain 404 prevents id enumeration.
+    """
+    ws = await db.get_workspace(workspace_id)
+    if ws is None:
+        raise WorkspaceNotFoundError(workspace_id)
+    if caller_owner_id is None:
+        return
+    if ws.ownerId != caller_owner_id and ws.ownerId != SYSTEM_OWNER_ID:
+        raise WorkspaceNotFoundError(workspace_id)
+
+
+async def list_connections(
+    workspace_id: str | None,
+    caller_owner_id: str | None = None,
+) -> list[ConnectionProfileResponse]:
     """Return all saved connection profiles, optionally filtered by workspace.
 
-    Raises ``WorkspaceNotFoundError`` if a non-None ``workspace_id`` is
-    provided and no such workspace exists.
+    Raises :class:`WorkspaceNotFoundError` if a non-None ``workspace_id``
+    is provided and no such workspace exists, *or* the workspace exists
+    but is invisible to ``caller_owner_id`` (Phase 2 — issue #307).
+    ``caller_owner_id=None`` keeps the legacy single-tenant behaviour
+    for code paths that have not been threaded through the ACL yet.
     """
     if workspace_id is not None:
-        ws = await db.get_workspace(workspace_id)
-        if not ws:
-            raise WorkspaceNotFoundError(workspace_id)
+        await _assert_workspace_visible(workspace_id, caller_owner_id)
     profiles = await db.get_all_connections(workspace_id)
     return [ConnectionProfileResponse.from_profile(p) for p in profiles]
 
@@ -109,15 +135,19 @@ async def get_connection(conn_id: str) -> ConnectionProfileResponse:
     return ConnectionProfileResponse.from_profile(conn)
 
 
-async def create_connection(payload: CreateConnectionRequest) -> ConnectionProfileResponse:
+async def create_connection(
+    payload: CreateConnectionRequest,
+    caller_owner_id: str | None = None,
+) -> ConnectionProfileResponse:
     """Persist a new connection profile and return it (without password).
 
-    Falls back to ``DEFAULT_WORKSPACE_ID`` when the request omits the workspace.
-    Raises ``WorkspaceNotFoundError`` if the resolved workspace does not exist.
+    Falls back to :data:`DEFAULT_WORKSPACE_ID` when the request omits the
+    workspace. Raises :class:`WorkspaceNotFoundError` if the resolved
+    workspace does not exist OR (Phase 2) is invisible to
+    ``caller_owner_id``.
     """
     workspace_id = payload.workspaceId or DEFAULT_WORKSPACE_ID
-    if not await db.get_workspace(workspace_id):
-        raise WorkspaceNotFoundError(workspace_id)
+    await _assert_workspace_visible(workspace_id, caller_owner_id)
 
     now = datetime.now(UTC).isoformat()
     conn = ConnectionProfile(
@@ -139,17 +169,22 @@ async def create_connection(payload: CreateConnectionRequest) -> ConnectionProfi
     return ConnectionProfileResponse.from_profile(conn)
 
 
-async def update_connection(conn_id: str, payload: UpdateConnectionRequest) -> ConnectionProfileResponse:
+async def update_connection(
+    conn_id: str,
+    payload: UpdateConnectionRequest,
+    caller_owner_id: str | None = None,
+) -> ConnectionProfileResponse:
     """Apply a partial update to ``conn_id`` and return the new state.
 
-    Raises ``ConnectionNotFoundError`` if the connection does not exist, or
-    ``WorkspaceNotFoundError`` if the request moves it to a missing workspace.
+    Raises :class:`ConnectionNotFoundError` if the connection does not
+    exist, or :class:`WorkspaceNotFoundError` if the request moves it to
+    a workspace that is missing or (Phase 2) invisible to
+    ``caller_owner_id``.
     """
     update_data = payload.model_dump(exclude_unset=True, by_alias=False)
     if "workspaceId" in update_data and update_data["workspaceId"] is not None:
         target_ws = update_data["workspaceId"]
-        if not await db.get_workspace(target_ws):
-            raise WorkspaceNotFoundError(target_ws)
+        await _assert_workspace_visible(target_ws, caller_owner_id)
 
     conn = await db.update_connection(conn_id, update_data)
     if not conn:

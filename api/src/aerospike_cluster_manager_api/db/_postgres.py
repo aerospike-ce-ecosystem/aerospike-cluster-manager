@@ -19,7 +19,11 @@ from aerospike_cluster_manager_api.db._base import (
     row_to_workspace,
 )
 from aerospike_cluster_manager_api.models.connection import ConnectionProfile
-from aerospike_cluster_manager_api.models.workspace import DEFAULT_WORKSPACE_ID, Workspace
+from aerospike_cluster_manager_api.models.workspace import (
+    DEFAULT_WORKSPACE_ID,
+    SYSTEM_OWNER_ID,
+    Workspace,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +52,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
     color       TEXT NOT NULL DEFAULT '#6366F1',
     description TEXT,
     is_default  BOOLEAN NOT NULL DEFAULT FALSE,
+    owner_id    TEXT NOT NULL DEFAULT 'system',
     created_at  TEXT NOT NULL,
     updated_at  TEXT NOT NULL
 );
@@ -70,18 +75,27 @@ async def _apply_migrations(conn: asyncpg.Connection | asyncpg.pool.PoolConnecti
     await conn.execute("ALTER TABLE connections ADD COLUMN IF NOT EXISTS labels JSONB")
     await conn.execute("ALTER TABLE connections ADD COLUMN IF NOT EXISTS workspace_id TEXT")
 
+    # workspaces.owner_id (issue #307 — Phase 0b). On PG the
+    # ``IF NOT EXISTS`` clause makes the migration idempotent and
+    # metadata-only on PG ≥ 11 (no full table rewrite). Existing rows
+    # backfill via the column ``DEFAULT 'system'``; the workspace ACL
+    # treats that sentinel as accessible to any authenticated caller
+    # (legacy single-tenant semantics).
+    await conn.execute("ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS owner_id TEXT NOT NULL DEFAULT 'system'")
+
     # Seed the built-in default workspace and back-fill any pre-existing
     # connections. Idempotent: ON CONFLICT DO NOTHING / WHERE workspace_id IS NULL.
     now = datetime.now(UTC).isoformat()
     await conn.execute(
         """INSERT INTO workspaces
-               (id, name, color, description, is_default, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, TRUE, $5, $6)
+               (id, name, color, description, is_default, owner_id, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, TRUE, $5, $6, $7)
            ON CONFLICT (id) DO NOTHING""",
         DEFAULT_WORKSPACE_ID,
         "Default",
         "#6366F1",
         "Default workspace",
+        SYSTEM_OWNER_ID,
         now,
         now,
     )
@@ -240,16 +254,37 @@ async def get_workspace(workspace_id: str) -> Workspace | None:
     return _row_to_workspace(row) if row else None
 
 
+async def get_workspaces_owned_by(owner_id: str) -> list[Workspace]:
+    """Return workspaces visible to ``owner_id``.
+
+    Visibility = ``ownerId == owner_id`` OR ``ownerId == 'system'``. The
+    second leg keeps the built-in default and any pre-migration rows
+    accessible to every authenticated caller, matching the ACL contract
+    in the ownership ADR.
+    """
+    pool = _get_pool()
+    rows = await pool.fetch(
+        """SELECT * FROM workspaces
+               WHERE owner_id = $1 OR owner_id = $2
+               ORDER BY is_default DESC, created_at""",
+        owner_id,
+        SYSTEM_OWNER_ID,
+    )
+    return [_row_to_workspace(row) for row in rows]
+
+
 async def create_workspace(ws: Workspace) -> None:
     pool = _get_pool()
     await pool.execute(
-        """INSERT INTO workspaces (id, name, color, description, is_default, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)""",
+        """INSERT INTO workspaces
+               (id, name, color, description, is_default, owner_id, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)""",
         ws.id,
         ws.name,
         ws.color,
         ws.description,
         ws.isDefault,
+        ws.ownerId,
         ws.createdAt,
         ws.updatedAt,
     )

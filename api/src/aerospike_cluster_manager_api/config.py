@@ -165,6 +165,15 @@ OIDC_EXCLUDE_PATHS: list[str] = _parse_str_list(
     os.getenv("OIDC_EXCLUDE_PATHS", "/api/health,/api/openapi.json,/api/docs")
 ) or ["/api/health", "/api/openapi.json", "/api/docs"]
 
+# OIDC claim used as the workspace owner identity. Defaults to ``sub`` (the
+# stable subject identifier mandated by the OIDC core spec). Operators
+# running against an IdP whose ``sub`` is unstable across logins can switch
+# to ``preferred_username`` / a custom claim. See
+# ``docs/plans/2026-05-07-workspace-ownership-schema.md`` Migration risk
+# table. Read once at module import time so request hot-paths avoid an
+# os.environ lookup on every call.
+ACM_OIDC_OWNER_CLAIM: str = os.getenv("ACM_OIDC_OWNER_CLAIM", "sub")
+
 # ---------------------------------------------------------------------------
 # MCP (Model Context Protocol) server — phase 1
 # ---------------------------------------------------------------------------

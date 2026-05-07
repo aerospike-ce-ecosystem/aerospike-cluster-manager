@@ -9,7 +9,9 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
+from aerospike_cluster_manager_api.dependencies import _resolve_caller_owner_id
 from aerospike_cluster_manager_api.main import app
+from aerospike_cluster_manager_api.models.workspace import SYSTEM_OWNER_ID
 
 
 @asynccontextmanager
@@ -27,6 +29,35 @@ async def client(init_test_db):
         yield ac
     app.state.limiter.enabled = True
     app.router.lifespan_context = original_lifespan
+
+
+def _override_caller(owner_id: str) -> None:
+    """Pin the caller-owner-id dependency to ``owner_id`` for ACL tests.
+
+    The router reads it via :func:`dependencies._resolve_caller_owner_id`
+    which inspects ``request.state.user_claims``. Plumbing real claims
+    through the OIDC middleware in tests would require a Keycloak fixture;
+    overriding the dependency is the surgical way to drive the ACL.
+    """
+    app.dependency_overrides[_resolve_caller_owner_id] = lambda: owner_id
+
+
+def _clear_caller_override() -> None:
+    app.dependency_overrides.pop(_resolve_caller_owner_id, None)
+
+
+@pytest.fixture()
+def as_owner_a():
+    _override_caller("user-a")
+    yield "user-a"
+    _clear_caller_override()
+
+
+@pytest.fixture()
+def as_owner_b():
+    _override_caller("user-b")
+    yield "user-b"
+    _clear_caller_override()
 
 
 CREATE_PAYLOAD = {
@@ -167,3 +198,113 @@ class TestDeleteWorkspaceDbGuard:
         ws = await db.get_workspace("ws-default")
         assert ws is not None
         assert ws.isDefault is True
+
+
+class TestOwnerIdResponseShape:
+    """The wire response always includes ``ownerId``."""
+
+    async def test_create_response_carries_owner_id(self, client: AsyncClient):
+        response = await client.post("/api/workspaces", json=CREATE_PAYLOAD)
+        assert response.status_code == 201
+        body = response.json()
+        # Anonymous test client → SYSTEM_OWNER_ID.
+        assert body["ownerId"] == SYSTEM_OWNER_ID
+
+    async def test_create_request_owner_id_is_ignored(self, client: AsyncClient):
+        """Even if a client sneaks ``ownerId`` into the create payload, the
+        request schema rejects unknown fields. ``populate_by_name`` is true
+        but extras are not allowed by default — assert behaviour is stable
+        either way (server-side ownerId)."""
+        payload = {**CREATE_PAYLOAD, "ownerId": "evil"}
+        response = await client.post("/api/workspaces", json=payload)
+        assert response.status_code == 201
+        body = response.json()
+        assert body["ownerId"] != "evil"
+
+    async def test_get_default_workspace_owner_is_system(self, client: AsyncClient):
+        response = await client.get("/api/workspaces/ws-default")
+        assert response.status_code == 200
+        assert response.json()["ownerId"] == SYSTEM_OWNER_ID
+
+
+class TestOwnerScopedListing:
+    """Phase 2 ACL — ``GET /api/workspaces`` is filtered to caller's own
+    workspaces plus the synthetic ``system``-owned rows."""
+
+    async def test_owner_a_does_not_see_owner_b_workspaces(self, client: AsyncClient, as_owner_a):
+        # Owner A creates a workspace, then we switch to owner B and assert
+        # the row is not returned.
+        create = await client.post("/api/workspaces", json={**CREATE_PAYLOAD, "name": "a-only"})
+        assert create.status_code == 201
+        a_id = create.json()["id"]
+
+        _override_caller("user-b")
+        try:
+            response = await client.get("/api/workspaces")
+            assert response.status_code == 200
+            ids = {w["id"] for w in response.json()}
+            assert a_id not in ids
+            # Default is owned by system → still visible to user-b.
+            assert "ws-default" in ids
+        finally:
+            _override_caller("user-a")
+
+    async def test_default_visible_to_every_caller(self, client: AsyncClient, as_owner_a):
+        response = await client.get("/api/workspaces")
+        assert response.status_code == 200
+        ids = {w["id"] for w in response.json()}
+        assert "ws-default" in ids
+
+
+class TestOwnerScopedAccess:
+    """Phase 2 ACL — cross-owner read/update/delete returns 404 (not 403)
+    so id enumeration cannot leak workspace existence."""
+
+    async def test_get_cross_owner_returns_404(self, client: AsyncClient, as_owner_a):
+        create = await client.post("/api/workspaces", json={**CREATE_PAYLOAD, "name": "a-only"})
+        a_id = create.json()["id"]
+
+        _override_caller("user-b")
+        try:
+            response = await client.get(f"/api/workspaces/{a_id}")
+            assert response.status_code == 404
+        finally:
+            _override_caller("user-a")
+
+    async def test_put_cross_owner_returns_404(self, client: AsyncClient, as_owner_a):
+        create = await client.post("/api/workspaces", json={**CREATE_PAYLOAD, "name": "a-only"})
+        a_id = create.json()["id"]
+
+        _override_caller("user-b")
+        try:
+            response = await client.put(f"/api/workspaces/{a_id}", json={"name": "hijacked"})
+            assert response.status_code == 404
+        finally:
+            _override_caller("user-a")
+
+    async def test_delete_cross_owner_returns_404(self, client: AsyncClient, as_owner_a):
+        create = await client.post("/api/workspaces", json={**CREATE_PAYLOAD, "name": "a-only"})
+        a_id = create.json()["id"]
+
+        _override_caller("user-b")
+        try:
+            response = await client.delete(f"/api/workspaces/{a_id}")
+            assert response.status_code == 404
+        finally:
+            _override_caller("user-a")
+
+    async def test_owner_id_field_is_not_patchable(self, client: AsyncClient, as_owner_a):
+        """Even passing ``ownerId`` in the PATCH body is silently ignored —
+        the request model strips it and the service+DB layer enforces the
+        invariant a second time."""
+        create = await client.post("/api/workspaces", json=CREATE_PAYLOAD)
+        a_id = create.json()["id"]
+
+        response = await client.put(
+            f"/api/workspaces/{a_id}",
+            json={"name": "renamed", "ownerId": "user-b"},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["name"] == "renamed"
+        assert body["ownerId"] == "user-a"

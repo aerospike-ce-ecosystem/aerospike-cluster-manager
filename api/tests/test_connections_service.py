@@ -68,13 +68,14 @@ class TestListConnections:
         from datetime import UTC, datetime
 
         from aerospike_cluster_manager_api import db
-        from aerospike_cluster_manager_api.models.workspace import Workspace
+        from aerospike_cluster_manager_api.models.workspace import SYSTEM_OWNER_ID, Workspace
 
         now = datetime.now(UTC).isoformat()
         ws = Workspace(
             id="ws-team-svc",
             name="team-svc",
             color="#123456",
+            ownerId=SYSTEM_OWNER_ID,
             createdAt=now,
             updatedAt=now,
         )

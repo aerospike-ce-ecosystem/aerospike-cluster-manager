@@ -9,7 +9,7 @@ from starlette.responses import Response
 
 from aerospike_cluster_manager_api.client_manager import client_manager
 from aerospike_cluster_manager_api.constants import INFO_BUILD, INFO_EDITION, INFO_NAMESPACES
-from aerospike_cluster_manager_api.dependencies import _get_verified_connection
+from aerospike_cluster_manager_api.dependencies import CallerOwnerId, _get_verified_connection
 from aerospike_cluster_manager_api.info_parser import parse_kv_pairs, parse_list, safe_int
 from aerospike_cluster_manager_api.models.connection import (
     ConnectionProfileResponse,
@@ -32,21 +32,35 @@ router = APIRouter(prefix="/connections", tags=["connections"])
 
 @router.get("", summary="List connections", description="Retrieve all saved Aerospike connection profiles.")
 async def list_connections(
+    caller_owner_id: CallerOwnerId,
     workspace_id: str | None = Query(default=None, description="Filter by workspace id."),
 ) -> list[ConnectionProfileResponse]:
-    """Retrieve all saved Aerospike connection profiles, optionally filtered by workspace."""
+    """Retrieve all saved Aerospike connection profiles, optionally filtered by workspace.
+
+    Phase 2: when ``workspace_id`` is supplied, the workspace must be visible
+    to the caller (owned by them or by the synthetic ``system`` user). Cross-
+    owner filters return 404 to avoid leaking workspace existence.
+    """
     try:
-        return await connections_service.list_connections(workspace_id)
+        return await connections_service.list_connections(workspace_id, caller_owner_id)
     except WorkspaceNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("", status_code=201, summary="Create connection", description="Create a new Aerospike connection profile.")
 @limiter.limit("10/minute")
-async def create_connection(request: Request, body: CreateConnectionRequest) -> ConnectionProfileResponse:
-    """Create a new Aerospike connection profile."""
+async def create_connection(
+    request: Request,
+    body: CreateConnectionRequest,
+    caller_owner_id: CallerOwnerId,
+) -> ConnectionProfileResponse:
+    """Create a new Aerospike connection profile.
+
+    Phase 2: the supplied ``workspaceId`` (or the default fallback) must be
+    visible to the caller; otherwise 404.
+    """
     try:
-        return await connections_service.create_connection(body)
+        return await connections_service.create_connection(body, caller_owner_id)
     except WorkspaceNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -70,6 +84,7 @@ async def get_connection(conn_id: str = Path()) -> ConnectionProfileResponse:
 )
 async def update_connection(
     body: UpdateConnectionRequest,
+    caller_owner_id: CallerOwnerId,
     conn_id: str = Path(),
 ) -> ConnectionProfileResponse:
     """Update an existing connection profile with new settings.
@@ -77,14 +92,25 @@ async def update_connection(
     The service's :func:`update_connection` raises
     :class:`ConnectionNotFoundError` when the id is missing, so the
     existence-check dependency is redundant — drop it to avoid the
-    duplicate ``db.get_connection`` round trip on each PUT.
+    duplicate ``db.get_connection`` round trip on each PUT. Phase 2:
+    moving the connection to a workspace invisible to the caller is a
+    404, same wire shape as a missing workspace.
     """
     try:
-        return await connections_service.update_connection(conn_id, body)
+        return await connections_service.update_connection(conn_id, body, caller_owner_id)
     except ConnectionNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except WorkspaceNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+# TODO(#307-E3): MCP registry workspace gate (the body of
+# ``_assert_workspace_owns_conn`` from the ADR) consumes the same
+# ``ownerId`` field plumbed in this PR. Stream E.3 wires the gate into
+# ``mcp/registry.py`` so MCP tool callers see ``workspace_mismatch``
+# errors when their ``conn_id`` resolves to a workspace they do not own.
+# Until E.3 lands, MCP tool callers behave as today (single-tenant
+# bearer or anonymous deployments).
 
 
 @router.get(

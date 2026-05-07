@@ -3,18 +3,59 @@
 from __future__ import annotations
 
 import logging
-from typing import Annotated
+from typing import Annotated, Any
 
 import aerospike_py
 from aerospike_py.exception import AerospikeError, ClusterError
 from fastapi import Depends, HTTPException, Path
+from starlette.requests import Request
 
-from aerospike_cluster_manager_api import db
+from aerospike_cluster_manager_api import config, db
 from aerospike_cluster_manager_api.client_manager import client_manager
 from aerospike_cluster_manager_api.models.connection import ConnectionProfile
-from aerospike_cluster_manager_api.models.workspace import Workspace
+from aerospike_cluster_manager_api.models.workspace import SYSTEM_OWNER_ID, Workspace
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_caller_owner_id(request: Request) -> str:
+    """Return the caller's workspace-owner identity for ACL checks.
+
+    Reads ``request.state.user_claims`` populated by
+    :class:`OIDCAuthMiddleware` (PR #298) or by the MCP bearer-token
+    middleware (PR #302). Falls back to the synthetic
+    :data:`SYSTEM_OWNER_ID` when:
+
+    * the bearer-token sentinel is set (``_mcp_bearer=True``) — MCP
+      callers in single-tenant mode behave like the legacy global-access
+      path; the workspace gate would otherwise be meaningless because
+      there is no per-user workspace concept.
+    * neither OIDC nor the bearer middleware ran (anonymous request,
+      e.g. ``OIDC_ENABLED=false`` deployments) — preserves the Phase 1
+      single-tenant behaviour where every workspace is reachable.
+
+    Otherwise, the configured OIDC claim
+    (:data:`config.ACM_OIDC_OWNER_CLAIM`, default ``sub``) is returned.
+    A missing/empty claim also degrades to :data:`SYSTEM_OWNER_ID` so a
+    misconfigured IdP cannot lock callers out of the default workspace.
+
+    TODO(#307-E2): Stream E.2 plumbs this same OIDC claim into the MCP
+    Context so the registry decorator can read the caller identity
+    without re-reading the FastAPI ``request.state``. The OIDC →
+    Context bridge lives in ``mcp/auth.py``; until it ships, MCP tool
+    callers all resolve to the bearer/system path.
+    """
+    claims: dict[str, Any] | None = getattr(request.state, "user_claims", None)
+    if claims is None:
+        # Anonymous (no auth middleware ran). Phase 1 semantics.
+        return SYSTEM_OWNER_ID
+    if claims.get("_mcp_bearer"):
+        # Bearer-token sentinel (single-tenant deployments).
+        return SYSTEM_OWNER_ID
+    raw = claims.get(config.ACM_OIDC_OWNER_CLAIM)
+    if not isinstance(raw, str) or not raw:
+        return SYSTEM_OWNER_ID
+    return raw
 
 
 async def _get_verified_connection(conn_id: str = Path()) -> str:
@@ -81,3 +122,7 @@ VerifiedWorkspaceId = Annotated[str, Depends(_get_verified_workspace)]
 
 VerifiedWorkspace = Annotated[Workspace, Depends(_get_workspace)]
 """Inject a full ``Workspace`` looked up from the path ``workspace_id``."""
+
+
+CallerOwnerId = Annotated[str, Depends(_resolve_caller_owner_id)]
+"""Inject the caller's workspace-owner identity (OIDC claim or system sentinel)."""
