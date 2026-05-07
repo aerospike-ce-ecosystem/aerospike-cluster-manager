@@ -40,6 +40,7 @@ done at the call site rather than at registration time.
 from __future__ import annotations
 
 import inspect
+import typing
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -98,16 +99,23 @@ def _ctx_session_id(ctx: Context | None) -> str | None:
         session = None
     if session is not None:
         return f"session-{id(session):x}"
-    client_id = ctx.client_id if hasattr(ctx, "client_id") else None
+    # ``ctx.client_id`` is a property that raises when ``request_context``
+    # is unbound (FastMCP's in-process call_tool path constructs a Context
+    # without a request when the test fixture doesn't drive the transport).
+    # Treat the unbound case as "no session" -- the REST equivalent slot.
+    try:
+        client_id = ctx.client_id
+    except (AttributeError, ValueError):
+        client_id = None
     if client_id:  # pragma: no cover -- exercised only when client populates _meta
         return f"client-{client_id}"
     return None
 
 
 async def _assert_workspace_owns_arg(
-    ctx: Context | None,  # noqa: ARG001
-    tool_name: str,  # noqa: ARG001
-    kwargs: dict[str, Any],  # noqa: ARG001
+    ctx: Context | None,
+    tool_name: str,
+    kwargs: dict[str, Any],
 ) -> None:
     """Workspace authorization gate (Phase 2, #307).
 
@@ -153,7 +161,16 @@ def _build_wrapped_signature(func: Callable[..., Any]) -> inspect.Signature:
     ``docs/plans/2026-05-07-mcp-context-contract.md`` "What lives where"
     for the rationale.
     """
-    func_sig = inspect.signature(func)
+    # ``eval_str=True`` resolves string annotations (the ones produced by
+    # ``from __future__ import annotations`` in the tool modules) relative
+    # to ``func``'s own module globals. Without this, the cached
+    # ``__signature__`` we attach to ``wrapped`` would carry raw strings
+    # like ``"Literal['equals', ...]"`` -- pydantic's
+    # ``model_json_schema`` then re-evaluates them in ``wrapped``'s module
+    # (registry), where ``Literal`` is not in scope, and blows up with
+    # ``PydanticUserError: ... is not fully defined``. Resolving up-front
+    # avoids that mismatch.
+    func_sig = inspect.signature(func, eval_str=True)
     ctx_param = inspect.Parameter(
         "ctx",
         inspect.Parameter.KEYWORD_ONLY,
@@ -250,7 +267,18 @@ def tool(
         wrapped.__doc__ = func.__doc__
         wrapped.__module__ = func.__module__
         wrapped.__signature__ = _build_wrapped_signature(func)  # type: ignore[attr-defined]
-        wrapped.__annotations__ = {**getattr(func, "__annotations__", {}), "ctx": Context}
+        # Resolve func's annotations against its own module globals so the
+        # copied dict carries real types (Literal[...], list[str], etc.)
+        # rather than raw forward-reference strings produced by
+        # ``from __future__ import annotations``. ``include_extras=True``
+        # preserves Annotated[...] metadata that some tool args use for
+        # FastMCP / pydantic field config. See the matching comment in
+        # ``_build_wrapped_signature`` for why this matters.
+        try:
+            resolved = typing.get_type_hints(func, include_extras=True)
+        except Exception:  # pragma: no cover -- defensive
+            resolved = dict(getattr(func, "__annotations__", {}))
+        wrapped.__annotations__ = {**resolved, "ctx": Context}
 
         _REGISTRY.append(ToolMetadata(name=tool_name, category=category, mutation=mutation, func=wrapped))
         return wrapped
