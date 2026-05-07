@@ -104,15 +104,6 @@ async def update_connection(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-# TODO(#307-E3): MCP registry workspace gate (the body of
-# ``_assert_workspace_owns_conn`` from the ADR) consumes the same
-# ``ownerId`` field plumbed in this PR. Stream E.3 wires the gate into
-# ``mcp/registry.py`` so MCP tool callers see ``workspace_mismatch``
-# errors when their ``conn_id`` resolves to a workspace they do not own.
-# Until E.3 lands, MCP tool callers behave as today (single-tenant
-# bearer or anonymous deployments).
-
-
 @router.get(
     "/{conn_id}/health",
     summary="Check connection health",

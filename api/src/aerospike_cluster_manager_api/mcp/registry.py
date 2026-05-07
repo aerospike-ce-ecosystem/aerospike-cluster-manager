@@ -26,7 +26,11 @@ returns a session-scoped cached client. The user-facing tool body is
 **unchanged** -- tool functions never see ``ctx``. See
 ``docs/plans/2026-05-07-mcp-context-contract.md`` for the design.
 
-Workspace gate (#307) is a no-op stub here -- populated by Stream E.
+Workspace gate (#307 / E.3) compares each call's ``conn_id`` /
+``workspace_id`` argument against the caller identity bridged in by
+:mod:`mcp.user_context`. Bearer-token sessions and anonymous deployments
+bypass; OIDC callers see ``code="workspace_mismatch"`` on a
+cross-tenant probe.
 
 The decorator returns the *wrapped* form so tests and other callers that
 bypass FastMCP still see the gate. ``register_all(mcp)`` is invoked once
@@ -48,9 +52,11 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 
 from aerospike_cluster_manager_api import client_manager as _client_manager_mod
-from aerospike_cluster_manager_api import config
+from aerospike_cluster_manager_api import config, db
+from aerospike_cluster_manager_api.mcp import user_context as _user_context_mod
 from aerospike_cluster_manager_api.mcp.access_profile import WRITE_TOOLS, AccessProfile, is_blocked
 from aerospike_cluster_manager_api.mcp.errors import MCPToolError, map_aerospike_errors
+from aerospike_cluster_manager_api.models.workspace import SYSTEM_OWNER_ID
 
 
 @dataclass(frozen=True)
@@ -120,18 +126,75 @@ async def _assert_workspace_owns_arg(
     tool_name: str,
     kwargs: dict[str, Any],
 ) -> None:
-    """Workspace authorization gate (Phase 2, #307).
+    """Workspace authorization gate (Phase 2 #307 / E.3).
 
-    No-op stub -- Stream E (#307) populates the body. Kept here so the
-    contract from ``docs/plans/2026-05-07-mcp-context-contract.md`` lands
-    in one place and Streams B / A can reference the same call site.
+    Fires for tools whose call kwargs name a ``conn_id`` or
+    ``workspace_id``. Resolves the caller's owner identity from the
+    contextvar populated by :class:`mcp.user_context.MCPUserContextMiddleware`
+    (E.2). Bypasses the check for:
 
-    TODO(#307): inspect ``kwargs`` for ``conn_id`` / ``workspace_id``
-    parameters and assert ``ctx.user_claims['sub']`` owns the referenced
-    workspace; raise ``MCPToolError(code="workspace_mismatch")`` on
-    mismatch. Bearer-token sessions bypass this gate.
+    * bearer-token sessions (``_mcp_bearer=True`` sentinel) — single
+      tenant deployments;
+    * anonymous requests (no ``user_claims``) — preserves the Phase 1
+      single-tenant fallback for ``OIDC_ENABLED=false`` deployments AND
+      direct unit-test invocations of the wrapper that don't drive the
+      HTTP layer.
+
+    Otherwise the workspace referenced by ``conn_id`` (resolved via
+    :func:`db.get_connection`) or ``workspace_id`` (used directly) must
+    be owned by the caller (or by ``SYSTEM_OWNER_ID`` — the default
+    workspace stays accessible to everyone). On mismatch we raise
+    :class:`MCPToolError` with ``code="workspace_mismatch"``.
+
+    Non-existent ``conn_id`` is NOT diagnosed here -- letting it fall
+    through means the tool body's normal "not found" path runs and the
+    caller sees ``code="not_found"`` from the standard error mapper.
+    Diagnosing it as ``workspace_mismatch`` would let a probing caller
+    distinguish "doesn't exist" from "exists but not yours" only by
+    correlating responses, but the wire shape stays clean if we let
+    ``not_found`` win the race.
     """
-    return None
+    claims = _user_context_mod.current_caller_claims()
+    if claims is None:
+        return
+    if claims.get("_mcp_bearer"):
+        return
+
+    # Resolve caller identity from the configured claim. A missing /
+    # empty claim degrades to SYSTEM_OWNER_ID -- same rule
+    # ``dependencies._resolve_caller_owner_id`` applies for REST
+    # callers, so misconfigured IdPs cannot lock callers out of the
+    # default workspace.
+    raw = claims.get(config.ACM_OIDC_OWNER_CLAIM)
+    if not isinstance(raw, str) or not raw:
+        return
+    caller_owner_id = raw
+
+    target_workspace_id: str | None = None
+    if "conn_id" in kwargs and isinstance(kwargs["conn_id"], str):
+        profile = await db.get_connection(kwargs["conn_id"])
+        if profile is None:
+            return  # let the tool body raise ``not_found``
+        target_workspace_id = profile.workspaceId
+    elif "workspace_id" in kwargs and isinstance(kwargs["workspace_id"], str):
+        target_workspace_id = kwargs["workspace_id"]
+
+    if target_workspace_id is None:
+        return
+
+    workspace = await db.get_workspace(target_workspace_id)
+    if workspace is None:
+        return  # let the tool body raise ``not_found``
+
+    if workspace.ownerId in (caller_owner_id, SYSTEM_OWNER_ID):
+        return
+
+    # Generic message -- intentionally does NOT name the workspace so a
+    # probing caller cannot enumerate other tenants' workspace ids.
+    raise MCPToolError(
+        f"Tool '{tool_name}' rejected: caller does not own the referenced workspace.",
+        code="workspace_mismatch",
+    )
 
 
 def _build_wrapped_signature(func: Callable[..., Any]) -> inspect.Signature:

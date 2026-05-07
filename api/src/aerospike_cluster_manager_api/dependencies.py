@@ -39,11 +39,10 @@ def _resolve_caller_owner_id(request: Request) -> str:
     A missing/empty claim also degrades to :data:`SYSTEM_OWNER_ID` so a
     misconfigured IdP cannot lock callers out of the default workspace.
 
-    TODO(#307-E2): Stream E.2 plumbs this same OIDC claim into the MCP
-    Context so the registry decorator can read the caller identity
-    without re-reading the FastAPI ``request.state``. The OIDC →
-    Context bridge lives in ``mcp/auth.py``; until it ships, MCP tool
-    callers all resolve to the bearer/system path.
+    The matching MCP-side bridge lives in
+    :mod:`aerospike_cluster_manager_api.mcp.user_context` -- it captures
+    the same ``request.state.user_claims`` into a contextvar that the
+    registry decorator's workspace gate reads (E.3 of #307).
     """
     claims: dict[str, Any] | None = getattr(request.state, "user_claims", None)
     if claims is None:
