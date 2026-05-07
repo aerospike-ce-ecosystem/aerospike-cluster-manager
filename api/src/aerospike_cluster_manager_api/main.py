@@ -308,6 +308,17 @@ if (
         "isolated to localhost / a trusted network."
     )
 
+if config.ACM_MCP_ENABLED:
+    # E.2 (#307): bridge ``request.state.user_claims`` into a contextvar
+    # so the MCP registry's workspace gate can read the caller identity
+    # without re-threading the FastAPI ``Request``. Installed BEFORE
+    # OIDC + MCPBearerToken in the add_middleware order so it runs
+    # INNER to both at request time -- by then ``user_claims`` is
+    # populated (or correctly absent for anonymous deployments).
+    from aerospike_cluster_manager_api.mcp.user_context import MCPUserContextMiddleware
+
+    app.add_middleware(MCPUserContextMiddleware)
+
 if config.OIDC_ENABLED:
     app.add_middleware(
         OIDCAuthMiddleware,
