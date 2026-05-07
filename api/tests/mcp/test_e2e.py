@@ -1,19 +1,22 @@
-"""Real JSON-RPC end-to-end test for the MCP server.
+"""Handler-chain end-to-end test for the MCP server.
 
 This test exercises the full handler chain on an actual mounted FastMCP
 instance — access-profile gate → error map → tool body → result
 serialisation — by driving :meth:`FastMCP.call_tool` directly.
 
-Why ``mcp.call_tool`` instead of the streamable-HTTP transport?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+What this file does NOT cover
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The streamable-HTTP transport requires session header negotiation that
-the in-process ASGI test client cannot satisfy without a non-trivial
-helper. ``call_tool`` bypasses the wire codec and hits the same registered
-handler — i.e. the same `wrapped` callable that ``register_all`` flushed
-into FastMCP. That handler is the bulk of the wire path: by the time the
-streamable-HTTP transport gets to it, the JSON-RPC envelope has already
-been parsed and the tool has been looked up by name.
+``call_tool`` bypasses the streamable-HTTP transport: the JSON-RPC
+envelope parser, the SSE response framer, and the ``Mcp-Session-Id``
+header negotiation are all skipped. By the time ``call_tool`` runs,
+the wire codec has already been short-circuited.
+
+The wire-level companion test lives in
+:mod:`tests.mcp.test_streamable_http_e2e` (#304). It boots the real
+FastAPI app under :class:`httpx.ASGITransport` and drives the same
+``initialize`` / ``tools/list`` / ``tools/call`` sequence over actual
+HTTP, so a regression in the JSON-RPC framing layer is caught there.
 
 Coverage
 --------
