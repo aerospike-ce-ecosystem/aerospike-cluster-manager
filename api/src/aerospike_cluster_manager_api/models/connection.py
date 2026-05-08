@@ -51,7 +51,7 @@ class ConnectionProfile(BaseModel):
     username: str | None = None
     password: str | None = None
     color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
-    description: str | None = None
+    note: str | None = None
     labels: dict[str, str] = Field(default_factory=lambda: {"env": "default"})
     workspaceId: str = DEFAULT_WORKSPACE_ID
     createdAt: str
@@ -80,7 +80,7 @@ class CreateConnectionRequest(BaseModel):
     username: str | None = None
     password: str | None = None
     color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$", default="#0097D3")
-    description: str | None = None
+    note: str | None = None
     labels: dict[str, str] | None = None
     # When None, the router falls back to the built-in default workspace
     # (DEFAULT_WORKSPACE_ID). Pre-existing clients that omit the field stay
@@ -98,7 +98,7 @@ class UpdateConnectionRequest(BaseModel):
     username: str | None = None
     password: str | None = None
     color: str | None = Field(default=None, pattern=r"^#[0-9a-fA-F]{6}$")
-    description: str | None = None
+    note: str | None = None
     labels: dict[str, str] | None = None
     workspaceId: str | None = None
 
@@ -127,7 +127,7 @@ class ConnectionProfileResponse(BaseModel):
     clusterName: str | None = None
     username: str | None = None
     color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
-    description: str | None = None
+    note: str | None = None
     labels: dict[str, str] = Field(default_factory=lambda: {"env": "default"})
     workspaceId: str = DEFAULT_WORKSPACE_ID
     createdAt: str

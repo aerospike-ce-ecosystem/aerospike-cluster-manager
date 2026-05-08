@@ -24,6 +24,9 @@ class SetInfo(BaseModel):
     stopWritesCount: int
     nodeCount: int = 0
     totalNodes: int = 0
+    # Operator-authored memo from cluster-manager metaDB. Null when no note
+    # has been attached. Joined in by clusters_service.get_cluster_info().
+    note: str | None = None
 
 
 class NamespaceInfo(BaseModel):

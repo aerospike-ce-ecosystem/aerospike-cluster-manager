@@ -159,7 +159,7 @@ async def create_connection(
         username=payload.username,
         password=payload.password,
         color=payload.color,
-        description=payload.description,
+        note=payload.note,
         labels=payload.labels or {},
         workspaceId=workspace_id,
         createdAt=now,

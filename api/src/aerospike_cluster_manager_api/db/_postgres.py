@@ -19,6 +19,7 @@ from aerospike_cluster_manager_api.db._base import (
     row_to_workspace,
 )
 from aerospike_cluster_manager_api.models.connection import ConnectionProfile
+from aerospike_cluster_manager_api.models.note import RecordNote, SetNote, StoredPkType
 from aerospike_cluster_manager_api.models.workspace import (
     DEFAULT_WORKSPACE_ID,
     SYSTEM_OWNER_ID,
@@ -38,7 +39,7 @@ CREATE TABLE IF NOT EXISTS connections (
     username     TEXT,
     password     TEXT,
     color        TEXT NOT NULL DEFAULT '#0097D3',
-    description  TEXT,
+    note         TEXT,
     labels       JSONB,
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL
@@ -58,6 +59,45 @@ CREATE TABLE IF NOT EXISTS workspaces (
 );
 """
 
+# Mirrors SQLite layout — see _sqlite.py for the design rationale on PK shape
+# and digest_hex semantics. PG enforces FK CASCADE natively.
+CREATE_SET_NOTES_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS set_notes (
+    connection_id TEXT NOT NULL,
+    namespace     TEXT NOT NULL,
+    set_name      TEXT NOT NULL,
+    note          TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL,
+    updated_by    TEXT,
+    PRIMARY KEY (connection_id, namespace, set_name),
+    FOREIGN KEY (connection_id) REFERENCES connections(id) ON DELETE CASCADE
+);
+"""
+
+CREATE_SET_NOTES_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_set_notes_conn_ns ON set_notes(connection_id, namespace);"
+
+CREATE_RECORD_NOTES_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS record_notes (
+    connection_id TEXT NOT NULL,
+    namespace     TEXT NOT NULL,
+    set_name      TEXT NOT NULL,
+    pk_text       TEXT NOT NULL,
+    pk_type       TEXT NOT NULL DEFAULT 'string',
+    digest_hex    TEXT,
+    note          TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL,
+    updated_by    TEXT,
+    PRIMARY KEY (connection_id, namespace, set_name, pk_text, pk_type),
+    FOREIGN KEY (connection_id) REFERENCES connections(id) ON DELETE CASCADE
+);
+"""
+
+CREATE_RECORD_NOTES_INDEX_SQL = (
+    "CREATE INDEX IF NOT EXISTS idx_record_notes_conn_ns_set ON record_notes(connection_id, namespace, set_name);"
+)
+
 
 def _get_pool() -> asyncpg.Pool:
     if _pool is None:
@@ -71,7 +111,25 @@ async def _apply_migrations(conn: asyncpg.Connection | asyncpg.pool.PoolConnecti
     Uses ``ADD COLUMN IF NOT EXISTS`` so concurrent startups (e.g. rolling
     deploys with multiple replicas) do not race each other.
     """
-    await conn.execute("ALTER TABLE connections ADD COLUMN IF NOT EXISTS description TEXT")
+    # description -> note rename. Idempotent across DB ages by inspecting
+    # information_schema before each branch:
+    #   * fresh DB (CREATE TABLE has note already): both branches skip
+    #   * legacy DB with description: RENAME description -> note (atomic)
+    #   * pathological: both columns coexist -> copy then drop description
+    desc_exists = await conn.fetchval(
+        "SELECT 1 FROM information_schema.columns WHERE table_name = 'connections' AND column_name = 'description'"
+    )
+    note_exists = await conn.fetchval(
+        "SELECT 1 FROM information_schema.columns WHERE table_name = 'connections' AND column_name = 'note'"
+    )
+    if desc_exists and not note_exists:
+        await conn.execute("ALTER TABLE connections RENAME COLUMN description TO note")
+    elif desc_exists and note_exists:
+        await conn.execute("UPDATE connections SET note = description WHERE note IS NULL")
+        await conn.execute("ALTER TABLE connections DROP COLUMN description")
+    elif not desc_exists and not note_exists:
+        await conn.execute("ALTER TABLE connections ADD COLUMN note TEXT")
+
     await conn.execute("ALTER TABLE connections ADD COLUMN IF NOT EXISTS labels JSONB")
     await conn.execute("ALTER TABLE connections ADD COLUMN IF NOT EXISTS workspace_id TEXT")
 
@@ -119,6 +177,10 @@ async def init_db() -> None:
         async with pool.acquire() as conn:
             await conn.execute(CREATE_TABLE_SQL)
             await conn.execute(CREATE_WORKSPACES_TABLE_SQL)
+            await conn.execute(CREATE_SET_NOTES_TABLE_SQL)
+            await conn.execute(CREATE_SET_NOTES_INDEX_SQL)
+            await conn.execute(CREATE_RECORD_NOTES_TABLE_SQL)
+            await conn.execute(CREATE_RECORD_NOTES_INDEX_SQL)
             await _apply_migrations(conn)
         _pool = pool
     except Exception:
@@ -180,7 +242,7 @@ async def create_connection(conn: ConnectionProfile) -> None:
     pool = _get_pool()
     await pool.execute(
         """INSERT INTO connections (id, name, hosts, port, cluster_name, username, password,
-                                    color, description, labels, workspace_id, created_at, updated_at)
+                                    color, note, labels, workspace_id, created_at, updated_at)
            VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13)""",
         conn.id,
         conn.name,
@@ -190,7 +252,7 @@ async def create_connection(conn: ConnectionProfile) -> None:
         conn.username,
         conn.password,
         conn.color,
-        conn.description,
+        conn.note,
         json.dumps(conn.labels),
         conn.workspaceId,
         conn.createdAt,
@@ -212,7 +274,7 @@ async def update_connection(conn_id: str, data: dict) -> ConnectionProfile | Non
             """UPDATE connections
                    SET name = $1, hosts = $2::jsonb, port = $3, cluster_name = $4,
                        username = $5, password = $6, color = $7,
-                       description = $8, labels = $9::jsonb, workspace_id = $10,
+                       note = $8, labels = $9::jsonb, workspace_id = $10,
                        updated_at = $11
                    WHERE id = $12""",
             updated.name,
@@ -222,7 +284,7 @@ async def update_connection(conn_id: str, data: dict) -> ConnectionProfile | Non
             updated.username,
             updated.password,
             updated.color,
-            updated.description,
+            updated.note,
             json.dumps(updated.labels),
             updated.workspaceId,
             updated.updatedAt,
@@ -333,3 +395,252 @@ async def count_connections_in_workspace(workspace_id: str) -> int:
     pool = _get_pool()
     val = await pool.fetchval("SELECT COUNT(*) FROM connections WHERE workspace_id = $1", workspace_id)
     return int(val) if val is not None else 0
+
+
+# ---------------------------------------------------------------------------
+# Async public API — set notes
+# ---------------------------------------------------------------------------
+
+
+def _row_to_set_note(row: asyncpg.Record) -> SetNote:
+    return SetNote(
+        connectionId=row["connection_id"],
+        namespace=row["namespace"],
+        setName=row["set_name"],
+        note=row["note"],
+        createdAt=row["created_at"],
+        updatedAt=row["updated_at"],
+        updatedBy=row["updated_by"],
+    )
+
+
+async def upsert_set_note(
+    connection_id: str,
+    namespace: str,
+    set_name: str,
+    note: str,
+    updated_by: str | None,
+) -> SetNote:
+    pool = _get_pool()
+    now = datetime.now(UTC).isoformat()
+    row = await pool.fetchrow(
+        """INSERT INTO set_notes (connection_id, namespace, set_name, note,
+                                  created_at, updated_at, updated_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (connection_id, namespace, set_name) DO UPDATE SET
+               note = EXCLUDED.note,
+               updated_at = EXCLUDED.updated_at,
+               updated_by = EXCLUDED.updated_by
+           RETURNING *""",
+        connection_id,
+        namespace,
+        set_name,
+        note,
+        now,
+        now,
+        updated_by,
+    )
+    return _row_to_set_note(row)
+
+
+async def delete_set_note(connection_id: str, namespace: str, set_name: str) -> bool:
+    pool = _get_pool()
+    result = await pool.execute(
+        "DELETE FROM set_notes WHERE connection_id = $1 AND namespace = $2 AND set_name = $3",
+        connection_id,
+        namespace,
+        set_name,
+    )
+    return result == "DELETE 1"
+
+
+async def get_set_note(connection_id: str, namespace: str, set_name: str) -> SetNote | None:
+    pool = _get_pool()
+    row = await pool.fetchrow(
+        "SELECT * FROM set_notes WHERE connection_id = $1 AND namespace = $2 AND set_name = $3",
+        connection_id,
+        namespace,
+        set_name,
+    )
+    return _row_to_set_note(row) if row else None
+
+
+async def list_set_notes(connection_id: str, namespace: str | None = None) -> list[SetNote]:
+    pool = _get_pool()
+    if namespace is None:
+        rows = await pool.fetch(
+            "SELECT * FROM set_notes WHERE connection_id = $1 ORDER BY namespace, set_name",
+            connection_id,
+        )
+    else:
+        rows = await pool.fetch(
+            "SELECT * FROM set_notes WHERE connection_id = $1 AND namespace = $2 ORDER BY set_name",
+            connection_id,
+            namespace,
+        )
+    return [_row_to_set_note(r) for r in rows]
+
+
+async def batch_get_set_notes(
+    connection_id: str,
+    namespace: str,
+    set_names: list[str],
+) -> dict[str, str]:
+    if not set_names:
+        return {}
+    pool = _get_pool()
+    # PG supports array IN with ANY($n::text[]) — single binding instead of
+    # variadic placeholders, which keeps the prepared-statement cache stable.
+    rows = await pool.fetch(
+        """SELECT set_name, note FROM set_notes
+               WHERE connection_id = $1 AND namespace = $2
+                 AND set_name = ANY($3::text[])""",
+        connection_id,
+        namespace,
+        set_names,
+    )
+    return {row["set_name"]: row["note"] for row in rows}
+
+
+# ---------------------------------------------------------------------------
+# Async public API — record notes
+# ---------------------------------------------------------------------------
+
+
+def _row_to_record_note(row: asyncpg.Record) -> RecordNote:
+    return RecordNote(
+        connectionId=row["connection_id"],
+        namespace=row["namespace"],
+        setName=row["set_name"],
+        pkText=row["pk_text"],
+        pkType=row["pk_type"],
+        digestHex=row["digest_hex"],
+        note=row["note"],
+        createdAt=row["created_at"],
+        updatedAt=row["updated_at"],
+        updatedBy=row["updated_by"],
+    )
+
+
+async def upsert_record_note(
+    connection_id: str,
+    namespace: str,
+    set_name: str,
+    pk_text: str,
+    pk_type: StoredPkType,
+    note: str,
+    digest_hex: str | None,
+    updated_by: str | None,
+) -> RecordNote:
+    pool = _get_pool()
+    now = datetime.now(UTC).isoformat()
+    row = await pool.fetchrow(
+        """INSERT INTO record_notes (connection_id, namespace, set_name, pk_text, pk_type,
+                                     digest_hex, note, created_at, updated_at, updated_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+           ON CONFLICT (connection_id, namespace, set_name, pk_text, pk_type) DO UPDATE SET
+               digest_hex = EXCLUDED.digest_hex,
+               note = EXCLUDED.note,
+               updated_at = EXCLUDED.updated_at,
+               updated_by = EXCLUDED.updated_by
+           RETURNING *""",
+        connection_id,
+        namespace,
+        set_name,
+        pk_text,
+        pk_type,
+        digest_hex,
+        note,
+        now,
+        now,
+        updated_by,
+    )
+    return _row_to_record_note(row)
+
+
+async def delete_record_note(
+    connection_id: str,
+    namespace: str,
+    set_name: str,
+    pk_text: str,
+    pk_type: StoredPkType,
+) -> bool:
+    pool = _get_pool()
+    result = await pool.execute(
+        """DELETE FROM record_notes
+               WHERE connection_id = $1 AND namespace = $2 AND set_name = $3
+                 AND pk_text = $4 AND pk_type = $5""",
+        connection_id,
+        namespace,
+        set_name,
+        pk_text,
+        pk_type,
+    )
+    return result == "DELETE 1"
+
+
+async def get_record_note(
+    connection_id: str,
+    namespace: str,
+    set_name: str,
+    pk_text: str,
+    pk_type: StoredPkType,
+) -> RecordNote | None:
+    pool = _get_pool()
+    row = await pool.fetchrow(
+        """SELECT * FROM record_notes
+               WHERE connection_id = $1 AND namespace = $2 AND set_name = $3
+                 AND pk_text = $4 AND pk_type = $5""",
+        connection_id,
+        namespace,
+        set_name,
+        pk_text,
+        pk_type,
+    )
+    return _row_to_record_note(row) if row else None
+
+
+async def list_record_notes(
+    connection_id: str,
+    namespace: str,
+    set_name: str,
+) -> list[RecordNote]:
+    pool = _get_pool()
+    rows = await pool.fetch(
+        """SELECT * FROM record_notes
+               WHERE connection_id = $1 AND namespace = $2 AND set_name = $3
+               ORDER BY pk_text""",
+        connection_id,
+        namespace,
+        set_name,
+    )
+    return [_row_to_record_note(r) for r in rows]
+
+
+async def batch_get_record_notes(
+    connection_id: str,
+    namespace: str,
+    set_name: str,
+    pks: list[tuple[str, StoredPkType]],
+) -> dict[tuple[str, StoredPkType], str]:
+    if not pks:
+        return {}
+    pool = _get_pool()
+    # Encode the (pk_text, pk_type) pairs as parallel arrays so we get one
+    # bound parameter per array instead of variadic placeholders. UNNEST
+    # zips them into a temporary relation we INNER JOIN against record_notes.
+    pk_texts = [p[0] for p in pks]
+    pk_types = [p[1] for p in pks]
+    rows = await pool.fetch(
+        """SELECT rn.pk_text, rn.pk_type, rn.note
+               FROM record_notes rn
+               INNER JOIN UNNEST($4::text[], $5::text[]) AS req(pk_text, pk_type)
+                       ON rn.pk_text = req.pk_text AND rn.pk_type = req.pk_type
+               WHERE rn.connection_id = $1 AND rn.namespace = $2 AND rn.set_name = $3""",
+        connection_id,
+        namespace,
+        set_name,
+        pk_texts,
+        pk_types,
+    )
+    return {(row["pk_text"], row["pk_type"]): row["note"] for row in rows}

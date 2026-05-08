@@ -27,6 +27,7 @@ import logging
 import aerospike_py
 from aerospike_py.types import InfoNodeResult
 
+from aerospike_cluster_manager_api import db
 from aerospike_cluster_manager_api.constants import (
     INFO_BUILD,
     INFO_EDITION,
@@ -361,7 +362,39 @@ async def get_cluster_info(client: aerospike_py.AsyncClient, conn_id: str) -> Cl
             )
         )
 
+    # Inject operator notes from cluster-manager metaDB. Single SQL per
+    # namespace; absent notes leave SetInfo.note=None.
+    await _attach_set_notes(conn_id, namespaces)
     return ClusterInfo(connectionId=conn_id, nodes=nodes, namespaces=namespaces)
+
+
+async def _attach_set_notes(conn_id: str, namespaces: list[NamespaceInfo]) -> None:
+    """Mutate ``namespaces`` in place to populate each ``SetInfo.note``.
+
+    Issues one batched lookup per namespace (typically ≤2 in CE clusters), so
+    the total round-trip count is bounded by the namespace count, not the
+    set count. No-op when a namespace has no sets, or when the metaDB has
+    not been initialised (unit-test paths that bypass ``db.init_db()``).
+    """
+    try:
+        for ns in namespaces:
+            if not ns.sets:
+                continue
+            notes = await db.batch_get_set_notes(conn_id, ns.name, [s.name for s in ns.sets])
+            if not notes:
+                continue
+            for s in ns.sets:
+                note = notes.get(s.name)
+                if note is not None:
+                    s.note = note
+    except RuntimeError as exc:
+        # Production startup always calls db.init_db() before serving traffic;
+        # the only realistic source of this RuntimeError is a unit test that
+        # exercises the cluster service without spinning up the metaDB. Log
+        # at debug to keep the prod log clean while still leaving a trail.
+        if "Database not initialized" not in str(exc):
+            raise
+        logger.debug("Skipping set-note injection: metaDB not initialized")
 
 
 async def configure_namespace(client: aerospike_py.AsyncClient, body: CreateNamespaceRequest) -> str:

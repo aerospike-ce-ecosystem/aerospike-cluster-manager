@@ -58,11 +58,21 @@ async def test_mcp_endpoint_lists_phase1_tools_via_fastmcp(app_with_mcp_enabled)
 
 
 async def test_mcp_route_exists_when_flag_on(app_with_mcp_enabled) -> None:
-    """The /mcp route exists on the real FastAPI app when the flag is on."""
+    """The /mcp route exists on the real FastAPI app when the flag is on.
+
+    The request needs the app's lifespan to be active because the
+    canonical-mount fix forwards ``/mcp`` straight into the streamable
+    HTTP transport (no more 307 to ``/mcp/``), and the transport's
+    session manager raises ``Task group is not initialized`` until
+    lifespan has bootstrapped its task group.
+    """
     from httpx import ASGITransport, AsyncClient
 
     transport = ASGITransport(app=app_with_mcp_enabled)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with (
+        AsyncClient(transport=transport, base_url="http://test") as client,
+        app_with_mcp_enabled.router.lifespan_context(app_with_mcp_enabled),
+    ):
         response = await client.get("/mcp")
         # Streamable HTTP MCP responds to GETs with 405/406/200 depending on
         # the SDK version — anything other than 404 proves the mount worked.

@@ -29,6 +29,8 @@ export interface AerospikeRecord {
   key: RecordKey
   meta: RecordMeta
   bins: Record<string, BinValue>
+  /** Operator-authored memo from cluster-manager metaDB. Null when no note is attached. */
+  note?: string | null
 }
 
 export interface RecordListResponse {

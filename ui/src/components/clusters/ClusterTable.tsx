@@ -60,7 +60,7 @@ export function ClusterTable({
                 <span aria-hidden="true">●</span>
               </TableHeaderCell>
               <TableHeaderCell>Name</TableHeaderCell>
-              <TableHeaderCell>Description</TableHeaderCell>
+              <TableHeaderCell>Note</TableHeaderCell>
               <TableHeaderCell>Labels</TableHeaderCell>
               <TableHeaderCell>Address</TableHeaderCell>
               <TableHeaderCell className={SECONDARY_HEADER}>
@@ -82,11 +82,11 @@ export function ClusterTable({
                   <NameLink row={r} />
                 </TableCell>
                 <TableCell className="max-w-[260px]">
-                  {r.description ? (
+                  {r.note ? (
                     <Tooltip
                       content={
                         <div className="max-w-md whitespace-pre-wrap break-words text-xs">
-                          {r.description}
+                          {r.note}
                         </div>
                       }
                       side="top"
@@ -94,7 +94,7 @@ export function ClusterTable({
                       className="max-w-md"
                     >
                       <span className="block cursor-help truncate text-gray-600 dark:text-gray-400">
-                        {r.description}
+                        {r.note}
                       </span>
                     </Tooltip>
                   ) : (

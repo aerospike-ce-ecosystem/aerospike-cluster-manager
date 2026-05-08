@@ -386,3 +386,42 @@ async def test_two_initializes_yield_distinct_session_ids(mcp_app) -> None:
     sid2 = second.headers.get("mcp-session-id")
     assert sid1 and sid2, "both initialize calls must hand out a session id"
     assert sid1 != sid2, "session ids must not collide across initialize calls"
+
+
+async def test_initialize_on_canonical_mount_path_no_redirect(mcp_app) -> None:
+    """``POST /mcp`` (no trailing slash) MUST answer 200 directly.
+
+    Regression guard for the canonical-mount fix: the default Starlette
+    ``Mount`` matches only ``/mcp/.*`` (its compiled regex appends
+    ``/{path:path}``), so a bare ``/mcp`` falls into the parent router's
+    ``redirect_slashes`` branch and returns 307 ``Location: /mcp/``. Many
+    MCP clients (notably ones that send POST + ``Authorization``) refuse
+    to follow the redirect and the wire transport fails. The
+    :class:`CanonicalMCPMount` route in ``mcp.server`` matches both
+    spellings explicitly — this test asserts the bare path returns 200
+    with a session-id, no Location header, and a parsable JSON-RPC
+    envelope.
+    """
+    transport = httpx.ASGITransport(app=mcp_app)
+    async with (
+        httpx.AsyncClient(
+            transport=transport,
+            base_url="http://127.0.0.1:8000",
+            timeout=httpx.Timeout(15.0),
+        ) as client,
+        mcp_app.router.lifespan_context(mcp_app),
+    ):
+        response = await client.post("/mcp", json=_initialize_body(), headers=_MCP_HEADERS)
+
+    assert response.status_code == 200, (
+        f"/mcp must answer the JSON-RPC transport directly; got "
+        f"status={response.status_code} location={response.headers.get('location')!r}"
+    )
+    assert "location" not in {k.lower() for k in response.headers}, (
+        "no redirect header should be emitted on the canonical mount path"
+    )
+    assert response.headers.get("mcp-session-id"), "initialize must hand out a session id on /mcp"
+    payload = _parse_jsonrpc(response)
+    assert payload["jsonrpc"] == "2.0"
+    assert payload["id"] == 1
+    assert "serverInfo" in payload["result"]

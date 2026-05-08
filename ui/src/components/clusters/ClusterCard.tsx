@@ -60,11 +60,11 @@ export function ClusterCard({
           >
             {row.displayName}
           </h3>
-          {row.description && (
+          {row.note && (
             <Tooltip
               content={
                 <div className="max-w-md whitespace-pre-wrap break-words text-xs">
-                  {row.description}
+                  {row.note}
                 </div>
               }
               side="top"
@@ -72,7 +72,7 @@ export function ClusterCard({
               className="max-w-md"
             >
               <p className="mt-1 cursor-help truncate text-xs text-gray-500 dark:text-gray-500">
-                {row.description}
+                {row.note}
               </p>
             </Tooltip>
           )}

@@ -78,6 +78,7 @@ class TestGetRecordDetail:
                 "name": "Alice",
                 "age": 30,
             },
+            "note": None,
         }
         mock_client.get.assert_awaited_once_with(("test", "demo", 42), policy=POLICY_READ)
 
