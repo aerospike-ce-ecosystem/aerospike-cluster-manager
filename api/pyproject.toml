@@ -33,7 +33,11 @@ dependencies = [
     "opentelemetry-instrumentation-asyncpg>=0.51b0",
     "opentelemetry-instrumentation-logging>=0.51b0",
     "httpx>=0.28.1",
-    "python-jose[cryptography]>=3.3,<4",
+    # PyJWT[crypto] replaces python-jose (unmaintained, CVE-2024-33663/4).
+    # The [crypto] extra pulls in `cryptography`, which we also use directly
+    # for Fernet at-rest encryption of stored connection passwords.
+    "pyjwt[crypto]>=2.9",
+    "cryptography>=42",
 ]
 
 [tool.uv]

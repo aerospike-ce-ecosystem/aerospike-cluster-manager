@@ -14,14 +14,13 @@ import uuid
 from collections.abc import Iterable
 
 import httpx
+import jwt as pyjwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse
 from httpx import ASGITransport, AsyncClient
-from jose import jwt as jose_jwt
-from jose.backends.cryptography_backend import CryptographyRSAKey
-from jose.constants import ALGORITHMS
+from jwt.algorithms import RSAAlgorithm
 
 from aerospike_cluster_manager_api.middleware.oidc_auth import OIDCAuthMiddleware
 
@@ -36,9 +35,14 @@ AUDIENCE = "acko-api"
 
 
 def _rsa_keypair() -> tuple[rsa.RSAPrivateKey, dict]:
-    """Return (private_key, jwk_public). ``kid`` is a stable random uuid."""
+    """Return (private_key, jwk_public). ``kid`` is a stable random uuid.
+
+    PyJWT's ``RSAAlgorithm.to_jwk`` returns a JSON string by default; we ask
+    for a dict and then graft on Keycloak-style ``kid``/``alg``/``use`` fields
+    so the resulting JWK is byte-compatible with what the IdP would emit.
+    """
     priv = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    pub_jwk = CryptographyRSAKey(priv.public_key(), ALGORITHMS.RS256).to_dict()
+    pub_jwk = RSAAlgorithm.to_jwk(priv.public_key(), as_dict=True)
     pub_jwk["kid"] = uuid.uuid4().hex
     pub_jwk["alg"] = "RS256"
     pub_jwk["use"] = "sig"
@@ -67,8 +71,7 @@ def _sign(
         claims["realm_access"] = {"roles": list(realm_roles)}
     if extra_claims:
         claims.update(extra_claims)
-    priv_jwk = CryptographyRSAKey(private_key, ALGORITHMS.RS256).to_dict()
-    return jose_jwt.encode(claims, priv_jwk, algorithm="RS256", headers={"kid": kid})
+    return pyjwt.encode(claims, private_key, algorithm="RS256", headers={"kid": kid})
 
 
 # ---------------------------------------------------------------------------
