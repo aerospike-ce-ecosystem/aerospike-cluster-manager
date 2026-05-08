@@ -23,7 +23,10 @@ services:
       - postgres-data:/var/lib/postgresql/data
     restart: unless-stopped
 
-  aerospike-cluster-manager:
+  # Override the API service from compose.yaml (split into -api / -web in #?)
+  # so the Postgres backend is reached from the FastAPI process. The web
+  # container has no DB awareness and does not need these vars.
+  aerospike-cluster-manager-api:
     environment:
       - ENABLE_POSTGRES=true
       - DATABASE_URL=postgresql://aerospike:aerospike@postgres:5432/aerospike_manager
