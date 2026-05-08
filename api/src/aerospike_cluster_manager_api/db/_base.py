@@ -28,6 +28,15 @@ class DatabaseBackend(Protocol):
 
     async def check_health(self) -> bool: ...
 
+    async def migrate_passwords_to_encrypted(self) -> int:
+        """Rewrite plaintext ``connections.password`` rows under the active KEK.
+
+        Idempotent — already-encrypted rows (carrying the ``enc:v1:`` prefix)
+        are skipped. Returns the number of rows rewritten so the caller
+        can log a single audit line rather than spamming per-row INFO.
+        """
+        ...
+
     async def get_all_connections(self, workspace_id: str | None = None) -> list[ConnectionProfile]: ...
 
     async def get_connection(self, conn_id: str) -> ConnectionProfile | None: ...

@@ -27,6 +27,11 @@ from aerospike_cluster_manager_api.models.workspace import (
     SYSTEM_OWNER_ID,
     Workspace,
 )
+from aerospike_cluster_manager_api.secrets_crypto import (
+    decrypt_password,
+    encrypt_password,
+    is_encrypted,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -227,6 +232,38 @@ async def check_health() -> bool:
         return False
 
 
+async def migrate_passwords_to_encrypted() -> int:
+    """Rewrite any plaintext (``enc:v1:``-prefix-missing) password rows.
+
+    Idempotent. Reads every row whose ``password`` column is non-empty and
+    not already ciphertext, encrypts it under the current KEK, and writes
+    it back. Returns the number of rows rewritten so the caller (init_db)
+    can log it. The query is deliberately uncorrelated with column-add
+    migrations — the fact that the connection might still be opening up
+    schema-wise is irrelevant; we only touch ``password``.
+    """
+    conn = _get_conn()
+    rewritten = 0
+    async with conn.execute("SELECT id, password FROM connections") as cursor:
+        rows = await cursor.fetchall()
+    for row in rows:
+        password = row["password"]
+        if password is None or password == "":
+            continue
+        if is_encrypted(password):
+            continue
+        encrypted = encrypt_password(password)
+        await conn.execute(
+            "UPDATE connections SET password = ? WHERE id = ?",
+            (encrypted, row["id"]),
+        )
+        rewritten += 1
+    if rewritten:
+        await conn.commit()
+        logger.info("Encrypted %d legacy plaintext password row(s) in SQLite.", rewritten)
+    return rewritten
+
+
 async def close_db() -> None:
     global _conn
     if _conn:
@@ -238,7 +275,20 @@ async def close_db() -> None:
 # Row -> Model helper (delegated to _base.py)
 # ---------------------------------------------------------------------------
 
-_row_to_profile = row_to_profile
+
+def _row_to_profile(row: aiosqlite.Row) -> ConnectionProfile:
+    """Wrap :func:`row_to_profile` to decrypt the password column on read.
+
+    Legacy rows (no ``enc:v1:`` prefix) round-trip unchanged thanks to
+    :func:`decrypt_password`'s migration-compat branch. The startup
+    encryption migration eventually rewrites them.
+    """
+    profile = row_to_profile(row)
+    if profile.password:
+        profile = profile.model_copy(update={"password": decrypt_password(profile.password)})
+    return profile
+
+
 _row_to_workspace = row_to_workspace
 
 
@@ -270,6 +320,10 @@ async def get_connection(conn_id: str) -> ConnectionProfile | None:
 
 async def create_connection(conn: ConnectionProfile) -> None:
     db_conn = _get_conn()
+    # Encrypt the password column before it touches the disk. Empty / None
+    # passwords (anonymous binds in CE) round-trip as the empty string —
+    # ``encrypt_password`` handles the falsy-input case.
+    stored_password = encrypt_password(conn.password) if conn.password else conn.password
     try:
         await db_conn.execute(
             """INSERT INTO connections (id, name, hosts, port, cluster_name, username, password,
@@ -282,7 +336,7 @@ async def create_connection(conn: ConnectionProfile) -> None:
                 conn.port,
                 conn.clusterName,
                 conn.username,
-                conn.password,
+                stored_password,
                 conn.color,
                 conn.note,
                 json.dumps(conn.labels),
@@ -298,16 +352,30 @@ async def create_connection(conn: ConnectionProfile) -> None:
 
 
 async def update_connection(conn_id: str, data: dict) -> ConnectionProfile | None:
+    """Atomic read-modify-write under a BEGIN IMMEDIATE write lock.
+
+    Mirrors :func:`update_workspace` and the Postgres ``SELECT ... FOR
+    UPDATE`` invariant: the SELECT and UPDATE must run inside the same
+    transaction so a concurrent writer cannot overwrite our merged
+    result with stale data (lost-update race).
+    """
     db_conn = _get_conn()
-    async with db_conn.execute("SELECT * FROM connections WHERE id = ?", (conn_id,)) as cursor:
-        row = await cursor.fetchone()
-    if not row:
-        return None
-
-    existing = _row_to_profile(row)
-    updated = build_merged_profile(existing, data, conn_id)
-
+    await db_conn.execute("BEGIN IMMEDIATE")
     try:
+        async with db_conn.execute("SELECT * FROM connections WHERE id = ?", (conn_id,)) as cursor:
+            row = await cursor.fetchone()
+        if not row:
+            await db_conn.rollback()
+            return None
+
+        existing = _row_to_profile(row)
+        updated = build_merged_profile(existing, data, conn_id)
+
+        # Re-encrypt the merged password before storing. ``existing.password``
+        # was decrypted by ``_row_to_profile``, so the merged result is
+        # plaintext regardless of whether the caller supplied a new
+        # password — we always encrypt on write.
+        stored_password = encrypt_password(updated.password) if updated.password else updated.password
         await db_conn.execute(
             """UPDATE connections
                    SET name = ?, hosts = ?, port = ?, cluster_name = ?,
@@ -321,7 +389,7 @@ async def update_connection(conn_id: str, data: dict) -> ConnectionProfile | Non
                 updated.port,
                 updated.clusterName,
                 updated.username,
-                updated.password,
+                stored_password,
                 updated.color,
                 updated.note,
                 json.dumps(updated.labels),

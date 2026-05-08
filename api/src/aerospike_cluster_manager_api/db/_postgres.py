@@ -25,6 +25,11 @@ from aerospike_cluster_manager_api.models.workspace import (
     SYSTEM_OWNER_ID,
     Workspace,
 )
+from aerospike_cluster_manager_api.secrets_crypto import (
+    decrypt_password,
+    encrypt_password,
+    is_encrypted,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -238,6 +243,36 @@ async def check_health() -> bool:
         return False
 
 
+async def migrate_passwords_to_encrypted() -> int:
+    """Rewrite any plaintext (``enc:v1:``-prefix-missing) password rows.
+
+    Idempotent. Mirrors :func:`db._sqlite.migrate_passwords_to_encrypted`.
+    Wrapped in a transaction so concurrent replicas serialise on each row;
+    the WHERE-clause shape is the canonical pattern for "rewrite if not
+    yet versioned" in this codebase.
+    """
+    pool = _get_pool()
+    rewritten = 0
+    async with pool.acquire() as conn, conn.transaction():
+        rows = await conn.fetch("SELECT id, password FROM connections")
+        for row in rows:
+            password = row["password"]
+            if password is None or password == "":
+                continue
+            if is_encrypted(password):
+                continue
+            encrypted = encrypt_password(password)
+            await conn.execute(
+                "UPDATE connections SET password = $1 WHERE id = $2",
+                encrypted,
+                row["id"],
+            )
+            rewritten += 1
+    if rewritten:
+        logger.info("Encrypted %d legacy plaintext password row(s) in PostgreSQL.", rewritten)
+    return rewritten
+
+
 async def close_db() -> None:
     global _pool
     if _pool:
@@ -249,7 +284,19 @@ async def close_db() -> None:
 # Row -> Model helper (delegated to _base.py)
 # ---------------------------------------------------------------------------
 
-_row_to_profile = row_to_profile
+
+def _row_to_profile(row: asyncpg.Record) -> ConnectionProfile:
+    """Wrap :func:`row_to_profile` to decrypt the password column on read.
+
+    Mirrors the SQLite backend so the encryption layer is transparent to
+    downstream consumers regardless of which DB is configured.
+    """
+    profile = row_to_profile(row)
+    if profile.password:
+        profile = profile.model_copy(update={"password": decrypt_password(profile.password)})
+    return profile
+
+
 _row_to_workspace = row_to_workspace
 
 
@@ -278,6 +325,9 @@ async def get_connection(conn_id: str) -> ConnectionProfile | None:
 
 async def create_connection(conn: ConnectionProfile) -> None:
     pool = _get_pool()
+    # Encrypt the password column before it touches the database. Empty
+    # / None passwords (anonymous binds) round-trip unchanged.
+    stored_password = encrypt_password(conn.password) if conn.password else conn.password
     await pool.execute(
         """INSERT INTO connections (id, name, hosts, port, cluster_name, username, password,
                                     color, note, labels, workspace_id, created_at, updated_at)
@@ -288,7 +338,7 @@ async def create_connection(conn: ConnectionProfile) -> None:
         conn.port,
         conn.clusterName,
         conn.username,
-        conn.password,
+        stored_password,
         conn.color,
         conn.note,
         json.dumps(conn.labels),
@@ -308,6 +358,11 @@ async def update_connection(conn_id: str, data: dict) -> ConnectionProfile | Non
         existing = _row_to_profile(row)
         updated = build_merged_profile(existing, data, conn_id)
 
+        # Re-encrypt the merged password before storing. ``existing.password``
+        # was decrypted by ``_row_to_profile``, so the merged result is
+        # plaintext regardless of whether the caller supplied a new
+        # password — we always encrypt on write.
+        stored_password = encrypt_password(updated.password) if updated.password else updated.password
         await conn.execute(
             """UPDATE connections
                    SET name = $1, hosts = $2::jsonb, port = $3, cluster_name = $4,
@@ -320,7 +375,7 @@ async def update_connection(conn_id: str, data: dict) -> ConnectionProfile | Non
             updated.port,
             updated.clusterName,
             updated.username,
-            updated.password,
+            stored_password,
             updated.color,
             updated.note,
             json.dumps(updated.labels),
