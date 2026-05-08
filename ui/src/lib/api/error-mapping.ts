@@ -10,14 +10,20 @@ import { ApiError } from "./client"
  *   - 403 with EE_MSG ("Security is not enabled…") → security-disabled card
  *   - 403 otherwise                                 → permission-denied
  *   - 404                                           → empty state for the resource
+ *   - 409                                           → conflict banner (record/version mismatch)
+ *   - 422                                           → validation banner, surface backend detail
  *   - 503                                           → banner + retry, do not hide page
+ *   - 504                                           → timeout banner, suggest retry
  *   - everything else                               → generic banner
  */
 export type ApiErrorKind =
   | { kind: "security-disabled"; message: string }
   | { kind: "permission-denied"; message: string }
   | { kind: "not-found"; message: string }
+  | { kind: "conflict"; message: string }
+  | { kind: "validation"; message: string }
   | { kind: "unreachable"; message: string }
+  | { kind: "timeout"; message: string }
   | { kind: "generic"; message: string }
 
 const SECURITY_DISABLED_MARKERS = ["security is not enabled", "ee_msg"] as const
@@ -37,8 +43,25 @@ export function mapApiError(err: unknown): ApiErrorKind {
         return { kind: "permission-denied", message: err.detail }
       case 404:
         return { kind: "not-found", message: err.detail }
+      case 409:
+        return {
+          kind: "conflict",
+          message: err.detail || "Conflict — record/version mismatch",
+        }
+      case 422:
+        // FastAPI validation + aerospike-py RustPanic land here. Prefer the
+        // backend detail string verbatim; only synthesize when it is empty.
+        return {
+          kind: "validation",
+          message: err.detail ? `Validation: ${err.detail}` : "Validation error",
+        }
       case 503:
         return { kind: "unreachable", message: err.detail }
+      case 504:
+        return {
+          kind: "timeout",
+          message: err.detail || "Aerospike timeout — try again",
+        }
       default:
         return { kind: "generic", message: err.detail }
     }
