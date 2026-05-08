@@ -26,8 +26,16 @@ from collections.abc import Awaitable, Callable, Iterable
 from typing import Any, cast
 
 import httpx
-from jose import JWTError, jwt
-from jose.exceptions import ExpiredSignatureError, JWTClaimsError
+import jwt
+from jwt.algorithms import ECAlgorithm, RSAAlgorithm
+from jwt.exceptions import (
+    DecodeError,
+    ExpiredSignatureError,
+    InvalidAudienceError,
+    InvalidIssuerError,
+    InvalidTokenError,
+    PyJWTError,
+)
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -62,10 +70,27 @@ _ALLOWED_ALGS: frozenset[str] = frozenset(
 # of HTTP requests against the issuer.
 _KID_MISS_BACKOFF_SECONDS: int = 30
 
-# TODO(follow-up): migrate from python-jose to PyJWT (>=2.9). python-jose is
-# unmaintained as of 2024 and has open CVE-2024-33663/4. Mitigations applied
-# here: pinned algorithm whitelist (above), strict aud/iss verification,
-# kid-miss back-off. Still, switching to a maintained library is preferred.
+
+def _public_key_from_jwk(jwk_dict: dict[str, Any]) -> Any:
+    """Convert a JWK dict to a PyJWT-compatible public-key object.
+
+    PyJWT's ``jwt.decode`` accepts ``cryptography``-native key objects
+    directly. We pick the algorithm class by JWK ``kty`` (key type) and
+    delegate to ``RSAAlgorithm.from_jwk`` / ``ECAlgorithm.from_jwk`` so
+    PyJWT does the actual parsing and validation. This deliberately
+    mirrors what the symmetric ``HMACAlgorithm.from_jwk`` would do — by
+    omitting the symmetric branch we silently refuse ``kty=oct`` keys
+    here, complementing the alg-whitelist defence-in-depth above.
+    """
+    import json as _json
+
+    kty = jwk_dict.get("kty")
+    raw = _json.dumps(jwk_dict)
+    if kty == "RSA":
+        return RSAAlgorithm.from_jwk(raw)
+    if kty == "EC":
+        return ECAlgorithm.from_jwk(raw)
+    raise _AuthError(f"Unsupported JWK key type: {kty!r}")
 
 
 class OIDCAuthMiddleware(BaseHTTPMiddleware):
@@ -98,9 +123,10 @@ class OIDCAuthMiddleware(BaseHTTPMiddleware):
         self._owns_http_client = http_client is None
 
         # JWKS cache state. ``_jwks_by_kid`` maps the JWS header ``kid`` to
-        # the raw JWK dict; jose accepts dicts directly. ``_expires_at`` is a
-        # monotonic-ish wall-clock seconds value; we use ``time.time()`` so a
-        # process restart resets the cache implicitly.
+        # the raw JWK dict; we lazily convert to a public-key object on
+        # first verification. ``_expires_at`` is a monotonic-ish wall-clock
+        # seconds value; we use ``time.time()`` so a process restart resets
+        # the cache implicitly.
         self._jwks_by_kid: dict[str, dict[str, Any]] = {}
         self._jwks_expires_at: float = 0.0
         self._jwks_lock = asyncio.Lock()
@@ -182,18 +208,18 @@ class OIDCAuthMiddleware(BaseHTTPMiddleware):
     async def _verify(self, token: str) -> dict[str, Any]:
         try:
             unverified_header = jwt.get_unverified_header(token)
-        except JWTError as exc:
+        except PyJWTError as exc:
             raise _AuthError(f"Malformed token header: {exc}") from exc
 
         kid = unverified_header.get("kid")
         if not kid:
             raise _AuthError("Token header missing 'kid'")
 
-        key = await self._key_for_kid(kid)
-        if key is None:
+        jwk_dict = await self._key_for_kid(kid)
+        if jwk_dict is None:
             raise _AuthError(f"Unknown signing key id (kid={kid!r})")
 
-        algorithm = key.get("alg") or unverified_header.get("alg")
+        algorithm = jwk_dict.get("alg") or unverified_header.get("alg")
         if not algorithm:
             raise _AuthError("Cannot determine signing algorithm")
         if algorithm not in _ALLOWED_ALGS:
@@ -202,19 +228,29 @@ class OIDCAuthMiddleware(BaseHTTPMiddleware):
             # via a tampered or rogue JWKS endpoint.
             raise _AuthError(f"Unsupported signing algorithm: {algorithm}")
 
+        public_key = _public_key_from_jwk(jwk_dict)
+
         try:
             claims = jwt.decode(
                 token,
-                key,
+                public_key,
                 algorithms=[algorithm],
                 audience=self.audience,
                 issuer=self.issuer_url,
             )
         except ExpiredSignatureError as exc:
             raise _AuthError("Token expired") from exc
-        except JWTClaimsError as exc:
-            raise _AuthError(f"Invalid claims: {exc}") from exc
-        except JWTError as exc:
+        except InvalidAudienceError as exc:
+            raise _AuthError(f"Invalid audience: {exc}") from exc
+        except InvalidIssuerError as exc:
+            raise _AuthError(f"Invalid issuer: {exc}") from exc
+        except DecodeError as exc:
+            # Signature/format failures land here — keep the message generic
+            # so we don't leak which leg of verification failed.
+            raise _AuthError(f"Invalid token: {exc}") from exc
+        except InvalidTokenError as exc:
+            # Catch-all for any other PyJWT-defined claim error
+            # (e.g. iat/nbf failures); InvalidTokenError is the umbrella.
             raise _AuthError(f"Invalid token: {exc}") from exc
         return cast(dict[str, Any], claims)
 
