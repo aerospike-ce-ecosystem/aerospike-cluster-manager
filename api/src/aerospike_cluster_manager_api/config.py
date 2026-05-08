@@ -145,6 +145,22 @@ LOG_HANDLERS: str = os.getenv("LOG_HANDLERS", "")
 LOGGING_CONFIG_FILE: str = os.getenv("LOGGING_CONFIG_FILE", "")
 
 # ---------------------------------------------------------------------------
+# At-rest encryption for stored connection passwords
+# ---------------------------------------------------------------------------
+# Fernet key used by ``secrets_crypto.encrypt_password`` to wrap the
+# ``connections.password`` column before it touches the database. The
+# canonical shape is a 44-char urlsafe base64 string emitted by
+# ``Fernet.generate_key()``. The actual validation, ephemeral-mode
+# fallback, and process-startup error live in ``secrets_crypto.py`` —
+# we surface the variable name here only so operators have a single
+# place to grep for "where does ACM read this from?". Reading the env
+# at import time would be wrong: the secrets module needs to defer
+# until the first encrypt/decrypt call so unrelated tests can import
+# the package without setting the KEK.
+ACM_PASSWORD_KEK_ENV: str = "ACM_PASSWORD_KEK"
+ACM_ALLOW_EPHEMERAL_KEK_ENV: str = "ACM_ALLOW_EPHEMERAL_KEK"
+
+# ---------------------------------------------------------------------------
 # OIDC / Keycloak native JWT verification (Phase 0 contracts C-4, C-6, C-7)
 # ---------------------------------------------------------------------------
 # When OIDC_ENABLED=false the middleware is a no-op (still installed but

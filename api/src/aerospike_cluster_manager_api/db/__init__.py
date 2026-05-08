@@ -48,6 +48,22 @@ async def init_db() -> None:
         from aerospike_cluster_manager_api.db import _sqlite as backend
     await backend.init_db()
     _backend = backend
+    # One-shot rewrite of any plaintext password rows from before the
+    # at-rest encryption migration. Idempotent (skips rows already
+    # carrying the ``enc:v1:`` ciphertext marker), so it's safe to run on
+    # every startup. Failures here must NOT block API readiness — a KEK
+    # misconfiguration should surface as decrypt errors on the actual
+    # CRUD path, not as a startup crash that hides the cause behind an
+    # unrelated traceback.
+    try:
+        await backend.migrate_passwords_to_encrypted()
+    except Exception:
+        import logging as _logging
+
+        _logging.getLogger(__name__).exception(
+            "Connection password encryption migration failed; the API will "
+            "start anyway but legacy plaintext rows remain on disk."
+        )
 
 
 async def close_db() -> None:
