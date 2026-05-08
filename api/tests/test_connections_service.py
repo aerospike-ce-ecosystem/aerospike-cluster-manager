@@ -91,6 +91,36 @@ class TestListConnections:
         assert all(item.workspaceId == "ws-team-svc" for item in ws_team)
         assert len(ws_team) >= 1
 
+    async def test_caller_filter_hides_other_owner_workspaces(self, init_test_db):
+        from datetime import UTC, datetime
+
+        from aerospike_cluster_manager_api import db
+        from aerospike_cluster_manager_api.models.workspace import Workspace
+
+        now = datetime.now(UTC).isoformat()
+        await db.create_workspace(
+            Workspace(id="ws-alice", name="alice", color="#111111", ownerId="alice", createdAt=now, updatedAt=now)
+        )
+        await db.create_workspace(
+            Workspace(id="ws-bob", name="bob", color="#222222", ownerId="bob", createdAt=now, updatedAt=now)
+        )
+        await connections_service.create_connection(
+            _create_payload(name="alice-conn", workspaceId="ws-alice"), caller_owner_id="alice"
+        )
+        await connections_service.create_connection(
+            _create_payload(name="bob-conn", workspaceId="ws-bob"), caller_owner_id="bob"
+        )
+
+        alice_view = await connections_service.list_connections(workspace_id=None, caller_owner_id="alice")
+        bob_view = await connections_service.list_connections(workspace_id=None, caller_owner_id="bob")
+
+        alice_names = {c.name for c in alice_view}
+        bob_names = {c.name for c in bob_view}
+        assert "alice-conn" in alice_names
+        assert "bob-conn" not in alice_names
+        assert "bob-conn" in bob_names
+        assert "alice-conn" not in bob_names
+
 
 # ---------------------------------------------------------------------------
 # create_connection
