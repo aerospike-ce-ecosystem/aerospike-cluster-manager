@@ -3,6 +3,7 @@
 import { Badge } from "@/components/Badge"
 import { Button } from "@/components/Button"
 import { Card } from "@/components/Card"
+import { CreateIndexDialog } from "@/components/dialogs/CreateIndexDialog"
 import { ErrorBanner } from "@/components/ErrorBanner"
 import { Input } from "@/components/Input"
 import {
@@ -37,6 +38,7 @@ export default function SecondaryIndexesPage({ params }: PageProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState("")
+  const [createOpen, setCreateOpen] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -98,9 +100,20 @@ export default function SecondaryIndexesPage({ params }: PageProps) {
           >
             Refresh
           </Button>
-          <Button variant="primary">Create index</Button>
+          <Button variant="primary" onClick={() => setCreateOpen(true)}>
+            Create index
+          </Button>
         </div>
       </header>
+
+      <CreateIndexDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        connId={params.clusterId}
+        onSuccess={() => {
+          void load()
+        }}
+      />
 
       {error && (
         <ErrorBanner

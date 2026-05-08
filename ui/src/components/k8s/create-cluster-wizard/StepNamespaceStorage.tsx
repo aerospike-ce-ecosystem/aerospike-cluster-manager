@@ -12,6 +12,7 @@ import type {
   CreateK8sClusterRequest,
   StorageVolumeConfig,
 } from "@/lib/types/k8s"
+import { useEffect } from "react"
 
 interface StepNamespaceStorageProps {
   form: CreateK8sClusterRequest
@@ -46,10 +47,20 @@ export function StepNamespaceStorage({
       ? form.namespaces
       : [defaultMemoryNamespace(clusterSize, 0)]
 
-  // Ensure the form always carries at least one namespace by syncing on mount when defaulted
-  if (!form.namespaces || form.namespaces.length === 0) {
-    updateForm({ namespaces })
-  }
+  // Ensure the form always carries at least one namespace by syncing once after mount
+  // when the form was constructed without any. Calling setState during render is a
+  // React error; an effect runs after commit so the parent receives the default
+  // without re-rendering the child mid-render.
+  const needsDefault = !form.namespaces || form.namespaces.length === 0
+  useEffect(() => {
+    if (needsDefault) {
+      updateForm({ namespaces: [defaultMemoryNamespace(clusterSize, 0)] })
+    }
+    // We intentionally only depend on whether a default is needed; ``updateForm``
+    // is a stable dispatcher from the parent reducer-style pattern and including
+    // it would re-fire if the parent recreates it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsDefault, clusterSize])
 
   const {
     keys: nsKeys,

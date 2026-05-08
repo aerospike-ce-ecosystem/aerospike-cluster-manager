@@ -12,6 +12,12 @@ export interface WorkspaceResponse {
   color: string
   description?: string | null
   isDefault: boolean
+  /**
+   * Sub claim of the OIDC user that owns the workspace. Mirrors
+   * ``WorkspaceResponse.ownerId`` on the backend (see
+   * ``api/src/aerospike_cluster_manager_api/models/workspace.py``).
+   */
+  ownerId: string
   createdAt: string
   updatedAt: string
 }
