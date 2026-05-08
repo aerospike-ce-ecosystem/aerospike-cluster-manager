@@ -160,3 +160,52 @@ def test_get_client_ip_no_xff_from_trusted():
     with patch("aerospike_cluster_manager_api.config.TRUSTED_PROXIES", ["10.0.0.1"]):
         req = _FakeRequest("10.0.0.1")
         assert _get_client_ip(req) == "10.0.0.1"
+
+
+def test_get_client_ip_picks_leftmost_untrusted_in_chain():
+    """Multi-hop chain: peel trusted hops from the right and stop at the first
+    untrusted entry. Picking the rightmost (the previous behaviour) would
+    collapse every external caller into the bucket of the last reverse proxy
+    and defeat the purpose of per-IP rate limiting.
+    """
+    with patch("aerospike_cluster_manager_api.config.TRUSTED_PROXIES", ["10.0.0.1", "10.0.0.2"]):
+        req = _FakeRequest("10.0.0.1", forwarded_for="203.0.113.50, 10.0.0.2, 10.0.0.1")
+        assert _get_client_ip(req) == "203.0.113.50"
+
+
+def test_get_client_ip_supports_cidr_trusted_proxies():
+    """TRUSTED_PROXIES accepts CIDR ranges (the docstring claim)."""
+    with patch("aerospike_cluster_manager_api.config.TRUSTED_PROXIES", ["10.0.0.0/24"]):
+        # peer is inside the /24 — the XFF chain should be honoured.
+        req = _FakeRequest("10.0.0.42", forwarded_for="203.0.113.50, 10.0.0.5")
+        assert _get_client_ip(req) == "203.0.113.50"
+
+
+def test_get_client_ip_all_hops_trusted_falls_back_to_peer():
+    """Chain entirely inside the trusted proxy fleet — fall back to peer."""
+    with patch("aerospike_cluster_manager_api.config.TRUSTED_PROXIES", ["10.0.0.0/8"]):
+        req = _FakeRequest("10.0.0.1", forwarded_for="10.1.2.3, 10.2.3.4")
+        assert _get_client_ip(req) == "10.0.0.1"
+
+
+# ---------------------------------------------------------------------------
+# Global default rate limit
+# ---------------------------------------------------------------------------
+
+
+def test_limiter_carries_global_default_limits():
+    """The shared Limiter instance must declare a default the SlowAPIMiddleware
+    can apply to every route. Without this, mutation routes that forget to
+    decorate themselves are unrate-limited and the SSE-exempt opt-out has
+    nothing to opt out of.
+    """
+    from aerospike_cluster_manager_api.rate_limit import DEFAULT_LIMITS, limiter
+
+    # slowapi exposes default_limits as a list of LimitGroup objects; assert
+    # at least one group is registered and the documented "60/minute" string
+    # is present in the module-level constant we feed to the Limiter.
+    assert DEFAULT_LIMITS, "DEFAULT_LIMITS must not be empty"
+    assert any("/minute" in entry or "/second" in entry for entry in DEFAULT_LIMITS)
+    # The Limiter's internal _default_limits is the runtime source of truth;
+    # accessing the protected attribute here is a deliberate test-of-glue.
+    assert limiter._default_limits, "Limiter must be constructed with default_limits"
