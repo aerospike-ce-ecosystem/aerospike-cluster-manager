@@ -2,12 +2,35 @@
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
+from cryptography.fernet import Fernet
 
 from aerospike_cluster_manager_api.models.connection import ConnectionProfile
+
+
+def _ensure_kek() -> None:
+    """Provision a deterministic Fernet key for the entire test session.
+
+    The at-rest encryption module enforces ACM_PASSWORD_KEK presence on
+    first use. Tests that don't directly exercise crypto still trip the
+    check via init_db's password migration; setting a fixed key here
+    keeps every fixture deterministic across pytest runs without forcing
+    each test to opt into ephemeral mode.
+    """
+    if not os.environ.get("ACM_PASSWORD_KEK"):
+        os.environ["ACM_PASSWORD_KEK"] = Fernet.generate_key().decode("ascii")
+    # Re-resolve so a previous test that monkey-patched the singleton
+    # doesn't leak state into the next one.
+    from aerospike_cluster_manager_api import secrets_crypto
+
+    secrets_crypto.reset_for_tests()
+
+
+_ensure_kek()
 
 
 @pytest.fixture()
