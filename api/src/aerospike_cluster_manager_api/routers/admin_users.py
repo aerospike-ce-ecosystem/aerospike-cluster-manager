@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from starlette.responses import Response
 
 from aerospike_cluster_manager_api.dependencies import AerospikeClient
 from aerospike_cluster_manager_api.models.admin import AerospikeUser, ChangePasswordRequest, CreateUserRequest
 from aerospike_cluster_manager_api.models.common import MessageResponse
+from aerospike_cluster_manager_api.rate_limit import limiter
 from aerospike_cluster_manager_api.routers._admin_utils import admin_endpoint
 
 logger = logging.getLogger(__name__)
@@ -44,8 +45,9 @@ async def get_users(client: AerospikeClient) -> list[AerospikeUser]:
     summary="Create user",
     description="Create a new Aerospike user with specified roles. Requires security to be enabled in aerospike.conf.",
 )
+@limiter.limit("20/minute")
 @admin_endpoint
-async def create_user(body: CreateUserRequest, client: AerospikeClient) -> AerospikeUser:
+async def create_user(request: Request, body: CreateUserRequest, client: AerospikeClient) -> AerospikeUser:
     """Create a new Aerospike user with specified roles. Requires security to be enabled in aerospike.conf."""
     if not body.username or not body.password:
         raise HTTPException(status_code=400, detail="Missing required fields: username, password")
@@ -67,8 +69,9 @@ async def create_user(body: CreateUserRequest, client: AerospikeClient) -> Aeros
     summary="Change user password",
     description="Change the password for an existing Aerospike user. Requires security to be enabled in aerospike.conf.",
 )
+@limiter.limit("20/minute")
 @admin_endpoint
-async def change_password(body: ChangePasswordRequest, client: AerospikeClient) -> MessageResponse:
+async def change_password(request: Request, body: ChangePasswordRequest, client: AerospikeClient) -> MessageResponse:
     """Change the password for an existing Aerospike user. Requires security to be enabled in aerospike.conf."""
     if not body.username or not body.password:
         raise HTTPException(status_code=400, detail="Missing required fields: username, password")
@@ -84,8 +87,10 @@ async def change_password(body: ChangePasswordRequest, client: AerospikeClient) 
     summary="Delete user",
     description="Delete an Aerospike user by username. Requires security to be enabled in aerospike.conf.",
 )
+@limiter.limit("20/minute")
 @admin_endpoint
 async def delete_user(
+    request: Request,
     client: AerospikeClient,
     username: str = Query(..., min_length=1),
 ) -> Response:

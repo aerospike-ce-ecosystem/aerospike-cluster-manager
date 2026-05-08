@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from aerospike_cluster_manager_api.converters import record_to_model
 from aerospike_cluster_manager_api.dependencies import AerospikeClient
 from aerospike_cluster_manager_api.models.query import QueryRequest, QueryResponse
+from aerospike_cluster_manager_api.rate_limit import limiter
 from aerospike_cluster_manager_api.services import query_service
 from aerospike_cluster_manager_api.services.query_service import SetRequiredForPkLookup
 
@@ -20,7 +21,8 @@ router = APIRouter(prefix="/query", tags=["query"])
     summary="Execute query",
     description="Execute a query against Aerospike using primary key lookup, predicate filter, or full scan.",
 )
-async def execute_query(body: QueryRequest, client: AerospikeClient) -> QueryResponse:
+@limiter.limit("30/minute")
+async def execute_query(request: Request, body: QueryRequest, client: AerospikeClient) -> QueryResponse:
     """Execute a query against Aerospike using primary key lookup, predicate filter, or full scan."""
     try:
         result = await query_service.execute_query(client, body)

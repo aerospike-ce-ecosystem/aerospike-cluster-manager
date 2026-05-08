@@ -57,10 +57,50 @@ def _resolve_caller_owner_id(request: Request) -> str:
     return raw
 
 
-async def _get_verified_connection(conn_id: str = Path()) -> str:
-    """Verify that a connection profile exists and return its id."""
+async def _get_verified_connection(
+    conn_id: str = Path(),
+    caller_owner_id: str = Depends(_resolve_caller_owner_id),
+) -> str:
+    """Verify that a connection profile exists and the caller owns its workspace.
+
+    Default-deny ACL gate (#307 — Phase 2). Returns the connection id when
+    the caller can see the connection's workspace. Raises 404 when:
+
+    * the connection does not exist;
+    * the connection's workspace was deleted between the load and now;
+    * the workspace exists but belongs to a different owner (and is not
+      the synthetic ``SYSTEM_OWNER_ID`` shared-default workspace).
+
+    Identity-404 (instead of 403) prevents id enumeration — the wire shape
+    matches the missing-row case so a probing caller cannot distinguish
+    "doesn't exist" from "exists but not yours". Anonymous deployments
+    (``caller_owner_id == SYSTEM_OWNER_ID``) keep the legacy
+    every-workspace-visible behaviour because system-owned rows always
+    pass and the resolver returns the system sentinel when no auth
+    middleware ran.
+
+    Unit-test paths that exercise the dependency without a workspace DB
+    (``DBNotInitialized``) skip the visibility check -- the connection
+    existence gate alone is the legacy behaviour.
+    """
     conn = await db.get_connection(conn_id)
     if not conn:
+        raise HTTPException(status_code=404, detail=f"Connection '{conn_id}' not found")
+    workspace_id = getattr(conn, "workspaceId", None)
+    if workspace_id is None:
+        # Connection has no workspace association (legacy / test fixture
+        # using a bare dict). Treat as system-shared — visible to every
+        # authenticated caller, matching the pre-#307 wire shape.
+        return conn_id
+    try:
+        workspace = await db.get_workspace(workspace_id)
+    except db.DBNotInitialized:
+        return conn_id
+    if workspace is None:
+        # Workspace deleted underneath us. Surface as connection 404 so
+        # the wire shape matches the no-ACL case.
+        raise HTTPException(status_code=404, detail=f"Connection '{conn_id}' not found")
+    if workspace.ownerId != caller_owner_id and workspace.ownerId != SYSTEM_OWNER_ID:
         raise HTTPException(status_code=404, detail=f"Connection '{conn_id}' not found")
     return conn_id
 
@@ -81,16 +121,31 @@ async def _get_workspace(workspace_id: str = Path()) -> Workspace:
     return ws
 
 
-async def _get_connection_profile(conn_id: str = Path()) -> ConnectionProfile:
+async def _get_connection_profile(
+    conn_id: str = Path(),
+    caller_owner_id: str = Depends(_resolve_caller_owner_id),
+) -> ConnectionProfile:
     """Fetch and return the full ``ConnectionProfile`` for *conn_id*.
 
-    Raises 404 if the profile does not exist.  Unlike
-    ``_get_verified_connection`` (which returns only the id string),
-    this dependency returns the full model so callers can avoid a
-    redundant database round-trip.
+    Same default-deny ACL gate as :func:`_get_verified_connection` —
+    raises 404 for missing rows AND for rows whose workspace is invisible
+    to the caller. Unlike ``_get_verified_connection`` (which returns
+    only the id string), this dependency returns the full model so
+    callers can avoid a redundant database round-trip.
     """
     conn = await db.get_connection(conn_id)
     if not conn:
+        raise HTTPException(status_code=404, detail=f"Connection '{conn_id}' not found")
+    workspace_id = getattr(conn, "workspaceId", None)
+    if workspace_id is None:
+        return conn
+    try:
+        workspace = await db.get_workspace(workspace_id)
+    except db.DBNotInitialized:
+        return conn
+    if workspace is None:
+        raise HTTPException(status_code=404, detail=f"Connection '{conn_id}' not found")
+    if workspace.ownerId != caller_owner_id and workspace.ownerId != SYSTEM_OWNER_ID:
         raise HTTPException(status_code=404, detail=f"Connection '{conn_id}' not found")
     return conn
 

@@ -32,21 +32,44 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from aerospike_cluster_manager_api import config
 from aerospike_cluster_manager_api.client_manager import client_manager
 from aerospike_cluster_manager_api.constants import INFO_NAMESPACES
 from aerospike_cluster_manager_api.info_parser import parse_list
 from aerospike_cluster_manager_api.mcp.registry import tool
+from aerospike_cluster_manager_api.mcp.user_context import current_caller_claims
 from aerospike_cluster_manager_api.models.connection import (
     CreateConnectionRequest,
     TestConnectionRequest,
     UpdateConnectionRequest,
 )
+from aerospike_cluster_manager_api.models.workspace import SYSTEM_OWNER_ID
 from aerospike_cluster_manager_api.services import connections_service
 from aerospike_cluster_manager_api.services.connections_service import (
     ConnectionNotFoundError,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_mcp_caller_owner_id() -> str:
+    """Translate MCP caller claims to the owner-id the service layer expects.
+
+    Mirrors :func:`dependencies._resolve_caller_owner_id` for the REST
+    surface so the same workspace ACL applies regardless of transport.
+    Bearer-token sessions and anonymous deployments degrade to
+    :data:`SYSTEM_OWNER_ID`, keeping the legacy single-tenant fallback
+    where every workspace is reachable.
+    """
+    claims = current_caller_claims()
+    if claims is None:
+        return SYSTEM_OWNER_ID
+    if claims.get("_mcp_bearer"):
+        return SYSTEM_OWNER_ID
+    raw = claims.get(config.ACM_OIDC_OWNER_CLAIM)
+    if not isinstance(raw, str) or not raw:
+        return SYSTEM_OWNER_ID
+    return raw
 
 
 @tool(category="connection", mutation=True)
@@ -86,7 +109,7 @@ async def create_connection(
         workspaceId=workspace_id,
         clusterName=cluster_name,
     )
-    result = await connections_service.create_connection(payload)
+    result = await connections_service.create_connection(payload, _resolve_mcp_caller_owner_id())
     return result.model_dump()
 
 
@@ -144,7 +167,7 @@ async def update_connection(
         update_kwargs["clusterName"] = cluster_name
 
     payload = UpdateConnectionRequest(**update_kwargs)
-    result = await connections_service.update_connection(conn_id, payload)
+    result = await connections_service.update_connection(conn_id, payload, _resolve_mcp_caller_owner_id())
     return result.model_dump()
 
 
@@ -163,8 +186,14 @@ async def delete_connection(conn_id: str) -> dict[str, Any]:
 
 @tool(category="connection", mutation=False)
 async def list_connections(workspace_id: str | None = None) -> list[dict[str, Any]]:
-    """List all connection profiles, optionally filtered by workspace id."""
-    results = await connections_service.list_connections(workspace_id)
+    """List all connection profiles, optionally filtered by workspace id.
+
+    The caller's identity (resolved from the MCP request context) is
+    threaded into the service layer so cross-tenant ``workspace_id``
+    filters return ``not_found`` rather than leaking another tenant's
+    connection list.
+    """
+    results = await connections_service.list_connections(workspace_id, _resolve_mcp_caller_owner_id())
     return [item.model_dump() for item in results]
 
 
