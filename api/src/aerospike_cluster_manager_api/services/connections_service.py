@@ -121,6 +121,15 @@ async def list_connections(
     if workspace_id is not None:
         await _assert_workspace_visible(workspace_id, caller_owner_id)
     profiles = await db.get_all_connections(workspace_id)
+
+    if caller_owner_id is not None and workspace_id is None:
+        try:
+            workspaces = await db.get_all_workspaces()
+        except db.DBNotInitialized:
+            workspaces = []
+        visible_ws_ids = {ws.id for ws in workspaces if ws.ownerId == caller_owner_id or ws.ownerId == SYSTEM_OWNER_ID}
+        profiles = [p for p in profiles if (p.workspaceId or DEFAULT_WORKSPACE_ID) in visible_ws_ids]
+
     return [ConnectionProfileResponse.from_profile(p) for p in profiles]
 
 
