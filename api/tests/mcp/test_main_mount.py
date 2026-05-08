@@ -143,9 +143,20 @@ async def test_mcp_route_exists_when_flag_enabled(app_with_mcp_enabled) -> None:
     C.1. The streamable-http transport typically replies with 4xx (bad
     request, missing session header, etc.) to a bare GET, which is fine —
     the route exists, that's all this test asserts.
+
+    Enter the app's lifespan so the FastMCP session manager's task group
+    is initialised before the request reaches it. Previously the bare
+    ``/mcp`` URL 307'd at the parent router and never touched the
+    session manager — the canonical-mount fix sends the request straight
+    through, so the ``RuntimeError("Task group is not initialized")``
+    that used to be hidden by the redirect now surfaces unless lifespan
+    has run.
     """
     transport = ASGITransport(app=app_with_mcp_enabled)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with (
+        AsyncClient(transport=transport, base_url="http://test") as ac,
+        app_with_mcp_enabled.router.lifespan_context(app_with_mcp_enabled),
+    ):
         resp = await ac.get("/mcp")
         assert resp.status_code != 404, (
             f"expected /mcp to be mounted, got 404 (status={resp.status_code}, body={resp.text!r})"

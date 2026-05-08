@@ -760,7 +760,16 @@ async def app_with_mcp_disabled_token_set(
 async def test_main_mcp_enabled_with_token_gates_mcp_path(
     app_with_mcp_enabled_and_token,
 ) -> None:
-    """End-to-end: ACM_MCP_ENABLED=true + token → /mcp requires bearer."""
+    """End-to-end: ACM_MCP_ENABLED=true + token → /mcp requires bearer.
+
+    The "correct token" leg drives the canonical ``/mcp`` URL all the way
+    into the FastMCP streamable-HTTP transport, which requires the app's
+    lifespan to have started (the session manager's task group is
+    bootstrapped there). Enter ``lifespan_context`` for the duration of
+    the call so the success path actually reaches the transport rather
+    than dying inside :class:`mcp.server.streamable_http_manager` with a
+    ``Task group is not initialized`` ``RuntimeError``.
+    """
     transport = ASGITransport(app=app_with_mcp_enabled_and_token)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         # No auth → 401 from MCP middleware.
@@ -772,10 +781,11 @@ async def test_main_mcp_enabled_with_token_gates_mcp_path(
         assert resp.status_code == 401
         # Correct token → not 401 (the MCP transport itself may still
         # reject a bare GET with 4xx, but it must NOT be the auth 401).
-        resp = await ac.get(
-            "/mcp",
-            headers={"Authorization": "Bearer wired-token"},
-        )
+        async with app_with_mcp_enabled_and_token.router.lifespan_context(app_with_mcp_enabled_and_token):
+            resp = await ac.get(
+                "/mcp",
+                headers={"Authorization": "Bearer wired-token"},
+            )
         assert resp.status_code != 401, f"correct token must reach MCP transport, got {resp.status_code} {resp.text!r}"
 
 
@@ -796,9 +806,15 @@ async def test_main_mcp_enabled_no_token_passes_through(
 ) -> None:
     """ACM_MCP_ENABLED=true + ACM_MCP_TOKEN unset: the middleware is
     installed but enforces nothing — /mcp reaches the FastMCP transport
-    without an auth 401 from us."""
+    without an auth 401 from us. The lifespan context wraps the call so
+    the FastMCP session manager's task group is initialised before the
+    transport is hit (the canonical ``/mcp`` URL no longer 307s, so the
+    request lands in the streamable-HTTP code path that needs it)."""
     transport = ASGITransport(app=app_with_mcp_enabled_no_token)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with (
+        AsyncClient(transport=transport, base_url="http://test") as ac,
+        app_with_mcp_enabled_no_token.router.lifespan_context(app_with_mcp_enabled_no_token),
+    ):
         resp = await ac.get("/mcp")
         # Whatever the transport replies, it must NOT be our 401.
         assert resp.status_code != 401 or resp.json() != {"detail": "MCP authentication required"}

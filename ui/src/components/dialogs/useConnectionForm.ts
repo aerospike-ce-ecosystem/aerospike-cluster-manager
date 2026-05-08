@@ -18,7 +18,7 @@ export interface ConnectionFormState {
   username: string
   password: string
   color: string
-  description: string
+  note: string
   labels: LabelEntry[]
   workspaceId: string
 }
@@ -30,7 +30,7 @@ export interface ParsedConnectionPayload {
   username: string | null
   password: string | null
   color: string
-  description: string | null
+  note: string | null
   labels: Record<string, string>
   workspaceId: string
 }
@@ -44,7 +44,7 @@ const EMPTY_FORM: ConnectionFormState = {
   username: "",
   password: "",
   color: DEFAULT_COLOR,
-  description: "",
+  note: "",
   labels: [{ key: ENV_LABEL_KEY, value: DEFAULT_ENV_VALUE }],
   workspaceId: DEFAULT_WORKSPACE_ID,
 }
@@ -59,7 +59,7 @@ export function fromConnection(
     username: conn.username ?? "",
     password: "",
     color: conn.color,
-    description: conn.description ?? "",
+    note: conn.note ?? "",
     labels: labelsToEntries(conn.labels ?? {}),
     workspaceId: conn.workspaceId ?? DEFAULT_WORKSPACE_ID,
   }
@@ -114,7 +114,7 @@ export function useConnectionForm(initial?: ConnectionFormState) {
         username: form.username.trim() || null,
         password: form.password ? form.password : null,
         color: form.color || DEFAULT_COLOR,
-        description: form.description.trim() || null,
+        note: form.note.trim() || null,
         labels: entriesToLabels(form.labels),
         workspaceId: form.workspaceId || DEFAULT_WORKSPACE_ID,
       },

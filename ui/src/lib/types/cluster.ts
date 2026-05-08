@@ -24,6 +24,8 @@ export interface SetInfo {
   stopWritesCount: number
   nodeCount: number
   totalNodes: number
+  /** Operator-authored memo from cluster-manager metaDB. Null when no note is attached. */
+  note?: string | null
 }
 
 export interface NamespaceInfo {

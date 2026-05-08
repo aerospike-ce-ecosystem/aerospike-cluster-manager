@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from typing import Any, Protocol, runtime_checkable
 
 from aerospike_cluster_manager_api.models.connection import ConnectionProfile
+from aerospike_cluster_manager_api.models.note import RecordNote, SetNote, StoredPkType
 from aerospike_cluster_manager_api.models.workspace import (
     DEFAULT_WORKSPACE_ID,
     SYSTEM_OWNER_ID,
@@ -50,6 +51,84 @@ class DatabaseBackend(Protocol):
     async def delete_workspace(self, workspace_id: str) -> bool: ...
 
     async def count_connections_in_workspace(self, workspace_id: str) -> int: ...
+
+    # ----- Set notes -----
+    async def upsert_set_note(
+        self,
+        connection_id: str,
+        namespace: str,
+        set_name: str,
+        note: str,
+        updated_by: str | None,
+    ) -> SetNote: ...
+
+    async def delete_set_note(self, connection_id: str, namespace: str, set_name: str) -> bool: ...
+
+    async def get_set_note(self, connection_id: str, namespace: str, set_name: str) -> SetNote | None: ...
+
+    async def list_set_notes(self, connection_id: str, namespace: str | None = None) -> list[SetNote]: ...
+
+    async def batch_get_set_notes(
+        self,
+        connection_id: str,
+        namespace: str,
+        set_names: list[str],
+    ) -> dict[str, str]:
+        """Return ``{set_name: note}`` for the requested set names (within a single namespace)."""
+        ...
+
+    # ----- Record notes -----
+    async def upsert_record_note(
+        self,
+        connection_id: str,
+        namespace: str,
+        set_name: str,
+        pk_text: str,
+        pk_type: StoredPkType,
+        note: str,
+        digest_hex: str | None,
+        updated_by: str | None,
+    ) -> RecordNote: ...
+
+    async def delete_record_note(
+        self,
+        connection_id: str,
+        namespace: str,
+        set_name: str,
+        pk_text: str,
+        pk_type: StoredPkType,
+    ) -> bool: ...
+
+    async def get_record_note(
+        self,
+        connection_id: str,
+        namespace: str,
+        set_name: str,
+        pk_text: str,
+        pk_type: StoredPkType,
+    ) -> RecordNote | None: ...
+
+    async def list_record_notes(
+        self,
+        connection_id: str,
+        namespace: str,
+        set_name: str,
+    ) -> list[RecordNote]: ...
+
+    async def batch_get_record_notes(
+        self,
+        connection_id: str,
+        namespace: str,
+        set_name: str,
+        pks: list[tuple[str, StoredPkType]],
+    ) -> dict[tuple[str, StoredPkType], str]:
+        """Return ``{(pk_text, pk_type): note}`` for the requested record keys.
+
+        Optimized for the data browser: callers pass the 50-row batch from a
+        single Aerospike scan and get back a single SQL ``IN`` lookup. Empty
+        ``pks`` returns an empty dict without hitting the DB.
+        """
+        ...
 
 
 def _decode_json_dict(value: object) -> dict[str, Any]:
@@ -102,7 +181,7 @@ def row_to_profile(row: Any) -> ConnectionProfile:
         username=row["username"],
         password=row["password"],
         color=row["color"],
-        description=row["description"],
+        note=row["note"],
         labels=labels,
         workspaceId=workspace_id or DEFAULT_WORKSPACE_ID,
         createdAt=row["created_at"],
@@ -183,7 +262,7 @@ def build_merged_profile(
         username=merged.get("username"),
         password=merged.get("password"),
         color=merged["color"],
-        description=merged.get("description"),
+        note=merged.get("note"),
         labels=merged.get("labels") or {},
         workspaceId=merged.get("workspaceId") or DEFAULT_WORKSPACE_ID,
         createdAt=existing.createdAt,

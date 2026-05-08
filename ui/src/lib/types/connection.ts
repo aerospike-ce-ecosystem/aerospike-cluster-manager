@@ -33,7 +33,7 @@ export interface ConnectionProfileResponse {
   clusterName?: string | null
   username?: string | null
   color: string
-  description?: string | null
+  note?: string | null
   /** Always contains an ``env`` key after backend normalization (defaults to ``default``). */
   labels: Record<string, string>
   /** Workspace this connection belongs to. Defaults to ``ws-default`` server-side. */
@@ -54,7 +54,7 @@ export interface CreateConnectionRequest {
   username?: string | null
   password?: string | null
   color?: string
-  description?: string | null
+  note?: string | null
   labels?: Record<string, string> | null
   /** When omitted, the backend assigns the connection to the default workspace. */
   workspaceId?: string | null
@@ -68,7 +68,7 @@ export interface UpdateConnectionRequest {
   username?: string | null
   password?: string | null
   color?: string
-  description?: string | null
+  note?: string | null
   labels?: Record<string, string> | null
   /** Set to move the connection into a different workspace. */
   workspaceId?: string | null

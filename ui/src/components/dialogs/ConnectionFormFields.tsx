@@ -125,11 +125,11 @@ export function ConnectionFormFields({
       )}
 
       <div className="flex flex-col gap-y-1.5">
-        <Label htmlFor={id("description")}>Description (optional)</Label>
+        <Label htmlFor={id("note")}>Note (optional)</Label>
         <textarea
-          id={id("description")}
-          value={form.description}
-          onChange={(e) => setForm({ ...form, description: e.target.value })}
+          id={id("note")}
+          value={form.note}
+          onChange={(e) => setForm({ ...form, note: e.target.value })}
           rows={3}
           placeholder="Notes about this cluster — purpose, owner, runbook link, …"
           className={TEXTAREA_CLASSES}

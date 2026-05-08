@@ -76,7 +76,7 @@ export function EditConnectionDialog({
         hosts: result.payload.hosts,
         port: result.payload.port,
         color: result.payload.color,
-        description: result.payload.description,
+        note: result.payload.note,
         labels: result.payload.labels,
         workspaceId: result.payload.workspaceId,
       })

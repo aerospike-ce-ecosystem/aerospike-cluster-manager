@@ -57,7 +57,7 @@ async def create_connection(
     username: str | None = None,
     password: str | None = None,
     color: str = "#0097D3",
-    description: str | None = None,
+    note: str | None = None,
     labels: dict[str, str] | None = None,
     workspace_id: str | None = None,
     cluster_name: str | None = None,
@@ -68,7 +68,8 @@ async def create_connection(
     the built-in default workspace when ``workspace_id`` is omitted.
     ``cluster_name`` is the optional cluster identifier used by the
     Aerospike client tend (``cluster-name`` policy) — leave unset to
-    discover the cluster name dynamically.
+    discover the cluster name dynamically. ``note`` is a free-text
+    operator memo (formerly ``description``).
 
     Mutation: requires ``ACM_MCP_ACCESS_PROFILE=full``; returns
     ``code=access_denied`` under READ_ONLY.
@@ -80,7 +81,7 @@ async def create_connection(
         username=username,
         password=password,
         color=color,
-        description=description,
+        note=note,
         labels=labels,
         workspaceId=workspace_id,
         clusterName=cluster_name,
@@ -105,7 +106,7 @@ async def update_connection(
     username: str | None = None,
     password: str | None = None,
     color: str | None = None,
-    description: str | None = None,
+    note: str | None = None,
     labels: dict[str, str] | None = None,
     workspace_id: str | None = None,
     cluster_name: str | None = None,
@@ -114,7 +115,8 @@ async def update_connection(
 
     Only fields explicitly supplied (non-``None``) are updated.
     ``cluster_name`` is the optional cluster identifier (``cluster-name``
-    tend policy); pass it to update or set it.
+    tend policy); pass it to update or set it. ``note`` is a free-text
+    operator memo (formerly ``description``).
 
     Mutation: requires ``ACM_MCP_ACCESS_PROFILE=full``; returns
     ``code=access_denied`` under READ_ONLY.
@@ -132,8 +134,8 @@ async def update_connection(
         update_kwargs["password"] = password
     if color is not None:
         update_kwargs["color"] = color
-    if description is not None:
-        update_kwargs["description"] = description
+    if note is not None:
+        update_kwargs["note"] = note
     if labels is not None:
         update_kwargs["labels"] = labels
     if workspace_id is not None:

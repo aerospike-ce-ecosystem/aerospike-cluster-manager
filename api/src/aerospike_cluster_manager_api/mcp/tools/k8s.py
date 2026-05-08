@@ -236,9 +236,12 @@ async def scale_k8s_cluster(
     deliberately small so the LLM can confirm the patch landed without
     having to parse a full cluster snapshot.
 
-    CE caps cluster size at 8 nodes; the operator's webhook enforces the
-    ceiling and returns ``conflict`` (mapped from a 409 K8s API error)
-    when exceeded.
+    CE caps cluster size at 8 nodes. The CRD's OpenAPI schema validator
+    rejects ``size > 8`` with a 422 ``Invalid`` response, which the error
+    mapper surfaces as ``code="invalid_argument"``. Webhook-enforced
+    invariants (e.g. modifying the operations list mid-flight) surface as
+    ``code="conflict"`` from a 409 — but the size cap itself is the
+    schema-level check, not the webhook.
 
     Mutation: requires ``ACM_MCP_ACCESS_PROFILE=full``; returns
     ``code=access_denied`` under READ_ONLY.
@@ -299,7 +302,15 @@ async def get_k8s_logs(
     _check_bound(tail_lines, max_value=_MAX_TAIL_LINES, name="tail_lines")
     namespace, name = _parse_cluster_id(cluster_id)
 
-    cluster_pods = await k8s_client.list_pods(namespace, f"app.kubernetes.io/instance={name}")
+    # Match the same label pair ``get_k8s_pods`` uses so a pod from another
+    # workload that happens to share the ``instance`` label cannot be
+    # pulled by name and have its logs leaked through this tool. The
+    # ACKO operator stamps both labels onto every cluster pod, so this
+    # narrowing is invisible to legitimate callers.
+    cluster_pods = await k8s_client.list_pods(
+        namespace,
+        f"app.kubernetes.io/name=aerospike-cluster,app.kubernetes.io/instance={name}",
+    )
     pod_names = {p["name"] for p in cluster_pods}
     if pod_name not in pod_names:
         raise MCPToolError(

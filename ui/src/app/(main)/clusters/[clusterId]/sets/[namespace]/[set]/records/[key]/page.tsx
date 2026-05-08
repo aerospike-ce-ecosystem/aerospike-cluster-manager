@@ -5,10 +5,12 @@ import { Button } from "@/components/Button"
 import { Card } from "@/components/Card"
 import { Input } from "@/components/Input"
 import { Label } from "@/components/Label"
+import { NoteSection } from "@/components/notes/NoteSection"
 import { RecordDetailSkeleton } from "@/components/skeletons/RecordDetailSkeleton"
 import { clusterSections } from "@/app/siteConfig"
 import { ApiError } from "@/lib/api/client"
 import { logFetchError } from "@/lib/api/log"
+import { deleteRecordNote, upsertRecordNote } from "@/lib/api/notes"
 import { deleteRecord, getRecordDetail, putRecord } from "@/lib/api/records"
 import type { AerospikeRecord, BinValue, PkType } from "@/lib/types/record"
 import Link from "next/link"
@@ -577,6 +579,33 @@ export default function RecordDetailPage({ params }: PageProps) {
               </dd>
             </div>
           </Card>
+
+          <NoteSection
+            title="Operator note"
+            note={record.note}
+            disabled={isEditing || deleting || saving}
+            onSave={async (next) => {
+              await upsertRecordNote(
+                params.clusterId,
+                params.namespace,
+                params.set,
+                pk,
+                { note: next, pkType: "auto" },
+              )
+              // Reload to pick up updatedAt / updatedBy from the server.
+              await loadRecord(loadSignalRef.current)
+            }}
+            onDelete={async () => {
+              await deleteRecordNote(
+                params.clusterId,
+                params.namespace,
+                params.set,
+                pk,
+                "auto",
+              )
+              await loadRecord(loadSignalRef.current)
+            }}
+          />
 
           <Card className="p-0">
             <ul className="flex flex-col divide-y divide-gray-200 dark:divide-gray-800">

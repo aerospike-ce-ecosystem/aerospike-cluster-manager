@@ -46,6 +46,13 @@ def test_build_mcp_app_registers_all_phase1_tools() -> None:
     assert "get_k8s_events" in names
     assert "scale_k8s_cluster" in names
     assert "get_k8s_logs" in names
+    # 6 notes (operator memos in metaDB)
+    assert "update_set_note" in names
+    assert "delete_set_note" in names
+    assert "list_set_notes" in names
+    assert "update_record_note" in names
+    assert "delete_record_note" in names
+    assert "list_record_notes" in names
 
     assert len(names) == EXPECTED_TOOL_COUNT, f"expected {EXPECTED_TOOL_COUNT} tools, got {len(names)}: {sorted(names)}"
 

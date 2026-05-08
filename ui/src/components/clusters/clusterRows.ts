@@ -21,7 +21,7 @@ export type ClusterRow = {
   k8sNamespace?: string
   phase?: string
   size?: number
-  description: string | null
+  note: string | null
   labels: Record<string, string>
   profile: ConnectionProfileResponse | null
 }
@@ -55,7 +55,7 @@ export function mergeRows(
       k8sNamespace: linkedK8s?.namespace,
       phase: linkedK8s?.phase,
       size: linkedK8s?.size,
-      description: c.description ?? null,
+      note: c.note ?? null,
       labels: ensureEnvLabel(c.labels),
       profile: c,
     })
@@ -74,7 +74,7 @@ export function mergeRows(
       k8sNamespace: k.namespace,
       phase: k.phase,
       size: k.size,
-      description: null,
+      note: null,
       labels: ensureEnvLabel(null),
       profile: null,
     })

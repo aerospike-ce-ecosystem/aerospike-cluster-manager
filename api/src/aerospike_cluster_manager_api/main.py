@@ -33,6 +33,7 @@ from aerospike_cluster_manager_api.routers import (
     events,
     indexes,
     metrics,
+    notes,
     query,
     records,
     sample_data,
@@ -478,6 +479,7 @@ _routers = [
     connections.router,
     clusters.router,
     records.router,
+    notes.router,
     query.router,
     indexes.router,
     admin_users.router,
@@ -508,10 +510,17 @@ app.include_router(api_router)
 # /api/* (different consumer, different auth/UX). The import is local so a
 # disabled flag pays no import cost at startup.
 if config.ACM_MCP_ENABLED:
-    from aerospike_cluster_manager_api.mcp.server import build_mcp_app
+    from aerospike_cluster_manager_api.mcp.server import CanonicalMCPMount, build_mcp_app, streamable_http_asgi
 
     _mcp_app = build_mcp_app()
-    app.mount(config.ACM_MCP_PATH, _mcp_app.streamable_http_app())
+    # ``CanonicalMCPMount`` replaces ``app.mount(...)`` because the default
+    # Starlette ``Mount`` regex (``^/mcp/(?P<path>.*)$``) does not match
+    # the bare ``/mcp`` URL — the parent Router then falls into the
+    # ``redirect_slashes`` branch and 307s clients to ``/mcp/``. Many MCP
+    # clients refuse to follow a 307 on a POST that carries an
+    # ``Authorization`` header, so the redirect would break the canonical
+    # transport URL. The custom route matches both spellings directly.
+    app.router.routes.append(CanonicalMCPMount(config.ACM_MCP_PATH, streamable_http_asgi(_mcp_app)))
 
 # FastAPIInstrumentor wraps every route handler with a server span. The
 # wiring is a no-op when OTel is disabled (NoOp tracer). We exclude the

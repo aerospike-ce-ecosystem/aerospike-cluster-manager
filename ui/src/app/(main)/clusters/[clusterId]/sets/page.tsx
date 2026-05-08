@@ -314,6 +314,7 @@ function SetChip({
         baseClass,
         "border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/50 dark:border-gray-800 dark:bg-gray-950 hover:dark:border-indigo-900/60 hover:dark:bg-indigo-950/20",
       )}
+      title={set.note ?? undefined}
     >
       <span className="font-mono text-gray-900 dark:text-gray-50">
         {set.name}
@@ -321,6 +322,14 @@ function SetChip({
       <span className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-[10px] text-gray-600 dark:bg-gray-900 dark:text-gray-400">
         {formatCount(set.objects)}
       </span>
+      {set.note && (
+        <span
+          aria-label="Set has an operator note"
+          className="rounded bg-indigo-100 px-1 py-0.5 font-mono text-[9px] uppercase tracking-wide text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300"
+        >
+          note
+        </span>
+      )}
       <RiArrowRightSLine
         className="size-3.5 text-gray-300 transition group-hover:text-indigo-500 dark:text-gray-700"
         aria-hidden="true"

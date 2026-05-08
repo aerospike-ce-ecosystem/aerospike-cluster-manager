@@ -3,11 +3,14 @@ from __future__ import annotations
 import logging
 from typing import Literal
 
+from aerospike_py import Record
 from fastapi import APIRouter, HTTPException, Query
 from starlette.responses import Response
 
+from aerospike_cluster_manager_api import db
 from aerospike_cluster_manager_api.converters import record_to_model
-from aerospike_cluster_manager_api.dependencies import AerospikeClient
+from aerospike_cluster_manager_api.dependencies import AerospikeClient, VerifiedConnId
+from aerospike_cluster_manager_api.models.note import StoredPkType
 from aerospike_cluster_manager_api.models.query import FilteredQueryRequest, FilteredQueryResponse
 from aerospike_cluster_manager_api.models.record import (
     AerospikeRecord,
@@ -26,6 +29,103 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/records", tags=["records"])
 
 
+def _raw_pk_to_stored(pk: object) -> tuple[str, StoredPkType] | None:
+    """Map an aerospike-py raw key value to (pk_text, pk_type).
+
+    Returns ``None`` when the key has no userKey (digest-only record), since
+    1차 release doesn't support notes for those.
+    """
+    if isinstance(pk, bool):
+        # ``bool`` is a subclass of ``int`` in Python — guard explicitly so
+        # True/False keys are not mis-tagged as INTEGER.
+        return None
+    if isinstance(pk, int):
+        return (str(pk), "int")
+    if isinstance(pk, bytes | bytearray):
+        return (bytes(pk).hex(), "bytes")
+    if isinstance(pk, str) and pk:
+        return (pk, "string")
+    return None
+
+
+def _extract_pk_pair(rec: Record) -> tuple[str, StoredPkType] | None:
+    """Pull (pk_text, pk_type) from a raw aerospike-py Record's key tuple."""
+    key = rec.key
+    if key is None or len(key) <= 2:
+        return None
+    return _raw_pk_to_stored(key[2])
+
+
+async def _attach_record_notes(
+    conn_id: str,
+    namespace: str,
+    set_name: str,
+    raw_records: list[Record],
+    models: list[AerospikeRecord],
+) -> None:
+    """Populate ``models[i].note`` from cluster-manager metaDB.
+
+    Single batch SQL keyed by the (pk_text, pk_type) pairs extracted from the
+    raw aerospike-py records. Records without a userKey are skipped silently
+    (they cannot have notes in 1차 release). When the metaDB has not been
+    initialised (unit-test paths), the call is a no-op.
+    """
+    if not set_name or not raw_records:
+        return
+    pairs: list[tuple[str, StoredPkType]] = []
+    pair_for_index: list[tuple[str, StoredPkType] | None] = []
+    for raw in raw_records:
+        pair = _extract_pk_pair(raw)
+        pair_for_index.append(pair)
+        if pair is not None:
+            pairs.append(pair)
+    if not pairs:
+        return
+    try:
+        notes = await db.batch_get_record_notes(conn_id, namespace, set_name, pairs)
+    except db.DBNotInitialized:
+        logger.warning(
+            "Skipping record-note injection for conn_id=%s ns=%s set=%s: metaDB not initialized",
+            conn_id,
+            namespace,
+            set_name,
+        )
+        return
+    if not notes:
+        return
+    for model, pair in zip(models, pair_for_index, strict=True):
+        if pair is not None and pair in notes:
+            model.note = notes[pair]
+
+
+async def _get_record_note_text(
+    conn_id: str,
+    namespace: str,
+    set_name: str,
+    pk_text: str,
+    pk_type: StoredPkType,
+) -> str | None:
+    """Single-record note text fetch with the metaDB-not-initialised guard.
+
+    Returns ``None`` either when no note exists or when the metaDB layer
+    has not been initialised (unit-test paths). Other exceptions
+    propagate — only the dedicated ``DBNotInitialized`` sentinel is
+    swallowed.
+    """
+    try:
+        rec = await db.get_record_note(conn_id, namespace, set_name, pk_text, pk_type)
+    except db.DBNotInitialized:
+        logger.warning(
+            "Skipping record-note lookup for conn_id=%s ns=%s set=%s pk=%s: metaDB not initialized",
+            conn_id,
+            namespace,
+            set_name,
+            pk_text,
+        )
+        return None
+    return rec.note if rec else None
+
+
 @router.get(
     "/{conn_id}",
     summary="List records",
@@ -33,6 +133,7 @@ router = APIRouter(prefix="/records", tags=["records"])
 )
 async def get_records(
     client: AerospikeClient,
+    conn_id: VerifiedConnId,
     ns: str = Query(..., min_length=1),
     set: str = "",
     pageSize: int = Query(25, ge=1, le=500),
@@ -47,8 +148,10 @@ async def get_records(
     available without an aerospike-core fork.
     """
     result = await records_service.list_records(client, ns, set, page_size=pageSize)
+    models = [record_to_model(r) for r in result.records]
+    await _attach_record_notes(conn_id, ns, set, result.records, models)
     return RecordListResponse(
-        records=[record_to_model(r) for r in result.records],
+        records=models,
         total=result.total,
         page=result.page,
         pageSize=result.page_size,
@@ -64,6 +167,7 @@ async def get_records(
 )
 async def get_record_detail(
     client: AerospikeClient,
+    conn_id: VerifiedConnId,
     ns: str = Query(..., min_length=1),
     set: str = Query(...),
     pk: str = Query(..., min_length=1),
@@ -81,7 +185,15 @@ async def get_record_detail(
     except ValueError as exc:
         # Explicit pk_type with unparseable pk → 400.
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return record_to_model(raw_result)
+    model = record_to_model(raw_result)
+    # Use the resolved (post-auto-fallback) particle type from the raw key —
+    # not the request's ``pk_type`` query param, which may be 'auto'. This
+    # keeps the note lookup consistent with how the record was actually
+    # stored.
+    pair = _extract_pk_pair(raw_result)
+    if pair is not None:
+        model.note = await _get_record_note_text(conn_id, ns, set, pair[0], pair[1])
+    return model
 
 
 @router.post(
@@ -142,6 +254,7 @@ async def delete_record(
 async def get_filtered_records(
     body: FilteredQueryRequest,
     client: AerospikeClient,
+    conn_id: VerifiedConnId,
 ) -> FilteredQueryResponse:
     """Scan records with optional expression filters and pagination."""
     try:
@@ -151,8 +264,13 @@ async def get_filtered_records(
     except InvalidPkPattern as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    models = [record_to_model(r) for r in result.records]
+    # Filter scans always carry a set scope (SetRequiredForPkLookup is
+    # raised above when not), so note injection has the (ns, set) it needs.
+    if body.set:
+        await _attach_record_notes(conn_id, body.namespace, body.set, result.records, models)
     return FilteredQueryResponse(
-        records=[record_to_model(r) for r in result.records],
+        records=models,
         total=result.total,
         page=result.page,
         pageSize=result.page_size,

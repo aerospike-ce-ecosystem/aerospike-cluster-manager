@@ -29,6 +29,10 @@ class AerospikeRecord(BaseModel):
     key: RecordKey
     meta: RecordMeta
     bins: dict[str, BinValue]
+    # Operator-authored memo from cluster-manager metaDB. Null when no note
+    # has been attached. Joined in by records_service after the Aerospike
+    # read (single batch SQL, not N+1).
+    note: str | None = None
 
 
 class RecordListResponse(BaseModel):

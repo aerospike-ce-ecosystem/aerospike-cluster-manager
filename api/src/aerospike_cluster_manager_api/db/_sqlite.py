@@ -21,6 +21,7 @@ from aerospike_cluster_manager_api.db._base import (
     row_to_workspace,
 )
 from aerospike_cluster_manager_api.models.connection import ConnectionProfile
+from aerospike_cluster_manager_api.models.note import RecordNote, SetNote, StoredPkType
 from aerospike_cluster_manager_api.models.workspace import (
     DEFAULT_WORKSPACE_ID,
     SYSTEM_OWNER_ID,
@@ -41,7 +42,7 @@ CREATE TABLE IF NOT EXISTS connections (
     username     TEXT,
     password     TEXT,
     color        TEXT NOT NULL DEFAULT '#0097D3',
-    description  TEXT,
+    note         TEXT,
     labels       TEXT,
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL
@@ -61,10 +62,58 @@ CREATE TABLE IF NOT EXISTS workspaces (
 );
 """
 
+# Set-level operator notes (free text). Identity is
+# (connection_id, namespace, set_name); FK CASCADE keeps the table tidy when
+# a connection is deleted. PRAGMA foreign_keys=ON is set in init_db().
+CREATE_SET_NOTES_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS set_notes (
+    connection_id TEXT NOT NULL,
+    namespace     TEXT NOT NULL,
+    set_name      TEXT NOT NULL,
+    note          TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL,
+    updated_by    TEXT,
+    PRIMARY KEY (connection_id, namespace, set_name),
+    FOREIGN KEY (connection_id) REFERENCES connections(id) ON DELETE CASCADE
+);
+"""
+
+CREATE_SET_NOTES_INDEX_SQL = "CREATE INDEX IF NOT EXISTS idx_set_notes_conn_ns ON set_notes(connection_id, namespace);"
+
+# Record-level operator notes. ``pk_type`` participates in the PK because
+# Aerospike treats ``42:string`` and ``42:int`` as distinct records (different
+# digests). ``digest_hex`` is verification-only — derived from (set, pk) so
+# it doesn't need to be in the PK or even non-null in 1차 release.
+CREATE_RECORD_NOTES_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS record_notes (
+    connection_id TEXT NOT NULL,
+    namespace     TEXT NOT NULL,
+    set_name      TEXT NOT NULL,
+    pk_text       TEXT NOT NULL,
+    pk_type       TEXT NOT NULL DEFAULT 'string',
+    digest_hex    TEXT,
+    note          TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL,
+    updated_by    TEXT,
+    PRIMARY KEY (connection_id, namespace, set_name, pk_text, pk_type),
+    FOREIGN KEY (connection_id) REFERENCES connections(id) ON DELETE CASCADE
+);
+"""
+
+CREATE_RECORD_NOTES_INDEX_SQL = (
+    "CREATE INDEX IF NOT EXISTS idx_record_notes_conn_ns_set ON record_notes(connection_id, namespace, set_name);"
+)
+
 
 def _get_conn() -> aiosqlite.Connection:
     if _conn is None:
-        raise RuntimeError("Database not initialized. Call init_db() first.")
+        # Imported inside the function to avoid a circular import at module
+        # load time (``db/__init__.py`` imports from ``db/_sqlite.py``).
+        from aerospike_cluster_manager_api.db import DBNotInitialized
+
+        raise DBNotInitialized("Database not initialized. Call init_db() first.")
     return _conn
 
 
@@ -73,10 +122,21 @@ async def _apply_migrations(conn: aiosqlite.Connection) -> None:
     async with conn.execute("PRAGMA table_info(connections)") as cursor:
         columns = {row[1] for row in await cursor.fetchall()}
 
-    if "description" not in columns:
-        logger.info("Migrating SQLite: adding description column")
-        await conn.execute("ALTER TABLE connections ADD COLUMN description TEXT")
+    # description -> note rename. Idempotent across all DB ages:
+    #   * fresh DB (CREATE TABLE has note already): both branches skip
+    #   * legacy DB with description: RENAME description -> note
+    #   * legacy DB without either: ADD COLUMN note (very old layout)
+    if "note" not in columns:
+        if "description" in columns:
+            logger.info("Renaming SQLite column: connections.description -> connections.note")
+            await conn.execute("ALTER TABLE connections RENAME COLUMN description TO note")
+        else:
+            logger.info("Migrating SQLite: adding connections.note column")
+            await conn.execute("ALTER TABLE connections ADD COLUMN note TEXT")
         await conn.commit()
+        # refresh column set for downstream checks
+        async with conn.execute("PRAGMA table_info(connections)") as cursor:
+            columns = {row[1] for row in await cursor.fetchall()}
 
     if "labels" not in columns:
         logger.info("Migrating SQLite: adding labels column")
@@ -140,6 +200,10 @@ async def init_db() -> None:
         await conn.execute("PRAGMA foreign_keys=ON")
         await conn.execute(CREATE_TABLE_SQL)
         await conn.execute(CREATE_WORKSPACES_TABLE_SQL)
+        await conn.execute(CREATE_SET_NOTES_TABLE_SQL)
+        await conn.execute(CREATE_SET_NOTES_INDEX_SQL)
+        await conn.execute(CREATE_RECORD_NOTES_TABLE_SQL)
+        await conn.execute(CREATE_RECORD_NOTES_INDEX_SQL)
         await conn.commit()
         await _apply_migrations(conn)
         _conn = conn
@@ -209,7 +273,7 @@ async def create_connection(conn: ConnectionProfile) -> None:
     try:
         await db_conn.execute(
             """INSERT INTO connections (id, name, hosts, port, cluster_name, username, password,
-                                        color, description, labels, workspace_id, created_at, updated_at)
+                                        color, note, labels, workspace_id, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 conn.id,
@@ -220,7 +284,7 @@ async def create_connection(conn: ConnectionProfile) -> None:
                 conn.username,
                 conn.password,
                 conn.color,
-                conn.description,
+                conn.note,
                 json.dumps(conn.labels),
                 conn.workspaceId,
                 conn.createdAt,
@@ -248,7 +312,7 @@ async def update_connection(conn_id: str, data: dict) -> ConnectionProfile | Non
             """UPDATE connections
                    SET name = ?, hosts = ?, port = ?, cluster_name = ?,
                        username = ?, password = ?, color = ?,
-                       description = ?, labels = ?, workspace_id = ?,
+                       note = ?, labels = ?, workspace_id = ?,
                        updated_at = ?
                    WHERE id = ?""",
             (
@@ -259,7 +323,7 @@ async def update_connection(conn_id: str, data: dict) -> ConnectionProfile | Non
                 updated.username,
                 updated.password,
                 updated.color,
-                updated.description,
+                updated.note,
                 json.dumps(updated.labels),
                 updated.workspaceId,
                 updated.updatedAt,
@@ -415,3 +479,258 @@ async def count_connections_in_workspace(workspace_id: str) -> int:
     async with conn.execute("SELECT COUNT(*) FROM connections WHERE workspace_id = ?", (workspace_id,)) as cursor:
         row = await cursor.fetchone()
     return int(row[0]) if row else 0
+
+
+# ---------------------------------------------------------------------------
+# Async public API — set notes
+# ---------------------------------------------------------------------------
+
+
+def _row_to_set_note(row: aiosqlite.Row) -> SetNote:
+    return SetNote(
+        connectionId=row["connection_id"],
+        namespace=row["namespace"],
+        setName=row["set_name"],
+        note=row["note"],
+        createdAt=row["created_at"],
+        updatedAt=row["updated_at"],
+        updatedBy=row["updated_by"],
+    )
+
+
+async def upsert_set_note(
+    connection_id: str,
+    namespace: str,
+    set_name: str,
+    note: str,
+    updated_by: str | None,
+) -> SetNote:
+    """Insert or update a set note. Caller has already validated note is non-empty."""
+    db_conn = _get_conn()
+    now = datetime.now(UTC).isoformat()
+    # Single statement INSERT … RETURNING * (SQLite 3.35+) so the row we
+    # return is the row we just wrote — no race window between commit and a
+    # follow-up SELECT, which mattered when two concurrent upserts shared
+    # the module-level aiosqlite connection.
+    try:
+        async with db_conn.execute(
+            """INSERT INTO set_notes (connection_id, namespace, set_name, note,
+                                      created_at, updated_at, updated_by)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(connection_id, namespace, set_name) DO UPDATE SET
+                   note = excluded.note,
+                   updated_at = excluded.updated_at,
+                   updated_by = excluded.updated_by
+               RETURNING *""",
+            (connection_id, namespace, set_name, note, now, now, updated_by),
+        ) as cursor:
+            row = await cursor.fetchone()
+        await db_conn.commit()
+    except Exception:
+        await db_conn.rollback()
+        raise
+    if row is None:  # pragma: no cover — RETURNING * always emits on upsert
+        raise RuntimeError("set note vanished immediately after upsert")
+    return _row_to_set_note(row)
+
+
+async def delete_set_note(connection_id: str, namespace: str, set_name: str) -> bool:
+    db_conn = _get_conn()
+    try:
+        cursor = await db_conn.execute(
+            "DELETE FROM set_notes WHERE connection_id = ? AND namespace = ? AND set_name = ?",
+            (connection_id, namespace, set_name),
+        )
+        await db_conn.commit()
+    except Exception:
+        await db_conn.rollback()
+        raise
+    return cursor.rowcount == 1
+
+
+async def get_set_note(connection_id: str, namespace: str, set_name: str) -> SetNote | None:
+    conn = _get_conn()
+    async with conn.execute(
+        """SELECT * FROM set_notes
+               WHERE connection_id = ? AND namespace = ? AND set_name = ?""",
+        (connection_id, namespace, set_name),
+    ) as cursor:
+        row = await cursor.fetchone()
+    return _row_to_set_note(row) if row else None
+
+
+async def list_set_notes(connection_id: str, namespace: str | None = None) -> list[SetNote]:
+    conn = _get_conn()
+    if namespace is None:
+        async with conn.execute(
+            "SELECT * FROM set_notes WHERE connection_id = ? ORDER BY namespace, set_name",
+            (connection_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+    else:
+        async with conn.execute(
+            """SELECT * FROM set_notes
+                   WHERE connection_id = ? AND namespace = ?
+                   ORDER BY set_name""",
+            (connection_id, namespace),
+        ) as cursor:
+            rows = await cursor.fetchall()
+    return [_row_to_set_note(r) for r in rows]
+
+
+async def batch_get_set_notes(
+    connection_id: str,
+    namespace: str,
+    set_names: list[str],
+) -> dict[str, str]:
+    if not set_names:
+        return {}
+    conn = _get_conn()
+    placeholders = ",".join("?" * len(set_names))
+    sql = (
+        f"SELECT set_name, note FROM set_notes "
+        f"WHERE connection_id = ? AND namespace = ? AND set_name IN ({placeholders})"
+    )
+    async with conn.execute(sql, (connection_id, namespace, *set_names)) as cursor:
+        rows = await cursor.fetchall()
+    return {row["set_name"]: row["note"] for row in rows}
+
+
+# ---------------------------------------------------------------------------
+# Async public API — record notes
+# ---------------------------------------------------------------------------
+
+
+def _row_to_record_note(row: aiosqlite.Row) -> RecordNote:
+    return RecordNote(
+        connectionId=row["connection_id"],
+        namespace=row["namespace"],
+        setName=row["set_name"],
+        pkText=row["pk_text"],
+        pkType=row["pk_type"],
+        digestHex=row["digest_hex"],
+        note=row["note"],
+        createdAt=row["created_at"],
+        updatedAt=row["updated_at"],
+        updatedBy=row["updated_by"],
+    )
+
+
+async def upsert_record_note(
+    connection_id: str,
+    namespace: str,
+    set_name: str,
+    pk_text: str,
+    pk_type: StoredPkType,
+    note: str,
+    digest_hex: str | None,
+    updated_by: str | None,
+) -> RecordNote:
+    db_conn = _get_conn()
+    now = datetime.now(UTC).isoformat()
+    # See upsert_set_note — single-statement RETURNING * eliminates the
+    # commit-then-SELECT race when two coroutines share the module-level
+    # aiosqlite connection.
+    try:
+        async with db_conn.execute(
+            """INSERT INTO record_notes (connection_id, namespace, set_name, pk_text, pk_type,
+                                         digest_hex, note, created_at, updated_at, updated_by)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(connection_id, namespace, set_name, pk_text, pk_type) DO UPDATE SET
+                   digest_hex = excluded.digest_hex,
+                   note = excluded.note,
+                   updated_at = excluded.updated_at,
+                   updated_by = excluded.updated_by
+               RETURNING *""",
+            (connection_id, namespace, set_name, pk_text, pk_type, digest_hex, note, now, now, updated_by),
+        ) as cursor:
+            row = await cursor.fetchone()
+        await db_conn.commit()
+    except Exception:
+        await db_conn.rollback()
+        raise
+    if row is None:  # pragma: no cover — RETURNING * always emits on upsert
+        raise RuntimeError("record note vanished immediately after upsert")
+    return _row_to_record_note(row)
+
+
+async def delete_record_note(
+    connection_id: str,
+    namespace: str,
+    set_name: str,
+    pk_text: str,
+    pk_type: StoredPkType,
+) -> bool:
+    db_conn = _get_conn()
+    try:
+        cursor = await db_conn.execute(
+            """DELETE FROM record_notes
+                   WHERE connection_id = ? AND namespace = ? AND set_name = ?
+                     AND pk_text = ? AND pk_type = ?""",
+            (connection_id, namespace, set_name, pk_text, pk_type),
+        )
+        await db_conn.commit()
+    except Exception:
+        await db_conn.rollback()
+        raise
+    return cursor.rowcount == 1
+
+
+async def get_record_note(
+    connection_id: str,
+    namespace: str,
+    set_name: str,
+    pk_text: str,
+    pk_type: StoredPkType,
+) -> RecordNote | None:
+    conn = _get_conn()
+    async with conn.execute(
+        """SELECT * FROM record_notes
+               WHERE connection_id = ? AND namespace = ? AND set_name = ?
+                 AND pk_text = ? AND pk_type = ?""",
+        (connection_id, namespace, set_name, pk_text, pk_type),
+    ) as cursor:
+        row = await cursor.fetchone()
+    return _row_to_record_note(row) if row else None
+
+
+async def list_record_notes(
+    connection_id: str,
+    namespace: str,
+    set_name: str,
+) -> list[RecordNote]:
+    conn = _get_conn()
+    async with conn.execute(
+        """SELECT * FROM record_notes
+               WHERE connection_id = ? AND namespace = ? AND set_name = ?
+               ORDER BY pk_text""",
+        (connection_id, namespace, set_name),
+    ) as cursor:
+        rows = await cursor.fetchall()
+    return [_row_to_record_note(r) for r in rows]
+
+
+async def batch_get_record_notes(
+    connection_id: str,
+    namespace: str,
+    set_name: str,
+    pks: list[tuple[str, StoredPkType]],
+) -> dict[tuple[str, StoredPkType], str]:
+    if not pks:
+        return {}
+    conn = _get_conn()
+    # SQLite has no native row-value IN; we scope by (conn, ns, set) so the
+    # OR-chain runs over the small index slice for one set, not the whole
+    # table. 50-row data browser ⇒ trivial cost.
+    or_clauses = " OR ".join("(pk_text = ? AND pk_type = ?)" for _ in pks)
+    sql = (
+        f"SELECT pk_text, pk_type, note FROM record_notes "
+        f"WHERE connection_id = ? AND namespace = ? AND set_name = ? AND ({or_clauses})"
+    )
+    flat: list[str] = [connection_id, namespace, set_name]
+    for pk_text, pk_type in pks:
+        flat.append(pk_text)
+        flat.append(pk_type)
+    async with conn.execute(sql, tuple(flat)) as cursor:
+        rows = await cursor.fetchall()
+    return {(row["pk_text"], row["pk_type"]): row["note"] for row in rows}
