@@ -175,8 +175,12 @@ class EventCollector:
                 clusters, _ = await k8s_client.list_clusters()
                 span.set_attribute("asm.collect.clusters", len(clusters))
                 for cluster in clusters:
-                    ns = cluster.get("namespace", "")
-                    name = cluster.get("name", "")
+                    metadata = cluster.get("metadata", {}) or {}
+                    ns = metadata.get("namespace", "") or ""
+                    name = metadata.get("name", "") or ""
+                    if not ns or not name:
+                        logger.debug("Skipping cluster with missing metadata.namespace/name: %r", metadata)
+                        continue
                     try:
                         detail = await k8s_client.get_cluster(ns, name)
                         await broker.publish(

@@ -116,8 +116,15 @@ class TestClientManagerConcurrency:
             result_slow = await task_slow
             assert result_slow is slow_client
 
-    async def test_close_client_cleans_up_lock(self, mock_db_profile):
-        """close_client() should remove the per-connection lock entry.
+    async def test_close_client_evicts_cached_client(self, mock_db_profile):
+        """close_client() removes the cached client; the per-conn lock
+        entry is intentionally left in place.
+
+        Holding the lock across ``client.close()`` is what makes the
+        eviction race-safe (Phase 1B / B4). Popping the lock would let
+        a concurrent ``get_client()`` install a fresh lock + new client
+        while we're still closing the old one. ``close_all`` /
+        ``close_session`` clear ``_conn_locks`` wholesale.
 
         REST callers have ``session_id=None`` so the cache key is
         ``(None, conn_id)`` -- see #303 for the per-session keying
@@ -135,8 +142,9 @@ class TestClientManagerConcurrency:
             assert (None, "conn-1") in mgr._conn_locks
 
             await mgr.close_client("conn-1")
-            assert (None, "conn-1") not in mgr._conn_locks
             assert (None, "conn-1") not in mgr._clients
+            # Lock entry is intentionally retained (Phase 1B / B4).
+            assert (None, "conn-1") in mgr._conn_locks
 
 
 class TestClientManagerSessionKeying:

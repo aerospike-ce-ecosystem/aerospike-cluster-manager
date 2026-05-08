@@ -323,15 +323,24 @@ async def truncate_set(
     """Truncate every record in ``namespace.set_name`` (optionally up to a LUT).
 
     ``before_lut`` is the cutoff in nanoseconds since CITRUS epoch (the
-    aerospike-py ``truncate`` API's ``nanos`` parameter). When omitted, the
-    truncate covers all records currently in the set. Pass an explicit
-    nanosecond value to truncate only records whose last-update-time is
-    below that threshold.
+    aerospike-py ``truncate`` API's ``nanos`` parameter). ``None`` means
+    "truncate everything currently in the set". A positive value targets
+    only records whose last-update-time is below that threshold.
+
+    Explicit ``before_lut=0`` is rejected: the underlying info command
+    treats ``lut=0`` as "no cutoff" (i.e. truncate-all), which would
+    silently turn a buggy caller passing literal zero into a full
+    truncation. Forcing ``ValueError`` makes the contract explicit —
+    callers that genuinely want a full truncate must pass ``None``.
 
     Internally this becomes the ``truncate-namespace:namespace=...;set=...
     [;lut=...]`` info command — aerospike-py's :meth:`AsyncClient.truncate`
     issues it for us so we don't have to format the wire string by hand.
     """
+    if before_lut is not None and before_lut <= 0:
+        raise ValueError(
+            "before_lut must be a positive nanosecond value; pass before_lut=None to truncate every record in the set"
+        )
     nanos = before_lut if before_lut is not None else 0
     await client.truncate(namespace, set_name, nanos)
 

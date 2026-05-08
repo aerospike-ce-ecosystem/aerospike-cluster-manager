@@ -190,10 +190,23 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[reportArgumentType]
 app.add_middleware(SlowAPIMiddleware)
 
+# CORS wildcard + credentials is unsafe -- the browser will silently drop
+# the response when both are set. Treat the dangerous combo as a
+# configuration error: log a warning and force credentials off so the
+# server starts in a recognizably-broken-but-safe state instead of
+# silently leaking a "*" origin with cookies/Authorization echoed back.
+_cors_allow_credentials = True
+if "*" in config.CORS_ORIGINS:
+    logger.warning(
+        "CORS_ORIGINS contains '*' which is incompatible with allow_credentials=True; "
+        "forcing allow_credentials=False. Set CORS_ORIGINS to an explicit list of origins to re-enable credentials."
+    )
+    _cors_allow_credentials = False
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.CORS_ORIGINS,
-    allow_credentials=True,
+    allow_credentials=_cors_allow_credentials,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
 )
@@ -309,18 +322,35 @@ if (
         "isolated to localhost / a trusted network."
     )
 
+# Starlette ``add_middleware`` semantics: each call ``insert(0, ...)`` into
+# ``user_middleware``, then ``build_middleware_stack`` wraps them in
+# ``reversed()`` order. Net effect: the LAST ``add_middleware`` call becomes
+# the OUTERMOST layer at request time. We exploit that to land:
+#
+#   request -> MCPBearerToken -> OIDC -> MCPUserContext -> ... -> route
+#
+# i.e. MCPBearerToken runs first to handle opaque bearer tokens (it
+# stashes a sentinel ``request.state.user_claims`` on success, otherwise
+# falls through), OIDC runs next to JWT-verify and populate
+# ``request.state.user_claims`` for real, and MCPUserContextMiddleware
+# runs *after* both so it can copy the now-populated claims onto the
+# contextvar for the MCP tool registry. The order of the ``add_middleware``
+# calls below is therefore deliberately reversed from the runtime order.
 if config.ACM_MCP_ENABLED:
     # E.2 (#307): bridge ``request.state.user_claims`` into a contextvar
     # so the MCP registry's workspace gate can read the caller identity
-    # without re-threading the FastAPI ``Request``. Installed BEFORE
-    # OIDC + MCPBearerToken in the add_middleware order so it runs
-    # INNER to both at request time -- by then ``user_claims`` is
-    # populated (or correctly absent for anonymous deployments).
+    # without re-threading the FastAPI ``Request``. Added FIRST here so
+    # it ends up INNERMOST among the auth-related middlewares — it reads
+    # the claims OIDC + MCPBearer have already populated.
     from aerospike_cluster_manager_api.mcp.user_context import MCPUserContextMiddleware
 
     app.add_middleware(MCPUserContextMiddleware)
 
 if config.OIDC_ENABLED:
+    # OIDC sits in the middle of the stack: outer to MCPUserContext (so
+    # claims are populated before the bridge reads them) but inner to
+    # MCPBearerToken (so an opaque bearer token can short-circuit OIDC's
+    # JWT verifier).
     app.add_middleware(
         OIDCAuthMiddleware,
         enabled=True,
@@ -332,6 +362,9 @@ if config.OIDC_ENABLED:
     )
 
 if config.ACM_MCP_ENABLED:
+    # Added LAST among the MCP/OIDC trio so it ends up OUTERMOST and
+    # gets first crack at the request -- bearer-only callers never reach
+    # OIDC's JWT verifier.
     from aerospike_cluster_manager_api.mcp.auth import MCPBearerTokenMiddleware
 
     app.add_middleware(MCPBearerTokenMiddleware)
@@ -375,6 +408,7 @@ try:
         AdminError,
         AerospikeError,
         AerospikeTimeoutError,
+        BackpressureError,
         ClusterError,
         IndexFoundError,
         IndexNotFound,
@@ -430,6 +464,18 @@ try:
     @app.exception_handler(AerospikeTimeoutError)
     async def _timeout_error(_req: Request, exc: AerospikeTimeoutError) -> JSONResponse:
         return JSONResponse(status_code=504, content={"detail": "Operation timed out"})
+
+    @app.exception_handler(BackpressureError)
+    async def _backpressure_error(_req: Request, exc: BackpressureError) -> JSONResponse:
+        # aerospike-py backpressure: native client refused the call because
+        # its in-flight queue is full. 503 + Retry-After (seconds) matches
+        # the aerospike-py-fastapi skill contract so clients can retry with
+        # exponential backoff instead of treating it as a hard failure.
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Aerospike client is overloaded; retry after backoff"},
+            headers={"Retry-After": "1"},
+        )
 
     @app.exception_handler(ClusterError)
     async def _cluster_error(_req: Request, exc: ClusterError) -> JSONResponse:
