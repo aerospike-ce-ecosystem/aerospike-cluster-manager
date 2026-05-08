@@ -180,9 +180,17 @@ function draftToBin(draft: string, kind: BinKind): BinValue {
 
 const TTL_NEVER_SENTINEL = 4_294_967_295
 
+// TTL semantics:
+//   -1                    → "never expire" (record stays forever)
+//    0                    → "keep current ttl" (only meaningful at write time;
+//                            on read this means "no expiry was set", i.e. keep
+//                            namespace default — render as "keep")
+//    TTL_NEVER_SENTINEL   → server's wire representation of "never" on the read path
+//    > 0                  → seconds remaining until expiry
 function formatTtl(ttl: number | undefined): string {
   if (ttl === undefined) return "—"
-  if (ttl === -1 || ttl === 0 || ttl === TTL_NEVER_SENTINEL) return "never"
+  if (ttl === -1 || ttl === TTL_NEVER_SENTINEL) return "never"
+  if (ttl === 0) return "keep"
   if (ttl >= 86400)
     return `${Math.floor(ttl / 86400)}d ${Math.floor((ttl % 86400) / 3600)}h`
   if (ttl >= 3600)
@@ -320,12 +328,19 @@ export default function RecordDetailPage({ params }: PageProps) {
     if (!record) return
     setDrafts(buildInitialDraft(record))
     const ttl = record.meta.ttl
-    // When the record is set to "never expire", start with 0 (= keep TTL) so we don't force a new TTL on save.
-    setTtlDraft(
-      ttl === undefined || ttl === -1 || ttl === TTL_NEVER_SENTINEL
-        ? "-1"
-        : String(ttl),
-    )
+    // Editor seeding:
+    //   -1 / sentinel → "-1" (record is set to never expire — preserve)
+    //   0             → "" (means "keep current TTL on save"; show empty so the
+    //                       placeholder explains the rules and the user can opt in)
+    //   undefined     → "" (no TTL info — same default behaviour as 0)
+    //   > 0           → echo the remaining seconds
+    if (ttl === -1 || ttl === TTL_NEVER_SENTINEL) {
+      setTtlDraft("-1")
+    } else if (ttl === undefined || ttl === 0) {
+      setTtlDraft("")
+    } else {
+      setTtlDraft(String(ttl))
+    }
     setBinErrors({})
     setIsEditing(true)
   }

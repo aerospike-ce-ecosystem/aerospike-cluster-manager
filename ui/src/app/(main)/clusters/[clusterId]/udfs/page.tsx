@@ -3,6 +3,7 @@
 import { Badge } from "@/components/Badge"
 import { Button } from "@/components/Button"
 import { Card } from "@/components/Card"
+import { RegisterUdfDialog } from "@/components/dialogs/RegisterUdfDialog"
 import { ErrorBanner } from "@/components/ErrorBanner"
 import { Input } from "@/components/Input"
 import {
@@ -27,6 +28,7 @@ export default function UdfsPage({ params }: PageProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState("")
+  const [registerOpen, setRegisterOpen] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -82,9 +84,20 @@ export default function UdfsPage({ params }: PageProps) {
           >
             Refresh
           </Button>
-          <Button variant="primary">Register UDF</Button>
+          <Button variant="primary" onClick={() => setRegisterOpen(true)}>
+            Register UDF
+          </Button>
         </div>
       </header>
+
+      <RegisterUdfDialog
+        open={registerOpen}
+        onOpenChange={setRegisterOpen}
+        connId={params.clusterId}
+        onSuccess={() => {
+          void load()
+        }}
+      />
 
       {error && (
         <ErrorBanner
