@@ -2,7 +2,11 @@
 
 import { Tooltip } from "@/components/Tooltip"
 import { cx } from "@/lib/utils"
-import { RiCheckLine, RiFileCopyLine } from "@remixicon/react"
+import {
+  RiCheckLine,
+  RiErrorWarningLine,
+  RiFileCopyLine,
+} from "@remixicon/react"
 import React from "react"
 
 interface AddressCopyCellProps {
@@ -13,13 +17,48 @@ interface AddressCopyCellProps {
   className?: string
 }
 
+type CopyStatus = "idle" | "copied" | "error"
+
+/**
+ * Best-effort copy that tries the modern Clipboard API first and falls back
+ * to the legacy ``document.execCommand('copy')`` flow when permissions are
+ * denied or the API isn't available (insecure contexts, embedded browsers,
+ * automation harnesses with restrictive permissions).
+ */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    // fall through to the textarea fallback
+  }
+  try {
+    const ta = document.createElement("textarea")
+    ta.value = text
+    ta.setAttribute("readonly", "")
+    // Position offscreen so the user never sees a flicker.
+    ta.style.position = "fixed"
+    ta.style.top = "-1000px"
+    ta.style.opacity = "0"
+    document.body.appendChild(ta)
+    ta.select()
+    const ok = document.execCommand("copy")
+    document.body.removeChild(ta)
+    return ok
+  } catch {
+    return false
+  }
+}
+
 export function AddressCopyCell({
   hosts,
   port,
   fallback = "—",
   className,
 }: AddressCopyCellProps) {
-  const [copied, setCopied] = React.useState(false)
+  const [status, setStatus] = React.useState<CopyStatus>("idle")
 
   if (hosts.length === 0) {
     return (
@@ -39,15 +78,19 @@ export function AddressCopyCell({
   const handleCopy = async (event: React.MouseEvent<HTMLButtonElement>) => {
     event.preventDefault()
     event.stopPropagation()
-    try {
-      await navigator.clipboard.writeText(seedList)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1500)
-    } catch {
-      // Browsers without clipboard permission fall back silently;
-      // the user can still read the address from the tooltip.
-    }
+    const ok = await copyText(seedList)
+    setStatus(ok ? "copied" : "error")
+    // Hold the feedback long enough for a glance — the previous 1.5s window
+    // was too short for the change to register reliably (#319 follow-up).
+    window.setTimeout(() => setStatus("idle"), 2500)
   }
+
+  const tooltipContent =
+    status === "copied"
+      ? "Copied!"
+      : status === "error"
+        ? "Copy failed — clipboard permission denied. Select the address text manually."
+        : `Copy seed list (${formatted.length} host${formatted.length === 1 ? "" : "s"})`
 
   return (
     <span className={cx("flex items-center gap-1.5", className)}>
@@ -70,26 +113,22 @@ export function AddressCopyCell({
           +{extra}
         </span>
       )}
-      <Tooltip
-        content={
-          copied
-            ? "Copied!"
-            : `Copy seed list (${formatted.length} host${formatted.length === 1 ? "" : "s"})`
-        }
-        side="top"
-        triggerAsChild
-      >
+      <Tooltip content={tooltipContent} side="top" triggerAsChild>
         <button
           type="button"
           onClick={handleCopy}
           aria-label="Copy seed list"
+          aria-live="polite"
           className={cx(
             "inline-flex size-6 items-center justify-center rounded text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-50",
-            copied && "text-emerald-600 dark:text-emerald-400",
+            status === "copied" && "text-emerald-600 dark:text-emerald-400",
+            status === "error" && "text-red-600 dark:text-red-400",
           )}
         >
-          {copied ? (
+          {status === "copied" ? (
             <RiCheckLine className="size-4" aria-hidden="true" />
+          ) : status === "error" ? (
+            <RiErrorWarningLine className="size-4" aria-hidden="true" />
           ) : (
             <RiFileCopyLine className="size-4" aria-hidden="true" />
           )}
