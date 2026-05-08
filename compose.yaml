@@ -130,6 +130,36 @@ services:
       - AEROSPIKE_HOST=${AEROSPIKE_HOST:-aerospike-node-1}
       - AEROSPIKE_PORT=${AEROSPIKE_PORT:-3000}
       - SQLITE_PATH=/app/data/connections.db
+      # ── OIDC (off by default) ─────────────────────────────────────
+      - OIDC_ENABLED=${OIDC_ENABLED:-false}
+      - OIDC_ISSUER_URL=${OIDC_ISSUER_URL:-}
+      - OIDC_AUDIENCE=${OIDC_AUDIENCE:-acko-api}
+      - OIDC_REQUIRED_ROLES=${OIDC_REQUIRED_ROLES:-}
+      - OIDC_JWKS_CACHE_TTL=${OIDC_JWKS_CACHE_TTL:-10m}
+      - OIDC_EXCLUDE_PATHS=${OIDC_EXCLUDE_PATHS:-/api/health,/api/openapi.json,/api/docs}
+      - ACM_OIDC_OWNER_CLAIM=${ACM_OIDC_OWNER_CLAIM:-sub}
+      # ── MCP (off by default) ──────────────────────────────────────
+      - ACM_MCP_ENABLED=${ACM_MCP_ENABLED:-false}
+      - ACM_MCP_PATH=${ACM_MCP_PATH:-/mcp}
+      - ACM_MCP_TOKEN=${ACM_MCP_TOKEN:-}
+      - ACM_MCP_ACCESS_PROFILE=${ACM_MCP_ACCESS_PROFILE:-read_only}
+      - ACM_MCP_ALLOW_ANONYMOUS=${ACM_MCP_ALLOW_ANONYMOUS:-false}
+      # ── Kubernetes management (off by default) ────────────────────
+      - K8S_MANAGEMENT_ENABLED=${K8S_MANAGEMENT_ENABLED:-false}
+      - K8S_VERIFY_SSL=${K8S_VERIFY_SSL:-true}
+      - K8S_API_TIMEOUT=${K8S_API_TIMEOUT:-10}
+      - K8S_LOG_TIMEOUT=${K8S_LOG_TIMEOUT:-30}
+      - K8S_CA_FILE=${K8S_CA_FILE:-}
+      # ── Security headers / SSE ────────────────────────────────────
+      - ENABLE_HSTS=${ENABLE_HSTS:-false}
+      - CSP_ENABLED=${CSP_ENABLED:-true}
+      - CSP_REPORT_URI=${CSP_REPORT_URI:-}
+      - SSE_ENABLED=${SSE_ENABLED:-true}
+      - SSE_HEARTBEAT_INTERVAL=${SSE_HEARTBEAT_INTERVAL:-15}
+      - SSE_MAX_CONNECTIONS=${SSE_MAX_CONNECTIONS:-50}
+      # ── Logging ───────────────────────────────────────────────────
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_FORMAT=${LOG_FORMAT:-text}
     volumes:
       - app-data:/app/data
     healthcheck:
