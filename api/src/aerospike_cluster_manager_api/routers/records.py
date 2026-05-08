@@ -83,10 +83,14 @@ async def _attach_record_notes(
         return
     try:
         notes = await db.batch_get_record_notes(conn_id, namespace, set_name, pairs)
-    except RuntimeError as exc:
-        if "Database not initialized" in str(exc):
-            return
-        raise
+    except db.DBNotInitialized:
+        logger.warning(
+            "Skipping record-note injection for conn_id=%s ns=%s set=%s: metaDB not initialized",
+            conn_id,
+            namespace,
+            set_name,
+        )
+        return
     if not notes:
         return
     for model, pair in zip(models, pair_for_index, strict=True):
@@ -94,20 +98,31 @@ async def _attach_record_notes(
             model.note = notes[pair]
 
 
-async def _safe_get_record_note(
+async def _get_record_note_text(
     conn_id: str,
     namespace: str,
     set_name: str,
     pk_text: str,
     pk_type: StoredPkType,
 ) -> str | None:
-    """Single-record note lookup with the same metaDB-not-initialised guard."""
+    """Single-record note text fetch with the metaDB-not-initialised guard.
+
+    Returns ``None`` either when no note exists or when the metaDB layer
+    has not been initialised (unit-test paths). Other exceptions
+    propagate — only the dedicated ``DBNotInitialized`` sentinel is
+    swallowed.
+    """
     try:
         rec = await db.get_record_note(conn_id, namespace, set_name, pk_text, pk_type)
-    except RuntimeError as exc:
-        if "Database not initialized" in str(exc):
-            return None
-        raise
+    except db.DBNotInitialized:
+        logger.warning(
+            "Skipping record-note lookup for conn_id=%s ns=%s set=%s pk=%s: metaDB not initialized",
+            conn_id,
+            namespace,
+            set_name,
+            pk_text,
+        )
+        return None
     return rec.note if rec else None
 
 
@@ -177,7 +192,7 @@ async def get_record_detail(
     # stored.
     pair = _extract_pk_pair(raw_result)
     if pair is not None:
-        model.note = await _safe_get_record_note(conn_id, ns, set, pair[0], pair[1])
+        model.note = await _get_record_note_text(conn_id, ns, set, pair[0], pair[1])
     return model
 
 

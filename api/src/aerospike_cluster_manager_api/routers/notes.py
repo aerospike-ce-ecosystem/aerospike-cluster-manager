@@ -7,9 +7,10 @@ also happens to be the recovery path for "I made a note but the random-50
 scan didn't surface it" (``GET /notes/records/{conn_id}?ns=&set=`` returns
 every annotated record key for the slice).
 
-Workspace ACL is transitively enforced through ``_get_verified_connection``,
-which 404s on a connection the caller can't see; we then thread the caller's
-OIDC ``sub`` into ``updated_by`` for audit.
+Workspace ACL: every endpoint depends on :func:`_assert_caller_owns_connection`
+which 404s when the caller's OIDC ``sub`` does not own the workspace the
+connection belongs to. Identity 404 (instead of 403) prevents id enumeration,
+matching the rule used by ``connections_service._assert_workspace_visible``.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from __future__ import annotations
 import logging
 from typing import Literal
 
-from fastapi import APIRouter, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel
 from starlette.responses import Response
 
@@ -31,11 +32,39 @@ from aerospike_cluster_manager_api.models.note import (
     UpsertRecordNoteRequest,
     UpsertSetNoteRequest,
 )
+from aerospike_cluster_manager_api.models.workspace import SYSTEM_OWNER_ID
 from aerospike_cluster_manager_api.pk import resolve_pk
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/notes", tags=["notes"])
+
+
+async def _assert_caller_owns_connection(
+    conn_id: VerifiedConnId,
+    caller_owner_id: CallerOwnerId,
+) -> str:
+    """ACL gate for note endpoints.
+
+    Returns the connection id when the caller can see the connection's
+    workspace. Raises 404 otherwise so the connection's existence is not
+    leaked across tenants. ``SYSTEM_OWNER_ID`` (``"system"``) is the
+    sentinel for the built-in default workspace and any pre-migration
+    rows — visible to every authenticated caller, matching the rule in
+    :func:`connections_service._assert_workspace_visible`.
+    """
+    profile = await db.get_connection(conn_id)
+    if profile is None:  # pragma: no cover — VerifiedConnId already checked
+        raise HTTPException(status_code=404, detail=f"Connection '{conn_id}' not found")
+    workspace = await db.get_workspace(profile.workspaceId)
+    if workspace is None:
+        # Workspace was deleted between the VerifiedConnId lookup and now —
+        # surface as a connection 404 so the wire shape matches the no-ACL
+        # case and ID enumeration is impossible.
+        raise HTTPException(status_code=404, detail=f"Connection '{conn_id}' not found")
+    if workspace.ownerId != caller_owner_id and workspace.ownerId != SYSTEM_OWNER_ID:
+        raise HTTPException(status_code=404, detail=f"Connection '{conn_id}' not found")
+    return conn_id
 
 
 def _resolve_pk_type(pk: str, pk_type: PkType) -> StoredPkType:
@@ -67,25 +96,23 @@ class SetNotesListResponse(BaseModel):
 @router.put(
     "/sets/{conn_id}/{namespace}/{set_name}",
     summary="Upsert set note",
-    description="Create or update an operator note attached to a set. Empty body deletes the note.",
+    description="Create or update an operator note attached to a set.",
 )
 async def upsert_set_note(
     body: UpsertSetNoteRequest,
-    conn_id: VerifiedConnId,
     caller_owner_id: CallerOwnerId,
+    conn_id: str = Depends(_assert_caller_owns_connection),
     namespace: str = Path(..., min_length=1, max_length=31),
     set_name: str = Path(..., min_length=1, max_length=63),
-) -> Response:
-    """Upsert a set note. Empty ``note`` is a delete (idempotent — 204 either way)."""
-    if not body.note:
-        await db.delete_set_note(conn_id, namespace, set_name)
-        return Response(status_code=204)
-    saved = await db.upsert_set_note(conn_id, namespace, set_name, body.note, caller_owner_id)
-    return Response(
-        content=saved.model_dump_json(),
-        media_type="application/json",
-        status_code=200,
-    )
+) -> SetNote:
+    """Upsert a set note.
+
+    Empty / whitespace-only ``note`` is rejected at the request-validation
+    layer (``min_length=1``) — the previous "PUT empty ⇒ delete" shortcut
+    was a footgun that turned trim-to-empty UX into silent data loss. Use
+    ``DELETE /api/notes/sets/...`` to remove a note explicitly.
+    """
+    return await db.upsert_set_note(conn_id, namespace, set_name, body.note, caller_owner_id)
 
 
 @router.delete(
@@ -95,7 +122,7 @@ async def upsert_set_note(
     description="Remove the operator note attached to a set. No-op when no note exists.",
 )
 async def delete_set_note(
-    conn_id: VerifiedConnId,
+    conn_id: str = Depends(_assert_caller_owns_connection),
     namespace: str = Path(..., min_length=1, max_length=31),
     set_name: str = Path(..., min_length=1, max_length=63),
 ) -> Response:
@@ -109,7 +136,7 @@ async def delete_set_note(
     description="List set-level operator notes for a connection, optionally filtered by namespace.",
 )
 async def list_set_notes(
-    conn_id: VerifiedConnId,
+    conn_id: str = Depends(_assert_caller_owns_connection),
     namespace: str | None = Query(default=None, min_length=1, max_length=31),
 ) -> SetNotesListResponse:
     notes = await db.list_set_notes(conn_id, namespace)
@@ -128,31 +155,28 @@ class RecordNotesListResponse(BaseModel):
 @router.put(
     "/records/{conn_id}/{namespace}/{set_name}/{pk}",
     summary="Upsert record note",
-    description="Create or update an operator note on a single record. Empty body deletes.",
+    description="Create or update an operator note on a single record.",
 )
 async def upsert_record_note(
     body: UpsertRecordNoteRequest,
-    conn_id: VerifiedConnId,
     caller_owner_id: CallerOwnerId,
+    conn_id: str = Depends(_assert_caller_owns_connection),
     namespace: str = Path(..., min_length=1, max_length=31),
     set_name: str = Path(..., min_length=1, max_length=63),
     pk: str = Path(..., min_length=1, max_length=1024),
-) -> Response:
-    """Upsert a record note. ``pk_type=auto`` (default) resolves via the same
-    heuristic as the read path; pass an explicit value for digit-only string
-    keys to avoid the INTEGER mis-classification.
+) -> RecordNote:
+    """Upsert a record note.
+
+    ``pk_type=auto`` (default) resolves via the same heuristic as the read
+    path; pass an explicit value for digit-only string keys to avoid the
+    INTEGER mis-classification.
+
+    Empty / whitespace-only ``note`` is rejected (``min_length=1``); use the
+    DELETE endpoint to remove a note.
     """
     stored_pk_type = _resolve_pk_type(pk, body.pkType)
-    if not body.note:
-        await db.delete_record_note(conn_id, namespace, set_name, pk, stored_pk_type)
-        return Response(status_code=204)
-    saved = await db.upsert_record_note(
+    return await db.upsert_record_note(
         conn_id, namespace, set_name, pk, stored_pk_type, body.note, None, caller_owner_id
-    )
-    return Response(
-        content=saved.model_dump_json(),
-        media_type="application/json",
-        status_code=200,
     )
 
 
@@ -163,7 +187,7 @@ async def upsert_record_note(
     description="Remove the operator note on a single record. No-op when none exists.",
 )
 async def delete_record_note(
-    conn_id: VerifiedConnId,
+    conn_id: str = Depends(_assert_caller_owns_connection),
     namespace: str = Path(..., min_length=1, max_length=31),
     set_name: str = Path(..., min_length=1, max_length=63),
     pk: str = Path(..., min_length=1, max_length=1024),
@@ -183,7 +207,7 @@ async def delete_record_note(
     ),
 )
 async def list_record_notes(
-    conn_id: VerifiedConnId,
+    conn_id: str = Depends(_assert_caller_owns_connection),
     ns: str = Query(..., min_length=1, max_length=31),
     set: str = Query(..., min_length=1, max_length=63),
 ) -> RecordNotesListResponse:

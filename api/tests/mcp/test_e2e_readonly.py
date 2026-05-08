@@ -84,6 +84,39 @@ async def test_execute_info_blocked_under_read_only(read_only_profile: None) -> 
     assert exc_info.value.code == "access_denied"
 
 
+@pytest.mark.parametrize(
+    "tool_name,kwargs",
+    [
+        ("update_set_note", {"conn_id": "x", "namespace": "test", "set_name": "s", "note": "hi"}),
+        ("delete_set_note", {"conn_id": "x", "namespace": "test", "set_name": "s"}),
+        (
+            "update_record_note",
+            {"conn_id": "x", "namespace": "test", "set_name": "s", "pk": "1", "note": "hi"},
+        ),
+        (
+            "delete_record_note",
+            {"conn_id": "x", "namespace": "test", "set_name": "s", "pk": "1"},
+        ),
+    ],
+)
+async def test_note_mutation_tools_blocked_under_read_only(
+    read_only_profile: None, tool_name: str, kwargs: dict
+) -> None:
+    """The 4 note mutation tools must refuse calls under ``READ_ONLY``
+    with ``code="access_denied"`` BEFORE the body runs. The registry's
+    import-time consistency check at ``mcp/registry.py`` already enforces
+    that ``@tool(mutation=True)`` names appear in ``WRITE_TOOLS``; this
+    test pins the runtime gate as well so a regression that swallowed the
+    gate exception would surface."""
+    from aerospike_cluster_manager_api.mcp.tools import notes as notes_tools
+
+    fn = getattr(notes_tools, tool_name)
+    with pytest.raises(MCPToolError) as exc_info:
+        await fn(**kwargs)
+    assert exc_info.value.code == "access_denied"
+    assert tool_name in str(exc_info.value)
+
+
 async def test_execute_info_on_node_blocked_under_read_only(read_only_profile: None) -> None:
     """``execute_info_on_node`` (companion of ``execute_info``) is also a
     write tool because asinfo can mutate cluster configuration."""

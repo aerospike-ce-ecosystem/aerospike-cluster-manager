@@ -109,7 +109,11 @@ CREATE_RECORD_NOTES_INDEX_SQL = (
 
 def _get_conn() -> aiosqlite.Connection:
     if _conn is None:
-        raise RuntimeError("Database not initialized. Call init_db() first.")
+        # Imported inside the function to avoid a circular import at module
+        # load time (``db/__init__.py`` imports from ``db/_sqlite.py``).
+        from aerospike_cluster_manager_api.db import DBNotInitialized
+
+        raise DBNotInitialized("Database not initialized. Call init_db() first.")
     return _conn
 
 
@@ -504,25 +508,30 @@ async def upsert_set_note(
     """Insert or update a set note. Caller has already validated note is non-empty."""
     db_conn = _get_conn()
     now = datetime.now(UTC).isoformat()
+    # Single statement INSERT … RETURNING * (SQLite 3.35+) so the row we
+    # return is the row we just wrote — no race window between commit and a
+    # follow-up SELECT, which mattered when two concurrent upserts shared
+    # the module-level aiosqlite connection.
     try:
-        await db_conn.execute(
+        async with db_conn.execute(
             """INSERT INTO set_notes (connection_id, namespace, set_name, note,
                                       created_at, updated_at, updated_by)
                VALUES (?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(connection_id, namespace, set_name) DO UPDATE SET
                    note = excluded.note,
                    updated_at = excluded.updated_at,
-                   updated_by = excluded.updated_by""",
+                   updated_by = excluded.updated_by
+               RETURNING *""",
             (connection_id, namespace, set_name, note, now, now, updated_by),
-        )
+        ) as cursor:
+            row = await cursor.fetchone()
         await db_conn.commit()
     except Exception:
         await db_conn.rollback()
         raise
-    result = await get_set_note(connection_id, namespace, set_name)
-    if result is None:  # pragma: no cover — upsert just succeeded
+    if row is None:  # pragma: no cover — RETURNING * always emits on upsert
         raise RuntimeError("set note vanished immediately after upsert")
-    return result
+    return _row_to_set_note(row)
 
 
 async def delete_set_note(connection_id: str, namespace: str, set_name: str) -> bool:
@@ -619,8 +628,11 @@ async def upsert_record_note(
 ) -> RecordNote:
     db_conn = _get_conn()
     now = datetime.now(UTC).isoformat()
+    # See upsert_set_note — single-statement RETURNING * eliminates the
+    # commit-then-SELECT race when two coroutines share the module-level
+    # aiosqlite connection.
     try:
-        await db_conn.execute(
+        async with db_conn.execute(
             """INSERT INTO record_notes (connection_id, namespace, set_name, pk_text, pk_type,
                                          digest_hex, note, created_at, updated_at, updated_by)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -628,17 +640,18 @@ async def upsert_record_note(
                    digest_hex = excluded.digest_hex,
                    note = excluded.note,
                    updated_at = excluded.updated_at,
-                   updated_by = excluded.updated_by""",
+                   updated_by = excluded.updated_by
+               RETURNING *""",
             (connection_id, namespace, set_name, pk_text, pk_type, digest_hex, note, now, now, updated_by),
-        )
+        ) as cursor:
+            row = await cursor.fetchone()
         await db_conn.commit()
     except Exception:
         await db_conn.rollback()
         raise
-    result = await get_record_note(connection_id, namespace, set_name, pk_text, pk_type)
-    if result is None:  # pragma: no cover
+    if row is None:  # pragma: no cover — RETURNING * always emits on upsert
         raise RuntimeError("record note vanished immediately after upsert")
-    return result
+    return _row_to_record_note(row)
 
 
 async def delete_record_note(

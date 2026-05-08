@@ -374,7 +374,9 @@ async def _attach_set_notes(conn_id: str, namespaces: list[NamespaceInfo]) -> No
     Issues one batched lookup per namespace (typically ≤2 in CE clusters), so
     the total round-trip count is bounded by the namespace count, not the
     set count. No-op when a namespace has no sets, or when the metaDB has
-    not been initialised (unit-test paths that bypass ``db.init_db()``).
+    not been initialised (unit-test paths that bypass ``db.init_db()`` —
+    in production ``main.py`` always initialises the DB before the first
+    request lands, so this branch should not fire).
     """
     try:
         for ns in namespaces:
@@ -387,14 +389,12 @@ async def _attach_set_notes(conn_id: str, namespaces: list[NamespaceInfo]) -> No
                 note = notes.get(s.name)
                 if note is not None:
                     s.note = note
-    except RuntimeError as exc:
-        # Production startup always calls db.init_db() before serving traffic;
-        # the only realistic source of this RuntimeError is a unit test that
-        # exercises the cluster service without spinning up the metaDB. Log
-        # at debug to keep the prod log clean while still leaving a trail.
-        if "Database not initialized" not in str(exc):
-            raise
-        logger.debug("Skipping set-note injection: metaDB not initialized")
+    except db.DBNotInitialized:
+        # Sentinel for the unit-test path. Logged at warning so a stray
+        # production occurrence (e.g. a request landing before the
+        # lifespan startup hook fires) leaves a real trail rather than
+        # silently degrading note injection.
+        logger.warning("Skipping set-note injection for conn_id=%s: metaDB not initialized", conn_id)
 
 
 async def configure_namespace(client: aerospike_py.AsyncClient, body: CreateNamespaceRequest) -> str:

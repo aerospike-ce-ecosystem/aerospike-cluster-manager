@@ -31,7 +31,7 @@ import {
 import { mapApiError } from "@/lib/api/error-mapping"
 import { listIndexes } from "@/lib/api/indexes"
 import { logFetchError } from "@/lib/api/log"
-import { listSetNotes, upsertSetNote } from "@/lib/api/notes"
+import { deleteSetNote, listSetNotes, upsertSetNote } from "@/lib/api/notes"
 import { filterRecords } from "@/lib/api/records"
 import { NoteSection } from "@/components/notes/NoteSection"
 import { TableSkeleton } from "@/components/skeletons/TableSkeleton"
@@ -177,14 +177,21 @@ export default function RecordBrowserPage({ params }: PageProps) {
     // Single-set lookup endpoint isn't exposed (the API surface is list /
     // upsert / delete), so this scans the namespace's notes — small in
     // practice and re-uses the route the recovery UI already calls.
+    const notes = await listSetNotes(params.clusterId, params.namespace)
+    const match = notes.find((n) => n.setName === params.set)
+    setSetNote(match?.note ?? null)
+  }, [params.clusterId, params.namespace, params.set])
+
+  // Initial mount swallows reload failures (a 503 from the metaDB
+  // shouldn't block the record browser from rendering), but the post-save
+  // path lets the rejection bubble so NoteSection can surface it.
+  const reloadSetNoteSilent = useCallback(async () => {
     try {
-      const notes = await listSetNotes(params.clusterId, params.namespace)
-      const match = notes.find((n) => n.setName === params.set)
-      setSetNote(match?.note ?? null)
+      await reloadSetNote()
     } catch (err) {
       logFetchError("set-note", err)
     }
-  }, [params.clusterId, params.namespace, params.set])
+  }, [reloadSetNote])
 
   const runFetch = useCallback(
     async (target: FilterDraft, size: number) => {
@@ -228,11 +235,11 @@ export default function RecordBrowserPage({ params }: PageProps) {
     setMeta(EMPTY_META)
     setSetNote(null)
     void runFetch(blank, pageSize)
-    void reloadSetNote()
+    void reloadSetNoteSilent()
     // Intentionally omit pageSize from deps — we only want to reset on set
     // change, not on every limit change (that's handled by handlePageSize).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runFetch, reloadSetNote])
+  }, [runFetch, reloadSetNoteSilent])
 
   // Load secondary indexes once per connection.
   useEffect(() => {
@@ -368,6 +375,10 @@ export default function RecordBrowserPage({ params }: PageProps) {
           await upsertSetNote(params.clusterId, params.namespace, params.set, {
             note: next,
           })
+          await reloadSetNote()
+        }}
+        onDelete={async () => {
+          await deleteSetNote(params.clusterId, params.namespace, params.set)
           await reloadSetNote()
         }}
       />

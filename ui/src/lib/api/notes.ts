@@ -51,7 +51,9 @@ export function deleteSetNote(
   namespace: string,
   setName: string,
 ): Promise<void> {
-  return apiDelete(`/notes/sets/${enc(connId)}/${enc(namespace)}/${enc(setName)}`)
+  return apiDelete(
+    `/notes/sets/${enc(connId)}/${enc(namespace)}/${enc(setName)}`,
+  )
 }
 
 /**
@@ -62,7 +64,9 @@ export async function listSetNotes(
   namespace?: string,
 ): Promise<SetNote[]> {
   const qs = namespace ? `?namespace=${enc(namespace)}` : ""
-  const resp = await apiGet<SetNotesListResponse>(`/notes/sets/${enc(connId)}${qs}`)
+  const resp = await apiGet<SetNotesListResponse>(
+    `/notes/sets/${enc(connId)}${qs}`,
+  )
   return resp.notes
 }
 

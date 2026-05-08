@@ -18,8 +18,10 @@ interface NoteSectionProps {
   title: string
   /** Current persisted note. ``null`` / empty string ⇒ no note attached. */
   note: string | null | undefined
-  /** Persist a note. Empty string deletes. */
+  /** Persist a non-empty note. Throws if called with an empty/whitespace value. */
   onSave: (next: string) => Promise<void>
+  /** Remove the persisted note. Distinct from ``onSave`` — never inferred from an empty save. */
+  onDelete: () => Promise<void>
   /** When set, render a small footnote — typically "Last edited by ksr@…". */
   footnote?: string | null
   /** Disable the form (e.g. while a parent action is in flight). */
@@ -38,6 +40,7 @@ export function NoteSection({
   title,
   note,
   onSave,
+  onDelete,
   footnote,
   disabled,
 }: NoteSectionProps) {
@@ -67,10 +70,18 @@ export function NoteSection({
   }
 
   const handleSave = async () => {
+    const trimmed = draft.trim()
+    // Save no longer falls through to delete — the API rejects empty notes
+    // (min_length=1). Surface the validation error inline instead of
+    // round-tripping a 422.
+    if (!trimmed) {
+      setError("Note can't be empty. Use Delete to remove it.")
+      return
+    }
     setSaving(true)
     setError(null)
     try {
-      await onSave(draft.trim())
+      await onSave(trimmed)
       setIsEditing(false)
     } catch (err) {
       if (err instanceof ApiError) setError(err.detail || err.message)
@@ -86,7 +97,7 @@ export function NoteSection({
     setSaving(true)
     setError(null)
     try {
-      await onSave("")
+      await onDelete()
       setDraft("")
       setIsEditing(false)
     } catch (err) {

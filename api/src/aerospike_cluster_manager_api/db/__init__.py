@@ -21,10 +21,22 @@ if TYPE_CHECKING:
 _backend: types.ModuleType | None = None
 
 
+class DBNotInitialized(RuntimeError):
+    """Raised when the metaDB layer is accessed before ``init_db()`` ran.
+
+    Exists as a dedicated sentinel so production code paths that opt to
+    treat an uninitialised DB as "no annotations available" (e.g. the note
+    injection helpers) can match this exception class exactly. Earlier
+    revisions matched the message string (``"Database not initialized"``);
+    that was fragile across i18n / log audits and risked silently
+    swallowing unrelated ``RuntimeError``s.
+    """
+
+
 def _get_backend() -> DatabaseBackend:
     """Return the active database backend, typed as *DatabaseBackend*."""
     if _backend is None:
-        raise RuntimeError("Database not initialized. Call init_db() first.")
+        raise DBNotInitialized("Database not initialized. Call init_db() first.")
     return cast(DatabaseBackend, _backend)
 
 

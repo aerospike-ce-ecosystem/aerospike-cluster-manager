@@ -10,7 +10,7 @@ import { RecordDetailSkeleton } from "@/components/skeletons/RecordDetailSkeleto
 import { clusterSections } from "@/app/siteConfig"
 import { ApiError } from "@/lib/api/client"
 import { logFetchError } from "@/lib/api/log"
-import { upsertRecordNote } from "@/lib/api/notes"
+import { deleteRecordNote, upsertRecordNote } from "@/lib/api/notes"
 import { deleteRecord, getRecordDetail, putRecord } from "@/lib/api/records"
 import type { AerospikeRecord, BinValue, PkType } from "@/lib/types/record"
 import Link from "next/link"
@@ -593,6 +593,16 @@ export default function RecordDetailPage({ params }: PageProps) {
                 { note: next, pkType: "auto" },
               )
               // Reload to pick up updatedAt / updatedBy from the server.
+              await loadRecord(loadSignalRef.current)
+            }}
+            onDelete={async () => {
+              await deleteRecordNote(
+                params.clusterId,
+                params.namespace,
+                params.set,
+                pk,
+                "auto",
+              )
               await loadRecord(loadSignalRef.current)
             }}
           />

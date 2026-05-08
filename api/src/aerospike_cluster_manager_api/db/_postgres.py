@@ -101,37 +101,75 @@ CREATE_RECORD_NOTES_INDEX_SQL = (
 
 def _get_pool() -> asyncpg.Pool:
     if _pool is None:
-        raise RuntimeError("Database not initialized. Call init_db() first.")
+        from aerospike_cluster_manager_api.db import DBNotInitialized
+
+        raise DBNotInitialized("Database not initialized. Call init_db() first.")
     return _pool
+
+
+# Advisory-lock key for the migration block. Picked at random and pinned
+# here so every replica negotiates the same lock — collisions with other
+# advisory locks in this DB are vanishingly unlikely. A 64-bit signed int
+# fits in a single bigint argument to ``pg_advisory_lock``.
+_MIGRATION_ADVISORY_LOCK_KEY = 0x4143_4D5F_4E4F_5445  # "ACM_NOTE"
 
 
 async def _apply_migrations(conn: asyncpg.Connection | asyncpg.pool.PoolConnectionProxy) -> None:
     """Add columns introduced after the initial schema.
 
-    Uses ``ADD COLUMN IF NOT EXISTS`` so concurrent startups (e.g. rolling
-    deploys with multiple replicas) do not race each other.
-    """
-    # description -> note rename. Idempotent across DB ages by inspecting
-    # information_schema before each branch:
-    #   * fresh DB (CREATE TABLE has note already): both branches skip
-    #   * legacy DB with description: RENAME description -> note (atomic)
-    #   * pathological: both columns coexist -> copy then drop description
-    desc_exists = await conn.fetchval(
-        "SELECT 1 FROM information_schema.columns WHERE table_name = 'connections' AND column_name = 'description'"
-    )
-    note_exists = await conn.fetchval(
-        "SELECT 1 FROM information_schema.columns WHERE table_name = 'connections' AND column_name = 'note'"
-    )
-    if desc_exists and not note_exists:
-        await conn.execute("ALTER TABLE connections RENAME COLUMN description TO note")
-    elif desc_exists and note_exists:
-        await conn.execute("UPDATE connections SET note = description WHERE note IS NULL")
-        await conn.execute("ALTER TABLE connections DROP COLUMN description")
-    elif not desc_exists and not note_exists:
-        await conn.execute("ALTER TABLE connections ADD COLUMN note TEXT")
+    Wrapped in a session-level advisory lock so concurrent startups
+    (rolling deploys with multiple replicas) serialise on the same DDL
+    block. Without the lock, two replicas can both observe
+    ``description column exists, note doesn't`` from
+    ``information_schema``, race to ``RENAME COLUMN``, and crash the
+    second one with ``UndefinedColumnError``. The lock is released
+    automatically when the session ends or on explicit ``pg_advisory_unlock``.
 
-    await conn.execute("ALTER TABLE connections ADD COLUMN IF NOT EXISTS labels JSONB")
-    await conn.execute("ALTER TABLE connections ADD COLUMN IF NOT EXISTS workspace_id TEXT")
+    Uses ``ADD COLUMN IF NOT EXISTS`` for the rest so the column-add
+    branches stay idempotent even if the lock contended.
+    """
+    await conn.execute("SELECT pg_advisory_lock($1)", _MIGRATION_ADVISORY_LOCK_KEY)
+    try:
+        # description -> note rename. Idempotent across DB ages by inspecting
+        # information_schema before each branch:
+        #   * fresh DB (CREATE TABLE has note already): both branches skip
+        #   * legacy DB with description: RENAME description -> note (atomic)
+        #   * pathological: both columns coexist -> copy then drop description
+        desc_exists = await conn.fetchval(
+            "SELECT 1 FROM information_schema.columns WHERE table_name = 'connections' AND column_name = 'description'"
+        )
+        note_exists = await conn.fetchval(
+            "SELECT 1 FROM information_schema.columns WHERE table_name = 'connections' AND column_name = 'note'"
+        )
+        if desc_exists and not note_exists:
+            await conn.execute("ALTER TABLE connections RENAME COLUMN description TO note")
+        elif desc_exists and note_exists:
+            # Both columns shouldn't coexist in a healthy deployment — only
+            # an aborted prior migration leaves this state. Surface the
+            # data-loss surface area at WARN before we drop ``description``
+            # so an operator at least sees how many distinct values were
+            # discarded.
+            divergent = await conn.fetchval(
+                """SELECT COUNT(*) FROM connections
+                       WHERE description IS NOT NULL
+                         AND (note IS NULL OR description <> note)"""
+            )
+            if divergent and divergent > 0:
+                logger.warning(
+                    "Dropping 'description' column with %d divergent value(s) "
+                    "(note IS NULL or note <> description). "
+                    "Run a manual reconciliation before redeploying if this is unexpected.",
+                    divergent,
+                )
+            await conn.execute("UPDATE connections SET note = description WHERE note IS NULL")
+            await conn.execute("ALTER TABLE connections DROP COLUMN description")
+        elif not desc_exists and not note_exists:
+            await conn.execute("ALTER TABLE connections ADD COLUMN note TEXT")
+
+        await conn.execute("ALTER TABLE connections ADD COLUMN IF NOT EXISTS labels JSONB")
+        await conn.execute("ALTER TABLE connections ADD COLUMN IF NOT EXISTS workspace_id TEXT")
+    finally:
+        await conn.execute("SELECT pg_advisory_unlock($1)", _MIGRATION_ADVISORY_LOCK_KEY)
 
     # workspaces.owner_id (issue #307 — Phase 0b). On PG the
     # ``IF NOT EXISTS`` clause makes the migration idempotent and

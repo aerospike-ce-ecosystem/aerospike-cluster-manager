@@ -64,14 +64,16 @@ async def update_set_note(
 ) -> dict[str, Any]:
     """Upsert an operator note attached to a set.
 
-    Empty ``note`` (``""``) deletes the note (idempotent — no error when
-    none existed). Non-empty ``note`` creates or replaces.
+    ``note`` must be non-empty after stripping whitespace — to remove a
+    note call :func:`delete_set_note` instead. The earlier "empty string ⇒
+    delete" shortcut was removed because it conflated upsert and delete
+    return shapes, leaving the caller (and any LLM) unable to tell which
+    one ran.
 
     Mutation: requires ``ACM_MCP_ACCESS_PROFILE=full``.
     """
-    if not note:
-        deleted = await db.delete_set_note(conn_id, namespace, set_name)
-        return {"deleted": deleted, "conn_id": conn_id, "namespace": namespace, "set_name": set_name}
+    if not note or not note.strip():
+        raise ValueError("note must be non-empty; call delete_set_note to remove a note")
     updated_by = _caller_owner_id()
     saved = await db.upsert_set_note(conn_id, namespace, set_name, note, updated_by)
     return saved.model_dump()
@@ -109,21 +111,17 @@ async def update_record_note(
 
     ``pk_type`` defaults to ``auto`` and is resolved server-side via the same
     heuristic as the read path. Pass an explicit value when the heuristic
-    would mis-classify a digit-only string key. Empty ``note`` deletes.
+    would mis-classify a digit-only string key.
+
+    ``note`` must be non-empty after stripping whitespace — to remove a
+    note call :func:`delete_record_note`. (The previous empty-string
+    shortcut was removed for the same reason as :func:`update_set_note`.)
 
     Mutation: requires ``ACM_MCP_ACCESS_PROFILE=full``.
     """
+    if not note or not note.strip():
+        raise ValueError("note must be non-empty; call delete_record_note to remove a note")
     stored_pk_type = _resolve_pk_type(pk, pk_type)
-    if not note:
-        deleted = await db.delete_record_note(conn_id, namespace, set_name, pk, stored_pk_type)
-        return {
-            "deleted": deleted,
-            "conn_id": conn_id,
-            "namespace": namespace,
-            "set_name": set_name,
-            "pk": pk,
-            "pk_type": stored_pk_type,
-        }
     updated_by = _caller_owner_id()
     saved = await db.upsert_record_note(conn_id, namespace, set_name, pk, stored_pk_type, note, None, updated_by)
     return saved.model_dump()

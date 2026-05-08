@@ -70,11 +70,13 @@ class RecordNote(BaseModel):
 class UpsertSetNoteRequest(BaseModel):
     """Request body for ``PUT /api/notes/sets/...``.
 
-    Empty ``note`` is treated as a delete signal so editors can clear a
-    note with the same wire path they use to write one.
+    ``note`` is required and non-empty. To remove a note use the dedicated
+    ``DELETE`` endpoint — the previous "PUT empty string ⇒ delete" shortcut
+    silently turned trim-to-empty UX (autosave + whitespace-only input)
+    into data loss, so it has been removed.
     """
 
-    note: str = Field(max_length=MAX_NOTE_LENGTH)
+    note: str = Field(min_length=1, max_length=MAX_NOTE_LENGTH)
 
 
 class UpsertRecordNoteRequest(BaseModel):
@@ -84,9 +86,12 @@ class UpsertRecordNoteRequest(BaseModel):
     :mod:`pk` decides between STRING and INTEGER for digit-only keys.
     Pass an explicit value when the heuristic would mis-classify (e.g. a
     customer id that looks numeric but lives as STRING in Aerospike).
+
+    ``note`` is required and non-empty — same rationale as
+    :class:`UpsertSetNoteRequest`.
     """
 
     model_config = ConfigDict(populate_by_name=True)
 
-    note: str = Field(max_length=MAX_NOTE_LENGTH)
+    note: str = Field(min_length=1, max_length=MAX_NOTE_LENGTH)
     pkType: PkType = Field(default="auto", alias="pk_type")

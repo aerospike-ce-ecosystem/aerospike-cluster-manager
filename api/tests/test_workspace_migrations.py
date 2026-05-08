@@ -35,6 +35,121 @@ class TestDefaultWorkspaceSeed:
         assert sum(1 for w in workspaces if w.id == DEFAULT_WORKSPACE_ID) == 1
 
 
+class TestConnectionDescriptionToNoteRename:
+    """description → note rename must preserve data on a legacy DB.
+
+    The migration in ``db/_sqlite._apply_migrations`` runs
+    ``ALTER TABLE connections RENAME COLUMN description TO note`` when the
+    legacy column exists and ``note`` does not. Without coverage, a
+    regression that swapped the operands or dropped the column would
+    silently wipe every operator note on first upgrade.
+    """
+
+    async def test_legacy_description_value_preserved_in_note(self, tmp_path):
+        db_path = str(tmp_path / "legacy-rename.db")
+
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.execute(
+                """CREATE TABLE connections (
+                    id           TEXT PRIMARY KEY,
+                    name         TEXT NOT NULL,
+                    hosts        TEXT NOT NULL,
+                    port         INTEGER NOT NULL DEFAULT 3000,
+                    cluster_name TEXT,
+                    username     TEXT,
+                    password     TEXT,
+                    color        TEXT NOT NULL DEFAULT '#0097D3',
+                    description  TEXT,
+                    labels       TEXT,
+                    created_at   TEXT NOT NULL,
+                    updated_at   TEXT NOT NULL
+                )"""
+            )
+            now = datetime.now(UTC).isoformat()
+            await conn.execute(
+                """INSERT INTO connections
+                       (id, name, hosts, port, color, description, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    "conn-rename-1",
+                    "legacy",
+                    json.dumps(["localhost"]),
+                    3000,
+                    "#0097D3",
+                    "operator memo from before rename",
+                    now,
+                    now,
+                ),
+            )
+            await conn.commit()
+
+        with (
+            patch("aerospike_cluster_manager_api.config.ENABLE_POSTGRES", False),
+            patch("aerospike_cluster_manager_api.config.SQLITE_PATH", db_path),
+        ):
+            await db.init_db()
+            try:
+                profile = await db.get_connection("conn-rename-1")
+                # Verify the schema actually changed — ``description`` is gone.
+                async with (
+                    aiosqlite.connect(db_path) as conn,
+                    conn.execute("PRAGMA table_info(connections)") as cursor,
+                ):
+                    cols = {row[1] for row in await cursor.fetchall()}
+            finally:
+                await db.close_db()
+
+        assert profile is not None
+        assert profile.note == "operator memo from before rename"
+        assert "note" in cols
+        assert "description" not in cols
+
+    async def test_idempotent_no_double_rename(self, tmp_path):
+        """Running the migration twice on a DB that already has ``note`` is a no-op."""
+        db_path = str(tmp_path / "rename-twice.db")
+
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.execute(
+                """CREATE TABLE connections (
+                    id           TEXT PRIMARY KEY,
+                    name         TEXT NOT NULL,
+                    hosts        TEXT NOT NULL,
+                    port         INTEGER NOT NULL DEFAULT 3000,
+                    cluster_name TEXT,
+                    username     TEXT,
+                    password     TEXT,
+                    color        TEXT NOT NULL DEFAULT '#0097D3',
+                    description  TEXT,
+                    created_at   TEXT NOT NULL,
+                    updated_at   TEXT NOT NULL
+                )"""
+            )
+            now = datetime.now(UTC).isoformat()
+            await conn.execute(
+                """INSERT INTO connections
+                       (id, name, hosts, port, color, description, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                ("conn-twice-1", "legacy", json.dumps(["h"]), 3000, "#FFFFFF", "kept", now, now),
+            )
+            await conn.commit()
+
+        with (
+            patch("aerospike_cluster_manager_api.config.ENABLE_POSTGRES", False),
+            patch("aerospike_cluster_manager_api.config.SQLITE_PATH", db_path),
+        ):
+            await db.init_db()
+            await db.close_db()
+            # Second init: schema already migrated, must not error.
+            await db.init_db()
+            try:
+                profile = await db.get_connection("conn-twice-1")
+            finally:
+                await db.close_db()
+
+        assert profile is not None
+        assert profile.note == "kept"
+
+
 class TestConnectionBackfill:
     async def test_pre_existing_connection_backfilled(self, tmp_path):
         """A connection inserted before the workspace_id column existed
