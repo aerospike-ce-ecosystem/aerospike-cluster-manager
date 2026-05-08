@@ -59,6 +59,20 @@ export function AddressCopyCell({
   className,
 }: AddressCopyCellProps) {
   const [status, setStatus] = React.useState<CopyStatus>("idle")
+  // Tracks the most recent feedback-reset timer so rapid double-clicks don't
+  // race a stale callback into resetting the status, and so the timer is
+  // canceled if the cell unmounts mid-feedback (otherwise React warns about
+  // setState on an unmounted component).
+  const resetTimerRef = React.useRef<number | null>(null)
+
+  React.useEffect(() => {
+    return () => {
+      if (resetTimerRef.current !== null) {
+        window.clearTimeout(resetTimerRef.current)
+        resetTimerRef.current = null
+      }
+    }
+  }, [])
 
   if (hosts.length === 0) {
     return (
@@ -80,9 +94,17 @@ export function AddressCopyCell({
     event.stopPropagation()
     const ok = await copyText(seedList)
     setStatus(ok ? "copied" : "error")
+    // Cancel any in-flight reset before scheduling a new one so the feedback
+    // window doesn't get cut short by the previous click's pending timer.
+    if (resetTimerRef.current !== null) {
+      window.clearTimeout(resetTimerRef.current)
+    }
     // Hold the feedback long enough for a glance — the previous 1.5s window
     // was too short for the change to register reliably (#319 follow-up).
-    window.setTimeout(() => setStatus("idle"), 2500)
+    resetTimerRef.current = window.setTimeout(() => {
+      setStatus("idle")
+      resetTimerRef.current = null
+    }, 2500)
   }
 
   const tooltipContent =

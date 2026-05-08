@@ -64,7 +64,13 @@ export default function ClusterOverview({ params }: PageProps) {
           >
             Refresh
           </Button>
-          <Button variant="primary">Open in AQL</Button>
+          <Button
+            variant="primary"
+            disabled
+            title="Use the dedicated terminal page"
+          >
+            Open in AQL
+          </Button>
         </div>
       </header>
 
@@ -93,8 +99,12 @@ export default function ClusterOverview({ params }: PageProps) {
               </p>
             </div>
             <div className="flex gap-2">
-              <Button variant="secondary">View CR</Button>
-              <Button variant="secondary">Events</Button>
+              <Button variant="secondary" disabled title="Coming soon">
+                View CR
+              </Button>
+              <Button variant="secondary" disabled title="Coming soon">
+                Events
+              </Button>
             </div>
           </div>
           <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
