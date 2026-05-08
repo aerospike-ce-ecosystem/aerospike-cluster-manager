@@ -1,7 +1,7 @@
 # =============================================================================
 # API (FastAPI) — standalone image
 # =============================================================================
-FROM python:3.14-slim AS builder
+FROM python:3.13-slim AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 WORKDIR /app/api
@@ -15,7 +15,7 @@ RUN uv sync --frozen --no-dev
 # =============================================================================
 # Runtime
 # =============================================================================
-FROM python:3.14-slim AS runtime
+FROM python:3.13-slim AS runtime
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
