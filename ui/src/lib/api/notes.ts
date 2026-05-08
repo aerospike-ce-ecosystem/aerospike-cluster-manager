@@ -29,6 +29,11 @@ const enc = encodeURIComponent
 /**
  * PUT /api/notes/sets/{conn_id}/{ns}/{set} — upsert a set note. An empty
  * ``note`` deletes the existing row (idempotent — no error when none).
+ *
+ * Backend compatibility: the API enforces ``min_length=1`` on the note body
+ * and returns 422 for an empty PUT, so when the caller passes an
+ * empty/whitespace-only note we transparently route through DELETE instead
+ * of PUT to preserve the historical "save empty == clear note" semantics.
  */
 export async function upsertSetNote(
   connId: string,
@@ -38,8 +43,8 @@ export async function upsertSetNote(
 ): Promise<SetNote | null> {
   const path = `/notes/sets/${enc(connId)}/${enc(namespace)}/${enc(setName)}`
   // The empty-note delete returns 204; non-empty returns the saved row.
-  if (!body.note) {
-    await apiPut<unknown>(path, body)
+  if (!body.note || !body.note.trim()) {
+    await deleteSetNote(connId, namespace, setName)
     return null
   }
   return apiPut<SetNote>(path, body)
@@ -77,6 +82,9 @@ export async function listSetNotes(
 /**
  * PUT /api/notes/records/{conn_id}/{ns}/{set}/{pk} — upsert a record note.
  * Empty ``note`` deletes (idempotent).
+ *
+ * Backend compatibility: see ``upsertSetNote`` — the API rejects empty bodies
+ * with 422, so empty-note saves transparently route through DELETE.
  */
 export async function upsertRecordNote(
   connId: string,
@@ -86,8 +94,8 @@ export async function upsertRecordNote(
   body: UpsertRecordNoteRequest,
 ): Promise<RecordNote | null> {
   const path = `/notes/records/${enc(connId)}/${enc(namespace)}/${enc(setName)}/${enc(pk)}`
-  if (!body.note) {
-    await apiPut<unknown>(path, body)
+  if (!body.note || !body.note.trim()) {
+    await deleteRecordNote(connId, namespace, setName, pk, body.pkType ?? "auto")
     return null
   }
   return apiPut<RecordNote>(path, body)
