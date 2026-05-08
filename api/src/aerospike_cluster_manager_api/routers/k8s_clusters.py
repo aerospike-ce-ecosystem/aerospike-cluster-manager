@@ -14,12 +14,13 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from opentelemetry import trace
 from pydantic import BaseModel, Field
 
 from aerospike_cluster_manager_api import config, db
 from aerospike_cluster_manager_api.client_manager import client_manager
+from aerospike_cluster_manager_api.dependencies import CallerOwnerId
 from aerospike_cluster_manager_api.k8s_client import K8sApiError, k8s_client
 from aerospike_cluster_manager_api.models.connection import ConnectionProfile
 from aerospike_cluster_manager_api.models.k8s_cluster import (
@@ -46,7 +47,8 @@ from aerospike_cluster_manager_api.models.k8s_cluster import (
     UpdateK8sClusterRequest,
     UpdateK8sTemplateRequest,
 )
-from aerospike_cluster_manager_api.models.workspace import DEFAULT_WORKSPACE_ID
+from aerospike_cluster_manager_api.models.workspace import DEFAULT_WORKSPACE_ID, SYSTEM_OWNER_ID
+from aerospike_cluster_manager_api.rate_limit import limiter
 from aerospike_cluster_manager_api.services.k8s_service import (
     build_cr,
     build_template_cr,
@@ -74,6 +76,76 @@ _tracer = trace.get_tracer("aerospike_cluster_manager_api.routers.k8s_clusters")
 def _require_k8s() -> None:
     if not config.K8S_MANAGEMENT_ENABLED:
         raise HTTPException(status_code=404, detail="Kubernetes management is not enabled")
+
+
+_WORKSPACE_LABEL = "acm.aerospike.com/workspace"
+
+
+def _cr_workspace_id(item: dict[str, Any]) -> str | None:
+    """Return the workspace id stamped on a CR's metadata labels, if any.
+
+    CRs without the workspace label are treated as system-shared — the
+    same rule the connection-profile ACL applies for ``SYSTEM_OWNER_ID``.
+    Returning ``None`` lets the caller decide whether to gate (mutations
+    require an owned workspace, reads with no label show to everyone).
+    """
+    labels = item.get("metadata", {}).get("labels") or {}
+    raw = labels.get(_WORKSPACE_LABEL)
+    return raw if isinstance(raw, str) and raw else None
+
+
+async def _is_workspace_visible(workspace_id: str, caller_owner_id: str) -> bool:
+    """Return True iff the caller can see ``workspace_id``.
+
+    Visibility = ``ownerId == caller`` OR ``ownerId == SYSTEM_OWNER_ID``.
+    Missing rows are invisible. Mirrors the rule used by
+    :func:`dependencies._get_verified_connection` for connection
+    profiles, so K8s and connection ACLs stay in lock-step.
+
+    When the workspace metaDB has not been initialised (unit-test paths
+    that exercise the K8s router in isolation), the check degrades to
+    permissive -- the same convention notes / records use to keep
+    legacy single-tenant fixtures green.
+    """
+    try:
+        ws = await db.get_workspace(workspace_id)
+    except db.DBNotInitialized:
+        return True
+    if ws is None:
+        return False
+    return ws.ownerId == caller_owner_id or ws.ownerId == SYSTEM_OWNER_ID
+
+
+async def _assert_caller_owns_k8s_cluster(
+    namespace: str,
+    name: str,
+    caller_owner_id: str,
+) -> dict[str, Any]:
+    """Default-deny ACL gate for K8s cluster mutations.
+
+    Resolves the cluster CR, reads its ``acm.aerospike.com/workspace``
+    label, and verifies the caller can see that workspace. Clusters with
+    no workspace label are treated as system-shared (visible to every
+    authenticated caller) so legacy CRs created before workspace
+    labelling stay reachable. Returns the CR dict for callers that need
+    it, so we don't pay the ``get_cluster`` round trip twice.
+
+    Raises ``HTTPException(404)`` for a missing cluster (matching
+    ``K8sApiError`` mapping) or for a cluster the caller cannot see
+    (identity-404 to prevent enumeration).
+    """
+    try:
+        cr = await k8s_client.get_cluster(namespace, name)
+    except K8sApiError as e:
+        if e.status == 404:
+            raise HTTPException(status_code=404, detail=f"Cluster '{namespace}/{name}' not found") from e
+        raise _map_k8s_error(e) from e
+    workspace_id = _cr_workspace_id(cr)
+    if workspace_id is None:
+        return cr
+    if not await _is_workspace_visible(workspace_id, caller_owner_id):
+        raise HTTPException(status_code=404, detail=f"Cluster '{namespace}/{name}' not found")
+    return cr
 
 
 router = APIRouter(prefix="/k8s", tags=["k8s-clusters"], dependencies=[Depends(_require_k8s)])
@@ -133,6 +205,7 @@ def _k8s_endpoint(operation: str):
 @router.get("/clusters", summary="List K8s Aerospike clusters")
 @_k8s_endpoint("list Kubernetes clusters")
 async def list_k8s_clusters(
+    caller_owner_id: CallerOwnerId,
     namespace: str | None = None,
     limit: int = Query(20, ge=1, le=100),
     continue_token: str | None = Query(None, alias="continueToken"),
@@ -142,6 +215,20 @@ async def list_k8s_clusters(
     items, next_token = await k8s_client.list_clusters(
         namespace, limit=limit, continue_token=continue_token, label_selector=label_selector
     )
+
+    # Filter CRs by workspace visibility. CRs with no workspace label are
+    # treated as system-shared (legacy compatibility). For labelled CRs we
+    # batch the visibility check so a 100-cluster page does not run 100
+    # serial ``db.get_workspace`` round trips.
+    workspace_ids: set[str] = set()
+    for item in items:
+        ws_id = _cr_workspace_id(item)
+        if ws_id is not None:
+            workspace_ids.add(ws_id)
+    visible_workspaces: dict[str, bool] = {}
+    for ws_id in workspace_ids:
+        visible_workspaces[ws_id] = await _is_workspace_visible(ws_id, caller_owner_id)
+    items = [item for item in items if (ws := _cr_workspace_id(item)) is None or visible_workspaces.get(ws, False)]
 
     connections = await db.get_all_connections()
     conn_by_host: dict[str, str] = {}
@@ -174,11 +261,12 @@ async def list_k8s_clusters(
 @router.get("/clusters/{namespace}/{name}", summary="Get K8s Aerospike cluster detail")
 @_k8s_endpoint("get Kubernetes cluster")
 async def get_k8s_cluster(
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ) -> K8sClusterDetail:
 
-    item = await k8s_client.get_cluster(namespace, name)
+    item = await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     pods_raw = await k8s_client.list_pods(
         namespace, f"app.kubernetes.io/name=aerospike-cluster,app.kubernetes.io/instance={name}"
     )
@@ -188,12 +276,13 @@ async def get_k8s_cluster(
 @router.get("/clusters/{namespace}/{name}/config-drift", summary="Get cluster config drift")
 @_k8s_endpoint("get cluster config drift")
 async def get_cluster_config_drift(
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ):
     """Compare desired spec vs applied spec and detect configuration drift."""
 
-    cr = await k8s_client.get_cluster(namespace, name)
+    cr = await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     result = compute_config_drift(cr)
     return ConfigDriftResponse(**result)
 
@@ -201,23 +290,25 @@ async def get_cluster_config_drift(
 @router.get("/clusters/{namespace}/{name}/health", summary="Get cluster health summary")
 @_k8s_endpoint("get cluster health")
 async def get_k8s_cluster_health(
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ) -> ClusterHealthResponse:
 
-    item = await k8s_client.get_cluster(namespace, name)
+    item = await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     return extract_health(item)
 
 
 @router.get("/clusters/{namespace}/{name}/reconciliation-status", summary="Get reconciliation health")
 @_k8s_endpoint("get reconciliation status")
 async def get_cluster_reconciliation_status(
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ):
     """Get reconciliation health including circuit breaker state."""
 
-    cr = await k8s_client.get_cluster(namespace, name)
+    cr = await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     result = extract_reconciliation_status(cr)
     return ReconciliationStatus(**result)
 
@@ -225,12 +316,13 @@ async def get_cluster_reconciliation_status(
 @router.get("/clusters/{namespace}/{name}/migration-status", summary="Get cluster migration status")
 @_k8s_endpoint("get cluster migration status")
 async def get_migration_status(
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ):
     """Get migration status including per-pod migration info."""
 
-    cr = await k8s_client.get_cluster(namespace, name)
+    cr = await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     result = extract_migration_status(cr)
     return MigrationStatusResponse(**result)
 
@@ -241,12 +333,13 @@ async def get_migration_status(
 )
 @_k8s_endpoint("get reconciliation health")
 async def get_cluster_reconciliation_health(
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ):
     """Get reconciliation health including phase, error info, and health status."""
 
-    cr = await k8s_client.get_cluster(namespace, name)
+    cr = await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     result = extract_reconciliation_health(cr)
     return ReconciliationHealthResponse(**result)
 
@@ -254,40 +347,56 @@ async def get_cluster_reconciliation_health(
 @router.get("/clusters/{namespace}/{name}/pods/{pod}/logs", summary="Get pod logs")
 @_k8s_endpoint("get pod logs")
 async def get_k8s_pod_logs(
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
     pod: str = Path(..., min_length=1, max_length=253),
     tail: int = Query(default=500, ge=1, le=10000, description="Number of tail lines"),
     container: str | None = Query(default=None, description="Container name"),
+    since_seconds: int | None = Query(
+        default=None,
+        ge=1,
+        le=86400,
+        description="Restrict logs to lines emitted within this many seconds (max 24h)",
+    ),
 ) -> dict[str, Any]:
 
+    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     cluster_pods = await k8s_client.list_pods(namespace, f"app.kubernetes.io/instance={name}")
     pod_names = {p["name"] for p in cluster_pods}
     if pod not in pod_names:
         raise HTTPException(status_code=404, detail=f"Pod '{pod}' does not belong to cluster '{name}'")
-    logs = await k8s_client.read_pod_log(namespace, pod, container=container, tail_lines=tail)
-    return {"pod": pod, "logs": logs, "tailLines": tail}
+    logs = await k8s_client.read_pod_log(
+        namespace, pod, container=container, tail_lines=tail, since_seconds=since_seconds
+    )
+    response: dict[str, Any] = {"pod": pod, "logs": logs, "tailLines": tail}
+    if since_seconds is not None:
+        response["sinceSeconds"] = since_seconds
+    return response
 
 
 @router.get("/clusters/{namespace}/{name}/yaml", summary="Get cluster CR as YAML")
 @_k8s_endpoint("export cluster YAML")
 async def get_k8s_cluster_yaml(
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ) -> dict[str, Any]:
 
-    item = await k8s_client.get_cluster(namespace, name)
+    item = await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     return {"yaml": clean_cr_for_export(item)}
 
 
 @router.get("/clusters/{namespace}/{name}/pvcs", summary="List PVCs for K8s Aerospike cluster")
 @_k8s_endpoint("list PVCs for Kubernetes cluster")
 async def list_k8s_cluster_pvcs(
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ) -> list[PVCInfo]:
     """List PersistentVolumeClaims associated with the cluster's StatefulSets."""
 
+    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     label_selector = f"app.kubernetes.io/instance={name}"
     pvcs_raw, pod_pvc_map = await asyncio.gather(
         k8s_client.list_pvcs(namespace, label_selector),
@@ -309,13 +418,17 @@ async def list_k8s_cluster_pvcs(
     summary="Delete a PVC",
     response_model=dict,
 )
+@limiter.limit("20/minute")
 @_k8s_endpoint("delete PVC")
 async def delete_pvc(
+    request: Request,
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
     pvc_name: str = Path(..., min_length=1, max_length=253),
 ) -> dict[str, str]:
     """Delete an orphaned PVC. The PVC must belong to the cluster (label check)."""
+    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     label_selector = f"app.kubernetes.io/instance={name}"
     pvcs_raw = await k8s_client.list_pvcs(namespace, label_selector)
     pvc_names = [p.get("name") for p in pvcs_raw]
@@ -330,13 +443,17 @@ async def delete_pvc(
     "/clusters/{namespace}/{name}/force-reconcile",
     summary="Force reconcile a drifted cluster",
 )
+@limiter.limit("20/minute")
 @_k8s_endpoint("force reconcile Kubernetes cluster")
 async def force_reconcile_k8s_cluster(
+    request: Request,
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ) -> K8sClusterSummary:
     """Add a force-reconcile annotation to trigger the operator to re-reconcile."""
 
+    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     patch: dict[str, Any] = {
         "metadata": {
             "annotations": {
@@ -353,12 +470,16 @@ async def force_reconcile_k8s_cluster(
     summary="Reset operator circuit breaker",
     response_model=dict,
 )
+@limiter.limit("20/minute")
 @_k8s_endpoint("reset circuit breaker")
 async def reset_circuit_breaker(
+    request: Request,
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ) -> dict[str, str]:
     """Reset the circuit breaker by patching status counters and annotating the CR."""
+    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     # 1. Reset status subresource (clear error state)
     await k8s_client.patch_cluster_status(
         namespace,
@@ -381,8 +502,13 @@ async def reset_circuit_breaker(
 
 
 @router.post("/clusters/import", status_code=201, summary="Import K8s Aerospike cluster from CR")
+@limiter.limit("20/minute")
 @_k8s_endpoint("import Kubernetes cluster")
-async def import_k8s_cluster(body: ImportClusterRequest) -> K8sClusterSummary:
+async def import_k8s_cluster(
+    request: Request,
+    body: ImportClusterRequest,
+    caller_owner_id: CallerOwnerId,
+) -> K8sClusterSummary:
     """Create a cluster from a raw AerospikeCluster CR (JSON/YAML)."""
 
     cr = body.cr
@@ -409,6 +535,16 @@ async def import_k8s_cluster(body: ImportClusterRequest) -> K8sClusterSummary:
     metadata.pop("generation", None)
     metadata.pop("managedFields", None)
 
+    # Reject CRs that carry a workspace label the caller cannot see.
+    # Without this gate the caller could attach a CR to another tenant's
+    # workspace and inherit visibility through the workspace fan-out.
+    cr_workspace_id = _cr_workspace_id(cr)
+    if cr_workspace_id is not None and not await _is_workspace_visible(cr_workspace_id, caller_owner_id):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Workspace '{cr_workspace_id}' not found",
+        )
+
     existing_namespaces = await k8s_client.list_namespaces()
     if cr_namespace not in existing_namespaces:
         raise HTTPException(
@@ -421,8 +557,19 @@ async def import_k8s_cluster(body: ImportClusterRequest) -> K8sClusterSummary:
 
 
 @router.post("/clusters", status_code=201, summary="Create K8s Aerospike cluster")
+@limiter.limit("20/minute")
 @_k8s_endpoint("create Kubernetes cluster")
-async def create_k8s_cluster(body: CreateK8sClusterRequest) -> K8sClusterSummary:
+async def create_k8s_cluster(
+    request: Request,
+    body: CreateK8sClusterRequest,
+    caller_owner_id: CallerOwnerId,
+) -> K8sClusterSummary:
+
+    # Reject creation in a workspace the caller cannot see. ``workspace_id``
+    # may be None (legacy clients) — fall through to the default workspace
+    # which is shared via SYSTEM_OWNER_ID.
+    if body.workspace_id is not None and not await _is_workspace_visible(body.workspace_id, caller_owner_id):
+        raise HTTPException(status_code=404, detail=f"Workspace '{body.workspace_id}' not found")
 
     existing_namespaces = await k8s_client.list_namespaces()
     if body.namespace not in existing_namespaces:
@@ -435,6 +582,13 @@ async def create_k8s_cluster(body: CreateK8sClusterRequest) -> K8sClusterSummary
         )
 
     cr = build_cr(body)
+    # Stamp the workspace label so subsequent ACL checks (list/get/mutate)
+    # can recognise the CR's tenant. Skipped when no workspace is named —
+    # the cluster lands in the system-shared bucket and stays visible to
+    # everyone, matching the legacy pre-#307 contract.
+    if body.workspace_id is not None:
+        labels = cr.setdefault("metadata", {}).setdefault("labels", {})
+        labels[_WORKSPACE_LABEL] = body.workspace_id
     result = await k8s_client.create_cluster(body.namespace, cr)
 
     connection_id: str | None = None
@@ -486,9 +640,12 @@ async def create_k8s_cluster(body: CreateK8sClusterRequest) -> K8sClusterSummary
 
 
 @router.patch("/clusters/{namespace}/{name}", summary="Update K8s Aerospike cluster")
+@limiter.limit("20/minute")
 @_k8s_endpoint("update Kubernetes cluster")
 async def update_k8s_cluster(
+    request: Request,
     body: UpdateK8sClusterRequest,
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ) -> K8sClusterSummary:
@@ -496,18 +653,23 @@ async def update_k8s_cluster(
     if not has_update_fields(body):
         raise HTTPException(status_code=400, detail="At least one field must be provided")
 
+    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     patch = build_update_patch(body)
     result = await k8s_client.patch_cluster(namespace, name, patch)
     return extract_summary(result)
 
 
 @router.delete("/clusters/{namespace}/{name}", status_code=202, summary="Delete K8s Aerospike cluster")
+@limiter.limit("20/minute")
 @_k8s_endpoint("delete Kubernetes cluster")
 async def delete_k8s_cluster(
+    request: Request,
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ) -> DeleteResponse:
 
+    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     await k8s_client.delete_cluster(namespace, name)
 
     try:
@@ -526,13 +688,17 @@ async def delete_k8s_cluster(
 
 
 @router.post("/clusters/{namespace}/{name}/scale", summary="Scale K8s Aerospike cluster")
+@limiter.limit("20/minute")
 @_k8s_endpoint("scale Kubernetes cluster")
 async def scale_k8s_cluster(
+    request: Request,
     body: ScaleK8sClusterRequest,
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ) -> K8sClusterSummary:
 
+    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     patch = {"spec": {"size": body.size}}
     result = await k8s_client.patch_cluster(namespace, name, patch)
     return extract_summary(result)
@@ -542,14 +708,18 @@ async def scale_k8s_cluster(
     "/clusters/{namespace}/{name}/node-blocklist",
     summary="Update node blocklist for K8s Aerospike cluster",
 )
+@limiter.limit("20/minute")
 @_k8s_endpoint("update node blocklist")
 async def update_node_blocklist(
+    request: Request,
     body: NodeBlocklistRequest,
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ) -> K8sClusterSummary:
     """Patch spec.k8sNodeBlockList on the AerospikeCluster CR."""
 
+    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     patch: dict[str, Any] = {"spec": {"k8sNodeBlockList": body.node_names}}
     result = await k8s_client.patch_cluster(namespace, name, patch)
     return extract_summary(result)
@@ -563,19 +733,24 @@ async def update_node_blocklist(
 @router.get("/clusters/{namespace}/{name}/hpa", summary="Get HPA for K8s Aerospike cluster")
 @_k8s_endpoint("get HPA for Kubernetes cluster")
 async def get_k8s_cluster_hpa(
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ) -> HPAResponse:
 
+    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     raw = await k8s_client.get_hpa(namespace, name)
     return extract_hpa_response(raw)
 
 
 @router.post("/clusters/{namespace}/{name}/hpa", summary="Create or update HPA for K8s Aerospike cluster")
+@limiter.limit("20/minute")
 @_k8s_endpoint("create/update HPA for Kubernetes cluster")
 async def create_or_update_k8s_cluster_hpa(
+    request: Request,
     response: Response,
     body: HPAConfig,
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ) -> HPAResponse:
@@ -584,6 +759,7 @@ async def create_or_update_k8s_cluster_hpa(
         raise HTTPException(
             status_code=400, detail="At least one of cpu_target_percent or memory_target_percent is required"
         )
+    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     # Check if HPA already exists — update if so, create if not
     try:
         await k8s_client.get_hpa(namespace, name)
@@ -613,12 +789,16 @@ async def create_or_update_k8s_cluster_hpa(
 
 
 @router.delete("/clusters/{namespace}/{name}/hpa", status_code=202, summary="Delete HPA for K8s Aerospike cluster")
+@limiter.limit("20/minute")
 @_k8s_endpoint("delete HPA for Kubernetes cluster")
 async def delete_k8s_cluster_hpa(
+    request: Request,
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ) -> DeleteResponse:
 
+    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     await k8s_client.delete_hpa(namespace, name)
     return DeleteResponse(message=f"HPA for {namespace}/{name} deleted")
 
@@ -686,8 +866,9 @@ async def get_k8s_template(
 
 
 @router.post("/templates", status_code=201, summary="Create K8s AerospikeClusterTemplate")
+@limiter.limit("20/minute")
 @_k8s_endpoint("create Kubernetes template")
-async def create_k8s_template(body: CreateK8sTemplateRequest) -> K8sTemplateSummary:
+async def create_k8s_template(request: Request, body: CreateK8sTemplateRequest) -> K8sTemplateSummary:
 
     cr = build_template_cr(body)
     result = await k8s_client.create_template(cr)
@@ -695,8 +876,10 @@ async def create_k8s_template(body: CreateK8sTemplateRequest) -> K8sTemplateSumm
 
 
 @router.patch("/templates/{name}", summary="Update K8s AerospikeClusterTemplate")
+@limiter.limit("20/minute")
 @_k8s_endpoint("update Kubernetes template")
 async def update_k8s_template(
+    request: Request,
     body: UpdateK8sTemplateRequest,
     name: str = _K8S_NAME,
 ) -> K8sTemplateSummary:
@@ -709,8 +892,10 @@ async def update_k8s_template(
 
 
 @router.delete("/templates/{name}", status_code=202, summary="Delete K8s AerospikeClusterTemplate")
+@limiter.limit("20/minute")
 @_k8s_endpoint("delete Kubernetes template")
 async def delete_k8s_template(
+    request: Request,
     name: str = _K8S_NAME,
 ) -> DeleteResponse:
 
@@ -746,12 +931,14 @@ async def delete_k8s_template(
 @router.get("/clusters/{namespace}/{name}/events", summary="Get K8s cluster events")
 @_k8s_endpoint("get Kubernetes cluster events")
 async def get_k8s_cluster_events(
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
     limit: int = Query(default=50, ge=1, le=500, description="Maximum number of events to return"),
     category: str | None = Query(default=None, description="Filter events by category"),
 ) -> list[K8sClusterEvent]:
 
+    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     field_selector = f"involvedObject.name={name},involvedObject.kind=AerospikeCluster"
     events_raw = await k8s_client.list_events(namespace, field_selector)
     events = [K8sClusterEvent(**e) for e in events_raw]
@@ -766,12 +953,16 @@ async def get_k8s_cluster_events(
     "/clusters/{namespace}/{name}/resync-template",
     summary="Trigger template resync for K8s Aerospike cluster",
 )
+@limiter.limit("20/minute")
 @_k8s_endpoint("resync template for Kubernetes cluster")
 async def resync_k8s_cluster_template(
+    request: Request,
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ) -> K8sClusterSummary:
 
+    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     patch: dict[str, Any] = {"metadata": {"annotations": {"acko.io/resync-template": "true"}}}
     result = await k8s_client.patch_cluster(namespace, name, patch)
     return extract_summary(result)
@@ -799,15 +990,18 @@ class CloneClusterRequest(BaseModel):
     status_code=201,
     summary="Clone an existing K8s Aerospike cluster",
 )
+@limiter.limit("20/minute")
 @_k8s_endpoint("clone Kubernetes cluster")
 async def clone_k8s_cluster(
+    request: Request,
     body: CloneClusterRequest,
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ) -> K8sClusterSummary:
     """Clone a cluster by copying its spec into a new cluster with a different name."""
 
-    source = await k8s_client.get_cluster(namespace, name)
+    source = await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     target_ns = body.namespace or namespace
 
     existing_namespaces = await k8s_client.list_namespaces()
@@ -823,6 +1017,12 @@ async def clone_k8s_cluster(
         "metadata": {"name": body.name, "namespace": target_ns},
         "spec": copy.deepcopy(source.get("spec", {})),
     }
+    # Carry the workspace label so the clone inherits the source's tenancy.
+    # Without this the cloned CR would land in the system-shared bucket and
+    # become reachable to every authenticated caller.
+    source_workspace_id = _cr_workspace_id(source)
+    if source_workspace_id is not None:
+        cr["metadata"].setdefault("labels", {})[_WORKSPACE_LABEL] = source_workspace_id
     # Remove operation state that shouldn't carry over
     cr["spec"].pop("operations", None)
     cr["spec"].pop("paused", None)
@@ -849,13 +1049,17 @@ async def clone_k8s_cluster(
 
 
 @router.post("/clusters/{namespace}/{name}/operations", summary="Trigger operation on K8s cluster")
+@limiter.limit("20/minute")
 @_k8s_endpoint("trigger operation on Kubernetes cluster")
 async def trigger_k8s_cluster_operation(
+    request: Request,
     body: OperationRequest,
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ) -> K8sClusterSummary:
 
+    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     op_id = body.id or f"ui-{uuid.uuid4().hex[:8]}"
     operation: dict[str, Any] = {"kind": body.kind, "id": op_id}
     if body.pod_list:
@@ -869,12 +1073,16 @@ async def trigger_k8s_cluster_operation(
     "/clusters/{namespace}/{name}/operations",
     summary="Clear operations on K8s cluster",
 )
+@limiter.limit("20/minute")
 @_k8s_endpoint("clear operations on Kubernetes cluster")
 async def clear_k8s_cluster_operations(
+    request: Request,
+    caller_owner_id: CallerOwnerId,
     namespace: str = _K8S_NAMESPACE,
     name: str = _K8S_NAME,
 ) -> K8sClusterSummary:
     """Clear spec.operations to unblock a stuck cluster."""
+    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     patch: dict[str, Any] = {"spec": {"operations": []}}
     result = await k8s_client.patch_cluster(namespace, name, patch)
     return extract_summary(result)

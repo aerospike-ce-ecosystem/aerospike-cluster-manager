@@ -5,13 +5,14 @@ import tempfile
 from pathlib import Path
 from typing import Literal, cast
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 from starlette.responses import Response
 
 from aerospike_cluster_manager_api.constants import INFO_UDF_LIST
 from aerospike_cluster_manager_api.dependencies import AerospikeClient
 from aerospike_cluster_manager_api.info_parser import parse_records
 from aerospike_cluster_manager_api.models.udf import UDFModule, UploadUDFRequest
+from aerospike_cluster_manager_api.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,8 @@ async def get_udfs(client: AerospikeClient) -> list[UDFModule]:
     summary="Upload UDF module",
     description="Upload and register a Lua UDF module to the Aerospike cluster.",
 )
-async def upload_udf(body: UploadUDFRequest, client: AerospikeClient) -> UDFModule:
+@limiter.limit("20/minute")
+async def upload_udf(request: Request, body: UploadUDFRequest, client: AerospikeClient) -> UDFModule:
     """Upload and register a Lua UDF module to the Aerospike cluster."""
     tmp_path: str | None = None
     try:
@@ -76,7 +78,9 @@ async def upload_udf(body: UploadUDFRequest, client: AerospikeClient) -> UDFModu
     summary="Delete UDF module",
     description="Remove a registered UDF module from the Aerospike cluster by filename.",
 )
+@limiter.limit("20/minute")
 async def delete_udf(
+    request: Request,
     client: AerospikeClient,
     filename: str = Query(..., min_length=1),
 ) -> Response:

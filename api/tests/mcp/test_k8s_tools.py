@@ -168,10 +168,13 @@ class TestGetK8sPods:
                 "image": "aerospike/aerospike-server:8.1",
             }
         ]
-        with patch.object(
-            k8s_tools.k8s_client,
-            "list_pods",
-            new=AsyncMock(return_value=raw_pods),
+        with (
+            patch.object(k8s_tools.k8s_client, "get_cluster", new=AsyncMock(return_value=_SAMPLE_CR)),
+            patch.object(
+                k8s_tools.k8s_client,
+                "list_pods",
+                new=AsyncMock(return_value=raw_pods),
+            ),
         ):
             result = await k8s_tools.get_k8s_pods(cluster_id="default/cl")
 
@@ -186,7 +189,7 @@ class TestGetK8sPods:
         with (
             patch.object(
                 k8s_tools.k8s_client,
-                "list_pods",
+                "get_cluster",
                 new=AsyncMock(side_effect=K8sApiError(status=404, reason="NotFound", message="cl missing")),
             ),
             pytest.raises(MCPToolError) as exc_info,
@@ -214,10 +217,13 @@ class TestGetK8sEvents:
                 "source": "operator",
             }
         ]
-        with patch.object(
-            k8s_tools.k8s_client,
-            "list_events",
-            new=AsyncMock(return_value=raw_events),
+        with (
+            patch.object(k8s_tools.k8s_client, "get_cluster", new=AsyncMock(return_value=_SAMPLE_CR)),
+            patch.object(
+                k8s_tools.k8s_client,
+                "list_events",
+                new=AsyncMock(return_value=raw_events),
+            ),
         ):
             result = await k8s_tools.get_k8s_events(cluster_id="default/cl")
 
@@ -240,10 +246,13 @@ class TestGetK8sEvents:
                 "source": "operator",
             }
         ]
-        with patch.object(
-            k8s_tools.k8s_client,
-            "list_events",
-            new=AsyncMock(return_value=raw_events),
+        with (
+            patch.object(k8s_tools.k8s_client, "get_cluster", new=AsyncMock(return_value=_SAMPLE_CR)),
+            patch.object(
+                k8s_tools.k8s_client,
+                "list_events",
+                new=AsyncMock(return_value=raw_events),
+            ),
         ):
             result = await k8s_tools.get_k8s_events(cluster_id="default/cl", since_minutes=10)
 
@@ -323,6 +332,7 @@ class TestGetK8sLogs:
 
         read_pod_log_mock = AsyncMock(return_value="line1\nline2\nline3")
         with (
+            patch.object(k8s_tools.k8s_client, "get_cluster", new=AsyncMock(return_value=_SAMPLE_CR)),
             patch.object(
                 k8s_tools.k8s_client,
                 "list_pods",
@@ -359,6 +369,7 @@ class TestGetK8sLogs:
 
         log_text = "\n".join(f"line{i}" for i in range(5))
         with (
+            patch.object(k8s_tools.k8s_client, "get_cluster", new=AsyncMock(return_value=_SAMPLE_CR)),
             patch.object(
                 k8s_tools.k8s_client,
                 "list_pods",
@@ -378,6 +389,7 @@ class TestGetK8sLogs:
         from aerospike_cluster_manager_api.mcp.tools import k8s as k8s_tools
 
         with (
+            patch.object(k8s_tools.k8s_client, "get_cluster", new=AsyncMock(return_value=_SAMPLE_CR)),
             patch.object(
                 k8s_tools.k8s_client,
                 "list_pods",

@@ -4,7 +4,7 @@ import asyncio
 import logging
 
 from aerospike_py.exception import AerospikeError, AerospikeTimeoutError, ClusterError
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from starlette.responses import Response
 
 from aerospike_cluster_manager_api.client_manager import client_manager
@@ -66,12 +66,13 @@ async def create_connection(
 
 
 @router.get("/{conn_id}", summary="Get connection", description="Retrieve a single connection profile by its ID.")
-async def get_connection(conn_id: str = Path()) -> ConnectionProfileResponse:
+async def get_connection(conn_id: str = Depends(_get_verified_connection)) -> ConnectionProfileResponse:
     """Retrieve a single connection profile by its ID.
 
-    The service raises :class:`ConnectionNotFoundError` for missing ids, so
-    the dedicated existence-check dependency is redundant — dropping it
-    halves the database round trips on this hot path.
+    The dependency enforces the workspace ACL: the caller must own the
+    connection's workspace (or the row must live in the shared
+    ``SYSTEM_OWNER_ID`` workspace). Cross-tenant probes 404 to keep the
+    wire shape identical to the missing-row case.
     """
     try:
         return await connections_service.get_connection(conn_id)
@@ -85,16 +86,14 @@ async def get_connection(conn_id: str = Path()) -> ConnectionProfileResponse:
 async def update_connection(
     body: UpdateConnectionRequest,
     caller_owner_id: CallerOwnerId,
-    conn_id: str = Path(),
+    conn_id: str = Depends(_get_verified_connection),
 ) -> ConnectionProfileResponse:
     """Update an existing connection profile with new settings.
 
-    The service's :func:`update_connection` raises
-    :class:`ConnectionNotFoundError` when the id is missing, so the
-    existence-check dependency is redundant — drop it to avoid the
-    duplicate ``db.get_connection`` round trip on each PUT. Phase 2:
-    moving the connection to a workspace invisible to the caller is a
-    404, same wire shape as a missing workspace.
+    The dependency rejects callers who do not own the connection's
+    workspace (404, identity wire shape with missing-row). Moving the
+    connection to a workspace the caller cannot see is also a 404 — the
+    service-layer ``WorkspaceNotFoundError`` is mapped here.
     """
     try:
         return await connections_service.update_connection(conn_id, body, caller_owner_id)

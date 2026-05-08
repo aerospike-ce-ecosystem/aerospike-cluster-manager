@@ -4,11 +4,12 @@ import logging
 from typing import cast
 
 from aerospike_py.types import Privilege as AerospikePrivilege
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from starlette.responses import Response
 
 from aerospike_cluster_manager_api.dependencies import AerospikeClient
 from aerospike_cluster_manager_api.models.admin import AerospikeRole, CreateRoleRequest, Privilege
+from aerospike_cluster_manager_api.rate_limit import limiter
 from aerospike_cluster_manager_api.routers._admin_utils import (
     PRIVILEGE_CODE_TO_NAME,
     PRIVILEGE_NAME_TO_CODE,
@@ -75,8 +76,9 @@ async def get_roles(client: AerospikeClient) -> list[AerospikeRole]:
     summary="Create role",
     description="Create a new Aerospike role with specified privileges. Requires security to be enabled in aerospike.conf.",
 )
+@limiter.limit("20/minute")
 @admin_endpoint
-async def create_role(body: CreateRoleRequest, client: AerospikeClient) -> AerospikeRole:
+async def create_role(request: Request, body: CreateRoleRequest, client: AerospikeClient) -> AerospikeRole:
     """Create a new Aerospike role with specified privileges. Requires security to be enabled in aerospike.conf."""
     if not body.name or not body.privileges:
         raise HTTPException(status_code=400, detail="Missing required fields: name, privileges")
@@ -123,8 +125,10 @@ async def create_role(body: CreateRoleRequest, client: AerospikeClient) -> Aeros
     summary="Delete role",
     description="Delete an Aerospike role by name. Requires security to be enabled in aerospike.conf.",
 )
+@limiter.limit("20/minute")
 @admin_endpoint
 async def delete_role(
+    request: Request,
     client: AerospikeClient,
     name: str = Query(..., min_length=1),
 ) -> Response:

@@ -40,19 +40,24 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from aerospike_cluster_manager_api import config
-from aerospike_cluster_manager_api.k8s_client import k8s_client
+from aerospike_cluster_manager_api import config, db
+from aerospike_cluster_manager_api.k8s_client import K8sApiError, k8s_client
 from aerospike_cluster_manager_api.mcp import serializers
 from aerospike_cluster_manager_api.mcp.errors import MCPToolError
 from aerospike_cluster_manager_api.mcp.registry import tool
+from aerospike_cluster_manager_api.mcp.user_context import current_caller_claims
 from aerospike_cluster_manager_api.models.k8s_cluster import (
     K8sClusterEvent,
     K8sClusterSummary,
     K8sPodStatus,
 )
+from aerospike_cluster_manager_api.models.workspace import SYSTEM_OWNER_ID
 from aerospike_cluster_manager_api.services import k8s_service
 
 logger = logging.getLogger(__name__)
+
+
+_WORKSPACE_LABEL = "acm.aerospike.com/workspace"
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +130,76 @@ def _workspace_label_selector(workspace_id: str | None) -> str | None:
     """
     if workspace_id is None:
         return None
-    return f"acm.aerospike.com/workspace={workspace_id}"
+    return f"{_WORKSPACE_LABEL}={workspace_id}"
+
+
+def _resolve_caller_owner_id() -> str:
+    """Translate MCP caller claims into the service-layer owner id.
+
+    Mirrors :func:`mcp.tools.connections._resolve_mcp_caller_owner_id`
+    and :func:`dependencies._resolve_caller_owner_id` so the same ACL
+    rule applies regardless of transport. Anonymous and bearer-token
+    sessions degrade to :data:`SYSTEM_OWNER_ID` -- single-tenant
+    deployments keep the legacy permissive behaviour.
+    """
+    claims = current_caller_claims()
+    if claims is None:
+        return SYSTEM_OWNER_ID
+    if claims.get("_mcp_bearer"):
+        return SYSTEM_OWNER_ID
+    raw = claims.get(config.ACM_OIDC_OWNER_CLAIM)
+    if not isinstance(raw, str) or not raw:
+        return SYSTEM_OWNER_ID
+    return raw
+
+
+def _cr_workspace_id(item: dict[str, Any]) -> str | None:
+    """Return the workspace id stamped on a CR, if any."""
+    labels = item.get("metadata", {}).get("labels") or {}
+    raw = labels.get(_WORKSPACE_LABEL)
+    return raw if isinstance(raw, str) and raw else None
+
+
+async def _assert_caller_owns_cluster(namespace: str, name: str) -> None:
+    """Enforce the workspace ACL on a single cluster identified by namespace/name.
+
+    Reads the CR's ``acm.aerospike.com/workspace`` label and confirms it
+    is visible to the caller (same rule as the REST K8s router). CRs
+    without the label are treated as system-shared. A missing cluster or
+    invisible workspace surfaces as ``code="not_found"`` so the wire
+    shape matches a non-existent CR -- prevents id enumeration via the
+    MCP surface.
+
+    When the workspace metaDB has not been initialised (unit-test paths
+    that exercise the K8s tools in isolation) the visibility check
+    short-circuits to "permissive" -- matches the legacy single-tenant
+    behaviour used by the notes layer.
+    """
+    try:
+        cr = await k8s_client.get_cluster(namespace, name)
+    except K8sApiError as e:
+        if e.status == 404:
+            raise MCPToolError(
+                f"Cluster '{namespace}/{name}' not found",
+                code="not_found",
+            ) from e
+        raise
+    workspace_id = _cr_workspace_id(cr)
+    if workspace_id is None:
+        return
+    caller_owner_id = _resolve_caller_owner_id()
+    try:
+        ws = await db.get_workspace(workspace_id)
+    except db.DBNotInitialized:
+        return
+    if ws is None:
+        return
+    if ws.ownerId == caller_owner_id or ws.ownerId == SYSTEM_OWNER_ID:
+        return
+    raise MCPToolError(
+        f"Cluster '{namespace}/{name}' not found",
+        code="not_found",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -145,10 +219,37 @@ async def list_k8s_clusters(workspace_id: str | None = None) -> list[dict[str, A
     ``acm.aerospike.com/workspace=<workspace_id>``. With ``workspace_id=None``
     (default) every visible CR is returned, including legacy CRs that
     pre-date workspace labelling.
+
+    Without ``workspace_id`` the result is filtered down to CRs whose
+    workspace label is visible to the caller (or whose label is missing
+    -- the system-shared bucket). This mirrors the REST list endpoint so
+    a multi-tenant MCP caller cannot enumerate other tenants' clusters
+    just by omitting the filter.
     """
     _assert_k8s_enabled()
     label_selector = _workspace_label_selector(workspace_id)
     items, _ = await k8s_client.list_clusters(label_selector=label_selector)
+
+    if workspace_id is None:
+        caller_owner_id = _resolve_caller_owner_id()
+        workspace_ids: set[str] = set()
+        for item in items:
+            ws_id = _cr_workspace_id(item)
+            if ws_id is not None:
+                workspace_ids.add(ws_id)
+        visible: dict[str, bool] = {}
+        try:
+            for ws_id in workspace_ids:
+                ws = await db.get_workspace(ws_id)
+                visible[ws_id] = ws is not None and (ws.ownerId == caller_owner_id or ws.ownerId == SYSTEM_OWNER_ID)
+        except db.DBNotInitialized:
+            # Workspace metaDB not configured -- fall back to the legacy
+            # permissive listing (every CR returned). Matches the notes
+            # layer's tolerance for unit-test fixtures that don't drive
+            # the workspace DB.
+            visible = dict.fromkeys(workspace_ids, True)
+        items = [item for item in items if (ws_id := _cr_workspace_id(item)) is None or visible.get(ws_id, False)]
+
     summaries = [k8s_service.extract_summary(item) for item in items]
     return [serializers.k8s_cluster_summary(s) for s in summaries]
 
@@ -170,6 +271,7 @@ async def get_k8s_pods(
     """
     _assert_k8s_enabled()
     namespace, name = _parse_cluster_id(cluster_id)
+    await _assert_caller_owns_cluster(namespace, name)
     pods_raw = await k8s_client.list_pods(
         namespace,
         f"app.kubernetes.io/name=aerospike-cluster,app.kubernetes.io/instance={name}",
@@ -198,6 +300,7 @@ async def get_k8s_events(
     _assert_k8s_enabled()
     _check_bound(since_minutes, max_value=_MAX_SINCE_MINUTES, name="since_minutes")
     namespace, name = _parse_cluster_id(cluster_id)
+    await _assert_caller_owns_cluster(namespace, name)
 
     field_selector = f"involvedObject.name={name},involvedObject.kind=AerospikeCluster"
     events_raw = await k8s_client.list_events(namespace, field_selector)
@@ -254,7 +357,11 @@ async def scale_k8s_cluster(
         )
     namespace, name = _parse_cluster_id(cluster_id)
 
-    # Read previous size first so the response carries an audit-style diff.
+    # ACL gate runs the same ``get_cluster`` we'd otherwise use to read
+    # the previous size — fold the two reads into one to avoid a
+    # redundant API hop. ``_assert_caller_owns_cluster`` raises before
+    # we get here when the caller cannot see the workspace.
+    await _assert_caller_owns_cluster(namespace, name)
     current = await k8s_client.get_cluster(namespace, name)
     previous_size = int(current.get("spec", {}).get("size", 0) or 0)
 
@@ -301,6 +408,7 @@ async def get_k8s_logs(
     _check_bound(since_seconds, max_value=_MAX_SINCE_SECONDS, name="since_seconds")
     _check_bound(tail_lines, max_value=_MAX_TAIL_LINES, name="tail_lines")
     namespace, name = _parse_cluster_id(cluster_id)
+    await _assert_caller_owns_cluster(namespace, name)
 
     # Match the same label pair ``get_k8s_pods`` uses so a pod from another
     # workload that happens to share the ``instance`` label cannot be

@@ -4,7 +4,7 @@ import logging
 from typing import Literal
 
 from aerospike_py import Record
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from starlette.responses import Response
 
 from aerospike_cluster_manager_api import db
@@ -17,6 +17,7 @@ from aerospike_cluster_manager_api.models.record import (
     RecordListResponse,
     RecordWriteRequest,
 )
+from aerospike_cluster_manager_api.rate_limit import limiter
 from aerospike_cluster_manager_api.services import records_service
 from aerospike_cluster_manager_api.services.records_service import (
     InvalidPkPattern,
@@ -202,7 +203,8 @@ async def get_record_detail(
     summary="Create or update record",
     description="Write a record to Aerospike with the specified key, bins, and optional TTL.",
 )
-async def put_record(body: RecordWriteRequest, client: AerospikeClient) -> AerospikeRecord:
+@limiter.limit("30/minute")
+async def put_record(request: Request, body: RecordWriteRequest, client: AerospikeClient) -> AerospikeRecord:
     """Write a record to Aerospike with the specified key, bins, and optional TTL.
 
     The key's particle type comes from ``body.key.pk_type`` ("auto" by default).
@@ -225,7 +227,9 @@ async def put_record(body: RecordWriteRequest, client: AerospikeClient) -> Aeros
     summary="Delete record",
     description="Delete a record identified by namespace, set, and primary key.",
 )
+@limiter.limit("30/minute")
 async def delete_record(
+    request: Request,
     client: AerospikeClient,
     ns: str = Query(..., min_length=1),
     set: str = Query(..., min_length=1),
@@ -251,7 +255,9 @@ async def delete_record(
     summary="Filtered record scan",
     description="Scan records with optional expression filters and pagination.",
 )
+@limiter.limit("30/minute")
 async def get_filtered_records(
+    request: Request,
     body: FilteredQueryRequest,
     client: AerospikeClient,
     conn_id: VerifiedConnId,
