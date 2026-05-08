@@ -150,6 +150,15 @@ class ClientManager:
         An MCP session evicts only its own slot, so disconnect from one
         session leaves other sessions' (and the REST path's) cached
         clients intact -- the core invariant of #303.
+
+        Race-safety: ``client.close()`` runs *while still holding* the
+        per-key lock so a concurrent ``get_client()`` cannot start
+        building a fresh AsyncClient against a soon-to-be-closed
+        underlying connection. The lock entry itself is intentionally
+        left in ``_conn_locks`` -- it gets cleaned up wholesale in
+        :meth:`close_all` and :meth:`close_session`. Popping it here
+        without the global lock + before the close completed was the
+        original race.
         """
         key = self._key(conn_id)
         conn_lock = await self._get_conn_lock(key)
@@ -159,8 +168,6 @@ class ClientManager:
             # session is the conservative choice since the underlying
             # cluster info doesn't depend on which MCP session asked.
             info_cache.invalidate_connection(conn_id)
-            async with self._global_lock:
-                self._conn_locks.pop(key, None)
             if client is not None:
                 with (
                     _tracer.start_as_current_span(

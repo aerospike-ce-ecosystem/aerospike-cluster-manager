@@ -25,12 +25,41 @@ class InvalidPkPatternError(ValueError):
     """Raised when a user-supplied PK regex/prefix pattern is malformed."""
 
 
+# Hard cap on user-supplied regex length. 256 is comfortably above any
+# legitimate PK / bin pattern we've seen, well below the size at which
+# pathological backtracking becomes feasible.
+_MAX_REGEX_PATTERN_LENGTH = 256
+
+# Heuristic detector for the classic "evil regex" shapes that drive
+# catastrophic backtracking in Python's ``re`` engine: a quantifier
+# wrapped in a quantified group, e.g. ``(a+)+``, ``(a*)*``, ``(a?)+``,
+# ``(.+)+`` etc. We can't catch every pathological pattern this way, but
+# the structural majority of accidental ReDoS payloads land on this
+# shape and the rejection is cheap.
+_REDOS_NESTED_QUANTIFIER_RE = re.compile(r"\([^()]*[+*?][^()]*\)\s*[+*?{]")
+
+
 def _validate_pattern(pattern: str) -> None:
     """Catch the common syntactic regex errors (unbalanced brackets / parens,
     dangling quantifiers) before the pattern reaches the server. Python's
     regex grammar is more permissive than POSIX in places, but rejecting
     the structural majority on the API side beats letting the user see an
-    empty result with no signal that their pattern was the problem."""
+    empty result with no signal that their pattern was the problem.
+
+    Also rejects patterns that exceed
+    :data:`_MAX_REGEX_PATTERN_LENGTH` or match the nested-quantifier
+    heuristic in :data:`_REDOS_NESTED_QUANTIFIER_RE` -- a coarse but
+    cheap ReDoS guard. Python's ``re`` cannot be safely interrupted
+    once compilation/matching has started, so structural rejection is
+    the only viable defence at this layer.
+    """
+    if len(pattern) > _MAX_REGEX_PATTERN_LENGTH:
+        raise InvalidPkPatternError(f"Regex pattern is too long ({len(pattern)} > {_MAX_REGEX_PATTERN_LENGTH})")
+    if _REDOS_NESTED_QUANTIFIER_RE.search(pattern):
+        raise InvalidPkPatternError(
+            "Regex pattern contains a nested quantifier shape "
+            "(e.g. (...+)+, (...*)+, (...?)+) that can trigger catastrophic backtracking"
+        )
     try:
         re.compile(pattern)
     except re.error as e:
