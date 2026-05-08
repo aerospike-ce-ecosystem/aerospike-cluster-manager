@@ -19,6 +19,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from aerospike_cluster_manager_api import config
 from aerospike_cluster_manager_api.events.broker import broker
+from aerospike_cluster_manager_api.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,12 @@ async def _event_generator(
     "Use the `types` parameter to filter events (comma-separated).",
     response_model=None,
 )
+# SSE streams are long-lived (one HTTP request held open for minutes/hours).
+# The global default rate limit would let only the first connection through
+# and 429 every reconnect attempt for the rest of the window — exempt the
+# stream so the broker's own ``SSE_MAX_CONNECTIONS`` cap (HTTP 429 with
+# detail "Too many SSE connections") owns the throttling decision.
+@limiter.exempt
 async def event_stream(
     request: Request,
     types: str | None = Query(None, description="Comma-separated event types to subscribe to"),
