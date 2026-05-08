@@ -33,6 +33,7 @@ import { listIndexes } from "@/lib/api/indexes"
 import { logFetchError } from "@/lib/api/log"
 import { deleteSetNote, listSetNotes, upsertSetNote } from "@/lib/api/notes"
 import { filterRecords } from "@/lib/api/records"
+import { CreateRecordDialog } from "@/components/dialogs/CreateRecordDialog"
 import { NoteSection } from "@/components/notes/NoteSection"
 import { TableSkeleton } from "@/components/skeletons/TableSkeleton"
 import type { BinDataType } from "@/lib/types/query"
@@ -41,6 +42,7 @@ import type { AerospikeRecord } from "@/lib/types/record"
 import { cx } from "@/lib/utils"
 import { RiRefreshLine, RiTimerLine } from "@remixicon/react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useMemo, useState } from "react"
 
 type PageProps = {
@@ -171,6 +173,8 @@ export default function RecordBrowserPage({ params }: PageProps) {
   const [draft, setDraft] = useState<FilterDraft>(emptyFilterDraft)
   const [applied, setApplied] = useState<FilterDraft>(emptyFilterDraft)
   const [setNote, setSetNote] = useState<string | null>(null)
+  const [createOpen, setCreateOpen] = useState(false)
+  const router = useRouter()
 
   const reloadSetNote = useCallback(async () => {
     // listSetNotes filtered by namespace; pick the row matching this set.
@@ -364,7 +368,9 @@ export default function RecordBrowserPage({ params }: PageProps) {
               aria-hidden="true"
             />
           </Button>
-          <Button variant="primary">New record</Button>
+          <Button variant="primary" onClick={() => setCreateOpen(true)}>
+            New record
+          </Button>
         </div>
       </header>
 
@@ -513,6 +519,27 @@ export default function RecordBrowserPage({ params }: PageProps) {
           </Table>
         </TableRoot>
       </Card>
+
+      <CreateRecordDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        connId={params.clusterId}
+        namespace={params.namespace}
+        set={params.set}
+        onSuccess={(pk) => {
+          // Navigate to the freshly-written record so the user can add more
+          // bins / edit metadata. The detail page re-fetches on mount, so
+          // the new row is immediately visible.
+          router.push(
+            clusterSections.record(
+              params.clusterId,
+              params.namespace,
+              params.set,
+              encodeURIComponent(pk),
+            ),
+          )
+        }}
+      />
     </main>
   )
 }

@@ -14,6 +14,26 @@ vi.mock("@/lib/api/records", () => ({
 vi.mock("@/lib/api/indexes", () => ({
   listIndexes: vi.fn(),
 }))
+// The page calls ``useRouter().push`` from the CreateRecordDialog ``onSuccess``
+// handler. Vitest's render() doesn't mount the App Router, so we replace
+// next/navigation with a lightweight stub. The page also calls
+// ``listSetNotes`` on mount and ``upsertSetNote`` / ``deleteSetNote`` from
+// the NoteSection — stub those so the network never fires under test.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    back: vi.fn(),
+    forward: vi.fn(),
+    refresh: vi.fn(),
+    prefetch: vi.fn(),
+  }),
+}))
+vi.mock("@/lib/api/notes", () => ({
+  listSetNotes: vi.fn().mockResolvedValue([]),
+  upsertSetNote: vi.fn(),
+  deleteSetNote: vi.fn(),
+}))
 
 const PARAMS = { clusterId: "conn-test", namespace: "test", set: "sample_set" }
 
