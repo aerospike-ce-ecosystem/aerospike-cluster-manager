@@ -12,6 +12,7 @@
  * Authorization header path.
  */
 
+import { refreshToken } from "@/lib/auth/keycloak"
 import { useAuthStore } from "@/stores/auth-store"
 import { useClusterSelectorStore } from "@/stores/cluster-selector-store"
 
@@ -36,19 +37,11 @@ export interface EventSubscription {
   readonly source: EventSource
 }
 
-/**
- * Subscribe to the backend SSE event stream. Returns a handle with a
- * `close()` method. Safe to call from the client only (EventSource is
- * browser-only; will throw in server components).
- */
-export function subscribeEvents<T = unknown>(
-  options: SubscribeEventsOptions<T> = {},
-): EventSubscription {
-  if (typeof window === "undefined" || typeof EventSource === "undefined") {
-    throw new Error("subscribeEvents can only be used in the browser")
-  }
-  const { types, onMessage, onError, onOpen } = options
+/** Backoff envelope for the auto-reconnect loop. */
+const RECONNECT_INITIAL_MS = 1_000
+const RECONNECT_MAX_MS = 30_000
 
+function buildStreamUrl(types?: string[]): string {
   const params = new URLSearchParams()
   if (types && types.length > 0) params.set("types", types.join(","))
 
@@ -80,9 +73,33 @@ export function subscribeEvents<T = unknown>(
 
   const qs = params.toString()
   const baseHost = active?.apiUrl?.replace(/\/+$/, "") ?? ""
-  const url = `${baseHost}${API_PREFIX}/events/stream${qs ? `?${qs}` : ""}`
+  return `${baseHost}${API_PREFIX}/events/stream${qs ? `?${qs}` : ""}`
+}
 
-  const source = new EventSource(url)
+/**
+ * Subscribe to the backend SSE event stream. Returns a handle with a
+ * `close()` method. Safe to call from the client only (EventSource is
+ * browser-only; will throw in server components).
+ *
+ * Auth-aware reconnect: when the EventSource transitions to ``CLOSED`` (the
+ * only state we can observe — ``EventSource`` does not surface HTTP status
+ * codes), we treat it as a likely 401/expired-token and try to refresh the
+ * access token before re-opening the stream. We back off exponentially
+ * (1s → 30s) on repeated failures so a permanently-broken auth doesn't melt
+ * the API into a reconnect storm.
+ */
+export function subscribeEvents<T = unknown>(
+  options: SubscribeEventsOptions<T> = {},
+): EventSubscription {
+  if (typeof window === "undefined" || typeof EventSource === "undefined") {
+    throw new Error("subscribeEvents can only be used in the browser")
+  }
+  const { types, onMessage, onError, onOpen } = options
+
+  let source: EventSource | null = null
+  let closed = false
+  let reconnectTimer: number | null = null
+  let backoffMs = RECONNECT_INITIAL_MS
 
   const messageHandler = (ev: MessageEvent) => {
     if (!onMessage) return
@@ -101,12 +118,88 @@ export function subscribeEvents<T = unknown>(
     onMessage(wrapped)
   }
 
-  source.addEventListener("message", messageHandler)
-  if (onOpen) source.addEventListener("open", onOpen)
-  if (onError) source.addEventListener("error", onError)
+  const scheduleReconnect = () => {
+    if (closed) return
+    if (reconnectTimer !== null) return
+    const delay = backoffMs
+    backoffMs = Math.min(backoffMs * 2, RECONNECT_MAX_MS)
+    reconnectTimer = window.setTimeout(() => {
+      reconnectTimer = null
+      void openConnection()
+    }, delay)
+  }
+
+  const openConnection = async () => {
+    if (closed) return
+
+    // Tear down any previous EventSource before starting a fresh one.
+    if (source) {
+      source.close()
+      source = null
+    }
+
+    const url = buildStreamUrl(types)
+    const next = new EventSource(url)
+    source = next
+
+    next.addEventListener("open", (ev) => {
+      // Successful open resets the backoff envelope.
+      backoffMs = RECONNECT_INITIAL_MS
+      onOpen?.(ev)
+    })
+
+    next.addEventListener("message", messageHandler)
+
+    next.addEventListener("error", (ev) => {
+      onError?.(ev)
+      // EventSource auto-reconnects on transient errors but stays in CLOSED
+      // when the server hard-rejected the request (e.g. 401). In that case,
+      // attempt a token refresh and re-open ourselves, otherwise leave the
+      // browser's reconnect to do its job.
+      if (next.readyState === EventSource.CLOSED) {
+        next.close()
+        if (closed) return
+        // Attempt a one-shot token refresh; on success we immediately reopen
+        // with the new token, otherwise we fall back to backoff so we don't
+        // hammer the API while auth is permanently broken.
+        void refreshToken()
+          .then((newToken) => {
+            if (closed) return
+            if (newToken) {
+              backoffMs = RECONNECT_INITIAL_MS
+              void openConnection()
+            } else {
+              scheduleReconnect()
+            }
+          })
+          .catch(() => {
+            if (!closed) scheduleReconnect()
+          })
+      }
+    })
+  }
+
+  void openConnection()
 
   return {
-    close: () => source.close(),
-    source,
+    close: () => {
+      closed = true
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer)
+        reconnectTimer = null
+      }
+      if (source) {
+        source.close()
+      }
+    },
+    // Best-effort accessor for advanced consumers; may briefly point at a
+    // closed instance during reconnect, which is fine because we never expose
+    // it before the first open completes for new consumers.
+    get source(): EventSource {
+      if (!source) {
+        throw new Error("EventSource is not yet initialised")
+      }
+      return source
+    },
   }
 }

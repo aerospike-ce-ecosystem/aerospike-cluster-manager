@@ -65,7 +65,9 @@ export default function AckoTemplatesPage() {
           >
             Refresh
           </Button>
-          <Button variant="primary">New template</Button>
+          <Button variant="primary" disabled title="Coming soon">
+            New template
+          </Button>
         </div>
       </header>
 
