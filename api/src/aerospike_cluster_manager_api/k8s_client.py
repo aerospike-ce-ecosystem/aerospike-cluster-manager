@@ -71,23 +71,28 @@ class K8sClient:
 
             from . import config as app_config
 
+            # Build a per-instance Configuration so we don't mutate the
+            # process-wide singleton (``client.Configuration.set_default``
+            # would leak K8S_VERIFY_SSL=false into anything else in the
+            # process that ever instantiates a kubernetes client). Start
+            # from a copy of whatever the loader populated so cluster
+            # endpoint / auth headers carry over, then layer our overrides
+            # on top.
+            configuration = client.Configuration.get_default_copy()
             if not app_config.K8S_VERIFY_SSL:
-                configuration = client.Configuration.get_default_copy()
                 configuration.verify_ssl = False
                 configuration.ssl_ca_cert = None
-                client.Configuration.set_default(configuration)
                 logger.warning("K8S_VERIFY_SSL=false — TLS certificate verification disabled")
             elif app_config.K8S_CA_FILE:
-                configuration = client.Configuration.get_default_copy()
                 configuration.verify_ssl = True
                 configuration.ssl_ca_cert = app_config.K8S_CA_FILE  # type: ignore[reportAttributeAccessIssue]
-                client.Configuration.set_default(configuration)
                 logger.info("Using custom K8s API CA bundle: %s", app_config.K8S_CA_FILE)
 
-            self._custom_api = client.CustomObjectsApi()
-            self._core_api = client.CoreV1Api()
-            self._storage_api = client.StorageV1Api()
-            self._autoscaling_api = client.AutoscalingV2Api()
+            api_client = client.ApiClient(configuration=configuration)
+            self._custom_api = client.CustomObjectsApi(api_client=api_client)
+            self._core_api = client.CoreV1Api(api_client=api_client)
+            self._storage_api = client.StorageV1Api(api_client=api_client)
+            self._autoscaling_api = client.AutoscalingV2Api(api_client=api_client)
             self._initialized = True
 
     # ------------------------------------------------------------------
