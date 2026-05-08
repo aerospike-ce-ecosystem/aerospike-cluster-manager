@@ -48,7 +48,12 @@ export function useEventStream<T = unknown>(
       sub = subscribeEvents<T>({
         types,
         onOpen: () => {
-          if (!cancelled) setConnected(true)
+          if (!cancelled) {
+            // A successful (re)open means whatever previous error we surfaced
+            // is no longer current — clear it so the consumer's banner clears.
+            setError(null)
+            setConnected(true)
+          }
         },
         onError: (err) => {
           if (cancelled) return

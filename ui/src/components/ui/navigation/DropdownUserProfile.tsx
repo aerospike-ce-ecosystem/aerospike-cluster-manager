@@ -14,6 +14,8 @@ import {
   DropdownMenuSubMenuTrigger,
   DropdownMenuTrigger,
 } from "@/components/Dropdown"
+import { logout as keycloakLogout } from "@/lib/auth/keycloak"
+import { useAuthStore } from "@/stores/auth-store"
 import {
   RiArrowRightUpLine,
   RiComputerLine,
@@ -34,6 +36,7 @@ export function DropdownUserProfile({
 }: DropdownUserProfileProps) {
   const [mounted, setMounted] = React.useState(false)
   const { theme, setTheme } = useTheme()
+  const claims = useAuthStore((s) => s.claims)
   React.useEffect(() => {
     setMounted(true)
   }, [])
@@ -41,12 +44,40 @@ export function DropdownUserProfile({
   if (!mounted) {
     return null
   }
+
+  const labelText =
+    claims?.email?.trim() ||
+    claims?.preferred_username?.trim() ||
+    claims?.name?.trim() ||
+    "Local user"
+  const isAuthenticated = Boolean(claims)
+
+  const handleSignOut = async (event: Event) => {
+    // Prevent the menu's default close-on-select from racing the redirect.
+    event.preventDefault()
+    try {
+      if (isAuthenticated) {
+        await keycloakLogout()
+      } else {
+        // OIDC disabled — best we can do is clear local state and refresh.
+        useAuthStore.getState().clear()
+        if (typeof window !== "undefined") {
+          window.location.reload()
+        }
+      }
+    } catch {
+      // logout() already redirects on success; on failure, fall back to clearing
+      // local state so the next API call exits the broken session cleanly.
+      useAuthStore.getState().clear()
+    }
+  }
+
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
         <DropdownMenuContent align={align}>
-          <DropdownMenuLabel>emma.stone@acme.com</DropdownMenuLabel>
+          <DropdownMenuLabel>{labelText}</DropdownMenuLabel>
           <DropdownMenuGroup>
             <DropdownMenuSubMenu>
               <DropdownMenuSubMenuTrigger>Theme</DropdownMenuSubMenuTrigger>
@@ -117,7 +148,13 @@ export function DropdownUserProfile({
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
-            <DropdownMenuItem>Sign out</DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={(event) => {
+                void handleSignOut(event)
+              }}
+            >
+              Sign out
+            </DropdownMenuItem>
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>

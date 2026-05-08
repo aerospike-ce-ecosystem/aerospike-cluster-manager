@@ -20,7 +20,7 @@ import { mapApiError } from "@/lib/api/error-mapping"
 import { logFetchError } from "@/lib/api/log"
 import type { AerospikeRole, AerospikeUser } from "@/lib/types/admin"
 import { RiShieldKeyholeLine } from "@remixicon/react"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
 type PageProps = { params: { clusterId: string } }
 
@@ -40,6 +40,7 @@ export default function AdminPage({ params }: PageProps) {
   const [securityDisabled, setSecurityDisabled] = useState(false)
   const [createUserOpen, setCreateUserOpen] = useState(false)
   const [createRoleOpen, setCreateRoleOpen] = useState(false)
+  const [userFilter, setUserFilter] = useState("")
 
   const load = useCallback(async () => {
     setUsersState((s) => ({ ...s, loading: true, error: null }))
@@ -100,6 +101,8 @@ export default function AdminPage({ params }: PageProps) {
           <UsersSection
             state={usersState}
             onCreate={() => setCreateUserOpen(true)}
+            filter={userFilter}
+            onFilterChange={setUserFilter}
           />
           <RolesSection
             state={rolesState}
@@ -163,10 +166,25 @@ function SecurityDisabledState() {
 function UsersSection({
   state,
   onCreate,
+  filter,
+  onFilterChange,
 }: {
   state: LoadState<AerospikeUser[]>
   onCreate: () => void
+  filter: string
+  onFilterChange: (value: string) => void
 }) {
+  const filtered = useMemo(() => {
+    if (!state.data) return null
+    const q = filter.trim().toLowerCase()
+    if (!q) return state.data
+    return state.data.filter(
+      (u) =>
+        u.username.toLowerCase().includes(q) ||
+        u.roles.some((r) => r.toLowerCase().includes(q)),
+    )
+  }, [state.data, filter])
+
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-end justify-between">
@@ -176,6 +194,8 @@ function UsersSection({
         <div className="flex gap-2">
           <Input
             type="search"
+            value={filter}
+            onChange={(e) => onFilterChange(e.target.value)}
             placeholder="Filter users..."
             className="sm:w-60"
           />
@@ -213,8 +233,8 @@ function UsersSection({
             <TableBody>
               {state.loading ? (
                 <SkeletonRows cols={6} rows={3} />
-              ) : state.data && state.data.length > 0 ? (
-                state.data.map((u) => (
+              ) : filtered && filtered.length > 0 ? (
+                filtered.map((u) => (
                   <TableRow key={u.username}>
                     <TableCell>
                       <span className="font-mono font-semibold text-gray-900 dark:text-gray-50">
@@ -240,7 +260,12 @@ function UsersSection({
                       {u.connections ?? 0}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" className="h-7 px-2 text-xs">
+                      <Button
+                        variant="ghost"
+                        disabled
+                        title="Edit coming soon"
+                        className="h-7 px-2 text-xs"
+                      >
                         Edit
                       </Button>
                     </TableCell>
@@ -252,7 +277,9 @@ function UsersSection({
                     colSpan={6}
                     className="py-6 text-center text-sm text-gray-500"
                   >
-                    No users.
+                    {state.data && state.data.length > 0
+                      ? "No users match the filter."
+                      : "No users."}
                   </TableCell>
                 </TableRow>
               )}
@@ -329,7 +356,12 @@ function RolesSection({
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" className="h-7 px-2 text-xs">
+                      <Button
+                        variant="ghost"
+                        disabled
+                        title="Edit coming soon"
+                        className="h-7 px-2 text-xs"
+                      >
                         Edit
                       </Button>
                     </TableCell>
