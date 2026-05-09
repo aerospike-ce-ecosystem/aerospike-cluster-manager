@@ -151,6 +151,7 @@ class K8sClient:
         apply: Any,
         body: dict[str, Any],
         label: str,
+        verify: Any = None,
     ) -> dict[str, Any]:
         """Apply ``body`` as a merge-patch with optimistic concurrency.
 
@@ -159,17 +160,32 @@ class K8sClient:
         attempt now:
 
         1. Refetches the CR to learn the current ``resourceVersion``.
-        2. Embeds it in the patch body's metadata so the API server enforces
-           optimistic concurrency (returns 409 if the CR moved underneath).
-        3. On 409 ``Conflict`` retries with backoff up to ``_PATCH_MAX_ATTEMPTS``.
+        2. Optionally re-verifies the freshly-fetched CR via ``verify``
+           (e.g. workspace-label ACL) so a TOCTOU window between the
+           caller's pre-patch ACL gate and the patch apply cannot let a
+           concurrent re-stamp leak the mutation across tenants. P1-4:
+           ``verify`` callbacks raise :class:`K8sApiError` (typically
+           ``status=409`` for "ACL changed under us, abort") which is
+           propagated unwrapped so the router maps it to a stable
+           ``Conflict`` response.
+        3. Embeds the refetched ``resourceVersion`` into the patch body's
+           metadata so the API server enforces optimistic concurrency
+           (returns 409 if the CR moved underneath us between fetch and
+           apply, even if ``verify`` passed).
+        4. On 409 ``Conflict`` retries with backoff up to ``_PATCH_MAX_ATTEMPTS``.
 
-        ``body`` is not mutated — a deep copy is taken before the
+        ``body`` is not mutated -- a deep copy is taken before the
         ``metadata.resourceVersion`` injection so callers that reuse the
         patch dict (e.g. tests) keep their original input.
         """
         last_err: K8sApiError | None = None
         for attempt in range(_PATCH_MAX_ATTEMPTS):
             current = fetch()
+            if verify is not None:
+                # Raise inside ``verify`` aborts the patch loop without
+                # consuming the retry budget -- a label mismatch is not a
+                # transient API-server flake but a real ACL violation.
+                verify(current)
             rv = (current.get("metadata", {}) or {}).get("resourceVersion")
             payload = copy.deepcopy(body)
             if rv:
@@ -410,13 +426,51 @@ class K8sClient:
         logger.debug("_create_cluster_sync(namespace=%s)", namespace)
         return self._create_custom_object_sync(PLURAL, namespace, body)
 
-    def _patch_cluster_sync(self, namespace: str, name: str, body: dict[str, Any]) -> dict[str, Any]:
-        logger.debug("_patch_cluster_sync(namespace=%s, name=%s)", namespace, name)
+    def _patch_cluster_sync(
+        self,
+        namespace: str,
+        name: str,
+        body: dict[str, Any],
+        *,
+        expected_workspace_id: str | None = None,
+    ) -> dict[str, Any]:
+        logger.debug(
+            "_patch_cluster_sync(namespace=%s, name=%s, expected_workspace_id=%s)",
+            namespace,
+            name,
+            expected_workspace_id,
+        )
+
+        verify = None
+        if expected_workspace_id is not None:
+            workspace_label = "acm.aerospike.com/workspace"
+
+            def _assert_label_unchanged(current: dict[str, Any]) -> None:
+                # P1-4: re-verify the workspace label hasn't drifted under
+                # us between the caller's pre-patch ACL check and the
+                # actual apply. If a concurrent writer re-stamped the CR
+                # with a different workspace, abort with 409 so the caller
+                # treats it as a normal optimistic-concurrency failure.
+                labels = (current.get("metadata", {}) or {}).get("labels") or {}
+                actual = labels.get(workspace_label)
+                if actual != expected_workspace_id:
+                    raise K8sApiError(
+                        status=409,
+                        reason="Conflict",
+                        message=(
+                            f"Workspace label on cluster {namespace}/{name} changed "
+                            "between ACL check and patch; refusing to apply."
+                        ),
+                    )
+
+            verify = _assert_label_unchanged
+
         return self._patch_with_resource_version(
             fetch=lambda: self._get_custom_object_sync(PLURAL, namespace, name),
             apply=lambda payload: self._patch_custom_object_sync(PLURAL, namespace, name, payload),
             body=body,
             label=f"cluster {namespace}/{name}",
+            verify=verify,
         )
 
     def _delete_cluster_sync(self, namespace: str, name: str) -> dict[str, Any]:
@@ -738,8 +792,29 @@ class K8sClient:
     async def create_cluster(self, namespace: str, body: dict[str, Any]) -> dict[str, Any]:
         return await asyncio.to_thread(self._create_cluster_sync, namespace, body)
 
-    async def patch_cluster(self, namespace: str, name: str, body: dict[str, Any]) -> dict[str, Any]:
-        return await asyncio.to_thread(self._patch_cluster_sync, namespace, name, body)
+    async def patch_cluster(
+        self,
+        namespace: str,
+        name: str,
+        body: dict[str, Any],
+        *,
+        expected_workspace_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Patch an AerospikeCluster CR with optimistic concurrency.
+
+        ``expected_workspace_id`` (P1-4) is the workspace label the
+        caller verified before invoking patch. When supplied, each
+        retry's refetch re-asserts the label is still that value -- a
+        concurrent re-stamp aborts with 409 ``Conflict`` instead of
+        applying the mutation under another tenant's label.
+        """
+        return await asyncio.to_thread(
+            self._patch_cluster_sync,
+            namespace,
+            name,
+            body,
+            expected_workspace_id=expected_workspace_id,
+        )
 
     async def delete_cluster(self, namespace: str, name: str) -> dict[str, Any]:
         return await asyncio.to_thread(self._delete_cluster_sync, namespace, name)

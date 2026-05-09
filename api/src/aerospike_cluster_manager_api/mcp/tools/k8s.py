@@ -191,9 +191,22 @@ async def _assert_caller_owns_cluster(namespace: str, name: str) -> None:
     try:
         ws = await db.get_workspace(workspace_id)
     except db.DBNotInitialized:
+        # Workspace metaDB is not configured -- preserve the legacy
+        # single-tenant fallback used by unit-test paths that exercise
+        # the K8s tools in isolation. Mirrors the REST permissive leg
+        # in :func:`routers.k8s_clusters._is_workspace_visible`.
         return
     if ws is None:
-        return
+        # Orphan label: the workspace the CR was stamped against has
+        # been deleted. Pre-fix the MCP tool returned silently, leaving
+        # the cluster accessible to every caller. Mirror the REST gate
+        # (``_is_workspace_visible`` returns False -> 404) and surface
+        # an identity-not_found so the caller cannot enumerate
+        # orphaned-label clusters across tenants.
+        raise MCPToolError(
+            f"Cluster '{namespace}/{name}' not found",
+            code="not_found",
+        )
     if ws.ownerId == caller_owner_id or ws.ownerId == SYSTEM_OWNER_ID:
         return
     raise MCPToolError(
@@ -366,7 +379,15 @@ async def scale_k8s_cluster(
     previous_size = int(current.get("spec", {}).get("size", 0) or 0)
 
     patch = {"spec": {"size": size}}
-    result = await k8s_client.patch_cluster(namespace, name, patch)
+    # P1-4: pass the workspace label observed during the ACL gate so the
+    # patch loop aborts if a concurrent writer re-stamps the CR with a
+    # different label between the gate and the apply (TOCTOU).
+    result = await k8s_client.patch_cluster(
+        namespace,
+        name,
+        patch,
+        expected_workspace_id=_cr_workspace_id(current),
+    )
     new_size = int(result.get("spec", {}).get("size", size) or size)
 
     # Use a non-aliased camelCase form directly so the response matches the
