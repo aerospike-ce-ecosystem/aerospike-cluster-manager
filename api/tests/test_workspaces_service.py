@@ -129,6 +129,33 @@ class TestUpdateWorkspace:
         with pytest.raises(WorkspaceNotFoundError):
             await workspaces_service.update_workspace(created.id, UpdateWorkspaceRequest(name="hijacked"), OWNER_B)
 
+    async def test_non_system_caller_cannot_update_system_workspace(self, init_test_db):
+        """Regression: visibility != ownership.
+
+        ``ws-default`` is owned by ``SYSTEM_OWNER_ID`` and visible to every
+        authenticated caller. Before the fix, any tenant could rename or
+        recolor it because update_workspace gated on visibility alone.
+        """
+        with pytest.raises(WorkspaceNotFoundError):
+            await workspaces_service.update_workspace(
+                DEFAULT_WORKSPACE_ID,
+                UpdateWorkspaceRequest(name="hijacked-default"),
+                OWNER_A,
+            )
+        # The default must be intact afterwards.
+        fetched = await workspaces_service.get_workspace(DEFAULT_WORKSPACE_ID, OWNER_A)
+        assert fetched.name != "hijacked-default"
+
+    async def test_system_caller_can_update_system_workspace(self, init_test_db):
+        """SYSTEM caller (anonymous / single-tenant fallback) keeps the
+        legacy permissive path so ``ws-default`` stays manageable."""
+        result = await workspaces_service.update_workspace(
+            DEFAULT_WORKSPACE_ID,
+            UpdateWorkspaceRequest(name="System Renamed"),
+            SYSTEM_OWNER_ID,
+        )
+        assert result.name == "System Renamed"
+
     async def test_owner_id_in_db_layer_not_mutated(self, init_test_db):
         """Defense-in-depth: even when a stale ``ownerId`` key reaches the
         DB merge helper, ``build_merged_workspace`` holds the field
@@ -162,8 +189,44 @@ class TestDeleteWorkspace:
             await workspaces_service.delete_workspace(created.id, OWNER_B)
 
     async def test_default_rejected(self, init_test_db):
-        with pytest.raises(WorkspaceIsDefaultError):
+        # The non-system caller is now blocked by the ownership gate before
+        # the "is default" guard fires (visibility allows the read, but
+        # SYSTEM ownership rejects the mutation). Both surface the same
+        # identity-404 wire shape.
+        with pytest.raises(WorkspaceNotFoundError):
             await workspaces_service.delete_workspace(DEFAULT_WORKSPACE_ID, OWNER_A)
+        # The system caller still hits the dedicated default-protection
+        # error, preserving the legacy 400 response on the router.
+        with pytest.raises(WorkspaceIsDefaultError):
+            await workspaces_service.delete_workspace(DEFAULT_WORKSPACE_ID, SYSTEM_OWNER_ID)
+
+    async def test_non_system_caller_cannot_delete_system_workspace(self, init_test_db):
+        """Regression for P0-1: only the system caller can delete a
+        SYSTEM-owned workspace. Prior to the fix, visibility alone gated
+        the delete path so any tenant could attempt it (and the only
+        thing stopping ``ws-default`` deletion was the dedicated
+        ``WorkspaceIsDefaultError`` guard, which doesn't fire on
+        non-default SYSTEM rows)."""
+        # Seed a non-default SYSTEM-owned workspace via the DB to mimic a
+        # legacy/pre-migration row.
+        from aerospike_cluster_manager_api.models.workspace import Workspace
+
+        now = datetime.now(UTC).isoformat()
+        await db.create_workspace(
+            Workspace(
+                id="ws-system-extra",
+                name="system-extra",
+                color="#ABCDEF",
+                ownerId=SYSTEM_OWNER_ID,
+                createdAt=now,
+                updatedAt=now,
+            )
+        )
+        with pytest.raises(WorkspaceNotFoundError):
+            await workspaces_service.delete_workspace("ws-system-extra", OWNER_A)
+        # Still present.
+        ws = await db.get_workspace("ws-system-extra")
+        assert ws is not None
 
     async def test_with_connections_rejected(self, init_test_db):
         created = await workspaces_service.create_workspace(_create_payload(), OWNER_A)
