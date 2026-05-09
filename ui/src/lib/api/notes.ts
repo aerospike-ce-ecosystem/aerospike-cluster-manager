@@ -95,7 +95,13 @@ export async function upsertRecordNote(
 ): Promise<RecordNote | null> {
   const path = `/notes/records/${enc(connId)}/${enc(namespace)}/${enc(setName)}/${enc(pk)}`
   if (!body.note || !body.note.trim()) {
-    await deleteRecordNote(connId, namespace, setName, pk, body.pkType ?? "auto")
+    await deleteRecordNote(
+      connId,
+      namespace,
+      setName,
+      pk,
+      body.pkType ?? "auto",
+    )
     return null
   }
   return apiPut<RecordNote>(path, body)
