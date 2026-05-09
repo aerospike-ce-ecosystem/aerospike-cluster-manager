@@ -145,6 +145,21 @@ export function Sidebar() {
     isActive(`/clusters/${c.id}`),
   )?.id
 
+  // Controlled accordion: defaultValue only applies on mount, so navigating
+  // between clusters via the URL would leave the accordion stuck on whatever
+  // cluster was active at first render. Track the open cluster in state and
+  // resync whenever the active cluster (derived from pathname) changes, while
+  // still allowing the user to manually toggle a cluster open/closed.
+  const [openCluster, setOpenCluster] = useState<string>(expandedCluster ?? "")
+  useEffect(() => {
+    if (expandedCluster && expandedCluster !== openCluster) {
+      setOpenCluster(expandedCluster)
+    }
+    // openCluster intentionally omitted: we only force-sync when the active
+    // cluster changes, not on every manual toggle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandedCluster])
+
   const loading = conn.isLoading || k8s.isLoading
 
   return (
@@ -170,7 +185,8 @@ export function Sidebar() {
                 <Accordion
                   type="single"
                   collapsible
-                  defaultValue={expandedCluster}
+                  value={openCluster}
+                  onValueChange={setOpenCluster}
                   className="flex flex-col gap-0.5"
                 >
                   {clusterList.map((c) => (

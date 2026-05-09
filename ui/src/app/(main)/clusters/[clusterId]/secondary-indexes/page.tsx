@@ -166,16 +166,15 @@ export default function SecondaryIndexesPage({ params }: PageProps) {
                 Object.entries(grouped).map(([ns, rows]) => (
                   <Fragment key={ns}>
                     <TableRow>
-                      <TableHeaderCell
-                        scope="colgroup"
+                      <TableCell
                         colSpan={6}
                         className="bg-gray-50 py-2 pl-4 font-mono sm:pl-6 dark:bg-gray-900"
                       >
-                        {ns}
+                        <span role="rowheader">{ns}</span>
                         <span className="ml-2 font-sans font-medium text-gray-500 dark:text-gray-400">
                           {rows.length}
                         </span>
-                      </TableHeaderCell>
+                      </TableCell>
                     </TableRow>
                     {rows.map((r) => {
                       const s = stateBadge[r.state]

@@ -243,12 +243,20 @@ function buildInitialDraft(record: AerospikeRecord): BinDraft[] {
   })
 }
 
+const safeDecode = (s: string): string | null => {
+  try {
+    return decodeURIComponent(s)
+  } catch {
+    return null
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 export default function RecordDetailPage({ params }: PageProps) {
   const router = useRouter()
-  const pk = decodeURIComponent(params.key)
+  const pk = safeDecode(params.key)
 
   const [record, setRecord] = useState<AerospikeRecord | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -262,6 +270,7 @@ export default function RecordDetailPage({ params }: PageProps) {
   const [saving, setSaving] = useState(false)
 
   const loadRecord = (signal?: { cancelled: boolean }) => {
+    if (pk === null) return Promise.resolve()
     setIsLoading(true)
     setError(null)
     return getRecordDetail(params.clusterId, {
@@ -292,6 +301,10 @@ export default function RecordDetailPage({ params }: PageProps) {
   const loadSignalRef = useRef<{ cancelled: boolean }>({ cancelled: false })
 
   useEffect(() => {
+    if (pk === null) {
+      setIsLoading(false)
+      return
+    }
     const signal = { cancelled: false }
     loadSignalRef.current = signal
     loadRecord(signal)
@@ -302,7 +315,7 @@ export default function RecordDetailPage({ params }: PageProps) {
   }, [params.clusterId, params.namespace, params.set, pk])
 
   const handleDelete = async () => {
-    if (!record) return
+    if (!record || pk === null) return
     if (!window.confirm(`Delete record '${pk}'?`)) return
     setDeleting(true)
     try {
@@ -376,7 +389,7 @@ export default function RecordDetailPage({ params }: PageProps) {
   }
 
   const handleSave = async () => {
-    if (!record) return
+    if (!record || pk === null) return
     setError(null)
 
     // Validate bin names
@@ -452,6 +465,40 @@ export default function RecordDetailPage({ params }: PageProps) {
     () => Object.keys(binErrors).length > 0,
     [binErrors],
   )
+
+  if (pk === null) {
+    return (
+      <main className="flex flex-col gap-6">
+        <nav
+          aria-label="Breadcrumb"
+          className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-500"
+        >
+          <Link
+            href={clusterSections.sets(params.clusterId)}
+            className="hover:text-gray-900 dark:hover:text-gray-50"
+          >
+            Sets
+          </Link>
+          <span aria-hidden="true">/</span>
+          <Link
+            href={clusterSections.set(
+              params.clusterId,
+              params.namespace,
+              params.set,
+            )}
+            className="hover:text-gray-900 dark:hover:text-gray-50"
+          >
+            <span className="font-mono">
+              {params.namespace}.{params.set}
+            </span>
+          </Link>
+        </nav>
+        <Card className="py-10 text-center text-sm text-gray-500 dark:text-gray-500">
+          Invalid record key.
+        </Card>
+      </main>
+    )
+  }
 
   return (
     <main className="flex flex-col gap-6">
