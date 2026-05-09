@@ -51,7 +51,9 @@ export const useClusterStore = create<ClusterStore>((set, get) => ({
 
   invalidate: (connId) => {
     const { [connId]: _removed, ...rest } = get().clusters
-    set({ clusters: rest })
+    const { [connId]: _loading, ...restLoading } = get().loadingIds
+    const { [connId]: _err, ...restErrors } = get().errors
+    set({ clusters: rest, loadingIds: restLoading, errors: restErrors })
   },
 
   reset: () => set({ clusters: {}, loadingIds: {}, errors: {} }),

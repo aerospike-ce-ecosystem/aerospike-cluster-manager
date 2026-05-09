@@ -77,6 +77,11 @@ export function useEventStream<T = unknown>(
       cancelled = true
       sub?.close()
       setConnected(false)
+      // Clear the last error/event so consumers that flip `enabled` back to
+      // false don't render a stale "stream broken" banner. A fresh subscribe
+      // will repopulate these on the next open.
+      setError(null)
+      setLastEvent(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- typesKey captures the intent
   }, [enabled, typesKey])
