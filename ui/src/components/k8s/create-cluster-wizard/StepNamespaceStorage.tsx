@@ -17,6 +17,13 @@ import { useEffect } from "react"
 interface StepNamespaceStorageProps {
   form: CreateK8sClusterRequest
   updateForm: (updates: Partial<CreateK8sClusterRequest>) => void
+  /**
+   * StorageClass names available on the target K8s cluster.
+   * Empty array means either still loading, fetch failed, or none exist —
+   * in all three cases the component falls back to a free-text input so the
+   * wizard remains usable.
+   */
+  storageClasses?: string[]
 }
 
 const MEMORY_SIZES: { label: string; bytes: number }[] = [
@@ -40,6 +47,7 @@ function defaultMemoryNamespace(
 export function StepNamespaceStorage({
   form,
   updateForm,
+  storageClasses = [],
 }: StepNamespaceStorageProps) {
   const clusterSize = form.size ?? 1
   const namespaces: AerospikeNamespaceConfig[] =
@@ -280,15 +288,47 @@ export function StepNamespaceStorage({
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="storage-class">Storage Class</Label>
-            <Input
-              id="storage-class"
-              value={legacyStorage.storageClass ?? "standard"}
-              onChange={(e) =>
-                updateForm({
-                  storage: { ...legacyStorage, storageClass: e.target.value },
-                })
-              }
-            />
+            {storageClasses.length > 0 ? (
+              <select
+                id="storage-class"
+                value={legacyStorage.storageClass ?? ""}
+                onChange={(e) =>
+                  updateForm({
+                    storage: {
+                      ...legacyStorage,
+                      storageClass: e.target.value,
+                    },
+                  })
+                }
+                className="h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+              >
+                {legacyStorage.storageClass &&
+                  !storageClasses.includes(legacyStorage.storageClass) && (
+                    <option value={legacyStorage.storageClass}>
+                      {legacyStorage.storageClass} (custom)
+                    </option>
+                  )}
+                {storageClasses.map((sc) => (
+                  <option key={sc} value={sc}>
+                    {sc}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <Input
+                id="storage-class"
+                value={legacyStorage.storageClass ?? "standard"}
+                onChange={(e) =>
+                  updateForm({
+                    storage: {
+                      ...legacyStorage,
+                      storageClass: e.target.value,
+                    },
+                  })
+                }
+                placeholder="standard"
+              />
+            )}
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="storage-size">Size</Label>
