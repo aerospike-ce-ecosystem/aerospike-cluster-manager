@@ -20,7 +20,10 @@
  */
 
 import { useAuthStore } from "@/stores/auth-store"
-import { getActiveApiUrl } from "@/stores/cluster-selector-store"
+import {
+  getActiveApiUrl,
+  getHydrationPromise,
+} from "@/stores/cluster-selector-store"
 
 export const API_PREFIX = "/api"
 export const DEFAULT_TIMEOUT_MS = 30_000
@@ -163,6 +166,19 @@ export async function apiFetch<T>(
   path: string,
   init: ApiRequestInit = {},
 ): Promise<T> {
+  // Wait for the cluster registry to either hydrate or fail, so we resolve
+  // the base URL against the final state. Without this, requests issued
+  // during boot fall back to the relative-path origin and then the
+  // post-hydration re-fetch races a 401 the silent-refresh path can't
+  // distinguish from a real auth failure. Browser-only path: in SSR we
+  // never have a registry, so the call resolves immediately via the
+  // already-terminal "registryError unset, registry unset" branch only when
+  // a hydrate has been kicked off; otherwise apiFetch on the server falls
+  // straight through.
+  if (typeof window !== "undefined") {
+    await getHydrationPromise()
+  }
+
   const url = buildUrl(path, init.query)
   const timeoutMs = init.timeoutMs ?? DEFAULT_TIMEOUT_MS
 

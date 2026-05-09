@@ -69,33 +69,93 @@ export const useClusterSelectorStore = create<ClusterSelectorStore>()(
 )
 
 /**
+ * Single-flight hydration promise. The first `hydrateClusterRegistry()` call
+ * primes this; every concurrent / subsequent `getHydrationPromise()` caller
+ * awaits the same promise so apiFetch never races the boot-time hydrate
+ * (otherwise the first few requests fall back to the relative-path origin
+ * before the registry lands, then the post-hydration re-fetch triggers a
+ * 401 the silent-refresh path can't distinguish from a real auth failure).
+ */
+let hydrationPromise: Promise<void> | null = null
+let resolveHydration: (() => void) | null = null
+
+function ensurePendingPromise(): Promise<void> {
+  if (hydrationPromise) return hydrationPromise
+  hydrationPromise = new Promise<void>((resolve) => {
+    resolveHydration = resolve
+  })
+  return hydrationPromise
+}
+
+function settleHydration(): void {
+  if (resolveHydration) {
+    const r = resolveHydration
+    resolveHydration = null
+    r()
+  } else if (!hydrationPromise) {
+    hydrationPromise = Promise.resolve()
+  }
+}
+
+/**
  * Fetch the cluster registry from the static JSON mount and hydrate the store.
- * Idempotent — call from the root provider on mount.
+ * Idempotent — call from the root provider on mount. Settles
+ * `getHydrationPromise()` whether the registry loads or the fetch fails so
+ * apiFetch callers never block forever in legacy single-cluster mode.
  */
 export async function hydrateClusterRegistry(
   fetcher: typeof fetch = fetch,
 ): Promise<ClusterRegistry> {
-  const res = await fetcher(REGISTRY_PATH, {
-    cache: "no-store",
-    credentials: "omit",
-  })
-  if (!res.ok) {
-    const msg = `Failed to load ${REGISTRY_PATH}: ${res.status} ${res.statusText}`
-    useClusterSelectorStore.getState().setRegistryError(msg)
-    throw new Error(msg)
+  ensurePendingPromise()
+  try {
+    const res = await fetcher(REGISTRY_PATH, {
+      cache: "no-store",
+      credentials: "omit",
+    })
+    if (!res.ok) {
+      const msg = `Failed to load ${REGISTRY_PATH}: ${res.status} ${res.statusText}`
+      useClusterSelectorStore.getState().setRegistryError(msg)
+      throw new Error(msg)
+    }
+    const data = (await res.json()) as ClusterRegistry
+    if (
+      !data ||
+      !Array.isArray(data.clusters) ||
+      typeof data.defaultClusterId !== "string"
+    ) {
+      const msg = `${REGISTRY_PATH} has invalid shape`
+      useClusterSelectorStore.getState().setRegistryError(msg)
+      throw new Error(msg)
+    }
+    useClusterSelectorStore.getState().setRegistry(data)
+    return data
+  } finally {
+    settleHydration()
   }
-  const data = (await res.json()) as ClusterRegistry
-  if (
-    !data ||
-    !Array.isArray(data.clusters) ||
-    typeof data.defaultClusterId !== "string"
-  ) {
-    const msg = `${REGISTRY_PATH} has invalid shape`
-    useClusterSelectorStore.getState().setRegistryError(msg)
-    throw new Error(msg)
-  }
-  useClusterSelectorStore.getState().setRegistry(data)
-  return data
+}
+
+/**
+ * Returns a single-flight promise that resolves once
+ * `hydrateClusterRegistry()` has settled (success OR error). If hydration
+ * has not been kicked off yet, resolves immediately so legacy single-cluster
+ * deployments — which never call `hydrateClusterRegistry` — do not deadlock.
+ *
+ * apiFetch awaits this before resolving the base URL so initial requests
+ * cannot fall back to the relative-path origin and then race the
+ * post-hydration re-fetch into a spurious 401.
+ */
+export function getHydrationPromise(): Promise<void> {
+  return hydrationPromise ?? Promise.resolve()
+}
+
+/**
+ * Test-only escape hatch: drop the cached single-flight promise so the next
+ * `hydrateClusterRegistry()` primes a fresh one. Used by unit tests that
+ * swap the store between scenarios.
+ */
+export function __resetHydrationPromiseForTests(): void {
+  hydrationPromise = null
+  resolveHydration = null
 }
 
 /**
