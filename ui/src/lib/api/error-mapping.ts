@@ -26,11 +26,15 @@ export type ApiErrorKind =
   | { kind: "timeout"; message: string }
   | { kind: "generic"; message: string }
 
-const SECURITY_DISABLED_MARKERS = ["security is not enabled", "ee_msg"] as const
-
+// Backend emits the exact phrase "Security is not enabled. Add a 'security
+// { }' block to aerospike.conf to manage users and roles." (see
+// api/src/aerospike_cluster_manager_api/constants.py :: EE_MSG). Anchor on
+// that phrase verbatim. The previous heuristic matched a lone `ee_msg`
+// substring, which produces false positives on legitimate 403 responses
+// like "EE_MSG: not authorized to drop role" — the user would then see
+// the security-disabled card instead of the real permission-denied error.
 function looksLikeSecurityDisabled(detail: string): boolean {
-  const lower = detail.toLowerCase()
-  return SECURITY_DISABLED_MARKERS.some((m) => lower.includes(m))
+  return detail.toLowerCase().includes("security is not enabled")
 }
 
 export function mapApiError(err: unknown): ApiErrorKind {
