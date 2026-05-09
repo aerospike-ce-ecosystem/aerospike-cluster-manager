@@ -251,6 +251,10 @@ class TestBuildTemplateStorageDict:
 
 class TestBuildTemplateNetworkConfigDict:
     def test_full(self):
+        # Output must match ACKO TemplateNetworkConfig
+        # (api/v1alpha1/aerospikeclustertemplate_types.go): a nested
+        # ``heartbeat: {mode, interval, timeout}`` map. ``heartbeat_port``
+        # has no place on the template defaults and is intentionally dropped.
         net = SimpleNamespace(
             heartbeat_mode="mesh",
             heartbeat_port=3002,
@@ -259,10 +263,11 @@ class TestBuildTemplateNetworkConfigDict:
         )
         result = _build_template_network_config_dict(net)
         assert result == {
-            "heartbeatMode": "mesh",
-            "heartbeatPort": 3002,
-            "heartbeatInterval": 150,
-            "heartbeatTimeout": 10,
+            "heartbeat": {
+                "mode": "mesh",
+                "interval": 150,
+                "timeout": 10,
+            }
         }
 
     def test_empty(self):
