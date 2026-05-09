@@ -236,14 +236,14 @@ async def list_k8s_clusters(
     # data leak. Mirrors the visibility rule used by
     # ``services/connections_service.list_connections``.
     connections = await db.get_all_connections()
-    try:
-        all_workspaces = await db.get_all_workspaces()
-    except db.DBNotInitialized:
-        all_workspaces = []
-    visible_ws_ids = {
-        ws.id for ws in all_workspaces if ws.ownerId == caller_owner_id or ws.ownerId == SYSTEM_OWNER_ID
-    }
-    if all_workspaces:
+    if caller_owner_id is not None:
+        try:
+            all_workspaces = await db.get_all_workspaces()
+        except db.DBNotInitialized:
+            all_workspaces = []
+        visible_ws_ids = {
+            ws.id for ws in all_workspaces if ws.ownerId == caller_owner_id or ws.ownerId == SYSTEM_OWNER_ID
+        }
         connections = [c for c in connections if (c.workspaceId or DEFAULT_WORKSPACE_ID) in visible_ws_ids]
     conn_by_host: dict[str, str] = {}
     conn_by_name: dict[str, str] = {}
@@ -903,8 +903,10 @@ async def list_k8s_secrets(caller_owner_id: CallerOwnerId, namespace: str = "aer
 # ---------------------------------------------------------------------------
 
 
-async def _assert_template_visible(name: str, caller_owner_id: str) -> dict[str, Any]:
-    """Default-deny ACL gate for template mutations / get.
+async def _assert_template_visible(
+    name: str, caller_owner_id: str, *, for_mutation: bool = False
+) -> dict[str, Any]:
+    """Default-deny ACL gate for template reads / mutations.
 
     Templates with no ``acm.aerospike.com/workspace`` label are treated as
     system-shared (visible to every authenticated caller) so legacy CRs
@@ -912,6 +914,12 @@ async def _assert_template_visible(name: str, caller_owner_id: str) -> dict[str,
     visible only to the workspace owner (or ``SYSTEM_OWNER_ID``). Returns
     the CR dict when visible; raises 404 otherwise (identity-404 to
     prevent enumeration).
+
+    Unlabelled (system-shared) templates are readable by all but cannot be
+    mutated; setting ``for_mutation=True`` therefore rejects them with the
+    same identity-404 used elsewhere. This prevents cross-tenant mutation
+    while a follow-up PR threads ``workspace`` through the template create
+    path so newly created templates are always labelled.
     """
     try:
         item = await k8s_client.get_template(name)
@@ -921,6 +929,8 @@ async def _assert_template_visible(name: str, caller_owner_id: str) -> dict[str,
         raise _map_k8s_error(e) from e
     workspace_id = _cr_workspace_id(item)
     if workspace_id is None:
+        if for_mutation:
+            raise HTTPException(status_code=404, detail=f"Template '{name}' not found")
         return item
     if not await _is_workspace_visible(workspace_id, caller_owner_id):
         raise HTTPException(status_code=404, detail=f"Template '{name}' not found")
@@ -988,7 +998,7 @@ async def update_k8s_template(
     name: str = _K8S_NAME,
 ) -> K8sTemplateSummary:
 
-    await _assert_template_visible(name, caller_owner_id)
+    await _assert_template_visible(name, caller_owner_id, for_mutation=True)
     patch = build_template_update_patch(body)
     if not patch.get("spec"):
         raise HTTPException(status_code=400, detail="No fields to update")
@@ -1005,7 +1015,7 @@ async def delete_k8s_template(
     name: str = _K8S_NAME,
 ) -> DeleteResponse:
 
-    await _assert_template_visible(name, caller_owner_id)
+    await _assert_template_visible(name, caller_owner_id, for_mutation=True)
 
     # Fetch all clusters (unpaginated) to check for template references
     all_clusters: list[dict[str, Any]] = []
