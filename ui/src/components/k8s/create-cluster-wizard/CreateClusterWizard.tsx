@@ -13,6 +13,7 @@ import {
   createK8sCluster,
   getK8sTemplate,
   listK8sNamespaces,
+  listK8sStorageClasses,
   listK8sTemplates,
 } from "@/lib/api/k8s"
 import type {
@@ -222,6 +223,7 @@ export function CreateClusterWizard() {
   const [templateLoading, setTemplateLoading] = useState(false)
 
   const [namespacesList, setNamespacesList] = useState<string[]>([])
+  const [storageClassesList, setStorageClassesList] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
@@ -253,6 +255,11 @@ export function CreateClusterWizard() {
     listK8sTemplates()
       .then(setTemplates)
       .catch(() => setTemplates([]))
+    listK8sStorageClasses()
+      .then(setStorageClassesList)
+      .catch(() => {
+        /* leave list empty; StepNamespaceStorage falls back to a free-text input */
+      })
   }, [])
 
   const handleModeChange = (next: CreationMode) => {
@@ -419,7 +426,11 @@ export function CreateClusterWizard() {
             updateForm={updateForm}
           />
         ) : step === 2 ? (
-          <StepNamespaceStorage form={form} updateForm={updateForm} />
+          <StepNamespaceStorage
+            form={form}
+            updateForm={updateForm}
+            storageClasses={storageClassesList}
+          />
         ) : step === 3 ? (
           <StepAdvanced form={form} updateForm={updateForm} />
         ) : (
