@@ -344,17 +344,25 @@ def _build_template_storage_dict(storage: TemplateStorageConfig) -> dict[str, An
 
 
 def _build_template_network_config_dict(network_config: TemplateNetworkConfig) -> dict[str, Any]:
-    """Convert a template network config to a CR-compatible dict."""
-    result: dict[str, Any] = {}
+    """Convert a template network config to ACKO ``TemplateNetworkConfig`` shape.
+
+    ACKO expects ``{"heartbeat": {"mode", "interval", "timeout"}}``. The
+    previous flat ``heartbeatMode`` / ``heartbeatInterval`` / ``heartbeatTimeout``
+    keys did not match any field on the CRD, so the operator silently dropped
+    them. ``heartbeat_port`` has no place on TemplateHeartbeatConfig (port
+    lives on the runtime cluster's ``aerospikeConfig.network.heartbeat.port``,
+    not on the template defaults), so we drop it here intentionally.
+    """
+    heartbeat: dict[str, Any] = {}
     if network_config.heartbeat_mode:
-        result["heartbeatMode"] = network_config.heartbeat_mode
-    if network_config.heartbeat_port is not None:
-        result["heartbeatPort"] = network_config.heartbeat_port
+        heartbeat["mode"] = network_config.heartbeat_mode
     if network_config.heartbeat_interval is not None:
-        result["heartbeatInterval"] = network_config.heartbeat_interval
+        heartbeat["interval"] = network_config.heartbeat_interval
     if network_config.heartbeat_timeout is not None:
-        result["heartbeatTimeout"] = network_config.heartbeat_timeout
-    return result
+        heartbeat["timeout"] = network_config.heartbeat_timeout
+    if not heartbeat:
+        return {}
+    return {"heartbeat": heartbeat}
 
 
 def _build_pod_metadata_dict(pod_metadata: PodMetadataConfig) -> dict[str, Any]:
@@ -822,14 +830,17 @@ def build_template_cr(req: CreateK8sTemplateRequest) -> dict[str, Any]:
             cr["spec"]["storage"] = storage
     if req.network_policy:
         cr["spec"]["aerospikeNetworkPolicy"] = build_network_policy(req.network_policy)
-    # Build aerospikeConfig with namespaceDefaults and service sub-sections
+    # Build aerospikeConfig with namespaceDefaults, service, and network
+    # sub-sections. Network heartbeat lives at ``aerospikeConfig.network`` per
+    # ACKO ``TemplateAerospikeConfig`` -- the previous ``spec.networkConfig``
+    # path did not exist on the CRD so the operator silently dropped it.
     aerospike_cfg = _build_aerospike_cfg(req.aerospike_config, req.service_config)
-    if aerospike_cfg:
-        cr["spec"]["aerospikeConfig"] = aerospike_cfg
     if req.network_config:
         net_cfg = _build_template_network_config_dict(req.network_config)
         if net_cfg:
-            cr["spec"]["networkConfig"] = net_cfg
+            aerospike_cfg.setdefault("network", net_cfg)
+    if aerospike_cfg:
+        cr["spec"]["aerospikeConfig"] = aerospike_cfg
     if req.rack_config:
         rack_cfg: dict[str, Any] = {}
         if req.rack_config.max_racks_per_node is not None:
@@ -863,14 +874,15 @@ def build_template_update_patch(body: UpdateK8sTemplateRequest) -> dict[str, Any
             patch["spec"]["storage"] = storage
     if body.network_policy is not None:
         patch["spec"]["aerospikeNetworkPolicy"] = build_network_policy(body.network_policy)
-    # Build aerospikeConfig with namespaceDefaults and service sub-sections
+    # Build aerospikeConfig with namespaceDefaults, service, and network
+    # heartbeat (see build_template_cr for field-path rationale).
     aerospike_cfg = _build_aerospike_cfg(body.aerospike_config, body.service_config)
-    if aerospike_cfg:
-        patch["spec"]["aerospikeConfig"] = aerospike_cfg
     if body.network_config is not None:
         net_cfg = _build_template_network_config_dict(body.network_config)
         if net_cfg:
-            patch["spec"]["networkConfig"] = net_cfg
+            aerospike_cfg.setdefault("network", net_cfg)
+    if aerospike_cfg:
+        patch["spec"]["aerospikeConfig"] = aerospike_cfg
     if body.rack_config is not None:
         rack_cfg: dict[str, Any] = {}
         if body.rack_config.max_racks_per_node is not None:
@@ -1415,8 +1427,13 @@ def extract_reconciliation_health(cr: dict) -> dict:
     last_error = status.get("lastReconcileError")
     operator_version = status.get("operatorVersion")
 
-    # Determine health_status based on phase and failed count
-    if phase in ("Running", "Completed"):
+    # Determine health_status based on phase and failed count. Phase names
+    # mirror ``v1alpha1.AerospikePhase`` (api/v1alpha1/aerospikecluster_types.go
+    # lines 352-383): Completed, InProgress, ScalingUp, ScalingDown,
+    # WaitingForMigration, RollingRestart, ACLSync, Paused, Deleting, Error,
+    # ConfigDegraded, BackoffActive. The previous "Running" phase did not
+    # exist on the CRD, so a healthy cluster never matched it.
+    if phase == "Completed":
         if failed_count == 0:
             health_status = "healthy"
         elif failed_count < 5:
@@ -1425,7 +1442,25 @@ def extract_reconciliation_health(cr: dict) -> dict:
             health_status = "critical"
     elif phase in ("Error", "Failed"):
         health_status = "critical"
-    elif phase in ("Pending", "Initializing", "ScalingUp", "ScalingDown", "RollingRestart"):
+    elif phase in ("ConfigDegraded", "BackoffActive"):
+        # Recoverable degraded states -- still actively reconciling but
+        # something needs operator attention.
+        health_status = "warning"
+    elif phase == "WaitingForMigration":
+        # Scale-down deferred for safety. Healthy as long as the operator is
+        # making progress; surface the failed-reconcile signal otherwise.
+        health_status = "warning" if failed_count > 0 else "healthy"
+    elif phase in (
+        "Pending",
+        "Initializing",
+        "InProgress",
+        "ScalingUp",
+        "ScalingDown",
+        "RollingRestart",
+        "ACLSync",
+        "Paused",
+        "Deleting",
+    ):
         health_status = "warning" if failed_count > 0 else "healthy"
     else:
         health_status = "warning" if failed_count > 0 else "healthy"

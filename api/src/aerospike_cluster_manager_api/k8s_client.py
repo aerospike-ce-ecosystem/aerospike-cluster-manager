@@ -7,8 +7,10 @@ to avoid blocking the event loop (same pattern as client_manager.py).
 from __future__ import annotations
 
 import asyncio
+import copy
 import logging
 import threading
+import time
 from typing import Any, cast
 
 from aerospike_cluster_manager_api import config
@@ -24,6 +26,12 @@ TEMPLATE_PLURAL = "aerospikeclustertemplates"
 _K8S_API_TIMEOUT = config.K8S_API_TIMEOUT
 # Longer timeout for streaming operations (pod logs)
 _K8S_LOG_TIMEOUT = config.K8S_LOG_TIMEOUT
+
+# Optimistic-concurrency retry budget for patch operations. Each retry refreshes
+# the CR's resourceVersion before resubmitting the patch, so a 409 from a
+# concurrent edit succeeds on the next pass instead of silently overwriting.
+_PATCH_MAX_ATTEMPTS = 3
+_PATCH_BACKOFF_BASE_S = 0.05
 
 
 class K8sApiError(Exception):
@@ -135,6 +143,54 @@ class K8sClient:
             return K8sApiError(status=408, reason="RequestTimeout", message="Kubernetes API request timed out")
         logger.error("Unexpected error in K8s operation: %s", e, exc_info=True)
         return K8sApiError(status=500, reason="InternalError", message="Internal server error")
+
+    @staticmethod
+    def _patch_with_resource_version(
+        *,
+        fetch: Any,
+        apply: Any,
+        body: dict[str, Any],
+        label: str,
+    ) -> dict[str, Any]:
+        """Apply ``body`` as a merge-patch with optimistic concurrency.
+
+        The previous flow sent the patch without a ``resourceVersion``, so a
+        concurrent edit would silently win the last-writer race. Each
+        attempt now:
+
+        1. Refetches the CR to learn the current ``resourceVersion``.
+        2. Embeds it in the patch body's metadata so the API server enforces
+           optimistic concurrency (returns 409 if the CR moved underneath).
+        3. On 409 ``Conflict`` retries with backoff up to ``_PATCH_MAX_ATTEMPTS``.
+
+        ``body`` is not mutated — a deep copy is taken before the
+        ``metadata.resourceVersion`` injection so callers that reuse the
+        patch dict (e.g. tests) keep their original input.
+        """
+        last_err: K8sApiError | None = None
+        for attempt in range(_PATCH_MAX_ATTEMPTS):
+            current = fetch()
+            rv = (current.get("metadata", {}) or {}).get("resourceVersion")
+            payload = copy.deepcopy(body)
+            if rv:
+                payload.setdefault("metadata", {})["resourceVersion"] = rv
+            try:
+                return apply(payload)
+            except K8sApiError as e:
+                if e.status != 409 or attempt == _PATCH_MAX_ATTEMPTS - 1:
+                    raise
+                last_err = e
+                # Exponential backoff (50ms / 100ms / 200ms) before refetching.
+                time.sleep(_PATCH_BACKOFF_BASE_S * (2**attempt))
+                logger.info(
+                    "Patch on %s lost a conflict; refetching resourceVersion (attempt %d/%d)",
+                    label,
+                    attempt + 2,
+                    _PATCH_MAX_ATTEMPTS,
+                )
+        # Defensive — the loop above always returns or raises, but mypy needs
+        # an explicit fallthrough.
+        raise last_err if last_err else K8sApiError(status=500, reason="InternalError", message="patch retry exhausted")
 
     # ------------------------------------------------------------------
     # Generic custom-object helpers (shared by cluster and template methods)
@@ -356,7 +412,12 @@ class K8sClient:
 
     def _patch_cluster_sync(self, namespace: str, name: str, body: dict[str, Any]) -> dict[str, Any]:
         logger.debug("_patch_cluster_sync(namespace=%s, name=%s)", namespace, name)
-        return self._patch_custom_object_sync(PLURAL, namespace, name, body)
+        return self._patch_with_resource_version(
+            fetch=lambda: self._get_custom_object_sync(PLURAL, namespace, name),
+            apply=lambda payload: self._patch_custom_object_sync(PLURAL, namespace, name, payload),
+            body=body,
+            label=f"cluster {namespace}/{name}",
+        )
 
     def _delete_cluster_sync(self, namespace: str, name: str) -> dict[str, Any]:
         logger.debug("_delete_cluster_sync(namespace=%s, name=%s)", namespace, name)
@@ -474,7 +535,12 @@ class K8sClient:
 
     def _patch_template_sync(self, name: str, body: dict[str, Any]) -> dict[str, Any]:
         logger.debug("_patch_template_sync(name=%s)", name)
-        return self._patch_cluster_custom_object_sync(TEMPLATE_PLURAL, name, body)
+        return self._patch_with_resource_version(
+            fetch=lambda: self._get_cluster_custom_object_sync(TEMPLATE_PLURAL, name),
+            apply=lambda payload: self._patch_cluster_custom_object_sync(TEMPLATE_PLURAL, name, payload),
+            body=body,
+            label=f"template {name}",
+        )
 
     def _delete_template_sync(self, name: str) -> dict[str, Any]:
         logger.debug("_delete_template_sync(name=%s)", name)
