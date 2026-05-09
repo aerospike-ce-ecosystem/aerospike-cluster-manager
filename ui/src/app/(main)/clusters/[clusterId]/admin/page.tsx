@@ -154,7 +154,7 @@ function SecurityDisabledState() {
       <a
         href="https://aerospike.com/docs/server/operations/configure/security"
         target="_blank"
-        rel="noreferrer"
+        rel="noopener noreferrer"
         className="text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
       >
         See Aerospike security docs →

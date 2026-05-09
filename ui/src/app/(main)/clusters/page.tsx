@@ -11,6 +11,7 @@ import { EditConnectionDialog } from "@/components/dialogs/EditConnectionDialog"
 import { useConnections } from "@/hooks/use-connections"
 import { useK8sClusters } from "@/hooks/use-k8s-clusters"
 import type { ConnectionProfileResponse } from "@/lib/types/connection"
+import { bumpConnectionsRev } from "@/stores/data-revision-store"
 import { useUiStore } from "@/stores/ui-store"
 import Link from "next/link"
 import { useMemo, useState } from "react"
@@ -42,6 +43,11 @@ export default function ClustersPage() {
   const combinedError = conn.error ?? k8s.error
 
   const handleConnectionUpserted = () => {
+    // Bump the connections revision so every other ``useConnections``
+    // subscriber (sidebar, dropdowns, …) refreshes too. Without this the
+    // sidebar shows stale data after add/edit even though this page itself
+    // refetches.
+    bumpConnectionsRev()
     conn.refetch()
   }
 
