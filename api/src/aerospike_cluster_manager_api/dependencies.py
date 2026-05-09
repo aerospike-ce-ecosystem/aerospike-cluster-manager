@@ -105,10 +105,29 @@ async def _get_verified_connection(
     return conn_id
 
 
-async def _get_verified_workspace(workspace_id: str = Path()) -> str:
-    """Verify that a workspace exists (path parameter) and return its id."""
-    ws = await db.get_workspace(workspace_id)
+async def _get_verified_workspace(
+    workspace_id: str = Path(),
+    caller_owner_id: str = Depends(_resolve_caller_owner_id),
+) -> str:
+    """Verify that a workspace exists and the caller can see it.
+
+    Default-deny ACL gate -- mirrors the rule used by
+    :func:`services.workspaces_service.get_workspace`. Returns the
+    workspace id when ``ownerId == caller_owner_id`` or the workspace is
+    system-shared (``ownerId == SYSTEM_OWNER_ID``). Raises 404
+    (identity-404, not 403) for missing rows and for rows the caller
+    cannot see, matching the wire shape used elsewhere so id enumeration
+    is impossible.
+    """
+    try:
+        ws = await db.get_workspace(workspace_id)
+    except db.DBNotInitialized:
+        # Unit-test paths that skip the workspace DB keep the legacy
+        # path-validation-only behaviour.
+        return workspace_id
     if not ws:
+        raise HTTPException(status_code=404, detail=f"Workspace '{workspace_id}' not found")
+    if ws.ownerId != caller_owner_id and ws.ownerId != SYSTEM_OWNER_ID:
         raise HTTPException(status_code=404, detail=f"Workspace '{workspace_id}' not found")
     return workspace_id
 

@@ -120,6 +120,18 @@ SSE_ENABLED: bool = os.getenv("SSE_ENABLED", "true").lower() in ("true", "1", "y
 SSE_HEARTBEAT_INTERVAL: int = _get_int("SSE_HEARTBEAT_INTERVAL", 15)  # seconds between heartbeat pings
 SSE_MAX_CONNECTIONS: int = _get_int("SSE_MAX_CONNECTIONS", 50)  # max concurrent SSE subscribers
 
+# CM_SSE_BROADCAST_PER_CONNECTION gates the per-connection broadcast loops in
+# ``events.collector`` (cluster.metrics, connection.health, k8s.cluster.*).
+# Default ``false`` because the broker has no per-subscriber owner filter --
+# emitting tenant-A connection metrics to tenant-B subscribers leaks data.
+# Operators of single-tenant deployments can opt back in by setting this to
+# true. Tracked as follow-up to ADR-0040 (per-subscriber filtering).
+CM_SSE_BROADCAST_PER_CONNECTION: bool = os.getenv("CM_SSE_BROADCAST_PER_CONNECTION", "false").lower() in (
+    "true",
+    "1",
+    "yes",
+)
+
 # ---------------------------------------------------------------------------
 # OpenTelemetry — exporter/sampler/resource configuration goes through OTel
 # SDK standard env vars (OTEL_EXPORTER_OTLP_*, OTEL_TRACES_SAMPLER, ...). The

@@ -56,6 +56,12 @@ async def _assert_caller_owns_connection(
     profile = await db.get_connection(conn_id)
     if profile is None:  # pragma: no cover — VerifiedConnId already checked
         raise HTTPException(status_code=404, detail=f"Connection '{conn_id}' not found")
+    if profile.workspaceId is None:
+        # Legacy / personal connection with no workspace association. Mirror
+        # the behaviour in ``dependencies._get_verified_connection`` and treat
+        # as system-shared (caller owns by default). Without this guard, a
+        # ``workspaceId=None`` row produces a spurious 404 for any caller.
+        return conn_id
     workspace = await db.get_workspace(profile.workspaceId)
     if workspace is None:
         # Workspace was deleted between the VerifiedConnId lookup and now —

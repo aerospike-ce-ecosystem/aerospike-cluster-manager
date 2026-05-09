@@ -59,10 +59,18 @@ class EventCollector:
             except asyncio.CancelledError:
                 return
             except Exception:
-                logger.debug("Metrics collection error", exc_info=True)
+                logger.warning("Metrics collection error", exc_info=True)
             await asyncio.sleep(METRICS_INTERVAL_S)
 
     async def _publish_metrics(self) -> None:
+        # The broker has no per-subscriber owner filter, so a per-connection
+        # broadcast loop leaks tenant-A metrics to tenant-B SSE subscribers.
+        # Disabled by default; single-tenant deployments can opt back in via
+        # ``CM_SSE_BROADCAST_PER_CONNECTION=true``. Frontends should poll
+        # ``/clusters/{id}`` for metrics until ADR-0040 follow-up lands a
+        # broker-level filtering primitive.
+        if not config.CM_SSE_BROADCAST_PER_CONNECTION:
+            return
         if broker.subscriber_count == 0:
             return
         connections = await db.get_all_connections()
@@ -83,7 +91,7 @@ class EventCollector:
                         }
                     )
                 except Exception:
-                    logger.debug("Failed to collect metrics for connection '%s'", conn.id, exc_info=True)
+                    logger.warning("Failed to collect metrics for connection '%s'", conn.id, exc_info=True)
 
     # ------------------------------------------------------------------
     # Connection health loop
@@ -96,10 +104,16 @@ class EventCollector:
             except asyncio.CancelledError:
                 return
             except Exception:
-                logger.debug("Health collection error", exc_info=True)
+                logger.warning("Health collection error", exc_info=True)
             await asyncio.sleep(HEALTH_INTERVAL_S)
 
     async def _publish_health(self) -> None:
+        # See ``_publish_metrics``: same multi-tenant leak. Gated off by
+        # default until ADR-0040 follow-up gives the broker per-subscriber
+        # filtering. Per-connection health is also exposed at
+        # ``GET /api/clusters/{id}/health`` for poll-based UIs.
+        if not config.CM_SSE_BROADCAST_PER_CONNECTION:
+            return
         if broker.subscriber_count == 0:
             return
         from aerospike_cluster_manager_api.constants import INFO_BUILD, INFO_EDITION, INFO_NAMESPACES
@@ -159,10 +173,16 @@ class EventCollector:
             except asyncio.CancelledError:
                 return
             except Exception:
-                logger.debug("K8s collection error", exc_info=True)
+                logger.warning("K8s collection error", exc_info=True)
             await asyncio.sleep(K8S_INTERVAL_S)
 
     async def _publish_k8s(self) -> None:
+        # See ``_publish_metrics``: per-cluster events (k8s.cluster.detail /
+        # events / health) bypass the workspace ACL when broadcast to all
+        # SSE subscribers. Gated off by default until per-subscriber filter
+        # lands.
+        if not config.CM_SSE_BROADCAST_PER_CONNECTION:
+            return
         if broker.subscriber_count == 0:
             return
         with _tracer.start_as_current_span(
@@ -192,7 +212,7 @@ class EventCollector:
                             }
                         )
                     except Exception:
-                        logger.debug("Failed to collect K8s detail for %s/%s", ns, name, exc_info=True)
+                        logger.warning("Failed to collect K8s detail for %s/%s", ns, name, exc_info=True)
 
                     try:
                         field_selector = f"involvedObject.name={name},involvedObject.kind=AerospikeCluster"
@@ -206,7 +226,7 @@ class EventCollector:
                             }
                         )
                     except Exception:
-                        logger.debug("Failed to collect K8s events for %s/%s", ns, name, exc_info=True)
+                        logger.warning("Failed to collect K8s events for %s/%s", ns, name, exc_info=True)
 
                     try:
                         from aerospike_cluster_manager_api.routers.k8s_clusters import extract_health
@@ -222,9 +242,9 @@ class EventCollector:
                             }
                         )
                     except Exception:
-                        logger.debug("Failed to collect K8s health for %s/%s", ns, name, exc_info=True)
+                        logger.warning("Failed to collect K8s health for %s/%s", ns, name, exc_info=True)
             except Exception:
-                logger.debug("K8s collection cycle failed", exc_info=True)
+                logger.warning("K8s collection cycle failed", exc_info=True)
 
 
 collector = EventCollector()

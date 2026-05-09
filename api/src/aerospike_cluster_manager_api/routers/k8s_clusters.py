@@ -230,7 +230,21 @@ async def list_k8s_clusters(
         visible_workspaces[ws_id] = await _is_workspace_visible(ws_id, caller_owner_id)
     items = [item for item in items if (ws := _cr_workspace_id(item)) is None or visible_workspaces.get(ws, False)]
 
+    # Build the connection-id correlation table from connections visible to the
+    # caller only. Without this filter, a tenant would receive another tenant's
+    # connectionId on a CR that happens to share a name/host -- a cross-tenant
+    # data leak. Mirrors the visibility rule used by
+    # ``services/connections_service.list_connections``.
     connections = await db.get_all_connections()
+    try:
+        all_workspaces = await db.get_all_workspaces()
+    except db.DBNotInitialized:
+        all_workspaces = []
+    visible_ws_ids = {
+        ws.id for ws in all_workspaces if ws.ownerId == caller_owner_id or ws.ownerId == SYSTEM_OWNER_ID
+    }
+    if all_workspaces:
+        connections = [c for c in connections if (c.workspaceId or DEFAULT_WORKSPACE_ID) in visible_ws_ids]
     conn_by_host: dict[str, str] = {}
     conn_by_name: dict[str, str] = {}
     for conn in connections:
@@ -678,6 +692,17 @@ async def delete_k8s_cluster(
         service_host = f"{name}.{namespace}.svc.cluster.local"
         for conn in all_conns:
             if conn.name == k8s_prefix or service_host in conn.hosts:
+                # Gate on workspace visibility so we never delete another
+                # tenant's connection profile that happens to share a
+                # hostname/name with the cluster being torn down.
+                conn_ws = conn.workspaceId or DEFAULT_WORKSPACE_ID
+                if not await _is_workspace_visible(conn_ws, caller_owner_id):
+                    logger.info(
+                        "Skipping connection cleanup for %s (workspace %s not visible to caller)",
+                        conn.id,
+                        conn_ws,
+                    )
+                    continue
                 await db.delete_connection(conn.id)
                 await client_manager.close_client(conn.id)
                 logger.info("Cleaned up auto-connect profile %s for deleted cluster %s/%s", conn.id, namespace, name)
@@ -808,31 +833,68 @@ async def delete_k8s_cluster_hpa(
 # ---------------------------------------------------------------------------
 
 
+async def _visible_cluster_namespaces(caller_owner_id: str) -> set[str]:
+    """Return the K8s namespaces hosting an AerospikeCluster the caller can see.
+
+    Used to bound infrastructure-level lookups (secrets) to namespaces the
+    caller has any cluster footprint in. Namespaces without a labelled CR
+    (legacy / system-shared) remain reachable.
+    """
+    items, _ = await k8s_client.list_clusters(limit=200)
+    workspace_ids: set[str] = {ws_id for item in items if (ws_id := _cr_workspace_id(item)) is not None}
+    visible_workspaces: dict[str, bool] = {
+        ws_id: await _is_workspace_visible(ws_id, caller_owner_id) for ws_id in workspace_ids
+    }
+    namespaces: set[str] = set()
+    for item in items:
+        ws_id = _cr_workspace_id(item)
+        if ws_id is None or visible_workspaces.get(ws_id, False):
+            ns = (item.get("metadata", {}) or {}).get("namespace")
+            if ns:
+                namespaces.add(ns)
+    return namespaces
+
+
 @router.get("/namespaces", summary="List Kubernetes namespaces")
 @_k8s_endpoint("list Kubernetes namespaces")
-async def list_k8s_namespaces() -> list[str]:
-
+async def list_k8s_namespaces(caller_owner_id: CallerOwnerId) -> list[str]:
+    # Namespaces are infrastructure-level metadata: returned cluster-wide so
+    # users can pick one when creating a new cluster. The ``caller_owner_id``
+    # dependency still requires an authenticated caller.
+    _ = caller_owner_id
     return await k8s_client.list_namespaces()
 
 
 @router.get("/nodes", summary="List Kubernetes nodes with zone info")
 @_k8s_endpoint("list Kubernetes nodes")
-async def list_k8s_nodes() -> list[dict[str, Any]]:
-
+async def list_k8s_nodes(caller_owner_id: CallerOwnerId) -> list[dict[str, Any]]:
+    # Nodes are cluster-level infrastructure -- enumerated for placement
+    # planning. Authenticated callers only.
+    _ = caller_owner_id
     return await k8s_client.list_nodes()
 
 
 @router.get("/storageclasses", summary="List Kubernetes storage classes")
 @_k8s_endpoint("list Kubernetes storage classes")
-async def list_k8s_storage_classes() -> list[str]:
-
+async def list_k8s_storage_classes(caller_owner_id: CallerOwnerId) -> list[str]:
+    # Storage classes are cluster-level infrastructure metadata.
+    # Authenticated callers only.
+    _ = caller_owner_id
     return await k8s_client.list_storage_classes()
 
 
 @router.get("/secrets", summary="List K8s Secrets in a namespace")
 @_k8s_endpoint("list Kubernetes secrets")
-async def list_k8s_secrets(namespace: str = "aerospike") -> list[str]:
-
+async def list_k8s_secrets(caller_owner_id: CallerOwnerId, namespace: str = "aerospike") -> list[str]:
+    # Secrets are sensitive: only return them for namespaces the caller has
+    # at least one visible AerospikeCluster CR in. Namespaces with no
+    # labelled CR (legacy / system-shared) remain reachable so existing
+    # single-tenant deployments keep working.
+    visible = await _visible_cluster_namespaces(caller_owner_id)
+    if visible and namespace not in visible:
+        # Identity-404 (empty list) so callers cannot enumerate other
+        # tenants' namespaces.
+        return []
     return await k8s_client.list_secrets(namespace)
 
 
@@ -841,21 +903,53 @@ async def list_k8s_secrets(namespace: str = "aerospike") -> list[str]:
 # ---------------------------------------------------------------------------
 
 
+async def _assert_template_visible(name: str, caller_owner_id: str) -> dict[str, Any]:
+    """Default-deny ACL gate for template mutations / get.
+
+    Templates with no ``acm.aerospike.com/workspace`` label are treated as
+    system-shared (visible to every authenticated caller) so legacy CRs
+    created before workspace labelling stay reachable. Labelled CRs are
+    visible only to the workspace owner (or ``SYSTEM_OWNER_ID``). Returns
+    the CR dict when visible; raises 404 otherwise (identity-404 to
+    prevent enumeration).
+    """
+    try:
+        item = await k8s_client.get_template(name)
+    except K8sApiError as e:
+        if e.status == 404:
+            raise HTTPException(status_code=404, detail=f"Template '{name}' not found") from e
+        raise _map_k8s_error(e) from e
+    workspace_id = _cr_workspace_id(item)
+    if workspace_id is None:
+        return item
+    if not await _is_workspace_visible(workspace_id, caller_owner_id):
+        raise HTTPException(status_code=404, detail=f"Template '{name}' not found")
+    return item
+
+
 @router.get("/templates", summary="List K8s AerospikeClusterTemplates")
 @_k8s_endpoint("list Kubernetes templates")
-async def list_k8s_templates() -> list[K8sTemplateSummary]:
+async def list_k8s_templates(caller_owner_id: CallerOwnerId) -> list[K8sTemplateSummary]:
 
     items = await k8s_client.list_templates()
+    # Filter labelled templates by workspace visibility. Templates without a
+    # workspace label are treated as system-shared (legacy compatibility).
+    workspace_ids: set[str] = {ws_id for item in items if (ws_id := _cr_workspace_id(item)) is not None}
+    visible_workspaces: dict[str, bool] = {
+        ws_id: await _is_workspace_visible(ws_id, caller_owner_id) for ws_id in workspace_ids
+    }
+    items = [item for item in items if (ws := _cr_workspace_id(item)) is None or visible_workspaces.get(ws, False)]
     return [extract_template_summary(item) for item in items]
 
 
 @router.get("/templates/{name}", summary="Get K8s AerospikeClusterTemplate detail")
 @_k8s_endpoint("get Kubernetes template")
 async def get_k8s_template(
+    caller_owner_id: CallerOwnerId,
     name: str = _K8S_NAME,
 ) -> K8sTemplateDetail:
 
-    item = await k8s_client.get_template(name)
+    item = await _assert_template_visible(name, caller_owner_id)
     metadata = item.get("metadata", {})
     return K8sTemplateDetail(
         name=metadata.get("name", ""),
@@ -868,8 +962,17 @@ async def get_k8s_template(
 @router.post("/templates", status_code=201, summary="Create K8s AerospikeClusterTemplate")
 @limiter.limit("20/minute")
 @_k8s_endpoint("create Kubernetes template")
-async def create_k8s_template(request: Request, body: CreateK8sTemplateRequest) -> K8sTemplateSummary:
+async def create_k8s_template(
+    request: Request,
+    body: CreateK8sTemplateRequest,
+    caller_owner_id: CallerOwnerId,
+) -> K8sTemplateSummary:
 
+    # Templates have no workspace_id field on the request model today -- they
+    # remain system-shared until a future PR threads workspace through
+    # CreateK8sTemplateRequest. Still require an authenticated caller (the
+    # ``caller_owner_id`` dependency would not run otherwise) so anonymous
+    # template mutations are impossible once OIDC is enabled.
     cr = build_template_cr(body)
     result = await k8s_client.create_template(cr)
     return extract_template_summary(result)
@@ -881,9 +984,11 @@ async def create_k8s_template(request: Request, body: CreateK8sTemplateRequest) 
 async def update_k8s_template(
     request: Request,
     body: UpdateK8sTemplateRequest,
+    caller_owner_id: CallerOwnerId,
     name: str = _K8S_NAME,
 ) -> K8sTemplateSummary:
 
+    await _assert_template_visible(name, caller_owner_id)
     patch = build_template_update_patch(body)
     if not patch.get("spec"):
         raise HTTPException(status_code=400, detail="No fields to update")
@@ -896,8 +1001,11 @@ async def update_k8s_template(
 @_k8s_endpoint("delete Kubernetes template")
 async def delete_k8s_template(
     request: Request,
+    caller_owner_id: CallerOwnerId,
     name: str = _K8S_NAME,
 ) -> DeleteResponse:
+
+    await _assert_template_visible(name, caller_owner_id)
 
     # Fetch all clusters (unpaginated) to check for template references
     all_clusters: list[dict[str, Any]] = []
