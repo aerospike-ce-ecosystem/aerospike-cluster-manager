@@ -115,4 +115,4 @@ def _get_client_ip(request: Request) -> str:
 # ``@limiter.limit(...)`` decorators.
 DEFAULT_LIMITS = ["60/minute"]
 
-limiter = Limiter(key_func=_get_client_ip, default_limits=DEFAULT_LIMITS)
+limiter = Limiter(key_func=_get_client_ip, default_limits=DEFAULT_LIMITS)  # type: ignore[arg-type]  # slowapi default_limits accepts list[str]; pyright strict-checks against alias

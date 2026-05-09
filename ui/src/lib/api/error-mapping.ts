@@ -53,7 +53,9 @@ export function mapApiError(err: unknown): ApiErrorKind {
         // backend detail string verbatim; only synthesize when it is empty.
         return {
           kind: "validation",
-          message: err.detail ? `Validation: ${err.detail}` : "Validation error",
+          message: err.detail
+            ? `Validation: ${err.detail}`
+            : "Validation error",
         }
       case 503:
         return { kind: "unreachable", message: err.detail }

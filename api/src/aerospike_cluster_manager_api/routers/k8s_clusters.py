@@ -903,9 +903,7 @@ async def list_k8s_secrets(caller_owner_id: CallerOwnerId, namespace: str = "aer
 # ---------------------------------------------------------------------------
 
 
-async def _assert_template_visible(
-    name: str, caller_owner_id: str, *, for_mutation: bool = False
-) -> dict[str, Any]:
+async def _assert_template_visible(name: str, caller_owner_id: str, *, for_mutation: bool = False) -> dict[str, Any]:
     """Default-deny ACL gate for template reads / mutations.
 
     Templates with no ``acm.aerospike.com/workspace`` label are treated as
