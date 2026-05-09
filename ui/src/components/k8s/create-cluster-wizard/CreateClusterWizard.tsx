@@ -216,6 +216,19 @@ export function CreateClusterWizard() {
     workspaceId: currentWorkspaceId,
   }))
 
+  // The form snapshot above only captures the workspace at mount time.
+  // If the user switches workspace via the sidebar dropdown while the wizard
+  // is open, keep the form's workspaceId in sync so the review step shows the
+  // correct value. handleCreate also re-reads from the store at submit to
+  // protect against any last-millisecond divergence.
+  useEffect(() => {
+    setForm((prev) =>
+      prev.workspaceId === currentWorkspaceId
+        ? prev
+        : { ...prev, workspaceId: currentWorkspaceId },
+    )
+  }, [currentWorkspaceId])
+
   const [templates, setTemplates] = useState<K8sTemplateSummary[]>([])
   const [selectedTemplateName, setSelectedTemplateName] = useState<
     string | null
@@ -376,7 +389,11 @@ export function CreateClusterWizard() {
     setSubmitError(null)
     setSubmitting(true)
     try {
-      const payload = cleanupPayload(form)
+      // Re-read the live workspace at submit time. The form's workspaceId is
+      // captured once on mount; reading from the store here protects against
+      // a stale snapshot if the user switched workspace mid-flow.
+      const liveWorkspaceId = useUiStore.getState().currentWorkspaceId
+      const payload = cleanupPayload({ ...form, workspaceId: liveWorkspaceId })
       await createK8sCluster(payload)
       // The operator path also auto-creates a connection profile under the
       // chosen workspace; refresh consumers (sidebar, dropdowns) so the new
