@@ -454,7 +454,11 @@ export function CreateClusterWizard() {
           templateMode
         />
       ) : step === 2 ? (
-        <StepNamespaceStorage form={form} updateForm={updateForm} />
+        <StepNamespaceStorage
+          form={form}
+          updateForm={updateForm}
+          storageClasses={storageClassesList}
+        />
       ) : (
         <StepReview form={form} templateName={selectedTemplateName} />
       )}
