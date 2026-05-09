@@ -467,7 +467,7 @@ async def force_reconcile_k8s_cluster(
 ) -> K8sClusterSummary:
     """Add a force-reconcile annotation to trigger the operator to re-reconcile."""
 
-    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
+    cr = await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     patch: dict[str, Any] = {
         "metadata": {
             "annotations": {
@@ -475,7 +475,7 @@ async def force_reconcile_k8s_cluster(
             }
         }
     }
-    result = await k8s_client.patch_cluster(namespace, name, patch)
+    result = await k8s_client.patch_cluster(namespace, name, patch, expected_workspace_id=_cr_workspace_id(cr))
     return extract_summary(result)
 
 
@@ -493,7 +493,7 @@ async def reset_circuit_breaker(
     name: str = _K8S_NAME,
 ) -> dict[str, str]:
     """Reset the circuit breaker by patching status counters and annotating the CR."""
-    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
+    cr = await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     # 1. Reset status subresource (clear error state)
     await k8s_client.patch_cluster_status(
         namespace,
@@ -511,7 +511,7 @@ async def reset_circuit_breaker(
             }
         }
     }
-    await k8s_client.patch_cluster(namespace, name, patch)
+    await k8s_client.patch_cluster(namespace, name, patch, expected_workspace_id=_cr_workspace_id(cr))
     return {"message": "Circuit breaker reset triggered", "namespace": namespace, "name": name}
 
 
@@ -558,6 +558,14 @@ async def import_k8s_cluster(
             status_code=404,
             detail=f"Workspace '{cr_workspace_id}' not found",
         )
+    # P1-3: stamp the caller's default workspace label when the imported
+    # CR has none. Without this fix, an import landed unlabelled and was
+    # therefore visible to every authenticated caller (matching the
+    # pre-#307 system-shared bucket). Mirrors the create_k8s_cluster
+    # pattern at routers/k8s_clusters.py:~603.
+    if cr_workspace_id is None:
+        labels = cr.setdefault("metadata", {}).setdefault("labels", {})
+        labels[_WORKSPACE_LABEL] = DEFAULT_WORKSPACE_ID
 
     existing_namespaces = await k8s_client.list_namespaces()
     if cr_namespace not in existing_namespaces:
@@ -667,9 +675,9 @@ async def update_k8s_cluster(
     if not has_update_fields(body):
         raise HTTPException(status_code=400, detail="At least one field must be provided")
 
-    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
+    cr = await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     patch = build_update_patch(body)
-    result = await k8s_client.patch_cluster(namespace, name, patch)
+    result = await k8s_client.patch_cluster(namespace, name, patch, expected_workspace_id=_cr_workspace_id(cr))
     return extract_summary(result)
 
 
@@ -723,9 +731,9 @@ async def scale_k8s_cluster(
     name: str = _K8S_NAME,
 ) -> K8sClusterSummary:
 
-    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
+    cr = await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     patch = {"spec": {"size": body.size}}
-    result = await k8s_client.patch_cluster(namespace, name, patch)
+    result = await k8s_client.patch_cluster(namespace, name, patch, expected_workspace_id=_cr_workspace_id(cr))
     return extract_summary(result)
 
 
@@ -744,9 +752,9 @@ async def update_node_blocklist(
 ) -> K8sClusterSummary:
     """Patch spec.k8sNodeBlockList on the AerospikeCluster CR."""
 
-    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
+    cr = await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     patch: dict[str, Any] = {"spec": {"k8sNodeBlockList": body.node_names}}
-    result = await k8s_client.patch_cluster(namespace, name, patch)
+    result = await k8s_client.patch_cluster(namespace, name, patch, expected_workspace_id=_cr_workspace_id(cr))
     return extract_summary(result)
 
 
@@ -906,18 +914,16 @@ async def list_k8s_secrets(caller_owner_id: CallerOwnerId, namespace: str = "aer
 async def _assert_template_visible(name: str, caller_owner_id: str, *, for_mutation: bool = False) -> dict[str, Any]:
     """Default-deny ACL gate for template reads / mutations.
 
-    Templates with no ``acm.aerospike.com/workspace`` label are treated as
-    system-shared (visible to every authenticated caller) so legacy CRs
-    created before workspace labelling stay reachable. Labelled CRs are
-    visible only to the workspace owner (or ``SYSTEM_OWNER_ID``). Returns
-    the CR dict when visible; raises 404 otherwise (identity-404 to
-    prevent enumeration).
+    Templates with no ``acm.aerospike.com/workspace`` label are surfaced
+    ONLY to the system caller -- legacy/pre-labelling rows stay reachable
+    for migration but never leak across tenants. Labelled CRs are visible
+    to the workspace owner (or ``SYSTEM_OWNER_ID``). Returns the CR dict
+    when visible; raises 404 otherwise (identity-404 to prevent
+    enumeration).
 
-    Unlabelled (system-shared) templates are readable by all but cannot be
-    mutated; setting ``for_mutation=True`` therefore rejects them with the
-    same identity-404 used elsewhere. This prevents cross-tenant mutation
-    while a follow-up PR threads ``workspace`` through the template create
-    path so newly created templates are always labelled.
+    With newly-created templates always carrying a workspace label
+    (post-#307 fix), the only unlabelled rows in production are pre-fix
+    legacy fixtures; system-only access is the safe default.
     """
     try:
         item = await k8s_client.get_template(name)
@@ -927,9 +933,15 @@ async def _assert_template_visible(name: str, caller_owner_id: str, *, for_mutat
         raise _map_k8s_error(e) from e
     workspace_id = _cr_workspace_id(item)
     if workspace_id is None:
-        if for_mutation:
-            raise HTTPException(status_code=404, detail=f"Template '{name}' not found")
-        return item
+        # Unlabelled: only the system caller may read or mutate.
+        # ``for_mutation`` is kept on the signature so existing call
+        # sites stay explicit, but the visibility rule is now the same
+        # for both paths -- the pre-fix gap let any caller mutate
+        # unlabelled templates iff they had created one (round-tripping
+        # the create-without-label bug).
+        if caller_owner_id == SYSTEM_OWNER_ID:
+            return item
+        raise HTTPException(status_code=404, detail=f"Template '{name}' not found")
     if not await _is_workspace_visible(workspace_id, caller_owner_id):
         raise HTTPException(status_code=404, detail=f"Template '{name}' not found")
     return item
@@ -940,13 +952,25 @@ async def _assert_template_visible(name: str, caller_owner_id: str, *, for_mutat
 async def list_k8s_templates(caller_owner_id: CallerOwnerId) -> list[K8sTemplateSummary]:
 
     items = await k8s_client.list_templates()
-    # Filter labelled templates by workspace visibility. Templates without a
-    # workspace label are treated as system-shared (legacy compatibility).
+    # Filter labelled templates by workspace visibility. Unlabelled
+    # templates are surfaced ONLY to the system caller -- legacy/pre-#307
+    # rows stay reachable for migration but no tenant can read another
+    # tenant's untagged templates. The pre-fix behaviour returned
+    # unlabelled templates to every caller, which leaked another tenant's
+    # untagged template metadata.
     workspace_ids: set[str] = {ws_id for item in items if (ws_id := _cr_workspace_id(item)) is not None}
     visible_workspaces: dict[str, bool] = {
         ws_id: await _is_workspace_visible(ws_id, caller_owner_id) for ws_id in workspace_ids
     }
-    items = [item for item in items if (ws := _cr_workspace_id(item)) is None or visible_workspaces.get(ws, False)]
+    is_system_caller = caller_owner_id == SYSTEM_OWNER_ID
+
+    def _template_visible(item: dict[str, Any]) -> bool:
+        ws = _cr_workspace_id(item)
+        if ws is None:
+            return is_system_caller
+        return visible_workspaces.get(ws, False)
+
+    items = [item for item in items if _template_visible(item)]
     return [extract_template_summary(item) for item in items]
 
 
@@ -976,12 +1000,27 @@ async def create_k8s_template(
     caller_owner_id: CallerOwnerId,
 ) -> K8sTemplateSummary:
 
-    # Templates have no workspace_id field on the request model today -- they
-    # remain system-shared until a future PR threads workspace through
-    # CreateK8sTemplateRequest. Still require an authenticated caller (the
-    # ``caller_owner_id`` dependency would not run otherwise) so anonymous
-    # template mutations are impossible once OIDC is enabled.
+    # Resolve the target workspace -- explicit body field wins, otherwise
+    # fall back to the caller's default workspace bucket so the new CR
+    # gets stamped with a label and the ACL gates (list / mutate) work
+    # downstream. Pre-fix the body had no field at all and the CR was
+    # created unlabelled -- visible to every authenticated caller and
+    # write-locked because ``_assert_template_visible(for_mutation=True)``
+    # rejected unlabelled rows (#P0-2).
+    if body.workspace_id is not None and not await _is_workspace_visible(body.workspace_id, caller_owner_id):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Workspace '{body.workspace_id}' not found",
+        )
+    target_workspace_id = body.workspace_id or DEFAULT_WORKSPACE_ID
+
     cr = build_template_cr(body)
+    # Stamp the workspace label so subsequent ACL gates can recognise the
+    # template's tenant -- mirrors the create_k8s_cluster pattern at
+    # routers/k8s_clusters.py:~603. Always labels (even for the default
+    # bucket) so list/get/mutate gates can apply uniform rules.
+    labels = cr.setdefault("metadata", {}).setdefault("labels", {})
+    labels[_WORKSPACE_LABEL] = target_workspace_id
     result = await k8s_client.create_template(cr)
     return extract_template_summary(result)
 
@@ -1078,9 +1117,9 @@ async def resync_k8s_cluster_template(
     name: str = _K8S_NAME,
 ) -> K8sClusterSummary:
 
-    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
+    cr = await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     patch: dict[str, Any] = {"metadata": {"annotations": {"acko.io/resync-template": "true"}}}
-    result = await k8s_client.patch_cluster(namespace, name, patch)
+    result = await k8s_client.patch_cluster(namespace, name, patch, expected_workspace_id=_cr_workspace_id(cr))
     return extract_summary(result)
 
 
@@ -1175,13 +1214,13 @@ async def trigger_k8s_cluster_operation(
     name: str = _K8S_NAME,
 ) -> K8sClusterSummary:
 
-    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
+    cr = await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     op_id = body.id or f"ui-{uuid.uuid4().hex[:8]}"
     operation: dict[str, Any] = {"kind": body.kind, "id": op_id}
     if body.pod_list:
         operation["podList"] = body.pod_list
     patch: dict[str, Any] = {"spec": {"operations": [operation]}}
-    result = await k8s_client.patch_cluster(namespace, name, patch)
+    result = await k8s_client.patch_cluster(namespace, name, patch, expected_workspace_id=_cr_workspace_id(cr))
     return extract_summary(result)
 
 
@@ -1198,7 +1237,7 @@ async def clear_k8s_cluster_operations(
     name: str = _K8S_NAME,
 ) -> K8sClusterSummary:
     """Clear spec.operations to unblock a stuck cluster."""
-    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
+    cr = await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
     patch: dict[str, Any] = {"spec": {"operations": []}}
-    result = await k8s_client.patch_cluster(namespace, name, patch)
+    result = await k8s_client.patch_cluster(namespace, name, patch, expected_workspace_id=_cr_workspace_id(cr))
     return extract_summary(result)

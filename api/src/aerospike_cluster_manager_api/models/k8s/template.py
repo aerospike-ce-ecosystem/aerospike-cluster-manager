@@ -56,6 +56,17 @@ class CreateK8sTemplateRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
     name: str = Field(min_length=1, max_length=63, pattern=r"^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$")
+    workspace_id: str | None = Field(
+        default=None,
+        alias="workspaceId",
+        description=(
+            "Workspace to stamp on the template via the "
+            "``acm.aerospike.com/workspace`` label. Defaults to the caller's "
+            "default workspace at the router layer when omitted. Without "
+            "this stamp, templates remain unlabelled and visible to every "
+            "authenticated caller (legacy single-tenant fallback)."
+        ),
+    )
     image: str | None = Field(default=None, pattern=r"^[a-z0-9]([a-z0-9._/-]*[a-z0-9])?:[a-zA-Z0-9._-]+$")
     size: int | None = Field(default=None, ge=1, le=8)
     resources: ResourceConfig | None = None

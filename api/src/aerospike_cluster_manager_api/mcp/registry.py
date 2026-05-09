@@ -44,6 +44,7 @@ done at the call site rather than at registration time.
 from __future__ import annotations
 
 import inspect
+import logging
 import typing
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -57,6 +58,30 @@ from aerospike_cluster_manager_api.mcp import user_context as _user_context_mod
 from aerospike_cluster_manager_api.mcp.access_profile import WRITE_TOOLS, AccessProfile, is_blocked
 from aerospike_cluster_manager_api.mcp.errors import MCPToolError, map_aerospike_errors
 from aerospike_cluster_manager_api.models.workspace import SYSTEM_OWNER_ID
+
+logger = logging.getLogger(__name__)
+
+
+# P1-5: track misconfig warnings emitted at most once per process per
+# missing-claim case. Without this guard a misconfigured IdP would log
+# a WARNING on every MCP tool invocation. Mirror the REST helper in
+# ``dependencies._warn_missing_owner_claim_once``.
+_WARNED_MISSING_CLAIMS: set[str] = set()
+
+
+def _warn_missing_owner_claim_once(claim_name: str) -> None:
+    """Emit a one-time WARNING when the configured OIDC owner claim is
+    missing from the MCP caller's JWT. Behavior unchanged (caller
+    silently degrades to permissive workspace access)."""
+    if claim_name in _WARNED_MISSING_CLAIMS:
+        return
+    _WARNED_MISSING_CLAIMS.add(claim_name)
+    logger.warning(
+        "MCP: OIDC owner claim '%s' is missing or empty in caller JWT; workspace gate is bypassed for this caller. "
+        "This silently downgrades caller identity and disables tenant isolation. "
+        "Verify ACM_OIDC_OWNER_CLAIM matches a claim your IdP actually emits.",
+        claim_name,
+    )
 
 
 @dataclass(frozen=True)
@@ -164,9 +189,12 @@ async def _assert_workspace_owns_arg(
     # empty claim degrades to SYSTEM_OWNER_ID -- same rule
     # ``dependencies._resolve_caller_owner_id`` applies for REST
     # callers, so misconfigured IdPs cannot lock callers out of the
-    # default workspace.
+    # default workspace. P1-5: emit a one-time WARNING so a
+    # misconfigured IdP is loudly visible (set guard prevents log
+    # spam).
     raw = claims.get(config.ACM_OIDC_OWNER_CLAIM)
     if not isinstance(raw, str) or not raw:
+        _warn_missing_owner_claim_once(config.ACM_OIDC_OWNER_CLAIM)
         return
     caller_owner_id = raw
 

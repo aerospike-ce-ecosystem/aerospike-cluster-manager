@@ -146,7 +146,7 @@ class TestCreateConnection:
 
     async def test_persisted_can_be_retrieved(self, init_test_db):
         created = await connections_service.create_connection(_create_payload())
-        fetched = await connections_service.get_connection(created.id)
+        fetched = await connections_service.get_connection(created.id, "system")
         assert fetched.id == created.id
         assert fetched.name == created.name
 
@@ -159,13 +159,31 @@ class TestCreateConnection:
 class TestGetConnection:
     async def test_returns_existing(self, init_test_db):
         created = await connections_service.create_connection(_create_payload())
-        result = await connections_service.get_connection(created.id)
+        result = await connections_service.get_connection(created.id, "system")
         assert isinstance(result, ConnectionProfileResponse)
         assert result.id == created.id
 
     async def test_missing_raises(self, init_test_db):
         with pytest.raises(ConnectionNotFoundError):
-            await connections_service.get_connection("conn-nonexistent")
+            await connections_service.get_connection("conn-nonexistent", "system")
+
+    async def test_cross_owner_returns_not_found(self, init_test_db):
+        """P1-2 regression: get_connection now requires caller_owner_id and
+        rejects cross-tenant probes with the same wire shape as missing."""
+        from datetime import UTC, datetime
+
+        from aerospike_cluster_manager_api import db
+        from aerospike_cluster_manager_api.models.workspace import Workspace
+
+        now = datetime.now(UTC).isoformat()
+        await db.create_workspace(
+            Workspace(id="ws-alice", name="alice", color="#111111", ownerId="alice", createdAt=now, updatedAt=now)
+        )
+        created = await connections_service.create_connection(
+            _create_payload(name="alice-only", workspaceId="ws-alice"), caller_owner_id="alice"
+        )
+        with pytest.raises(ConnectionNotFoundError):
+            await connections_service.get_connection(created.id, caller_owner_id="bob")
 
 
 # ---------------------------------------------------------------------------
@@ -206,7 +224,7 @@ class TestDeleteConnection:
         created = await connections_service.create_connection(_create_payload())
         await connections_service.delete_connection(created.id)
         with pytest.raises(ConnectionNotFoundError):
-            await connections_service.get_connection(created.id)
+            await connections_service.get_connection(created.id, "system")
 
     async def test_idempotent_for_missing(self, init_test_db):
         # Delete twice — second call must not raise (idempotent).

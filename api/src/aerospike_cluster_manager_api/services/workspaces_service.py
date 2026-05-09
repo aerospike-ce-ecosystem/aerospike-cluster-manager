@@ -95,6 +95,25 @@ def _is_visible_to(ws: Workspace, caller_owner_id: str) -> bool:
     return ws.ownerId == caller_owner_id or ws.ownerId == SYSTEM_OWNER_ID
 
 
+def _is_owned_by(ws: Workspace, caller_owner_id: str) -> bool:
+    """Return True iff ``caller_owner_id`` may **mutate** ``ws``.
+
+    Stricter than :func:`_is_visible_to`: SYSTEM-owned workspaces (the
+    built-in default, ``ws-default``) can only be mutated by the system
+    caller itself. Without this check any authenticated caller could
+    rename or recolor ``ws-default`` because the visibility rule lets
+    every authenticated caller read SYSTEM rows. The earlier
+    pre-fix behaviour gated update/delete on visibility, so any tenant
+    could mutate the shared default.
+
+    The system caller (``caller_owner_id == SYSTEM_OWNER_ID``) keeps the
+    legacy permissive path -- anonymous deployments and the
+    single-tenant fallback both resolve to SYSTEM_OWNER_ID and should
+    still be able to manage every workspace.
+    """
+    return ws.ownerId == caller_owner_id
+
+
 # ---------------------------------------------------------------------------
 # Service entry points
 # ---------------------------------------------------------------------------
@@ -154,10 +173,17 @@ async def update_workspace(
 
     Raises :class:`WorkspaceNotFoundError` when the workspace does not
     exist or is invisible to the caller — same wire shape so id
-    enumeration is impossible.
+    enumeration is impossible. Mutations require strict ownership
+    (:func:`_is_owned_by`); visibility alone is not enough or any tenant
+    could rename / recolor SYSTEM-owned rows like ``ws-default``.
     """
     ws = await db.get_workspace(workspace_id)
     if ws is None or not _is_visible_to(ws, caller_owner_id):
+        raise WorkspaceNotFoundError(workspace_id)
+    if not _is_owned_by(ws, caller_owner_id):
+        # Visible to the caller (e.g. SYSTEM-shared default) but not
+        # owned -- refuse the mutation. Use the same identity-404 wire
+        # shape as the visibility miss to avoid leaking ownership info.
         raise WorkspaceNotFoundError(workspace_id)
 
     update_data = payload.model_dump(exclude_unset=True, by_alias=False)
@@ -186,6 +212,11 @@ async def delete_workspace(workspace_id: str, caller_owner_id: str) -> None:
     """
     ws = await db.get_workspace(workspace_id)
     if ws is None or not _is_visible_to(ws, caller_owner_id):
+        raise WorkspaceNotFoundError(workspace_id)
+    if not _is_owned_by(ws, caller_owner_id):
+        # Same default-deny rule update_workspace uses: visible (e.g.
+        # SYSTEM-shared) but not owned by the caller is treated as a
+        # 404 to avoid leaking the existence of the SYSTEM bucket.
         raise WorkspaceNotFoundError(workspace_id)
     if ws.isDefault or ws.id == DEFAULT_WORKSPACE_ID:
         raise WorkspaceIsDefaultError(workspace_id)

@@ -18,6 +18,31 @@ from aerospike_cluster_manager_api.models.workspace import SYSTEM_OWNER_ID, Work
 logger = logging.getLogger(__name__)
 
 
+# P1-5: track misconfig warnings emitted at most once per process per
+# missing-claim case. Without this guard a misconfigured IdP would log a
+# WARNING on every request which buries other diagnostic noise. The set
+# is keyed on the configured claim name so changing
+# ``ACM_OIDC_OWNER_CLAIM`` mid-process re-emits.
+_WARNED_MISSING_CLAIMS: set[str] = set()
+
+
+def _warn_missing_owner_claim_once(claim_name: str) -> None:
+    """Emit a one-time WARNING when the configured OIDC owner claim is
+    missing from the JWT. Behavior stays unchanged (caller silently
+    degrades to ``SYSTEM_OWNER_ID``) -- this is purely an observability
+    hook so an operator notices a misconfigured IdP instead of silently
+    losing tenant isolation. See ``.env.example`` for tuning guidance."""
+    if claim_name in _WARNED_MISSING_CLAIMS:
+        return
+    _WARNED_MISSING_CLAIMS.add(claim_name)
+    logger.warning(
+        "OIDC owner claim '%s' is missing or empty in caller JWT; falling back to SYSTEM_OWNER_ID. "
+        "This silently downgrades caller identity and disables tenant isolation. "
+        "Verify ACM_OIDC_OWNER_CLAIM matches a claim your IdP actually emits.",
+        claim_name,
+    )
+
+
 def _resolve_caller_owner_id(request: Request) -> str:
     """Return the caller's workspace-owner identity for ACL checks.
 
@@ -53,6 +78,11 @@ def _resolve_caller_owner_id(request: Request) -> str:
         return SYSTEM_OWNER_ID
     raw = claims.get(config.ACM_OIDC_OWNER_CLAIM)
     if not isinstance(raw, str) or not raw:
+        # P1-5: surface misconfigured-IdP cases instead of silently
+        # collapsing every authenticated caller into SYSTEM_OWNER_ID.
+        # Behaviour stays the same to avoid breaking deployments that
+        # genuinely expect single-tenant fallback.
+        _warn_missing_owner_claim_once(config.ACM_OIDC_OWNER_CLAIM)
         return SYSTEM_OWNER_ID
     return raw
 

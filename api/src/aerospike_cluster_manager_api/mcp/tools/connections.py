@@ -116,7 +116,7 @@ async def create_connection(
 @tool(category="connection", mutation=False)
 async def get_connection(conn_id: str) -> dict[str, Any]:
     """Fetch a connection profile by id."""
-    result = await connections_service.get_connection(conn_id)
+    result = await connections_service.get_connection(conn_id, _resolve_mcp_caller_owner_id())
     return result.model_dump()
 
 
