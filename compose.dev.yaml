@@ -1,16 +1,24 @@
 services:
   # ── PostgreSQL ───────────────────────────────────────────────────────
+  # SECURITY: bound to 127.0.0.1 only. Do not expose this port on a LAN
+  # without first replacing the password — POSTGRES_PASSWORD must be set
+  # in the shell or .env (no default). Set POSTGRES_USER / POSTGRES_DB to
+  # override the defaults below.
   postgres:
     container_name: postgres
     image: postgres:17-alpine
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     environment:
-      POSTGRES_USER: aerospike
-      POSTGRES_PASSWORD: aerospike
-      POSTGRES_DB: aerospike_manager
+      POSTGRES_USER: ${POSTGRES_USER:-aerospike}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set (see .env.example)}
+      POSTGRES_DB: ${POSTGRES_DB:-aerospike_manager}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U aerospike -d aerospike_manager"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-aerospike} -d ${POSTGRES_DB:-aerospike_manager}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
