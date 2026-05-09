@@ -220,6 +220,7 @@ export function CreateClusterWizard() {
     string | null
   >(null)
   const [templateLoading, setTemplateLoading] = useState(false)
+  const [templateError, setTemplateError] = useState<string | null>(null)
 
   const [namespacesList, setNamespacesList] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
@@ -273,11 +274,18 @@ export function CreateClusterWizard() {
   const handleSelectTemplate = async (name: string) => {
     setSelectedTemplateName(name)
     setTemplateLoading(true)
+    setTemplateError(null)
     try {
       const detail = await getK8sTemplate(name)
       const spec = (detail as { spec?: Record<string, unknown> }).spec ?? {}
       const updates = buildFormUpdatesFromTemplate(spec, name)
       setForm((prev) => ({ ...prev, ...updates }))
+    } catch (err) {
+      // Surface load failure to the user instead of silently leaving the
+      // template selector with stale state. Mirrors `submitError` styling.
+      const message =
+        err instanceof Error ? err.message : "Failed to load template"
+      setTemplateError(`Failed to load template "${name}": ${message}`)
     } finally {
       setTemplateLoading(false)
     }
@@ -451,6 +459,11 @@ export function CreateClusterWizard() {
       {stepError && (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
           {stepError}
+        </div>
+      )}
+      {templateError && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+          {templateError}
         </div>
       )}
       {submitError && (

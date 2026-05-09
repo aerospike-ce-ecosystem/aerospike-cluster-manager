@@ -69,7 +69,21 @@ function buildStreamUrl(types?: string[]): string {
     null
   if (active) params.set("cluster", active.id)
   const token = useAuthStore.getState().accessToken
-  if (token) params.set("access_token", token)
+  if (token) {
+    // TODO(ADR-0040 follow-up): replace with per-stream signed nonce or
+    // cookie-based auth so the token does not appear in the URL. EventSource
+    // does not support custom headers in stock browsers, so this remains the
+    // workaround until the broker grows a dedicated handshake endpoint.
+    if (process.env.NODE_ENV !== "production") {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[events.ts] access_token is being sent in the SSE URL query " +
+          "string. Ensure the ingress masks `access_token` from access logs. " +
+          "Tracking: ADR-0040 follow-up.",
+      )
+    }
+    params.set("access_token", token)
+  }
 
   const qs = params.toString()
   const baseHost = active?.apiUrl?.replace(/\/+$/, "") ?? ""
