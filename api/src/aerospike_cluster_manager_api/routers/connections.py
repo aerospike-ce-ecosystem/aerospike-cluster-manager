@@ -66,16 +66,23 @@ async def create_connection(
 
 
 @router.get("/{conn_id}", summary="Get connection", description="Retrieve a single connection profile by its ID.")
-async def get_connection(conn_id: str = Depends(_get_verified_connection)) -> ConnectionProfileResponse:
+async def get_connection(
+    caller_owner_id: CallerOwnerId,
+    conn_id: str = Depends(_get_verified_connection),
+) -> ConnectionProfileResponse:
     """Retrieve a single connection profile by its ID.
 
     The dependency enforces the workspace ACL: the caller must own the
     connection's workspace (or the row must live in the shared
     ``SYSTEM_OWNER_ID`` workspace). Cross-tenant probes 404 to keep the
     wire shape identical to the missing-row case.
+
+    ``caller_owner_id`` is also threaded into the service-layer call as
+    defense-in-depth (P1-2) so a future refactor that bypasses
+    ``_get_verified_connection`` still hits the ACL.
     """
     try:
-        return await connections_service.get_connection(conn_id)
+        return await connections_service.get_connection(conn_id, caller_owner_id)
     except ConnectionNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -213,10 +220,32 @@ def _disconnected_health(error: str, error_type: str) -> Response:
     description="Test connectivity to an Aerospike cluster without saving the profile.",
 )
 @limiter.limit("5/minute")
-async def test_connection(request: Request, body: TestConnectionRequest) -> dict[str, bool | str]:
-    """Test connectivity to an Aerospike cluster without saving the profile."""
+async def test_connection(
+    request: Request,
+    body: TestConnectionRequest,
+    caller_owner_id: CallerOwnerId,
+) -> dict[str, bool | str]:
+    """Test connectivity to an Aerospike cluster without saving the profile.
+
+    Failure messages are normalised to a generic ``"connection failed"``
+    string so the REST surface does not leak host/port or driver
+    internals to the caller. The original exception text is preserved in
+    the structured operator log alongside the caller identity so an SRE
+    debugging a flapping cluster still has the underlying error.
+    """
     result = await connections_service.test_connection(body)
-    return {"success": result.success, "message": result.message}
+    if not result.success:
+        # Mirror the MCP-side hardening (mcp/tools/connections.py:~265):
+        # generic wire response, structured operator log with detail.
+        logger.warning(
+            "REST test_connection failure: caller_owner_id=%s hosts=%s port=%s detail=%s",
+            caller_owner_id,
+            body.hosts,
+            body.port,
+            result.message,
+        )
+        return {"success": False, "message": "connection failed"}
+    return {"success": True, "message": result.message}
 
 
 @router.delete(

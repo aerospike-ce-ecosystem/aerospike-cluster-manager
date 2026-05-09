@@ -312,7 +312,13 @@ class TestTestConnection:
         assert body["message"] == "Connected successfully"
 
     async def test_failure(self, client: AsyncClient):
-        """Test connection endpoint when connection fails."""
+        """Test connection endpoint when connection fails.
+
+        Failure messages are normalised to a generic ``"connection
+        failed"`` so the REST surface does not leak driver internals
+        (P1-1 hardening); the original detail lives in the operator
+        log only.
+        """
         with patch(
             "aerospike_cluster_manager_api.services.connections_service.aerospike_py.AsyncClient",
             side_effect=Exception("Connection refused"),
@@ -325,7 +331,9 @@ class TestTestConnection:
         assert response.status_code == 200
         body = response.json()
         assert body["success"] is False
-        assert "Connection refused" in body["message"]
+        assert body["message"] == "connection failed"
+        # The original detail must NOT leak through.
+        assert "Connection refused" not in body["message"]
 
     async def test_not_connected(self, client: AsyncClient):
         """Test connection endpoint when client connects but is_connected returns False."""
@@ -346,7 +354,9 @@ class TestTestConnection:
         assert response.status_code == 200
         body = response.json()
         assert body["success"] is False
-        assert "Failed to connect" in body["message"]
+        # P1-1: REST returns the normalised generic message; the original
+        # ("Failed to connect") only appears in the operator log.
+        assert body["message"] == "connection failed"
 
     async def test_with_credentials(self, client: AsyncClient):
         """Test connection endpoint passes credentials correctly."""
@@ -375,6 +385,95 @@ class TestTestConnection:
         call_args = mock_cls.call_args[0][0]
         assert call_args["user"] == "admin"
         assert call_args["password"] == "secret"
+
+
+class TestConnectionSSRF:
+    """P1-1 regression: test_connection rejects loopback / link-local
+    targets without making any network call."""
+
+    async def test_imds_target_rejected_without_network_call(self, client: AsyncClient):
+        """169.254.169.254 (EC2 IMDS) must be blocked by the SSRF gate
+        before the Aerospike client is even constructed."""
+        with patch(
+            "aerospike_cluster_manager_api.services.connections_service.aerospike_py.AsyncClient",
+        ) as mock_cls:
+            response = await client.post(
+                "/api/connections/test",
+                json={"hosts": ["169.254.169.254"], "port": 80},
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["success"] is False
+        # No network call must have happened.
+        mock_cls.assert_not_called()
+
+    async def test_loopback_ipv4_rejected(self, client: AsyncClient):
+        with patch(
+            "aerospike_cluster_manager_api.services.connections_service.aerospike_py.AsyncClient",
+        ) as mock_cls:
+            response = await client.post(
+                "/api/connections/test",
+                json={"hosts": ["127.0.0.1"], "port": 3000},
+            )
+        assert response.status_code == 200
+        assert response.json()["success"] is False
+        mock_cls.assert_not_called()
+
+    async def test_loopback_ipv6_rejected(self, client: AsyncClient):
+        with patch(
+            "aerospike_cluster_manager_api.services.connections_service.aerospike_py.AsyncClient",
+        ) as mock_cls:
+            response = await client.post(
+                "/api/connections/test",
+                json={"hosts": ["[::1]"], "port": 3000},
+            )
+        assert response.status_code == 200
+        assert response.json()["success"] is False
+        mock_cls.assert_not_called()
+
+    async def test_loopback_allowed_when_env_override_set(self, client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+        """``ACM_CONNECTION_TEST_ALLOW_PRIVATE=true`` lets dev deployments
+        target the loopback Aerospike running alongside the API."""
+        monkeypatch.setenv("ACM_CONNECTION_TEST_ALLOW_PRIVATE", "true")
+
+        mock_client = AsyncMock()
+        mock_client.connect = AsyncMock()
+        mock_client.is_connected = lambda: True
+        mock_client.close = AsyncMock()
+
+        with patch(
+            "aerospike_cluster_manager_api.services.connections_service.aerospike_py.AsyncClient",
+            return_value=mock_client,
+        ) as mock_cls:
+            response = await client.post(
+                "/api/connections/test",
+                json={"hosts": ["127.0.0.1"], "port": 3000},
+            )
+
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+        mock_cls.assert_called_once()
+
+    async def test_dns_hostname_not_blocked(self, client: AsyncClient):
+        """Hostnames are not pre-resolved here -- the gate is bare-IP
+        only. Egress firewalls back-stop DNS-based bypasses."""
+        mock_client = AsyncMock()
+        mock_client.connect = AsyncMock()
+        mock_client.is_connected = lambda: True
+        mock_client.close = AsyncMock()
+
+        with patch(
+            "aerospike_cluster_manager_api.services.connections_service.aerospike_py.AsyncClient",
+            return_value=mock_client,
+        ) as mock_cls:
+            response = await client.post(
+                "/api/connections/test",
+                json={"hosts": ["example.com"], "port": 3000},
+            )
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+        mock_cls.assert_called_once()
 
 
 class TestCrossOwnerWorkspaceAccess:

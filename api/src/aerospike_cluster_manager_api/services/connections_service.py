@@ -16,7 +16,9 @@ exceptions defined here, which the router translates to HTTP status codes.
 from __future__ import annotations
 
 import contextlib
+import ipaddress
 import logging
+import os
 import uuid
 from datetime import UTC, datetime
 from typing import Any, NamedTuple
@@ -55,6 +57,22 @@ class ConnectionNotFoundError(LookupError):
         self.conn_id = conn_id
 
 
+class BlockedConnectionTargetError(ValueError):
+    """Raised when a test_connection target points at a denied address.
+
+    Default-deny SSRF gate: loopback, link-local (especially the EC2 IMDS
+    169.254.169.254), and IPv6 ``::1`` are rejected before any network
+    syscall so the API cannot be repurposed as an internal port scanner
+    or a metadata-service exfil channel. Operators can override the
+    default-deny via ``ACM_CONNECTION_TEST_ALLOW_PRIVATE=true`` for dev
+    deployments where the API and Aerospike share a host.
+    """
+
+    def __init__(self, host: str) -> None:
+        super().__init__(f"Connection target '{host}' is not allowed")
+        self.host = host
+
+
 class WorkspaceNotFoundError(LookupError):
     """Raised when a referenced workspace does not exist."""
 
@@ -85,6 +103,56 @@ class TestConnectionResult(NamedTuple):
 # ---------------------------------------------------------------------------
 # Service entry points
 # ---------------------------------------------------------------------------
+
+
+_ALLOW_PRIVATE_TARGETS_ENV = "ACM_CONNECTION_TEST_ALLOW_PRIVATE"
+
+
+def _allow_private_targets() -> bool:
+    """Return True when operators have opted into private-range targets.
+
+    Read live (not snapshotted) so test fixtures can flip the env var via
+    monkeypatch. The default is False -- production deployments default-
+    deny loopback / link-local to keep the test_connection API from
+    being repurposed as an internal port scanner or IMDS exfil channel.
+    """
+    return os.environ.get(_ALLOW_PRIVATE_TARGETS_ENV, "false").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _is_blocked_target(host: str) -> bool:
+    """Return True iff ``host`` resolves to a denied IP literal.
+
+    Blocks loopback (``127.0.0.0/8``, ``::1``) and link-local IPv4
+    (``169.254.0.0/16`` -- includes the EC2 IMDS ``169.254.169.254``) so
+    the test-connection endpoint cannot be turned into an SSRF probe by
+    an authenticated caller. Hostnames that are not bare IP literals are
+    *not* blocked here -- the underlying Aerospike client resolves DNS
+    natively and re-checking after resolve would race with TOCTOU. The
+    contract is: literal-IP rejection is the cheap first line; deeper
+    network-policy enforcement (egress firewall) is expected to backstop
+    DNS-based bypasses.
+
+    The ``ACM_CONNECTION_TEST_ALLOW_PRIVATE`` env var disables the gate
+    for dev deployments where the API and Aerospike share a host (the
+    compose.dev.yaml workflow exercises this routinely).
+    """
+    if _allow_private_targets():
+        return False
+    candidate = host.strip()
+    if not candidate:
+        return False
+    # IPv6 literals may arrive bracketed (`[::1]`); strip before parsing.
+    if candidate.startswith("[") and candidate.endswith("]"):
+        candidate = candidate[1:-1]
+    try:
+        ip = ipaddress.ip_address(candidate)
+    except ValueError:
+        # Not a bare IP literal -- let it through; DNS-based abuse is
+        # explicitly out of scope per the docstring rationale.
+        return False
+    if ip.is_loopback:
+        return True
+    return bool(ip.is_link_local)
 
 
 async def _assert_workspace_visible(workspace_id: str, caller_owner_id: str | None) -> None:
@@ -133,13 +201,39 @@ async def list_connections(
     return [ConnectionProfileResponse.from_profile(p) for p in profiles]
 
 
-async def get_connection(conn_id: str) -> ConnectionProfileResponse:
-    """Return the connection profile with id ``conn_id``.
+async def get_connection(conn_id: str, caller_owner_id: str) -> ConnectionProfileResponse:
+    """Return the connection profile with id ``conn_id`` if visible to caller.
 
-    Raises ``ConnectionNotFoundError`` if no such profile exists.
+    Raises ``ConnectionNotFoundError`` when the row does not exist *or*
+    when it exists but the caller does not own the underlying workspace
+    (and the workspace is not the SYSTEM-shared bucket). Identity-404
+    so id enumeration cannot distinguish "missing" from "exists but not
+    yours".
+
+    ``caller_owner_id`` is mandatory -- previously this service entry
+    had no ACL plumbed through and relied on every caller (REST + MCP)
+    to gate beforehand. That made it a regression trap: any future
+    caller forgetting the gate would silently expose cross-tenant
+    connections. Threading the parameter through forces the contract.
     """
     conn = await db.get_connection(conn_id)
     if not conn:
+        raise ConnectionNotFoundError(conn_id)
+    workspace_id = getattr(conn, "workspaceId", None)
+    if workspace_id is None:
+        # Legacy / dict-fixture connection with no workspace association.
+        # Treat as system-shared so the pre-#307 wire shape is preserved.
+        return ConnectionProfileResponse.from_profile(conn)
+    try:
+        workspace = await db.get_workspace(workspace_id)
+    except db.DBNotInitialized:
+        # Unit-test paths that don't drive the workspace DB keep the
+        # legacy permissive behaviour -- matches the dependency-layer
+        # convention in :func:`dependencies._get_verified_connection`.
+        return ConnectionProfileResponse.from_profile(conn)
+    if workspace is None:
+        raise ConnectionNotFoundError(conn_id)
+    if workspace.ownerId != caller_owner_id and workspace.ownerId != SYSTEM_OWNER_ID:
         raise ConnectionNotFoundError(conn_id)
     return ConnectionProfileResponse.from_profile(conn)
 
@@ -218,10 +312,35 @@ async def delete_connection(conn_id: str) -> None:
 async def test_connection(req: TestConnectionRequest) -> TestConnectionResult:
     """Probe Aerospike connectivity without persisting a profile.
 
-    Returns a :class:`TestConnectionResult`. Never raises — any error is
+    Returns a :class:`TestConnectionResult`. Never raises -- any error is
     captured and surfaced as ``success=False`` so HTTP/MCP wrappers can
     forward the wire shape unchanged.
+
+    SSRF gate: targets that resolve to loopback / link-local literals
+    (including the EC2 IMDS ``169.254.169.254``) are rejected before any
+    network syscall fires. The blocked path returns the same
+    ``success=False`` shape as a real connection failure so a probing
+    caller cannot distinguish "blocked" from "unreachable" by the wire
+    response alone -- the discriminator is operator-only via the
+    structured log.
     """
+    # Default-deny SSRF gate. Apply once at the top, before any network
+    # syscall, so an attacker cannot use this surface to enumerate
+    # internal listeners (Redis on 127.0.0.1, IMDS on 169.254.169.254,
+    # cloud SQL proxies on the host loopback). The check is cheap (pure
+    # ip parsing) and keyed on bare IP literals -- DNS hostnames are
+    # outside the gate; egress firewalls are expected to backstop those.
+    for host_str in req.hosts:
+        host_only, _ = parse_host_port(host_str, req.port)
+        if _is_blocked_target(host_only):
+            logger.warning(
+                "Test connection blocked: target=%s reason=loopback_or_link_local",
+                host_str,
+            )
+            return TestConnectionResult(
+                success=False,
+                message="connection failed",
+            )
     try:
         hosts = [parse_host_port(h, req.port) for h in req.hosts]
 
