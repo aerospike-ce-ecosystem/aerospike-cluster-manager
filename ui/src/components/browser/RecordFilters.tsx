@@ -602,6 +602,15 @@ function ConditionEditor({
     if (needsValue) inputRef.current?.focus()
   }, [needsValue])
 
+  // Resync local input state when the underlying condition changes from the
+  // outside (operator switch, parent reset, etc.). Without this, switching
+  // operator from e.g. "between" back to "equals" would keep the stale
+  // first-value/second-value strings in the inputs.
+  useEffect(() => {
+    setVal(condition.value != null ? String(condition.value) : "")
+    setVal2(condition.value2 != null ? String(condition.value2) : "")
+  }, [condition.value, condition.value2, condition.operator])
+
   const commit = useCallback(() => {
     const updates: Partial<Omit<FilterDraftCondition, "id">> = {}
     if (needsValue) {
