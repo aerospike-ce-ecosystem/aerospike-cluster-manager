@@ -69,11 +69,25 @@ function buildStreamUrl(types?: string[]): string {
     null
   if (active) params.set("cluster", active.id)
   const token = useAuthStore.getState().accessToken
+  const baseHost = active?.apiUrl?.replace(/\/+$/, "") ?? ""
   if (token) {
     // TODO(ADR-0040 follow-up): replace with per-stream signed nonce or
     // cookie-based auth so the token does not appear in the URL. EventSource
     // does not support custom headers in stock browsers, so this remains the
     // workaround until the broker grows a dedicated handshake endpoint.
+    //
+    // Until that lands, refuse to open the stream against a plain-http
+    // origin: the JWT would travel as cleartext in the URL and end up in
+    // every reverse-proxy access log on the path. Operators must serve the
+    // API over https before SSE+OIDC can be used.
+    if (active?.apiUrl && /^http:\/\//i.test(active.apiUrl)) {
+      throw new Error(
+        "[events.ts] refusing to open SSE stream over plain http://: " +
+          "the access_token query param would leak via access logs. " +
+          "Configure the cluster apiUrl to use https://. " +
+          "Tracking: ADR-0040 follow-up.",
+      )
+    }
     if (process.env.NODE_ENV !== "production") {
       // eslint-disable-next-line no-console
       console.warn(
@@ -86,7 +100,6 @@ function buildStreamUrl(types?: string[]): string {
   }
 
   const qs = params.toString()
-  const baseHost = active?.apiUrl?.replace(/\/+$/, "") ?? ""
   return `${baseHost}${API_PREFIX}/events/stream${qs ? `?${qs}` : ""}`
 }
 
