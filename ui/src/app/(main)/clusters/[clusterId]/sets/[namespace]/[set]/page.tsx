@@ -43,7 +43,7 @@ import { cx } from "@/lib/utils"
 import { RiRefreshLine, RiTimerLine } from "@remixicon/react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 type PageProps = {
   params: { clusterId: string; namespace: string; set: string }
@@ -197,8 +197,16 @@ export default function RecordBrowserPage({ params }: PageProps) {
     }
   }, [reloadSetNote])
 
+  // Sequence ref guards against fast successive fetches (page-size flips,
+  // double-click on Apply, set switch mid-fetch) — older promises that
+  // resolve after a newer one would otherwise overwrite the latest result.
+  // filterRecords doesn't accept an AbortSignal, so we discard stale
+  // resolutions instead of cancelling the in-flight request.
+  const fetchSeqRef = useRef(0)
+
   const runFetch = useCallback(
     async (target: FilterDraft, size: number) => {
+      const seq = ++fetchSeqRef.current
       setLoading(true)
       setError(null)
       try {
@@ -212,6 +220,7 @@ export default function RecordBrowserPage({ params }: PageProps) {
           pkMatchMode: target.pkMatchMode,
           filters: filters ?? null,
         })
+        if (seq !== fetchSeqRef.current) return
         setRecords(resp.records)
         setMeta({
           total: resp.total,
@@ -219,10 +228,11 @@ export default function RecordBrowserPage({ params }: PageProps) {
           executionTimeMs: resp.executionTimeMs,
         })
       } catch (err) {
+        if (seq !== fetchSeqRef.current) return
         logFetchError("records", err)
         setError(mapApiError(err).message)
       } finally {
-        setLoading(false)
+        if (seq === fetchSeqRef.current) setLoading(false)
       }
     },
     [params.clusterId, params.namespace, params.set],
