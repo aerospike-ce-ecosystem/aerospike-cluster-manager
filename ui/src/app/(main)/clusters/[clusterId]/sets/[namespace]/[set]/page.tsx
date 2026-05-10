@@ -483,17 +483,27 @@ export default function RecordBrowserPage({ params }: PageProps) {
                         "sticky left-0 z-10 bg-white font-mono text-xs dark:bg-[#090E1A]",
                       )}
                     >
-                      <Link
-                        href={clusterSections.record(
-                          params.clusterId,
-                          params.namespace,
-                          params.set,
-                          encodeURIComponent(r.key.pk ?? ""),
-                        )}
-                        className="text-indigo-600 hover:underline dark:text-indigo-400"
-                      >
-                        {r.key.pk}
-                      </Link>
+                      {r.key.pk != null ? (
+                        <Link
+                          href={clusterSections.record(
+                            params.clusterId,
+                            params.namespace,
+                            params.set,
+                            encodeURIComponent(r.key.pk),
+                          )}
+                          className="text-indigo-600 hover:underline dark:text-indigo-400"
+                        >
+                          {r.key.pk}
+                        </Link>
+                      ) : (
+                        // digest-only records (sendKey=false on write) have no
+                        // primary-key column; the detail route requires a pk
+                        // path segment, so we render an inert digest stub
+                        // instead of a broken empty-string link.
+                        <span className="italic text-gray-400 text-xs">
+                          digest:{r.key.digest?.slice(0, 8) ?? ""}…
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right font-mono text-xs tabular-nums">
                       {r.meta.generation}
@@ -505,22 +515,33 @@ export default function RecordBrowserPage({ params }: PageProps) {
                       <TableCell key={b}>{renderBin(r.bins[b], b)}</TableCell>
                     ))}
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        className="h-7 px-2 text-xs"
-                        asChild
-                      >
-                        <Link
-                          href={clusterSections.record(
-                            params.clusterId,
-                            params.namespace,
-                            params.set,
-                            encodeURIComponent(r.key.pk ?? ""),
-                          )}
+                      {r.key.pk != null ? (
+                        <Button
+                          variant="ghost"
+                          className="h-7 px-2 text-xs"
+                          asChild
+                        >
+                          <Link
+                            href={clusterSections.record(
+                              params.clusterId,
+                              params.namespace,
+                              params.set,
+                              encodeURIComponent(r.key.pk),
+                            )}
+                          >
+                            Open
+                          </Link>
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          disabled
+                          title="Digest-only records cannot be opened by primary key"
+                          className="h-7 px-2 text-xs"
                         >
                           Open
-                        </Link>
-                      </Button>
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))
