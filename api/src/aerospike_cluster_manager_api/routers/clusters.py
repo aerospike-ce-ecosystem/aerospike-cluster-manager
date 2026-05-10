@@ -52,5 +52,17 @@ async def configure_namespace(body: CreateNamespaceRequest, client: AerospikeCli
             ),
         ) from exc
     except NamespaceConfigError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        # The raw Aerospike server response can leak internal details
+        # (node names, build identifiers, error code paths). Surface a
+        # sanitized message to the API consumer and keep the raw response
+        # in the server log for operator-side debugging.
+        logger.warning(
+            "set-config rejected for namespace=%s: %s",
+            exc.namespace,
+            exc.response,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=f"Namespace '{exc.namespace}' configuration was rejected by the cluster",
+        ) from exc
     return MessageResponse(message=message)
