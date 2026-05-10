@@ -255,7 +255,24 @@ async def test_connection(
     description="Delete a connection profile and close its active client.",
 )
 @limiter.limit("10/minute")
-async def delete_connection(request: Request, conn_id: str = Depends(_get_verified_connection)) -> Response:
-    """Delete a connection profile and close its active client."""
-    await connections_service.delete_connection(conn_id)
+async def delete_connection(
+    request: Request,
+    caller_owner_id: CallerOwnerId,
+    conn_id: str = Depends(_get_verified_connection),
+) -> Response:
+    """Delete a connection profile and close its active client.
+
+    The dependency already enforces the workspace ACL (returning 404 on
+    cross-tenant attempts). ``caller_owner_id`` is threaded into the
+    service call as defense-in-depth — mirrors :func:`update_connection`
+    so a future refactor that bypasses ``_get_verified_connection`` still
+    hits the gate at the service boundary.
+    """
+    try:
+        await connections_service.delete_connection(conn_id, caller_owner_id)
+    except ConnectionNotFoundError as exc:
+        # Service-layer ACL rejected after the dependency cleared. Map to
+        # 404 with the same wire shape the dependency uses — id
+        # enumeration cannot distinguish "missing" from "not yours".
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     return Response(status_code=204)

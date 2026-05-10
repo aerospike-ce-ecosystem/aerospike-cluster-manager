@@ -5,6 +5,7 @@ Uses aiosqlite with WAL mode for async database access.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -36,6 +37,38 @@ from aerospike_cluster_manager_api.secrets_crypto import (
 logger = logging.getLogger(__name__)
 
 _conn: aiosqlite.Connection | None = None
+
+# Serialise writes against the single module-level aiosqlite connection.
+#
+# aiosqlite multiplexes async calls onto one underlying sqlite3.Connection,
+# so two coroutines that issue ``execute(...)`` + ``commit()`` concurrently
+# can race in two ways:
+#   1) the second ``BEGIN IMMEDIATE`` raises ``database is locked`` while
+#      the first transaction is still open, and
+#   2) the second ``commit()`` lands between the first execute and its own
+#      commit, atomicity-wise observing a half-applied state.
+#
+# WAL mode mitigates reader/writer contention, but it does not serialise
+# two concurrent writers on the same connection. Wrapping every write
+# path in this lock guarantees a single in-flight write at a time —
+# matches the approach :mod:`db._postgres` gets for free via its asyncpg
+# pool, and is the smallest fix that keeps the rest of the layout intact.
+_write_lock: asyncio.Lock | None = None
+
+
+def _get_write_lock() -> asyncio.Lock:
+    """Lazily build the write lock on the running event loop.
+
+    Module import time may not have an event loop yet, so we defer the
+    ``asyncio.Lock()`` construction to first-write. ``close_db`` resets
+    the lock so back-to-back tests on different loops (the FastAPI
+    lifespan + pytest-asyncio fixtures) get a fresh, loop-bound lock.
+    """
+    global _write_lock
+    if _write_lock is None:
+        _write_lock = asyncio.Lock()
+    return _write_lock
+
 
 CREATE_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS connections (
@@ -244,31 +277,36 @@ async def migrate_passwords_to_encrypted() -> int:
     """
     conn = _get_conn()
     rewritten = 0
-    async with conn.execute("SELECT id, password FROM connections") as cursor:
-        rows = await cursor.fetchall()
-    for row in rows:
-        password = row["password"]
-        if password is None or password == "":
-            continue
-        if is_encrypted(password):
-            continue
-        encrypted = encrypt_password(password)
-        await conn.execute(
-            "UPDATE connections SET password = ? WHERE id = ?",
-            (encrypted, row["id"]),
-        )
-        rewritten += 1
-    if rewritten:
-        await conn.commit()
-        logger.info("Encrypted %d legacy plaintext password row(s) in SQLite.", rewritten)
+    async with _get_write_lock():
+        async with conn.execute("SELECT id, password FROM connections") as cursor:
+            rows = await cursor.fetchall()
+        for row in rows:
+            password = row["password"]
+            if password is None or password == "":
+                continue
+            if is_encrypted(password):
+                continue
+            encrypted = encrypt_password(password)
+            await conn.execute(
+                "UPDATE connections SET password = ? WHERE id = ?",
+                (encrypted, row["id"]),
+            )
+            rewritten += 1
+        if rewritten:
+            await conn.commit()
+            logger.info("Encrypted %d legacy plaintext password row(s) in SQLite.", rewritten)
     return rewritten
 
 
 async def close_db() -> None:
-    global _conn
+    global _conn, _write_lock
     if _conn:
         await _conn.close()
         _conn = None
+    # Drop the lock too — pytest-asyncio fixtures spin up a fresh event
+    # loop per test, and an asyncio.Lock bound to a closed loop will
+    # raise ``RuntimeError: ... attached to a different loop``.
+    _write_lock = None
 
 
 # ---------------------------------------------------------------------------
@@ -324,31 +362,32 @@ async def create_connection(conn: ConnectionProfile) -> None:
     # passwords (anonymous binds in CE) round-trip as the empty string —
     # ``encrypt_password`` handles the falsy-input case.
     stored_password = encrypt_password(conn.password) if conn.password else conn.password
-    try:
-        await db_conn.execute(
-            """INSERT INTO connections (id, name, hosts, port, cluster_name, username, password,
-                                        color, note, labels, workspace_id, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                conn.id,
-                conn.name,
-                json.dumps(conn.hosts),
-                conn.port,
-                conn.clusterName,
-                conn.username,
-                stored_password,
-                conn.color,
-                conn.note,
-                json.dumps(conn.labels),
-                conn.workspaceId,
-                conn.createdAt,
-                conn.updatedAt,
-            ),
-        )
-        await db_conn.commit()
-    except Exception:
-        await db_conn.rollback()
-        raise
+    async with _get_write_lock():
+        try:
+            await db_conn.execute(
+                """INSERT INTO connections (id, name, hosts, port, cluster_name, username, password,
+                                            color, note, labels, workspace_id, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    conn.id,
+                    conn.name,
+                    json.dumps(conn.hosts),
+                    conn.port,
+                    conn.clusterName,
+                    conn.username,
+                    stored_password,
+                    conn.color,
+                    conn.note,
+                    json.dumps(conn.labels),
+                    conn.workspaceId,
+                    conn.createdAt,
+                    conn.updatedAt,
+                ),
+            )
+            await db_conn.commit()
+        except Exception:
+            await db_conn.rollback()
+            raise
 
 
 async def update_connection(conn_id: str, data: dict) -> ConnectionProfile | None:
@@ -360,60 +399,62 @@ async def update_connection(conn_id: str, data: dict) -> ConnectionProfile | Non
     result with stale data (lost-update race).
     """
     db_conn = _get_conn()
-    await db_conn.execute("BEGIN IMMEDIATE")
-    try:
-        async with db_conn.execute("SELECT * FROM connections WHERE id = ?", (conn_id,)) as cursor:
-            row = await cursor.fetchone()
-        if not row:
+    async with _get_write_lock():
+        await db_conn.execute("BEGIN IMMEDIATE")
+        try:
+            async with db_conn.execute("SELECT * FROM connections WHERE id = ?", (conn_id,)) as cursor:
+                row = await cursor.fetchone()
+            if not row:
+                await db_conn.rollback()
+                return None
+
+            existing = _row_to_profile(row)
+            updated = build_merged_profile(existing, data, conn_id)
+
+            # Re-encrypt the merged password before storing. ``existing.password``
+            # was decrypted by ``_row_to_profile``, so the merged result is
+            # plaintext regardless of whether the caller supplied a new
+            # password — we always encrypt on write.
+            stored_password = encrypt_password(updated.password) if updated.password else updated.password
+            await db_conn.execute(
+                """UPDATE connections
+                       SET name = ?, hosts = ?, port = ?, cluster_name = ?,
+                           username = ?, password = ?, color = ?,
+                           note = ?, labels = ?, workspace_id = ?,
+                           updated_at = ?
+                       WHERE id = ?""",
+                (
+                    updated.name,
+                    json.dumps(updated.hosts),
+                    updated.port,
+                    updated.clusterName,
+                    updated.username,
+                    stored_password,
+                    updated.color,
+                    updated.note,
+                    json.dumps(updated.labels),
+                    updated.workspaceId,
+                    updated.updatedAt,
+                    conn_id,
+                ),
+            )
+            await db_conn.commit()
+        except Exception:
             await db_conn.rollback()
-            return None
-
-        existing = _row_to_profile(row)
-        updated = build_merged_profile(existing, data, conn_id)
-
-        # Re-encrypt the merged password before storing. ``existing.password``
-        # was decrypted by ``_row_to_profile``, so the merged result is
-        # plaintext regardless of whether the caller supplied a new
-        # password — we always encrypt on write.
-        stored_password = encrypt_password(updated.password) if updated.password else updated.password
-        await db_conn.execute(
-            """UPDATE connections
-                   SET name = ?, hosts = ?, port = ?, cluster_name = ?,
-                       username = ?, password = ?, color = ?,
-                       note = ?, labels = ?, workspace_id = ?,
-                       updated_at = ?
-                   WHERE id = ?""",
-            (
-                updated.name,
-                json.dumps(updated.hosts),
-                updated.port,
-                updated.clusterName,
-                updated.username,
-                stored_password,
-                updated.color,
-                updated.note,
-                json.dumps(updated.labels),
-                updated.workspaceId,
-                updated.updatedAt,
-                conn_id,
-            ),
-        )
-        await db_conn.commit()
-    except Exception:
-        await db_conn.rollback()
-        raise
+            raise
 
     return updated
 
 
 async def delete_connection(conn_id: str) -> bool:
     db_conn = _get_conn()
-    try:
-        cursor = await db_conn.execute("DELETE FROM connections WHERE id = ?", (conn_id,))
-        await db_conn.commit()
-    except Exception:
-        await db_conn.rollback()
-        raise
+    async with _get_write_lock():
+        try:
+            cursor = await db_conn.execute("DELETE FROM connections WHERE id = ?", (conn_id,))
+            await db_conn.commit()
+        except Exception:
+            await db_conn.rollback()
+            raise
     return cursor.rowcount == 1
 
 
@@ -460,26 +501,27 @@ async def get_workspaces_owned_by(owner_id: str) -> list[Workspace]:
 
 async def create_workspace(ws: Workspace) -> None:
     db_conn = _get_conn()
-    try:
-        await db_conn.execute(
-            """INSERT INTO workspaces
-                   (id, name, color, description, is_default, owner_id, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                ws.id,
-                ws.name,
-                ws.color,
-                ws.description,
-                1 if ws.isDefault else 0,
-                ws.ownerId,
-                ws.createdAt,
-                ws.updatedAt,
-            ),
-        )
-        await db_conn.commit()
-    except Exception:
-        await db_conn.rollback()
-        raise
+    async with _get_write_lock():
+        try:
+            await db_conn.execute(
+                """INSERT INTO workspaces
+                       (id, name, color, description, is_default, owner_id, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    ws.id,
+                    ws.name,
+                    ws.color,
+                    ws.description,
+                    1 if ws.isDefault else 0,
+                    ws.ownerId,
+                    ws.createdAt,
+                    ws.updatedAt,
+                ),
+            )
+            await db_conn.commit()
+        except Exception:
+            await db_conn.rollback()
+            raise
 
 
 async def update_workspace(workspace_id: str, data: dict) -> Workspace | None:
@@ -490,33 +532,34 @@ async def update_workspace(workspace_id: str, data: dict) -> Workspace | None:
     writer cannot overwrite our merged result with stale data.
     """
     db_conn = _get_conn()
-    await db_conn.execute("BEGIN IMMEDIATE")
-    try:
-        async with db_conn.execute("SELECT * FROM workspaces WHERE id = ?", (workspace_id,)) as cursor:
-            row = await cursor.fetchone()
-        if not row:
+    async with _get_write_lock():
+        await db_conn.execute("BEGIN IMMEDIATE")
+        try:
+            async with db_conn.execute("SELECT * FROM workspaces WHERE id = ?", (workspace_id,)) as cursor:
+                row = await cursor.fetchone()
+            if not row:
+                await db_conn.rollback()
+                return None
+
+            existing = _row_to_workspace(row)
+            updated = build_merged_workspace(existing, data)
+
+            await db_conn.execute(
+                """UPDATE workspaces
+                       SET name = ?, color = ?, description = ?, updated_at = ?
+                       WHERE id = ?""",
+                (
+                    updated.name,
+                    updated.color,
+                    updated.description,
+                    updated.updatedAt,
+                    workspace_id,
+                ),
+            )
+            await db_conn.commit()
+        except Exception:
             await db_conn.rollback()
-            return None
-
-        existing = _row_to_workspace(row)
-        updated = build_merged_workspace(existing, data)
-
-        await db_conn.execute(
-            """UPDATE workspaces
-                   SET name = ?, color = ?, description = ?, updated_at = ?
-                   WHERE id = ?""",
-            (
-                updated.name,
-                updated.color,
-                updated.description,
-                updated.updatedAt,
-                workspace_id,
-            ),
-        )
-        await db_conn.commit()
-    except Exception:
-        await db_conn.rollback()
-        raise
+            raise
 
     return updated
 
@@ -530,15 +573,16 @@ async def delete_workspace(workspace_id: str) -> bool:
     caller bypasses the router (refactor, internal task, direct tests).
     """
     db_conn = _get_conn()
-    try:
-        cursor = await db_conn.execute(
-            "DELETE FROM workspaces WHERE id = ? AND is_default = 0",
-            (workspace_id,),
-        )
-        await db_conn.commit()
-    except Exception:
-        await db_conn.rollback()
-        raise
+    async with _get_write_lock():
+        try:
+            cursor = await db_conn.execute(
+                "DELETE FROM workspaces WHERE id = ? AND is_default = 0",
+                (workspace_id,),
+            )
+            await db_conn.commit()
+        except Exception:
+            await db_conn.rollback()
+            raise
     return cursor.rowcount == 1
 
 
@@ -580,23 +624,24 @@ async def upsert_set_note(
     # return is the row we just wrote — no race window between commit and a
     # follow-up SELECT, which mattered when two concurrent upserts shared
     # the module-level aiosqlite connection.
-    try:
-        async with db_conn.execute(
-            """INSERT INTO set_notes (connection_id, namespace, set_name, note,
-                                      created_at, updated_at, updated_by)
-               VALUES (?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(connection_id, namespace, set_name) DO UPDATE SET
-                   note = excluded.note,
-                   updated_at = excluded.updated_at,
-                   updated_by = excluded.updated_by
-               RETURNING *""",
-            (connection_id, namespace, set_name, note, now, now, updated_by),
-        ) as cursor:
-            row = await cursor.fetchone()
-        await db_conn.commit()
-    except Exception:
-        await db_conn.rollback()
-        raise
+    async with _get_write_lock():
+        try:
+            async with db_conn.execute(
+                """INSERT INTO set_notes (connection_id, namespace, set_name, note,
+                                          created_at, updated_at, updated_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(connection_id, namespace, set_name) DO UPDATE SET
+                       note = excluded.note,
+                       updated_at = excluded.updated_at,
+                       updated_by = excluded.updated_by
+                   RETURNING *""",
+                (connection_id, namespace, set_name, note, now, now, updated_by),
+            ) as cursor:
+                row = await cursor.fetchone()
+            await db_conn.commit()
+        except Exception:
+            await db_conn.rollback()
+            raise
     if row is None:  # pragma: no cover — RETURNING * always emits on upsert
         raise RuntimeError("set note vanished immediately after upsert")
     return _row_to_set_note(row)
@@ -604,15 +649,16 @@ async def upsert_set_note(
 
 async def delete_set_note(connection_id: str, namespace: str, set_name: str) -> bool:
     db_conn = _get_conn()
-    try:
-        cursor = await db_conn.execute(
-            "DELETE FROM set_notes WHERE connection_id = ? AND namespace = ? AND set_name = ?",
-            (connection_id, namespace, set_name),
-        )
-        await db_conn.commit()
-    except Exception:
-        await db_conn.rollback()
-        raise
+    async with _get_write_lock():
+        try:
+            cursor = await db_conn.execute(
+                "DELETE FROM set_notes WHERE connection_id = ? AND namespace = ? AND set_name = ?",
+                (connection_id, namespace, set_name),
+            )
+            await db_conn.commit()
+        except Exception:
+            await db_conn.rollback()
+            raise
     return cursor.rowcount == 1
 
 
@@ -699,24 +745,25 @@ async def upsert_record_note(
     # See upsert_set_note — single-statement RETURNING * eliminates the
     # commit-then-SELECT race when two coroutines share the module-level
     # aiosqlite connection.
-    try:
-        async with db_conn.execute(
-            """INSERT INTO record_notes (connection_id, namespace, set_name, pk_text, pk_type,
-                                         digest_hex, note, created_at, updated_at, updated_by)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(connection_id, namespace, set_name, pk_text, pk_type) DO UPDATE SET
-                   digest_hex = excluded.digest_hex,
-                   note = excluded.note,
-                   updated_at = excluded.updated_at,
-                   updated_by = excluded.updated_by
-               RETURNING *""",
-            (connection_id, namespace, set_name, pk_text, pk_type, digest_hex, note, now, now, updated_by),
-        ) as cursor:
-            row = await cursor.fetchone()
-        await db_conn.commit()
-    except Exception:
-        await db_conn.rollback()
-        raise
+    async with _get_write_lock():
+        try:
+            async with db_conn.execute(
+                """INSERT INTO record_notes (connection_id, namespace, set_name, pk_text, pk_type,
+                                             digest_hex, note, created_at, updated_at, updated_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(connection_id, namespace, set_name, pk_text, pk_type) DO UPDATE SET
+                       digest_hex = excluded.digest_hex,
+                       note = excluded.note,
+                       updated_at = excluded.updated_at,
+                       updated_by = excluded.updated_by
+                   RETURNING *""",
+                (connection_id, namespace, set_name, pk_text, pk_type, digest_hex, note, now, now, updated_by),
+            ) as cursor:
+                row = await cursor.fetchone()
+            await db_conn.commit()
+        except Exception:
+            await db_conn.rollback()
+            raise
     if row is None:  # pragma: no cover — RETURNING * always emits on upsert
         raise RuntimeError("record note vanished immediately after upsert")
     return _row_to_record_note(row)
@@ -730,17 +777,18 @@ async def delete_record_note(
     pk_type: StoredPkType,
 ) -> bool:
     db_conn = _get_conn()
-    try:
-        cursor = await db_conn.execute(
-            """DELETE FROM record_notes
-                   WHERE connection_id = ? AND namespace = ? AND set_name = ?
-                     AND pk_text = ? AND pk_type = ?""",
-            (connection_id, namespace, set_name, pk_text, pk_type),
-        )
-        await db_conn.commit()
-    except Exception:
-        await db_conn.rollback()
-        raise
+    async with _get_write_lock():
+        try:
+            cursor = await db_conn.execute(
+                """DELETE FROM record_notes
+                       WHERE connection_id = ? AND namespace = ? AND set_name = ?
+                         AND pk_text = ? AND pk_type = ?""",
+                (connection_id, namespace, set_name, pk_text, pk_type),
+            )
+            await db_conn.commit()
+        except Exception:
+            await db_conn.rollback()
+            raise
     return cursor.rowcount == 1
 
 

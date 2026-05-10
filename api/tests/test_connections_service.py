@@ -233,6 +233,45 @@ class TestDeleteConnection:
         await connections_service.delete_connection(created.id)
         await connections_service.delete_connection(created.id)
 
+    async def test_cross_owner_delete_returns_not_found(self, init_test_db):
+        """Defense-in-depth: a caller from another tenant must not be able
+        to delete a connection in someone else's workspace, even if they
+        somehow bypass ``_get_verified_connection``. Mirrors the
+        ``get_connection`` cross-tenant probe contract."""
+        from datetime import UTC, datetime
+
+        from aerospike_cluster_manager_api import db
+        from aerospike_cluster_manager_api.models.workspace import Workspace
+
+        now = datetime.now(UTC).isoformat()
+        await db.create_workspace(
+            Workspace(id="ws-alice", name="alice", color="#111111", ownerId="alice", createdAt=now, updatedAt=now)
+        )
+        created = await connections_service.create_connection(
+            _create_payload(name="alice-only", workspaceId="ws-alice"), caller_owner_id="alice"
+        )
+        with pytest.raises(ConnectionNotFoundError):
+            await connections_service.delete_connection(created.id, caller_owner_id="bob")
+        # The row must still exist — bob's cross-tenant attempt was rejected.
+        assert await db.get_connection(created.id) is not None
+
+    async def test_owner_delete_succeeds(self, init_test_db):
+        """Owner of the workspace can still delete their own connection."""
+        from datetime import UTC, datetime
+
+        from aerospike_cluster_manager_api import db
+        from aerospike_cluster_manager_api.models.workspace import Workspace
+
+        now = datetime.now(UTC).isoformat()
+        await db.create_workspace(
+            Workspace(id="ws-alice2", name="alice2", color="#111111", ownerId="alice", createdAt=now, updatedAt=now)
+        )
+        created = await connections_service.create_connection(
+            _create_payload(name="alice-deletable", workspaceId="ws-alice2"), caller_owner_id="alice"
+        )
+        await connections_service.delete_connection(created.id, caller_owner_id="alice")
+        assert await db.get_connection(created.id) is None
+
 
 # ---------------------------------------------------------------------------
 # test_connection

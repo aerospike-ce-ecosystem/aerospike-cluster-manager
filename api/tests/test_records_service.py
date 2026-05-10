@@ -13,7 +13,14 @@ from unittest.mock import AsyncMock, MagicMock
 import aerospike_py
 import pytest
 from aerospike_py import exp
-from aerospike_py.exception import AerospikeError, RecordExistsError, RecordNotFound
+from aerospike_py.exception import (
+    AerospikeError,
+    AerospikeTimeoutError,
+    BackpressureError,
+    ClusterError,
+    RecordExistsError,
+    RecordNotFound,
+)
 
 from aerospike_cluster_manager_api.constants import POLICY_QUERY, POLICY_READ, POLICY_WRITE
 from aerospike_cluster_manager_api.expression_builder import build_pk_filter_expression
@@ -450,6 +457,31 @@ class TestListRecords:
         assert result.records == []
         assert result.has_more is False
 
+    async def test_cluster_error_propagates_not_silently_empty(self):
+        """Connectivity failures must surface as 503 via the global handler,
+        not be swallowed into HTTP 200 with an empty page (silent failure)."""
+        client, query = _build_query_mock()
+        query.results = AsyncMock(side_effect=ClusterError("cluster down"))
+
+        with pytest.raises(ClusterError):
+            await records_service.list_records(client, "test", "demo", page_size=25)
+
+    async def test_timeout_error_propagates(self):
+        """Timeouts must propagate (504) — silent empty-page would mask outages."""
+        client, query = _build_query_mock()
+        query.results = AsyncMock(side_effect=AerospikeTimeoutError("timeout"))
+
+        with pytest.raises(AerospikeTimeoutError):
+            await records_service.list_records(client, "test", "demo", page_size=25)
+
+    async def test_backpressure_error_propagates(self):
+        """Backpressure must propagate (503 + Retry-After), not be hidden."""
+        client, query = _build_query_mock()
+        query.results = AsyncMock(side_effect=BackpressureError("queue full"))
+
+        with pytest.raises(BackpressureError):
+            await records_service.list_records(client, "test", "demo", page_size=25)
+
     async def test_max_records_capped_to_pagesize(self):
         client, query = _build_query_mock()
         await records_service.list_records(client, "test", "demo", page_size=5)
@@ -560,6 +592,42 @@ class TestFilterRecords:
 
         assert result.records == []
         assert result.has_more is False
+
+    async def test_cluster_error_propagates_not_silently_empty(self):
+        """ClusterError must propagate so the global 503 handler runs;
+        masking it as an empty page hides outages from the UI."""
+        client, query = _build_query_mock()
+        query.results = AsyncMock(side_effect=ClusterError("cluster down"))
+
+        body = FilteredQueryRequest(namespace="test", set="demo")
+        with pytest.raises(ClusterError):
+            await records_service.filter_records(client, body)
+
+    async def test_timeout_error_propagates(self):
+        client, query = _build_query_mock()
+        query.results = AsyncMock(side_effect=AerospikeTimeoutError("timeout"))
+
+        body = FilteredQueryRequest(namespace="test", set="demo")
+        with pytest.raises(AerospikeTimeoutError):
+            await records_service.filter_records(client, body)
+
+    async def test_backpressure_error_propagates(self):
+        client, query = _build_query_mock()
+        query.results = AsyncMock(side_effect=BackpressureError("queue full"))
+
+        body = FilteredQueryRequest(namespace="test", set="demo")
+        with pytest.raises(BackpressureError):
+            await records_service.filter_records(client, body)
+
+    async def test_exact_mode_without_set_raises_set_required(self):
+        """The PK-exact short-circuit must reject a missing set with the
+        explicit domain exception even with python -O (where ``assert``
+        is stripped). This guards the invariant at runtime, not just
+        during development."""
+        client, _query = _build_query_mock()
+        body = FilteredQueryRequest(namespace="test", primaryKey="42", pkMatchMode="exact")
+        with pytest.raises(SetRequiredForPkLookup):
+            await records_service.filter_records(client, body)
 
     async def test_hasMore_true_when_results_equal_pagesize_plus_one(self):
         recs = [_make_record(key=("test", "demo", f"k{i}", b"\x00"), bins={"score": i}) for i in range(6)]
