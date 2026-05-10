@@ -606,10 +606,23 @@ function ConditionEditor({
   // outside (operator switch, parent reset, etc.). Without this, switching
   // operator from e.g. "between" back to "equals" would keep the stale
   // first-value/second-value strings in the inputs.
+  //
+  // When the operator change hides a field (e.g. "between" → "is_null" drops
+  // both inputs; "between" → "equals" drops the second input) the parent
+  // does not reset condition.value/value2, so we explicitly clear the local
+  // draft for any field the new operator no longer accepts.
   useEffect(() => {
-    setVal(condition.value != null ? String(condition.value) : "")
-    setVal2(condition.value2 != null ? String(condition.value2) : "")
-  }, [condition.value, condition.value2, condition.operator])
+    setVal(needsValue && condition.value != null ? String(condition.value) : "")
+    setVal2(
+      needsValue2 && condition.value2 != null ? String(condition.value2) : "",
+    )
+  }, [
+    condition.value,
+    condition.value2,
+    condition.operator,
+    needsValue,
+    needsValue2,
+  ])
 
   const commit = useCallback(() => {
     const updates: Partial<Omit<FilterDraftCondition, "id">> = {}
