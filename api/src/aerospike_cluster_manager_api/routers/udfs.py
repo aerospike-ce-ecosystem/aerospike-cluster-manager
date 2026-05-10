@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
+import os
 import tempfile
-from pathlib import Path
 from typing import Literal, cast
 
-from fastapi import APIRouter, Query, Request
+from aerospike_py.exception import AerospikeError
+from fastapi import APIRouter, HTTPException, Query, Request
 from starlette.responses import Response
 
 from aerospike_cluster_manager_api.constants import INFO_UDF_LIST
@@ -52,17 +53,21 @@ async def get_udfs(client: AerospikeClient) -> list[UDFModule]:
 )
 @limiter.limit("20/minute")
 async def upload_udf(request: Request, body: UploadUDFRequest, client: AerospikeClient) -> UDFModule:
-    """Upload and register a Lua UDF module to the Aerospike cluster."""
-    tmp_path: str | None = None
-    try:
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".lua", delete=False) as tmp:
-            tmp.write(body.content)
-            tmp.flush()
-            tmp_path = tmp.name
+    """Upload and register a Lua UDF module to the Aerospike cluster.
+
+    aerospike-py's ``udf_put`` derives the registered module name from the
+    file's basename, so the temp file MUST be created with ``body.filename``
+    as its basename. Using ``NamedTemporaryFile`` (basename ``tmpXXXX.lua``)
+    registered the UDF under a random name and broke every later fetch /
+    delete by ``body.filename``. ``body.filename`` is already validated
+    against a strict pattern at the request model layer, so there is no
+    path traversal exposure from joining it with the temp directory.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = os.path.join(tmpdir, body.filename)
+        with open(tmp_path, "w") as f:
+            f.write(body.content)
         await client.udf_put(tmp_path)
-    finally:
-        if tmp_path:
-            Path(tmp_path).unlink(missing_ok=True)
 
     # Re-fetch to get actual hash
     modules = await _list_udfs(client)
@@ -84,6 +89,19 @@ async def delete_udf(
     client: AerospikeClient,
     filename: str = Query(..., min_length=1),
 ) -> Response:
-    """Remove a registered UDF module from the Aerospike cluster by filename."""
-    await client.udf_remove(filename)
+    """Remove a registered UDF module from the Aerospike cluster by filename.
+
+    aerospike-py does not expose a dedicated ``UDFNotFound`` exception, so
+    "module is not registered" surfaces as a generic ``AerospikeError`` /
+    ``UDFError`` carrying a ``"udf not found"`` (or similar) server message.
+    We pattern-match that here so a missing module returns 404 instead of
+    being swallowed by the global 500 handler — mirrors the 404 mapping
+    that ``delete_index`` gets for ``IndexNotFound``.
+    """
+    try:
+        await client.udf_remove(filename)
+    except AerospikeError as exc:
+        if "not found" in str(exc).lower():
+            raise HTTPException(status_code=404, detail=f"UDF module '{filename}' not found") from exc
+        raise
     return Response(status_code=204)
