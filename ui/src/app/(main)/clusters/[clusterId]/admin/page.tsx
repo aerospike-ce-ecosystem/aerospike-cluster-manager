@@ -46,30 +46,54 @@ export default function AdminPage({ params }: PageProps) {
     setUsersState((s) => ({ ...s, loading: true, error: null }))
     setRolesState((s) => ({ ...s, loading: true, error: null }))
     setSecurityDisabled(false)
-    try {
-      const [users, roles] = await Promise.all([
-        listUsers(params.clusterId),
-        listRoles(params.clusterId),
-      ])
-      setUsersState({ data: users, loading: false, error: null })
-      setRolesState({ data: roles, loading: false, error: null })
-    } catch (err) {
-      logFetchError("admin", err)
-      const mapped = mapApiError(err)
-      // Admin endpoints refuse access either because security is off (CE
-      // default) or the connecting user lacks ACL — both surface as the
-      // same explanatory card here.
-      if (
-        mapped.kind === "security-disabled" ||
-        mapped.kind === "permission-denied"
-      ) {
-        setSecurityDisabled(true)
-        setUsersState({ data: null, loading: false, error: null })
-        setRolesState({ data: null, loading: false, error: null })
-        return
-      }
-      setUsersState({ data: null, loading: false, error: mapped.message })
-      setRolesState({ data: null, loading: false, error: mapped.message })
+
+    // allSettled lets a partial success render — e.g. listUsers may succeed
+    // while listRoles 5xxs from a transient asinfo timeout. The previous
+    // Promise.all dropped the successful side too. The "security disabled"
+    // / "permission denied" UX still wins iff *both* sides report it,
+    // since CE refuses both endpoints when security is off — a single-side
+    // 403 (e.g. read-only role) should surface as a per-section error.
+    const [usersRes, rolesRes] = await Promise.allSettled([
+      listUsers(params.clusterId),
+      listRoles(params.clusterId),
+    ])
+
+    const isAclGate = (err: unknown) => {
+      const k = mapApiError(err).kind
+      return k === "security-disabled" || k === "permission-denied"
+    }
+    if (
+      usersRes.status === "rejected" &&
+      rolesRes.status === "rejected" &&
+      isAclGate(usersRes.reason) &&
+      isAclGate(rolesRes.reason)
+    ) {
+      logFetchError("admin", usersRes.reason)
+      setSecurityDisabled(true)
+      setUsersState({ data: null, loading: false, error: null })
+      setRolesState({ data: null, loading: false, error: null })
+      return
+    }
+
+    if (usersRes.status === "fulfilled") {
+      setUsersState({ data: usersRes.value, loading: false, error: null })
+    } else {
+      logFetchError("admin-users", usersRes.reason)
+      setUsersState({
+        data: null,
+        loading: false,
+        error: mapApiError(usersRes.reason).message,
+      })
+    }
+    if (rolesRes.status === "fulfilled") {
+      setRolesState({ data: rolesRes.value, loading: false, error: null })
+    } else {
+      logFetchError("admin-roles", rolesRes.reason)
+      setRolesState({
+        data: null,
+        loading: false,
+        error: mapApiError(rolesRes.reason).message,
+      })
     }
   }, [params.clusterId])
 
