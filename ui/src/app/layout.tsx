@@ -13,22 +13,32 @@ const inter = Inter({
   variable: "--font-inter",
 })
 
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  "https://aerospike-ce-ecosystem.github.io/aerospike-cluster-manager"
+
 export const metadata: Metadata = {
-  metadataBase: new URL("https://yoururl.com"),
+  metadataBase: new URL(SITE_URL),
   title: siteConfig.name,
   description: siteConfig.description,
-  keywords: [],
+  keywords: [
+    "aerospike",
+    "aerospike ce",
+    "cluster manager",
+    "kubernetes",
+    "nosql",
+  ],
   authors: [
     {
-      name: "yourname",
-      url: "",
+      name: "Aerospike CE Ecosystem",
+      url: "https://github.com/aerospike-ce-ecosystem",
     },
   ],
-  creator: "yourname",
+  creator: "Aerospike CE Ecosystem",
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: siteConfig.url,
+    url: SITE_URL,
     title: siteConfig.name,
     description: siteConfig.description,
     siteName: siteConfig.name,

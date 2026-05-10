@@ -15,7 +15,7 @@ import { deleteRecord, getRecordDetail, putRecord } from "@/lib/api/records"
 import type { AerospikeRecord, BinValue, PkType } from "@/lib/types/record"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 type PageProps = {
   params: { clusterId: string; namespace: string; set: string; key: string }
@@ -269,36 +269,47 @@ export default function RecordDetailPage({ params }: PageProps) {
   const [ttlDraft, setTtlDraft] = useState<string>("")
   const [saving, setSaving] = useState(false)
 
-  const loadRecord = (signal?: { cancelled: boolean }) => {
-    if (pk === null) return Promise.resolve()
-    setIsLoading(true)
-    setError(null)
-    return getRecordDetail(params.clusterId, {
-      ns: params.namespace,
-      set: params.set,
-      pk,
-      pk_type: "auto" as PkType,
-    })
-      .then((r) => {
-        if (signal?.cancelled) return
-        setRecord(r)
+  const loadRecord = useCallback(
+    (signal?: { cancelled: boolean }) => {
+      if (pk === null) return Promise.resolve()
+      setIsLoading(true)
+      setError(null)
+      return getRecordDetail(params.clusterId, {
+        ns: params.namespace,
+        set: params.set,
+        pk,
+        pk_type: "auto" as PkType,
       })
-      .catch((err) => {
-        if (signal?.cancelled) return
-        if (err instanceof ApiError) setError(err.detail || err.message)
-        else if (err instanceof Error) setError(err.message)
-        else setError("Failed to load record")
-      })
-      .finally(() => {
-        if (!signal?.cancelled) setIsLoading(false)
-      })
-  }
+        .then((r) => {
+          if (signal?.cancelled) return
+          setRecord(r)
+        })
+        .catch((err) => {
+          if (signal?.cancelled) return
+          if (err instanceof ApiError) setError(err.detail || err.message)
+          else if (err instanceof Error) setError(err.message)
+          else setError("Failed to load record")
+        })
+        .finally(() => {
+          if (!signal?.cancelled) setIsLoading(false)
+        })
+    },
+    [params.clusterId, params.namespace, params.set, pk],
+  )
 
   // Keep the latest cancellation signal in a ref so handleSave's
   // post-PUT reload can be canceled when the user navigates away mid-save.
   // Without this, an old PUT's getRecordDetail can resolve onto a different
   // record's page and overwrite its state.
   const loadSignalRef = useRef<{ cancelled: boolean }>({ cancelled: false })
+
+  // Mirror the latest loadRecord into a ref so callbacks captured by long-lived
+  // children (NoteSection's onSave/onDelete, handleSave's post-PUT reload) call
+  // the current closure rather than the one from the mount-time render.
+  const loadRecordRef = useRef(loadRecord)
+  useEffect(() => {
+    loadRecordRef.current = loadRecord
+  }, [loadRecord])
 
   useEffect(() => {
     if (pk === null) {
@@ -311,8 +322,7 @@ export default function RecordDetailPage({ params }: PageProps) {
     return () => {
       signal.cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.clusterId, params.namespace, params.set, pk])
+  }, [params.clusterId, params.namespace, params.set, pk, loadRecord])
 
   const handleDelete = async () => {
     if (!record || pk === null) return
@@ -447,7 +457,7 @@ export default function RecordDetailPage({ params }: PageProps) {
       })
       setIsEditing(false)
       setDrafts([])
-      await loadRecord(loadSignalRef.current)
+      await loadRecordRef.current(loadSignalRef.current)
     } catch (err) {
       logFetchError("record-save", err)
       if (err instanceof ApiError) setError(err.detail || err.message)
@@ -655,7 +665,7 @@ export default function RecordDetailPage({ params }: PageProps) {
                 { note: next, pkType: "auto" },
               )
               // Reload to pick up updatedAt / updatedBy from the server.
-              await loadRecord(loadSignalRef.current)
+              await loadRecordRef.current(loadSignalRef.current)
             }}
             onDelete={async () => {
               await deleteRecordNote(
@@ -665,7 +675,7 @@ export default function RecordDetailPage({ params }: PageProps) {
                 pk,
                 "auto",
               )
-              await loadRecord(loadSignalRef.current)
+              await loadRecordRef.current(loadSignalRef.current)
             }}
           />
 

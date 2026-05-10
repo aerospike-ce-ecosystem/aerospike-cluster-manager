@@ -19,6 +19,21 @@ function isPublicPath(pathname: string): boolean {
 }
 
 /**
+ * SSR-safe initial state. Multi-cluster mode is signalled by the build-time
+ * env flag NEXT_PUBLIC_CLUSTER_REGISTRY_ENABLED — when unset (the legacy
+ * single-cluster default) we skip the loading spinner entirely on the first
+ * render so the SSR HTML matches the "render children" path and there is no
+ * post-hydration flash of a transient sign-in spinner. When the flag is set
+ * we render the spinner from the very first paint.
+ */
+function initialBootState(): BootState {
+  if (process.env.NEXT_PUBLIC_CLUSTER_REGISTRY_ENABLED === "true") {
+    return "loading"
+  }
+  return "single-cluster"
+}
+
+/**
  * Boots OIDC + cluster registry. Behaviour:
  *   1. Try to fetch /cluster-registry.json. If absent (404) we're in legacy
  *      single-cluster mode → render children unchanged.
@@ -28,7 +43,7 @@ function isPublicPath(pathname: string): boolean {
  *      authenticated, redirect to login.
  */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = React.useState<BootState>("loading")
+  const [state, setState] = React.useState<BootState>(initialBootState)
   const [errorMsg, setErrorMsg] = React.useState<string | null>(null)
   const accessToken = useAuthStore((s) => s.accessToken)
   const registry = useClusterSelectorStore((s) => s.registry)
