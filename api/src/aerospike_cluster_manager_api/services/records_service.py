@@ -27,7 +27,13 @@ from typing import Any, NamedTuple
 
 import aerospike_py
 from aerospike_py import Record, exp
-from aerospike_py.exception import AerospikeError, RecordNotFound
+from aerospike_py.exception import (
+    AerospikeError,
+    AerospikeTimeoutError,
+    BackpressureError,
+    ClusterError,
+    RecordNotFound,
+)
 from aerospike_py.types import WriteMeta
 
 from aerospike_cluster_manager_api.constants import (
@@ -397,6 +403,12 @@ async def list_records(
     empty page rather than propagate. ``RustPanicError`` (#280) is *not*
     caught here — that's a real per-stream blocker handled by its dedicated
     422 exception handler at the HTTP layer.
+
+    Connectivity / timeout / backpressure errors (``ClusterError``,
+    ``AerospikeTimeoutError``, ``BackpressureError``) are intentionally
+    re-raised so the global exception handlers in :mod:`main` can surface
+    them as 503/504 instead of being silently swallowed into an empty
+    HTTP 200 — a dead cluster must not look like an empty set.
     """
     set_total = await _get_set_object_count(client, namespace, set_name)
 
@@ -405,7 +417,12 @@ async def list_records(
     q = client.query(namespace, set_name)
     try:
         raw_results: list[Record] = await q.results(policy)
-    except AerospikeError:
+    except AerospikeError as exc:
+        # Connectivity / timeout / backpressure must propagate — the global
+        # handlers map these to 503/504. Only narrow scan/query errors get
+        # converted to an empty page (issue #259 workaround).
+        if isinstance(exc, ClusterError | AerospikeTimeoutError | BackpressureError):
+            raise
         logger.exception("Query failed for ns=%s set=%s; returning empty page", namespace, set_name)
         raw_results = []
 
@@ -440,7 +457,12 @@ async def filter_records(client: aerospike_py.AsyncClient, body: FilteredQueryRe
     # PK exact short-circuit. Falls back to alternate particle type on
     # NOT_FOUND when pk_type='auto'. Prefix/regex skip this branch.
     if pk_target and body.pk_match_mode == "exact":
-        assert body.set is not None
+        # The ``pk_target and not body.set`` branch above already raises
+        # SetRequiredForPkLookup, so ``body.set`` is guaranteed non-empty
+        # here. Re-check explicitly (rather than ``assert``) so the
+        # invariant survives ``python -O``, where ``assert`` is stripped.
+        if body.set is None:
+            raise SetRequiredForPkLookup()
         resolved = resolve_pk(pk_target, body.pk_type)
         try:
             raw_record = await get_with_pk_fallback(
@@ -516,7 +538,13 @@ async def filter_records(client: aerospike_py.AsyncClient, body: FilteredQueryRe
 
     try:
         raw_results = await q.results(policy)
-    except AerospikeError:
+    except AerospikeError as exc:
+        # Connectivity / timeout / backpressure must propagate so the global
+        # handlers in :mod:`main` can surface them as 503/504. Without this
+        # gate a dead cluster looks like an empty result page (HTTP 200) and
+        # silently masks the outage from the UI.
+        if isinstance(exc, ClusterError | AerospikeTimeoutError | BackpressureError):
+            raise
         # Empty/sparse-namespace failure mode (aerospike-py #259). Log at
         # exception level so operators can still find the underlying cause
         # in logs — pattern + filter context goes in the message so user-

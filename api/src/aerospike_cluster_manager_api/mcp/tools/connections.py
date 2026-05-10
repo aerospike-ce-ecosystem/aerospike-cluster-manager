@@ -180,7 +180,7 @@ async def delete_connection(conn_id: str) -> dict[str, Any]:
     Mutation: requires ``ACM_MCP_ACCESS_PROFILE=full``; returns
     ``code=access_denied`` under READ_ONLY.
     """
-    await connections_service.delete_connection(conn_id)
+    await connections_service.delete_connection(conn_id, _resolve_mcp_caller_owner_id())
     return {"deleted": True, "conn_id": conn_id}
 
 

@@ -295,7 +295,7 @@ async def update_connection(
     return ConnectionProfileResponse.from_profile(conn)
 
 
-async def delete_connection(conn_id: str) -> None:
+async def delete_connection(conn_id: str, caller_owner_id: str | None = None) -> None:
     """Delete a connection profile and close its cached Aerospike client.
 
     Idempotent: deleting a missing connection is a no-op. The HTTP router
@@ -304,7 +304,31 @@ async def delete_connection(conn_id: str) -> None:
     semantics — while MCP tool callers see the idempotent behaviour
     directly. (The pre-refactor router returned 404 from inside the
     handler; the new layout pushes that gate up to the dependency.)
+
+    ``caller_owner_id`` is plumbed through as defense-in-depth: the
+    dependency-layer gate already rejects cross-tenant DELETEs, but a
+    future caller (a refactor, an internal task, an MCP tool that
+    forgets to gate) bypassing that path would otherwise erase a
+    connection it does not own. Mirrors the pattern in
+    :func:`get_connection` / :func:`update_connection`. ``None`` keeps
+    the legacy single-tenant behaviour for callers not yet threaded.
     """
+    if caller_owner_id is not None:
+        # Re-do the same visibility check the dependency does so that
+        # bypassing the router cannot silently delete cross-tenant rows.
+        # ``ConnectionNotFoundError`` is the matching wire shape — id
+        # enumeration cannot distinguish "missing" from "exists but not
+        # yours".
+        existing = await db.get_connection(conn_id)
+        if existing is not None:
+            workspace_id = getattr(existing, "workspaceId", None)
+            if workspace_id is not None:
+                try:
+                    workspace = await db.get_workspace(workspace_id)
+                except db.DBNotInitialized:
+                    workspace = None
+                if workspace is not None and workspace.ownerId not in (caller_owner_id, SYSTEM_OWNER_ID):
+                    raise ConnectionNotFoundError(conn_id)
     await db.delete_connection(conn_id)
     await client_manager.close_client(conn_id)
 

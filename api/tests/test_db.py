@@ -6,6 +6,7 @@ on connection profiles.
 
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 from datetime import UTC, datetime
 
@@ -332,3 +333,62 @@ class TestGetBackendWithoutInit:
                 db._get_backend()
         finally:
             db._backend = original
+
+
+class TestSqliteWriteConcurrency:
+    """Regression tests for the module-level write lock in db._sqlite.
+
+    Before the lock, two simultaneous coroutines hitting plain
+    ``execute + commit`` paths (delete_connection, delete_set_note,
+    delete_workspace, …) could race on the single shared aiosqlite
+    connection and either ``database is locked`` or interleave commits.
+    """
+
+    async def test_concurrent_deletes_all_succeed(self, init_test_db):
+        # Insert N rows, then concurrently delete each in its own task.
+        now = datetime.now(UTC).isoformat()
+        ids = [f"conn-conc-{i}" for i in range(20)]
+        for cid in ids:
+            await db.create_connection(
+                ConnectionProfile(
+                    id=cid,
+                    name=cid,
+                    hosts=["10.0.0.1"],
+                    port=3000,
+                    color="#0097D3",
+                    createdAt=now,
+                    updatedAt=now,
+                )
+            )
+
+        results = await asyncio.gather(*(db.delete_connection(cid) for cid in ids))
+
+        # Every delete must report success exactly once — no "database is
+        # locked" exception, no rowcount=0 false negatives.
+        assert all(results), f"some deletes lost rows: {results}"
+        for cid in ids:
+            assert await db.get_connection(cid) is None
+
+    async def test_concurrent_creates_all_persist(self, init_test_db):
+        # Mixed-write workload: many parallel inserts into the same table.
+        now = datetime.now(UTC).isoformat()
+        ids = [f"conn-pcreate-{i}" for i in range(20)]
+
+        async def _create(cid: str) -> None:
+            await db.create_connection(
+                ConnectionProfile(
+                    id=cid,
+                    name=cid,
+                    hosts=["10.0.0.1"],
+                    port=3000,
+                    color="#0097D3",
+                    createdAt=now,
+                    updatedAt=now,
+                )
+            )
+
+        await asyncio.gather(*(_create(cid) for cid in ids))
+
+        all_ids = {p.id for p in await db.get_all_connections()}
+        for cid in ids:
+            assert cid in all_ids
