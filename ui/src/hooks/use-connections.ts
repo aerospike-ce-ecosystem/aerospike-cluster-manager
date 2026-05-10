@@ -10,7 +10,7 @@
 
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import { listConnections } from "@/lib/api/connections"
 import { logFetchError } from "@/lib/api/log"
@@ -30,17 +30,33 @@ export function useConnections(): UseConnectionsResult {
   const [isLoading, setIsLoading] = useState(true)
   const rev = useDataRevisionStore((s) => s.connectionsRev)
 
+  // Hook-level mounted guard so both the initial fetch effect AND the
+  // exposed refetch can drop late resolutions after unmount. The previous
+  // useEffect-local `cancelled` flag missed callers who triggered refetch
+  // and then navigated away before the response landed — React would then
+  // warn about setState on an unmounted component (and in strict mode, the
+  // double-mount during dev surfaced the same race more reliably).
+  const isMountedRef = useRef(true)
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
   const refetch = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
       const result = await listConnections()
+      if (!isMountedRef.current) return
       setData(result)
     } catch (err) {
       logFetchError("connections", err)
+      if (!isMountedRef.current) return
       setError(err instanceof Error ? err : new Error(String(err)))
     } finally {
-      setIsLoading(false)
+      if (isMountedRef.current) setIsLoading(false)
     }
   }, [])
 
@@ -49,17 +65,17 @@ export function useConnections(): UseConnectionsResult {
     ;(async () => {
       try {
         const result = await listConnections()
-        if (!cancelled) {
+        if (!cancelled && isMountedRef.current) {
           setData(result)
           setError(null)
         }
       } catch (err) {
         logFetchError("connections", err)
-        if (!cancelled) {
+        if (!cancelled && isMountedRef.current) {
           setError(err instanceof Error ? err : new Error(String(err)))
         }
       } finally {
-        if (!cancelled) setIsLoading(false)
+        if (!cancelled && isMountedRef.current) setIsLoading(false)
       }
     })()
     return () => {
