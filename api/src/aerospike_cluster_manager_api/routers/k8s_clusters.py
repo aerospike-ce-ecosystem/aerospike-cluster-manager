@@ -217,17 +217,20 @@ async def list_k8s_clusters(
     )
 
     # Filter CRs by workspace visibility. CRs with no workspace label are
-    # treated as system-shared (legacy compatibility). For labelled CRs we
-    # batch the visibility check so a 100-cluster page does not run 100
-    # serial ``db.get_workspace`` round trips.
+    # treated as system-shared (legacy compatibility). Visibility checks run
+    # in parallel via ``asyncio.gather`` so a 100-cluster page does not
+    # serialize 100 ``db.get_workspace`` round trips — the prior loop turned
+    # a fan-out lookup into an O(N) blocking chain.
     workspace_ids: set[str] = set()
     for item in items:
         ws_id = _cr_workspace_id(item)
         if ws_id is not None:
             workspace_ids.add(ws_id)
-    visible_workspaces: dict[str, bool] = {}
-    for ws_id in workspace_ids:
-        visible_workspaces[ws_id] = await _is_workspace_visible(ws_id, caller_owner_id)
+    ws_id_list = list(workspace_ids)
+    visibility_results = await asyncio.gather(
+        *(_is_workspace_visible(ws_id, caller_owner_id) for ws_id in ws_id_list),
+    )
+    visible_workspaces: dict[str, bool] = dict(zip(ws_id_list, visibility_results, strict=True))
     items = [item for item in items if (ws := _cr_workspace_id(item)) is None or visible_workspaces.get(ws, False)]
 
     # Build the connection-id correlation table from connections visible to the
@@ -850,9 +853,13 @@ async def _visible_cluster_namespaces(caller_owner_id: str) -> set[str]:
     """
     items, _ = await k8s_client.list_clusters(limit=200)
     workspace_ids: set[str] = {ws_id for item in items if (ws_id := _cr_workspace_id(item)) is not None}
-    visible_workspaces: dict[str, bool] = {
-        ws_id: await _is_workspace_visible(ws_id, caller_owner_id) for ws_id in workspace_ids
-    }
+    # Parallelize visibility lookups — see ``list_k8s_clusters`` for the
+    # rationale: a serial ``await`` per workspace turns into N round-trips.
+    ws_id_list = list(workspace_ids)
+    visibility_results = await asyncio.gather(
+        *(_is_workspace_visible(ws_id, caller_owner_id) for ws_id in ws_id_list),
+    )
+    visible_workspaces: dict[str, bool] = dict(zip(ws_id_list, visibility_results, strict=True))
     namespaces: set[str] = set()
     for item in items:
         ws_id = _cr_workspace_id(item)
@@ -959,9 +966,12 @@ async def list_k8s_templates(caller_owner_id: CallerOwnerId) -> list[K8sTemplate
     # unlabelled templates to every caller, which leaked another tenant's
     # untagged template metadata.
     workspace_ids: set[str] = {ws_id for item in items if (ws_id := _cr_workspace_id(item)) is not None}
-    visible_workspaces: dict[str, bool] = {
-        ws_id: await _is_workspace_visible(ws_id, caller_owner_id) for ws_id in workspace_ids
-    }
+    # Parallelize visibility lookups (same pattern as ``list_k8s_clusters``).
+    ws_id_list = list(workspace_ids)
+    visibility_results = await asyncio.gather(
+        *(_is_workspace_visible(ws_id, caller_owner_id) for ws_id in ws_id_list),
+    )
+    visible_workspaces: dict[str, bool] = dict(zip(ws_id_list, visibility_results, strict=True))
     is_system_caller = caller_owner_id == SYSTEM_OWNER_ID
 
     def _template_visible(item: dict[str, Any]) -> bool:
