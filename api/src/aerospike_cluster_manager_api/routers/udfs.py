@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
+import os
 import tempfile
-from pathlib import Path
 from typing import Literal, cast
 
 from aerospike_py.exception import AerospikeError
@@ -53,17 +53,21 @@ async def get_udfs(client: AerospikeClient) -> list[UDFModule]:
 )
 @limiter.limit("20/minute")
 async def upload_udf(request: Request, body: UploadUDFRequest, client: AerospikeClient) -> UDFModule:
-    """Upload and register a Lua UDF module to the Aerospike cluster."""
-    tmp_path: str | None = None
-    try:
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".lua", delete=False) as tmp:
-            tmp.write(body.content)
-            tmp.flush()
-            tmp_path = tmp.name
+    """Upload and register a Lua UDF module to the Aerospike cluster.
+
+    aerospike-py's ``udf_put`` derives the registered module name from the
+    file's basename, so the temp file MUST be created with ``body.filename``
+    as its basename. Using ``NamedTemporaryFile`` (basename ``tmpXXXX.lua``)
+    registered the UDF under a random name and broke every later fetch /
+    delete by ``body.filename``. ``body.filename`` is already validated
+    against a strict pattern at the request model layer, so there is no
+    path traversal exposure from joining it with the temp directory.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = os.path.join(tmpdir, body.filename)
+        with open(tmp_path, "w") as f:
+            f.write(body.content)
         await client.udf_put(tmp_path)
-    finally:
-        if tmp_path:
-            Path(tmp_path).unlink(missing_ok=True)
 
     # Re-fetch to get actual hash
     modules = await _list_udfs(client)
