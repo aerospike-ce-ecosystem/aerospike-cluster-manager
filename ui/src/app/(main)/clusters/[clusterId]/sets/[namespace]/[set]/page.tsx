@@ -500,7 +500,7 @@ export default function RecordBrowserPage({ params }: PageProps) {
                         // primary-key column; the detail route requires a pk
                         // path segment, so we render an inert digest stub
                         // instead of a broken empty-string link.
-                        <span className="italic text-gray-400 text-xs">
+                        <span className="text-xs italic text-gray-400">
                           digest:{r.key.digest?.slice(0, 8) ?? ""}…
                         </span>
                       )}
