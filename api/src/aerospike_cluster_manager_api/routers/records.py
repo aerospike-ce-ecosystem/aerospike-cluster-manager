@@ -4,6 +4,7 @@ import logging
 from typing import Literal
 
 from aerospike_py import Record
+from aerospike_py.exception import RecordNotFound
 from fastapi import APIRouter, HTTPException, Query, Request
 from starlette.responses import Response
 
@@ -242,9 +243,18 @@ async def delete_record(
     delete that targets the wrong particle type would silently no-op (the
     record at the *other* type stays put), and a fallback could mask that
     fact. Pass an explicit ``pk_type`` to be sure of which record gets removed.
+
+    DELETE is idempotent — if the underlying record is already gone we still
+    return 204. Letting ``RecordNotFound`` propagate would translate to 404
+    via the global handler and break common UI / CLI retry patterns where the
+    same DELETE is replayed after a network blip.
     """
     try:
         await records_service.delete_record(client, ns, set, pk, pk_type)
+    except RecordNotFound:
+        # Idempotent: the record is already absent, which is the desired
+        # post-condition of DELETE.
+        pass
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return Response(status_code=204)
