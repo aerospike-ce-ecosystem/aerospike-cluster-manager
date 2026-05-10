@@ -99,9 +99,13 @@ function settleHydration(): void {
 
 /**
  * Fetch the cluster registry from the static JSON mount and hydrate the store.
- * Idempotent — call from the root provider on mount. Settles
- * `getHydrationPromise()` whether the registry loads or the fetch fails so
- * apiFetch callers never block forever in legacy single-cluster mode.
+ * Idempotent on success; on failure, the cached single-flight promise is
+ * cleared so a follow-up `hydrateClusterRegistry()` call (e.g. from a retry
+ * banner) primes a fresh pending promise that future apiFetch callers can
+ * actually wait on. Without that reset, the first failure would leave a
+ * settled promise behind and apiFetch would skip waiting on the in-flight
+ * retry, racing the relative-path fallback into the same boot-time 401
+ * loop the single-flight was supposed to prevent.
  */
 export async function hydrateClusterRegistry(
   fetcher: typeof fetch = fetch,
@@ -128,9 +132,19 @@ export async function hydrateClusterRegistry(
       throw new Error(msg)
     }
     useClusterSelectorStore.getState().setRegistry(data)
-    return data
-  } finally {
     settleHydration()
+    return data
+  } catch (err) {
+    // Drain the pending promise so the next caller sees a deterministic
+    // resolved state (rather than a stuck pending one), then null out the
+    // cache so the *next* hydrateClusterRegistry call primes a brand new
+    // single-flight promise. Order matters: settle first so already-awaiting
+    // apiFetch callers unblock, then null out so the retry creates a fresh
+    // promise the next batch of callers can await.
+    settleHydration()
+    hydrationPromise = null
+    resolveHydration = null
+    throw err
   }
 }
 
