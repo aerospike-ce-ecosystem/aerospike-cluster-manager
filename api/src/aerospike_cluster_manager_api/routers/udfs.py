@@ -5,7 +5,8 @@ import tempfile
 from pathlib import Path
 from typing import Literal, cast
 
-from fastapi import APIRouter, Query, Request
+from aerospike_py.exception import AerospikeError
+from fastapi import APIRouter, HTTPException, Query, Request
 from starlette.responses import Response
 
 from aerospike_cluster_manager_api.constants import INFO_UDF_LIST
@@ -84,6 +85,19 @@ async def delete_udf(
     client: AerospikeClient,
     filename: str = Query(..., min_length=1),
 ) -> Response:
-    """Remove a registered UDF module from the Aerospike cluster by filename."""
-    await client.udf_remove(filename)
+    """Remove a registered UDF module from the Aerospike cluster by filename.
+
+    aerospike-py does not expose a dedicated ``UDFNotFound`` exception, so
+    "module is not registered" surfaces as a generic ``AerospikeError`` /
+    ``UDFError`` carrying a ``"udf not found"`` (or similar) server message.
+    We pattern-match that here so a missing module returns 404 instead of
+    being swallowed by the global 500 handler — mirrors the 404 mapping
+    that ``delete_index`` gets for ``IndexNotFound``.
+    """
+    try:
+        await client.udf_remove(filename)
+    except AerospikeError as exc:
+        if "not found" in str(exc).lower():
+            raise HTTPException(status_code=404, detail=f"UDF module '{filename}' not found") from exc
+        raise
     return Response(status_code=204)
