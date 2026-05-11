@@ -269,6 +269,4 @@ ACM_MCP_ALLOW_ANONYMOUS: bool = _get_bool("ACM_MCP_ALLOW_ANONYMOUS", False)
 # When the list is empty (default) we preserve the SDK auto-default behavior —
 # only loopback hosts are allowed. This matches what users got before this knob
 # existed and avoids silently widening the trust boundary on upgrade.
-ACM_MCP_ALLOWED_HOSTS: list[str] = [
-    h.strip() for h in os.getenv("ACM_MCP_ALLOWED_HOSTS", "").split(",") if h.strip()
-]
+ACM_MCP_ALLOWED_HOSTS: list[str] = [h.strip() for h in os.getenv("ACM_MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]

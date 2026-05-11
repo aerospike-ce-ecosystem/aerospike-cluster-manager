@@ -80,9 +80,7 @@ def test_wildcard_port_host_does_not_generate_origin() -> None:
 
 def test_multiple_external_hosts_all_merged() -> None:
     """Multiple operator-supplied hosts all land in the allow-list."""
-    mcp = build_mcp_app(
-        allowed_hosts=["aerospike-api.example.com", "aerospike-api.staging.example.com"]
-    )
+    mcp = build_mcp_app(allowed_hosts=["aerospike-api.example.com", "aerospike-api.staging.example.com"])
     settings = mcp.settings.transport_security
     assert settings is not None
     assert "aerospike-api.example.com" in settings.allowed_hosts
