@@ -8,11 +8,24 @@ registry into the FastMCP app.
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from starlette.routing import BaseRoute, Match
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from aerospike_cluster_manager_api.mcp import tools  # noqa: F401  — import side-effects only
 from aerospike_cluster_manager_api.mcp.registry import register_all
+
+# SDK auto-default for the streamable-HTTP transport when ``host`` falls back to
+# ``127.0.0.1`` — see ``mcp.server.lowlevel.server.streamable_http_app``. We
+# replicate it here so the operator-configured allow-list can be MERGED with the
+# loopback entries instead of REPLACING them (which would break in-pod
+# debugging such as ``kubectl exec ... curl http://localhost:8000/mcp``).
+_LOOPBACK_HOSTS: tuple[str, ...] = ("127.0.0.1:*", "localhost:*", "[::1]:*")
+_LOOPBACK_ORIGINS: tuple[str, ...] = (
+    "http://127.0.0.1:*",
+    "http://localhost:*",
+    "http://[::1]:*",
+)
 
 
 class CanonicalMCPMount(BaseRoute):
@@ -75,7 +88,34 @@ class CanonicalMCPMount(BaseRoute):
         await self.app(scope, receive, send)
 
 
-def build_mcp_app() -> FastMCP:
+def _build_transport_security(allowed_hosts: list[str]) -> TransportSecuritySettings | None:
+    """Construct the streamable-HTTP transport security settings.
+
+    Returns ``None`` when ``allowed_hosts`` is empty so the SDK falls back to
+    its own auto-default (DNS rebinding protection enabled with loopback-only
+    allow-lists, because the transport ``host`` defaults to ``127.0.0.1``).
+
+    Returns an explicit :class:`TransportSecuritySettings` when the list is
+    non-empty, merging the operator-supplied external hostnames with the
+    loopback defaults so in-pod debugging (``kubectl exec ... curl
+    http://localhost:8000/mcp``) keeps working alongside the public ingress
+    hostnames. Origins are merged similarly. DNS rebinding protection itself
+    stays *on* — we widen the allow-list, never disable the guard.
+    """
+    if not allowed_hosts:
+        return None
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=[*allowed_hosts, *_LOOPBACK_HOSTS],
+        allowed_origins=[
+            *[f"http://{h}" for h in allowed_hosts if not h.endswith(":*")],
+            *[f"https://{h}" for h in allowed_hosts if not h.endswith(":*")],
+            *_LOOPBACK_ORIGINS,
+        ],
+    )
+
+
+def build_mcp_app(*, allowed_hosts: list[str] | None = None) -> FastMCP:
     """Construct the ACM MCP server with all decorated tools registered.
 
     ``streamable_http_path="/"`` keeps the inner Streamable-HTTP route at
@@ -83,8 +123,25 @@ def build_mcp_app() -> FastMCP:
     :class:`CanonicalMCPMount` at ``ACM_MCP_PATH`` (``/mcp`` by default)
     both ``/mcp`` and ``/mcp/<anything>`` reach the JSON-RPC transport
     without a 307 redirect.
+
+    Host allow-list
+    ---------------
+
+    ``allowed_hosts`` is the operator-configured list of extra ``Host``
+    header values to accept in addition to the SDK's loopback defaults. The
+    SDK auto-enables a DNS-rebinding guard that whitelists only
+    ``127.0.0.1:*`` / ``localhost:*`` / ``[::1]:*`` whenever the transport
+    ``host`` falls back to ``127.0.0.1``, so production deployments that
+    surface ``/mcp`` through an ingress / LoadBalancer with a public
+    hostname need to widen the list here — otherwise every external
+    request is rejected with HTTP 421 ``Invalid Host header``.
     """
-    mcp = FastMCP("aerospike-cluster-manager", streamable_http_path="/")
+    transport_security = _build_transport_security(allowed_hosts or [])
+    mcp = FastMCP(
+        "aerospike-cluster-manager",
+        streamable_http_path="/",
+        transport_security=transport_security,
+    )
     register_all(mcp)
     return mcp
 

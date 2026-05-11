@@ -241,3 +241,32 @@ ACM_MCP_ACCESS_PROFILE: AccessProfile = parse_profile(os.getenv("ACM_MCP_ACCESS_
 # loopback or behind a sealed-off ingress can opt back in here, but the
 # refusal is the default for a reason.
 ACM_MCP_ALLOW_ANONYMOUS: bool = _get_bool("ACM_MCP_ALLOW_ANONYMOUS", False)
+
+# DNS rebinding protection — Host/Origin header allow-list for the streamable-HTTP
+# transport.
+#
+# The MCP Python SDK (``mcp.server.lowlevel.server.streamable_http_app``)
+# auto-enables DNS rebinding protection whenever the transport ``host`` falls
+# back to its default of ``127.0.0.1`` and no explicit ``TransportSecuritySettings``
+# is supplied. Because :func:`mcp.server.server.streamable_http_asgi` calls
+# ``mcp.streamable_http_app()`` without arguments, that default kicks in and the
+# transport rejects any request whose ``Host`` header is not in
+# ``["127.0.0.1:*", "localhost:*", "[::1]:*"]`` with HTTP 421 ``Invalid Host header``.
+#
+# That is the correct default for ``mcp run`` on a developer laptop, but it
+# breaks production deployments where the API is reached through an ingress /
+# LoadBalancer / Gateway with a public hostname (e.g.
+# ``aerospike-api.example.com``). Operators set this env to a comma-separated
+# list of allowed Host values, e.g.::
+#
+#     ACM_MCP_ALLOWED_HOSTS=aerospike-api.example.com,aerospike-api.example.com:*
+#
+# Each entry is matched as-is by the SDK's :class:`TransportSecurityMiddleware`,
+# which also supports the ``host:*`` wildcard-port pattern. The localhost
+# loopback entries are merged in automatically so direct in-pod debugging
+# (``kubectl exec ... curl http://localhost:8000/mcp``) keeps working.
+#
+# When the list is empty (default) we preserve the SDK auto-default behavior —
+# only loopback hosts are allowed. This matches what users got before this knob
+# existed and avoids silently widening the trust boundary on upgrade.
+ACM_MCP_ALLOWED_HOSTS: list[str] = [h.strip() for h in os.getenv("ACM_MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]

@@ -558,7 +558,7 @@ app.include_router(api_router)
 if config.ACM_MCP_ENABLED:
     from aerospike_cluster_manager_api.mcp.server import CanonicalMCPMount, build_mcp_app, streamable_http_asgi
 
-    _mcp_app = build_mcp_app()
+    _mcp_app = build_mcp_app(allowed_hosts=config.ACM_MCP_ALLOWED_HOSTS)
     # ``CanonicalMCPMount`` replaces ``app.mount(...)`` because the default
     # Starlette ``Mount`` regex (``^/mcp/(?P<path>.*)$``) does not match
     # the bare ``/mcp`` URL — the parent Router then falls into the
