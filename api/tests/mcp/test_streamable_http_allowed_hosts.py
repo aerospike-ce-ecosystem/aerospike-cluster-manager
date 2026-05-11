@@ -87,3 +87,45 @@ def test_multiple_external_hosts_all_merged() -> None:
     assert "aerospike-api.staging.example.com" in settings.allowed_hosts
     assert "http://aerospike-api.example.com" in settings.allowed_origins
     assert "http://aerospike-api.staging.example.com" in settings.allowed_origins
+
+
+def test_explicit_origins_replace_auto_derivation() -> None:
+    """``allowed_origins`` explicit → no auto-derivation from hosts.
+
+    Operators who set an explicit Origin allow-list usually have a reason
+    (strict-scheme deployment, non-standard port, CDN). The auto-derivation
+    would silently broaden the trust boundary, so we honor only the literal
+    list (plus loopback for in-pod debugging).
+    """
+    mcp = build_mcp_app(
+        allowed_hosts=["aerospike-api.example.com"],
+        allowed_origins=["https://aerospike-api.example.com"],
+    )
+    settings = mcp.settings.transport_security
+    assert settings is not None
+    # Operator-supplied origin is present.
+    assert "https://aerospike-api.example.com" in settings.allowed_origins
+    # Auto-derived ``http://`` form is NOT present — operator wants https only.
+    assert "http://aerospike-api.example.com" not in settings.allowed_origins
+    # Loopback origins are still merged in.
+    for origin in _LOOPBACK_ORIGINS:
+        assert origin in settings.allowed_origins
+
+
+def test_origin_only_without_host_still_engages_guard() -> None:
+    """``allowed_origins`` only (host empty) → still flips DNS rebinding on.
+
+    Edge case: operator sets origins but forgets hosts. We don't try to be
+    clever — we engage the explicit settings (with loopback hosts) so the
+    operator's origin allow-list is honored, even though the host axis is
+    loopback-only. The deployment effectively only serves ``/mcp`` to
+    in-pod clients, which is a coherent (if unusual) configuration.
+    """
+    mcp = build_mcp_app(allowed_origins=["https://cdn.example.com"])
+    settings = mcp.settings.transport_security
+    assert settings is not None
+    assert settings.enable_dns_rebinding_protection is True
+    assert set(settings.allowed_hosts) == set(_LOOPBACK_HOSTS)
+    assert "https://cdn.example.com" in settings.allowed_origins
+    for origin in _LOOPBACK_ORIGINS:
+        assert origin in settings.allowed_origins

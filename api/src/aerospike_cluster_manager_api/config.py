@@ -270,3 +270,27 @@ ACM_MCP_ALLOW_ANONYMOUS: bool = _get_bool("ACM_MCP_ALLOW_ANONYMOUS", False)
 # only loopback hosts are allowed. This matches what users got before this knob
 # existed and avoids silently widening the trust boundary on upgrade.
 ACM_MCP_ALLOWED_HOSTS: list[str] = [h.strip() for h in os.getenv("ACM_MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]
+
+# Origin allow-list for the streamable-HTTP transport. Browser-style clients
+# send an ``Origin`` header on cross-origin requests; SDK's
+# :class:`TransportSecurityMiddleware` matches it against this list.
+#
+# When empty (default), :func:`mcp.server.server.build_mcp_app` derives
+# ``http://<host>`` + ``https://<host>`` entries from ``ACM_MCP_ALLOWED_HOSTS``.
+# That works for plain ingress URLs (``aerospike-api.example.com`` →
+# ``http://aerospike-api.example.com`` + ``https://...``) and is what you want
+# in the common case.
+#
+# Set this env explicitly when the public Origin form differs from Host — e.g.::
+#
+#   * non-standard port:     ACM_MCP_ALLOWED_ORIGINS=https://app.example.com:8443
+#   * CDN / proxy rewriting: ACM_MCP_ALLOWED_ORIGINS=https://acm.cdn-domain.com
+#   * strict-scheme:         ACM_MCP_ALLOWED_ORIGINS=https://aerospike-api.example.com
+#                            (only https — no http auto-derivation)
+#
+# Localhost loopback origins (``http://127.0.0.1:*``, ``http://localhost:*``,
+# ``http://[::1]:*``) are merged in automatically — explicit operator entries
+# never need to repeat them.
+ACM_MCP_ALLOWED_ORIGINS: list[str] = [
+    o.strip() for o in os.getenv("ACM_MCP_ALLOWED_ORIGINS", "").split(",") if o.strip()
+]

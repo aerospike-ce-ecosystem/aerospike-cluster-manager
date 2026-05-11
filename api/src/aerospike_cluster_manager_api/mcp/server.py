@@ -88,34 +88,57 @@ class CanonicalMCPMount(BaseRoute):
         await self.app(scope, receive, send)
 
 
-def _build_transport_security(allowed_hosts: list[str]) -> TransportSecuritySettings | None:
+def _build_transport_security(allowed_hosts: list[str], allowed_origins: list[str]) -> TransportSecuritySettings | None:
     """Construct the streamable-HTTP transport security settings.
 
-    Returns ``None`` when ``allowed_hosts`` is empty so the SDK falls back to
-    its own auto-default (DNS rebinding protection enabled with loopback-only
+    Returns ``None`` when both lists are empty so the SDK falls back to its
+    own auto-default (DNS rebinding protection enabled with loopback-only
     allow-lists, because the transport ``host`` defaults to ``127.0.0.1``).
 
-    Returns an explicit :class:`TransportSecuritySettings` when the list is
-    non-empty, merging the operator-supplied external hostnames with the
-    loopback defaults so in-pod debugging (``kubectl exec ... curl
+    Returns an explicit :class:`TransportSecuritySettings` when either list
+    is non-empty, merging the operator-supplied entries with the loopback
+    defaults so in-pod debugging (``kubectl exec ... curl
     http://localhost:8000/mcp``) keeps working alongside the public ingress
-    hostnames. Origins are merged similarly. DNS rebinding protection itself
-    stays *on* — we widen the allow-list, never disable the guard.
+    hostnames. DNS rebinding protection itself stays *on* — we widen the
+    allow-list, never disable the guard.
+
+    Origin merge rules
+    ------------------
+
+    * ``allowed_origins`` explicitly set: operator's literal list is used as
+      the Origin allow-list (plus loopback). Nothing is auto-derived from
+      ``allowed_hosts`` — operators who care about Origin enforcement know
+      what schemes / ports they speak.
+    * ``allowed_origins`` empty and ``allowed_hosts`` set: derive
+      ``http://<host>`` and ``https://<host>`` for each bare hostname so
+      browser-style clients pointed at the public ingress continue to work
+      without operators having to re-enumerate every URL form.
+      ``host:*`` wildcard-port entries do NOT auto-generate origins —
+      ``http://host:*`` would over-grant.
     """
-    if not allowed_hosts:
+    if not allowed_hosts and not allowed_origins:
         return None
-    return TransportSecuritySettings(
-        enable_dns_rebinding_protection=True,
-        allowed_hosts=[*allowed_hosts, *_LOOPBACK_HOSTS],
-        allowed_origins=[
+    merged_hosts = [*allowed_hosts, *_LOOPBACK_HOSTS]
+    if allowed_origins:
+        merged_origins = [*allowed_origins, *_LOOPBACK_ORIGINS]
+    else:
+        merged_origins = [
             *[f"http://{h}" for h in allowed_hosts if not h.endswith(":*")],
             *[f"https://{h}" for h in allowed_hosts if not h.endswith(":*")],
             *_LOOPBACK_ORIGINS,
-        ],
+        ]
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=merged_hosts,
+        allowed_origins=merged_origins,
     )
 
 
-def build_mcp_app(*, allowed_hosts: list[str] | None = None) -> FastMCP:
+def build_mcp_app(
+    *,
+    allowed_hosts: list[str] | None = None,
+    allowed_origins: list[str] | None = None,
+) -> FastMCP:
     """Construct the ACM MCP server with all decorated tools registered.
 
     ``streamable_http_path="/"`` keeps the inner Streamable-HTTP route at
@@ -135,8 +158,19 @@ def build_mcp_app(*, allowed_hosts: list[str] | None = None) -> FastMCP:
     surface ``/mcp`` through an ingress / LoadBalancer with a public
     hostname need to widen the list here — otherwise every external
     request is rejected with HTTP 421 ``Invalid Host header``.
+
+    Origin allow-list
+    -----------------
+
+    ``allowed_origins`` is the operator-configured list of extra ``Origin``
+    header values to accept (browser-style clients send ``Origin`` on
+    cross-origin requests). When empty, the SDK / our defaults derive
+    ``http://<host>`` + ``https://<host>`` entries from ``allowed_hosts``,
+    which works for plain ingress URLs. Set it explicitly when the public
+    Origin form differs from the Host — e.g. non-standard ports, CDN /
+    proxy rewriting, or strict-scheme deployments that need only ``https``.
     """
-    transport_security = _build_transport_security(allowed_hosts or [])
+    transport_security = _build_transport_security(allowed_hosts or [], allowed_origins or [])
     mcp = FastMCP(
         "aerospike-cluster-manager",
         streamable_http_path="/",
