@@ -35,6 +35,7 @@ from aerospike_cluster_manager_api.models.k8s_cluster import (
     K8sClusterEvent,
     K8sClusterListResponse,
     K8sClusterSummary,
+    K8sPodStatus,
     K8sTemplateDetail,
     K8sTemplateSummary,
     MigrationStatusResponse,
@@ -288,6 +289,33 @@ async def get_k8s_cluster(
         namespace, f"app.kubernetes.io/name=aerospike-cluster,app.kubernetes.io/instance={name}"
     )
     return extract_detail(item, pods_raw)
+
+
+@router.get(
+    "/clusters/{namespace}/{name}/pods",
+    summary="List pods of a K8s Aerospike cluster",
+)
+@_k8s_endpoint("list Kubernetes cluster pods")
+async def list_k8s_cluster_pods(
+    caller_owner_id: CallerOwnerId,
+    namespace: str = _K8S_NAMESPACE,
+    name: str = _K8S_NAME,
+) -> list[K8sPodStatus]:
+    """Return pod status for an AerospikeCluster CR.
+
+    Mirrors the pods slice of :func:`get_k8s_cluster` so ackoctl (and any
+    other API consumer) can fetch pods without paying for the full
+    ``K8sClusterDetail`` payload (operations status, conditions, full
+    spec/status). Same workspace ACL gate -- identity-404 for invisible
+    or missing clusters.
+    """
+
+    await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
+    pods_raw = await k8s_client.list_pods(
+        namespace,
+        f"app.kubernetes.io/name=aerospike-cluster,app.kubernetes.io/instance={name}",
+    )
+    return [K8sPodStatus(**p) for p in pods_raw]
 
 
 @router.get("/clusters/{namespace}/{name}/config-drift", summary="Get cluster config drift")

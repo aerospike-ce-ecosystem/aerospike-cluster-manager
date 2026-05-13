@@ -37,6 +37,7 @@ from aerospike_cluster_manager_api.routers import (
     query,
     records,
     sample_data,
+    sets,
     udfs,
     workspaces,
 )
@@ -525,6 +526,7 @@ _routers = [
     connections.router,
     clusters.router,
     records.router,
+    sets.router,
     notes.router,
     query.router,
     indexes.router,
