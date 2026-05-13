@@ -1,17 +1,14 @@
-"""Read-only asinfo verb whitelist for ``ACM_MCP_ACCESS_PROFILE=read_only``.
+"""Read-only asinfo verb whitelist for the REST API info endpoint.
 
 The Aerospike asinfo protocol multiplexes both reads (``namespaces``,
 ``version``, ``roster:``, ...) and writes (``set-config:``, ``recluster:``,
-``truncate-namespace:``) over the same wire format. The MCP read-only
-profile therefore cannot decide a tool's safety from its name alone — it
-needs to inspect the *verb* (the leading token of the command).
+``truncate-namespace:``) over the same wire format. The read-only info
+endpoint therefore cannot decide a command's safety from its shape alone
+— it needs to inspect the *verb* (the leading token of the command).
 
-This module is the single source of truth for that decision. It lives at
-the package root so the service layer can import it without reaching back
-into ``mcp/``. The service raises :class:`InfoVerbNotAllowed`. The MCP
-error mapper at :mod:`mcp.errors` translates it to ``code=invalid_argument``
-so the LLM sees a "pick a different verb" signal rather than a permission
-denial.
+This module is the single source of truth for that decision. The service
+layer raises :class:`InfoVerbNotAllowed`, which the router maps to an
+HTTP 400 with a "pick a different verb" hint.
 
 To add a verb:
 
@@ -73,18 +70,16 @@ _HINT_VERBS: tuple[str, ...] = ("namespaces", "version", "nodes", "statistics", 
 class InfoVerbNotAllowed(ValueError):
     """Raised when an asinfo command's leading verb is not on the read-only allowlist.
 
-    The MCP error mapper translates this to
-    :class:`mcp.errors.MCPToolError` with ``code="invalid_argument"`` so
-    LLM clients receive a "pick a different verb" signal rather than a
-    permission denial.
+    The REST router maps this to HTTP 400 with a "pick a different verb"
+    hint so clients receive a clear "use a read-only verb" signal rather
+    than a permission denial.
     """
 
     def __init__(self, verb: str) -> None:
         sample = ", ".join(_HINT_VERBS)
         super().__init__(
             f"Verb {verb!r} is not on the read-only asinfo whitelist; "
-            f"pick from: {sample} (full list at info_verbs.READ_ONLY_INFO_VERBS), "
-            f"or use execute_info under ACM_MCP_ACCESS_PROFILE=full."
+            f"pick from: {sample} (full list at info_verbs.READ_ONLY_INFO_VERBS)."
         )
         self.verb = verb
 

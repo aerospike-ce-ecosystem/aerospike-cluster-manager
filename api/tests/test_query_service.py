@@ -1,8 +1,8 @@
 """Unit tests for the query service layer.
 
 These tests exercise ``services.query_service`` directly — without going
-through FastAPI — so the same function can be reused by an MCP tool layer.
-The router-layer regression net (when present) lives elsewhere.
+through FastAPI — so the service contract stays stable independent of the
+REST router. The router-layer regression net (when present) lives elsewhere.
 """
 
 from __future__ import annotations

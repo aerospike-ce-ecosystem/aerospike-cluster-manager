@@ -4,29 +4,22 @@ Manages one ``AsyncClient`` per ``(session_id, conn_id)`` pair, with a
 per-pair :class:`asyncio.Lock` for safe concurrent access without global
 serialization.
 
-Phase 2 (#303) -- per-session scoping
--------------------------------------
+Per-session scoping
+-------------------
 
 Cached entries are keyed by ``(session_id, conn_id)`` rather than just
-``conn_id`` so one MCP session's ``disconnect("X")`` cannot evict another
-session's cached client for the same connection profile. The
+``conn_id`` so one caller's ``disconnect("X")`` cannot evict another
+caller's cached client for the same connection profile. The
 ``session_id`` is read transparently from a module-level
-:class:`contextvars.ContextVar` (``_SESSION_CTXVAR``); the MCP registry
-decorator stashes it before calling the tool body, and unsets it on the
-way out so the contextvar never leaks across calls.
+:class:`contextvars.ContextVar` (``_SESSION_CTXVAR``); callers that want
+per-session scoping stash an identifier before invoking the service
+layer, and unset it on the way out so the contextvar never leaks across
+calls.
 
-The REST API path has no MCP session -- the contextvar stays at its
-default ``None`` and every REST caller therefore shares one cache slot
-per ``conn_id`` (the Phase 1 behaviour the existing REST routers and
-``test_client_manager.py`` rely on). ``close_client(conn_id)`` only
-evicts the caller's *own* slot: an MCP session's disconnect cannot tear
-down the REST cache, and the REST path's eviction does not touch any
-MCP session.
-
-If FastMCP exposes a session-cleanup hook in the future, call
-:meth:`ClientManager.close_session` from it; until then the per-session
-slots sit until process exit, which is acceptable for the short-lived
-sessions FastMCP creates over StreamableHTTP.
+The REST API path leaves the contextvar at its default ``None`` and every
+REST caller therefore shares one cache slot per ``conn_id`` -- the
+single-tenant behaviour the routers and ``test_client_manager.py`` rely
+on. ``close_client(conn_id)`` only evicts the caller's *own* slot.
 """
 
 from __future__ import annotations
@@ -48,19 +41,19 @@ from aerospike_cluster_manager_api.utils import parse_host_port
 _tracer = trace.get_tracer("aerospike_cluster_manager_api.client_manager")
 
 
-# Per-call session id used to key the cache. The MCP registry decorator
-# (mcp/registry.py) sets this before invoking a tool body and resets it
-# on the way out. The REST API path leaves it at its default ``None``,
-# which collapses to the Phase 1 single-cache-per-conn_id behaviour the
-# REST routers expect.
+# Per-call session id used to key the cache. Callers that want
+# per-session scoping set this contextvar before invoking the service
+# layer and reset it on the way out. The REST API path leaves it at its
+# default ``None``, which collapses to single-cache-per-conn_id behaviour
+# the REST routers rely on.
 _SESSION_CTXVAR: ContextVar[str | None] = ContextVar(
-    "asm_mcp_session_id",
+    "asm_session_id",
     default=None,
 )
 
 # Cache key: ``(session_id, conn_id)`` where ``session_id is None``
-# represents the REST API path (no MCP session). Aliasing keeps the type
-# annotations self-documenting in a few places below.
+# represents the REST API path (no per-session scope). Aliasing keeps
+# the type annotations self-documenting in a few places below.
 _CacheKey = tuple[str | None, str]
 
 
@@ -74,7 +67,7 @@ class ClientManager:
 
     @staticmethod
     def _current_session_id() -> str | None:
-        """Read the per-call session id stashed by the MCP registry decorator.
+        """Read the per-call session id from :data:`_SESSION_CTXVAR`.
 
         Returns ``None`` for the REST API path. Exposed as a method so
         tests can monkey-patch it cleanly.
@@ -147,8 +140,8 @@ class ClientManager:
         """Evict the caller's *own* cached client for ``conn_id``.
 
         REST callers (``session_id=None``) only ever evict the REST slot.
-        An MCP session evicts only its own slot, so disconnect from one
-        session leaves other sessions' (and the REST path's) cached
+        A per-session caller evicts only its own slot, so disconnect from
+        one session leaves other sessions' (and the REST path's) cached
         clients intact -- the core invariant of #303.
 
         Race-safety: ``client.close()`` runs *while still holding* the
@@ -166,7 +159,7 @@ class ClientManager:
             client = self._clients.pop(key, None)
             # info_cache is keyed by conn_id only -- invalidating cross-
             # session is the conservative choice since the underlying
-            # cluster info doesn't depend on which MCP session asked.
+            # cluster info doesn't depend on which session asked.
             info_cache.invalidate_connection(conn_id)
             if client is not None:
                 with (
@@ -183,14 +176,13 @@ class ClientManager:
                 self._instruments["active_aerospike_connections"].add(-1, attributes=self._metric_attrs(conn_id))
 
     async def close_session(self, session_id: str) -> None:
-        """Evict every cached client for the given MCP session.
+        """Evict every cached client for the given session id.
 
-        Intended to be called from a FastMCP session-cleanup hook when /
-        if one becomes available. Until then it is best-effort: the
-        cache entry sits until process exit, which is acceptable for the
-        short-lived sessions FastMCP currently produces. Passing
+        Intended to be called from a session-cleanup hook if/when a
+        caller adopts per-session scoping. Until then it is best-effort:
+        the cache entry sits until process exit. Passing
         ``session_id=None`` would close the REST path's slots -- we
-        forbid that to avoid REST-vs-MCP confusion.
+        forbid that to avoid REST-vs-session confusion.
         """
         if session_id is None:
             raise ValueError("close_session requires a non-None session id; use close_client/close_all instead")

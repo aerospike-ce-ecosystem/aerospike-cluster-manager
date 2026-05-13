@@ -1,6 +1,6 @@
 """Shared utility functions — FastAPI adapters around HTTP-free domain logic.
 
-The genuine domain logic lives in dedicated modules so MCP tool wrappers
+The genuine domain logic lives in dedicated modules so any non-HTTP caller
 can reuse it without dragging FastAPI in:
 
 * :mod:`aerospike_cluster_manager_api.pk` — primary-key resolution and

@@ -1,15 +1,11 @@
 """Business logic for ad-hoc Aerospike queries.
 
 This module backs the ``POST /query/{conn_id}`` endpoint. It is the single
-source of truth for query execution and is called by both:
+source of truth for query execution. The HTTP router (``routers/query.py``)
+wraps the result in HTTPException translation, FastAPI dependencies, and
+``record_to_model`` conversion to the wire-format ``AerospikeRecord``.
 
-* the HTTP router (``routers/query.py``) — which wraps the result in
-  HTTPException translation, FastAPI dependencies, and ``record_to_model``
-  conversion to the wire-format ``AerospikeRecord``, and
-* the MCP tool layer (added in a later task) — which calls it directly from
-  MCP tool handlers.
-
-To stay reusable from both sides, this module **must not** import ``fastapi``
+To stay reusable from any caller, this module **must not** import ``fastapi``
 or other HTTP-shaping libraries. Domain failures are signalled by plain
 exceptions defined here, which the router translates to HTTP status codes.
 
@@ -142,7 +138,7 @@ async def execute_query(client: aerospike_py.AsyncClient, body: QueryRequest) ->
     if body.predicate:
         # build_predicate raises ``UnknownPredicateOperator`` (a ``ValueError``)
         # for unknown operators — the HTTP router catches it via
-        # ``utils.build_predicate``'s adapter, MCP tools via the error mapper.
+        # ``utils.build_predicate``'s adapter.
         q.where(build_predicate(body.predicate))
     if body.selectBins:
         q.select(*body.selectBins)

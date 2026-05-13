@@ -177,14 +177,14 @@ class TestAssertReadOnly:
         assert exc.value.verb == "recluster"
 
     def test_error_message_mentions_a_few_allowed_verbs(self) -> None:
-        # The wire message points the LLM at the allowed list in lieu of
-        # a separate "list allowed verbs" tool. Exact wording is not
-        # asserted — just the shape.
+        # The wire message points the caller at the allowed list in lieu
+        # of a separate "list allowed verbs" endpoint. Exact wording is
+        # not asserted — just the shape.
         with pytest.raises(InfoVerbNotAllowed) as exc:
             assert_read_only("frobnicate")
         msg = str(exc.value)
         assert "frobnicate" in msg
-        assert "execute_info" in msg
+        assert "READ_ONLY_INFO_VERBS" in msg
 
 
 # ---------------------------------------------------------------------------

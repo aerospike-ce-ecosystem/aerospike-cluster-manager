@@ -1,14 +1,11 @@
 """Business logic for Aerospike connection profile management.
 
 These functions are the single source of truth for the connection lifecycle
-(list / get / create / update / delete / test). They are called by both:
+(list / get / create / update / delete / test). The HTTP router
+(``routers/connections.py``) wraps them in HTTPException translation,
+rate-limiting, and FastAPI dependencies.
 
-* the HTTP router (``routers/connections.py``) — which wraps them in
-  HTTPException translation, rate-limiting, and FastAPI dependencies, and
-* the MCP tool layer (added in a later task) — which calls them directly
-  from MCP tool handlers.
-
-To stay reusable from both sides, this module **must not** import ``fastapi``
+To stay reusable from any caller, this module **must not** import ``fastapi``
 or other HTTP-shaping libraries. Domain failures are signalled by plain
 exceptions defined here, which the router translates to HTTP status codes.
 """
@@ -90,10 +87,10 @@ class TestConnectionResult(NamedTuple):
     """Outcome of a non-persisting connectivity probe.
 
     Mirrors the existing service-surface convention (``QueryResult``,
-    ``ListRecordsResult``) so HTTP and MCP wrappers can map fields to
-    their preferred wire format. ``success`` is a boolean for easy
-    short-circuit checks; ``message`` carries either the success
-    summary or the error text.
+    ``ListRecordsResult``) so HTTP wrappers can map fields to their
+    preferred wire format. ``success`` is a boolean for easy short-circuit
+    checks; ``message`` carries either the success summary or the error
+    text.
     """
 
     success: bool
@@ -211,10 +208,10 @@ async def get_connection(conn_id: str, caller_owner_id: str) -> ConnectionProfil
     yours".
 
     ``caller_owner_id`` is mandatory -- previously this service entry
-    had no ACL plumbed through and relied on every caller (REST + MCP)
-    to gate beforehand. That made it a regression trap: any future
-    caller forgetting the gate would silently expose cross-tenant
-    connections. Threading the parameter through forces the contract.
+    had no ACL plumbed through and relied on every caller to gate
+    beforehand. That made it a regression trap: any future caller
+    forgetting the gate would silently expose cross-tenant connections.
+    Threading the parameter through forces the contract.
     """
     conn = await db.get_connection(conn_id)
     if not conn:
@@ -301,17 +298,17 @@ async def delete_connection(conn_id: str, caller_owner_id: str | None = None) ->
     Idempotent: deleting a missing connection is a no-op. The HTTP router
     still gates on existence via the ``_get_verified_connection``
     dependency — so the wire-level ``DELETE`` keeps its 404-on-missing
-    semantics — while MCP tool callers see the idempotent behaviour
+    semantics. Direct service-layer callers see the idempotent behaviour
     directly. (The pre-refactor router returned 404 from inside the
     handler; the new layout pushes that gate up to the dependency.)
 
     ``caller_owner_id`` is plumbed through as defense-in-depth: the
     dependency-layer gate already rejects cross-tenant DELETEs, but a
-    future caller (a refactor, an internal task, an MCP tool that
-    forgets to gate) bypassing that path would otherwise erase a
-    connection it does not own. Mirrors the pattern in
-    :func:`get_connection` / :func:`update_connection`. ``None`` keeps
-    the legacy single-tenant behaviour for callers not yet threaded.
+    future caller (a refactor, an internal task) bypassing that path
+    would otherwise erase a connection it does not own. Mirrors the
+    pattern in :func:`get_connection` / :func:`update_connection`.
+    ``None`` keeps the legacy single-tenant behaviour for callers not
+    yet threaded.
     """
     if caller_owner_id is not None:
         # Re-do the same visibility check the dependency does so that
@@ -337,7 +334,7 @@ async def test_connection(req: TestConnectionRequest) -> TestConnectionResult:
     """Probe Aerospike connectivity without persisting a profile.
 
     Returns a :class:`TestConnectionResult`. Never raises -- any error is
-    captured and surfaced as ``success=False`` so HTTP/MCP wrappers can
+    captured and surfaced as ``success=False`` so HTTP wrappers can
     forward the wire shape unchanged.
 
     SSRF gate: targets that resolve to loopback / link-local literals

@@ -47,34 +47,19 @@ def _resolve_caller_owner_id(request: Request) -> str:
     """Return the caller's workspace-owner identity for ACL checks.
 
     Reads ``request.state.user_claims`` populated by
-    :class:`OIDCAuthMiddleware` (PR #298) or by the MCP bearer-token
-    middleware (PR #302). Falls back to the synthetic
-    :data:`SYSTEM_OWNER_ID` when:
-
-    * the bearer-token sentinel is set (``_mcp_bearer=True``) — MCP
-      callers in single-tenant mode behave like the legacy global-access
-      path; the workspace gate would otherwise be meaningless because
-      there is no per-user workspace concept.
-    * neither OIDC nor the bearer middleware ran (anonymous request,
-      e.g. ``OIDC_ENABLED=false`` deployments) — preserves the Phase 1
-      single-tenant behaviour where every workspace is reachable.
+    :class:`OIDCAuthMiddleware` (PR #298). Falls back to the synthetic
+    :data:`SYSTEM_OWNER_ID` when OIDC did not run (anonymous request,
+    e.g. ``OIDC_ENABLED=false`` deployments) — preserves the Phase 1
+    single-tenant behaviour where every workspace is reachable.
 
     Otherwise, the configured OIDC claim
     (:data:`config.ACM_OIDC_OWNER_CLAIM`, default ``sub``) is returned.
     A missing/empty claim also degrades to :data:`SYSTEM_OWNER_ID` so a
     misconfigured IdP cannot lock callers out of the default workspace.
-
-    The matching MCP-side bridge lives in
-    :mod:`aerospike_cluster_manager_api.mcp.user_context` -- it captures
-    the same ``request.state.user_claims`` into a contextvar that the
-    registry decorator's workspace gate reads (E.3 of #307).
     """
     claims: dict[str, Any] | None = getattr(request.state, "user_claims", None)
     if claims is None:
         # Anonymous (no auth middleware ran). Phase 1 semantics.
-        return SYSTEM_OWNER_ID
-    if claims.get("_mcp_bearer"):
-        # Bearer-token sentinel (single-tenant deployments).
         return SYSTEM_OWNER_ID
     raw = claims.get(config.ACM_OIDC_OWNER_CLAIM)
     if not isinstance(raw, str) or not raw:

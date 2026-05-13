@@ -1,8 +1,8 @@
 """Unit tests for the workspaces service layer.
 
 Exercise ``services.workspaces_service`` directly so the same functions can
-be reused by an MCP tool layer in a later PR. The router-layer regression
-net lives in ``test_workspaces_router.py``.
+be reused by additional REST API consumers without touching the router
+layer. The router-layer regression net lives in ``test_workspaces_router.py``.
 """
 
 from __future__ import annotations

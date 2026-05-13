@@ -235,8 +235,7 @@ async def test_connection(
     """
     result = await connections_service.test_connection(body)
     if not result.success:
-        # Mirror the MCP-side hardening (mcp/tools/connections.py:~265):
-        # generic wire response, structured operator log with detail.
+        # Generic wire response, structured operator log with detail.
         logger.warning(
             "REST test_connection failure: caller_owner_id=%s hosts=%s port=%s detail=%s",
             caller_owner_id,

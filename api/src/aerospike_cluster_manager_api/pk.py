@@ -1,19 +1,18 @@
 """Shared primary-key helpers — HTTP-free domain logic.
 
 This module is the single source of truth for translating a string-form
-primary key (as it appears in URLs, request bodies, MCP arguments) into
-the typed value Aerospike expects, and for performing a read with a
-particle-type fallback when ``pk_type='auto'`` guesses wrong.
+primary key (as it appears in URLs and request bodies) into the typed
+value Aerospike expects, and for performing a read with a particle-type
+fallback when ``pk_type='auto'`` guesses wrong.
 
 Design rules:
 
 * This module **must not** import ``fastapi`` or any HTTP-shaping
   libraries — the same code is reused by service-layer callers (which
-  raise domain exceptions) and by MCP tool wrappers.
+  raise domain exceptions) and by any non-HTTP caller.
 * Domain failures surface as ``ValueError`` subclasses defined here.
   HTTP-boundary callers (``utils.py``) catch them and re-raise as
-  :class:`fastapi.HTTPException` with the right status code; the MCP
-  error mapper translates them via :func:`mcp.errors.map_aerospike_errors`.
+  :class:`fastapi.HTTPException` with the right status code.
 
 Previously these helpers were duplicated three times — ``services.query_service``,
 ``services.records_service``, and ``utils`` each carried a near byte-identical
