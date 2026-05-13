@@ -5,7 +5,7 @@ from typing import Literal
 
 from aerospike_py import Record
 from aerospike_py.exception import RecordNotFound
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Path, Query, Request
 from starlette.responses import Response
 
 from aerospike_cluster_manager_api import db
@@ -255,6 +255,59 @@ async def delete_record(
         # Idempotent: the record is already absent, which is the desired
         # post-condition of DELETE.
         pass
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return Response(status_code=204)
+
+
+@router.delete(
+    "/{conn_id}/{namespace}/{set_name}/{pk}/bins/{bin_name}",
+    status_code=204,
+    summary="Delete a bin from a record",
+    description="Remove a single bin from an existing record (sets it to nil server-side).",
+)
+@limiter.limit("30/minute")
+async def delete_record_bin(
+    request: Request,
+    client: AerospikeClient,
+    conn_id: VerifiedConnId,
+    namespace: str = Path(..., min_length=1, max_length=31),
+    set_name: str = Path(..., min_length=1, max_length=63),
+    pk: str = Path(..., min_length=1, max_length=1024),
+    bin_name: str = Path(..., min_length=1, max_length=15),
+    pk_type: Literal["auto", "string", "int", "bytes"] = Query("auto"),
+) -> Response:
+    """Remove a single bin from an existing record.
+
+    Mirrors :func:`mcp.tools.records.delete_bin` so ackoctl reaches MCP
+    parity through the REST surface. Removing the last bin causes the
+    whole record to disappear server-side — that's standard Aerospike
+    behaviour, not something this endpoint papers over.
+
+    ``pk_type`` semantics match :func:`update_record_note` and
+    :func:`delete_record_note`: ``auto`` (default) lets the heuristic
+    decide between INTEGER and STRING; pass an explicit value for
+    digit-only string keys to avoid misclassification. Unlike record
+    reads, bin delete does not fall back to the alternate type — passing
+    the wrong ``pk_type`` would silently no-op (RecordNotFound), so be
+    explicit when in doubt.
+
+    Returns 204 on success, 404 when the record (or its bin) is absent.
+    Conn id ``conn_id`` is gated by the workspace ACL via
+    :data:`VerifiedConnId`.
+    """
+    # ``conn_id`` is unused inside the body — its only job is to trigger
+    # the workspace ACL via :data:`VerifiedConnId` before the destructive
+    # call reaches the service layer. Keep the parameter present so the
+    # dependency runs.
+    _ = conn_id
+    try:
+        await records_service.delete_bin(client, namespace, set_name, pk, bin_name, pk_type)
+    except RecordNotFound as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Record '{namespace}/{set_name}/{pk}' not found",
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return Response(status_code=204)
