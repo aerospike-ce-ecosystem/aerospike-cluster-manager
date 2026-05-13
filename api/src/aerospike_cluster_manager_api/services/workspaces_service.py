@@ -1,13 +1,12 @@
 """Business logic for workspace management.
 
 Lives alongside :mod:`connections_service` and follows the same pure-Python /
-no-FastAPI shape so the same functions can power both the HTTP router and a
-future MCP tool layer. Domain failures are signalled by plain exceptions
-defined here (or re-exported from the connections service); the router
-translates them to HTTP status codes.
+no-FastAPI shape so the service entry points can be reused beyond the HTTP
+router. Domain failures are signalled by plain exceptions defined here (or
+re-exported from the connections service); the router translates them to
+HTTP status codes.
 
-Phase 2 ownership rules (see
-``docs/plans/2026-05-07-workspace-ownership-schema.md``):
+Phase 2 ownership rules:
 
 * ``create_workspace`` populates ``ownerId`` from the caller's identity.
 * ``list_workspaces`` filters via the DB-side

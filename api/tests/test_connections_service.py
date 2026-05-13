@@ -1,8 +1,8 @@
 """Unit tests for the connections service layer.
 
 These tests exercise ``services.connections_service`` directly — without going
-through FastAPI — so the same functions can be reused by an MCP tool layer.
-The router-layer regression net lives in ``test_connections_router.py``.
+through FastAPI — so the service contract stays stable independent of the
+REST router. The router-layer regression net lives in ``test_connections_router.py``.
 """
 
 from __future__ import annotations

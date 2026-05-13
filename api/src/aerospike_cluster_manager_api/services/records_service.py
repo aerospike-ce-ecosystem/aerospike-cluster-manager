@@ -1,15 +1,11 @@
 """Business logic for Aerospike record CRUD and scan operations.
 
 These functions are the single source of truth for the records read/write
-path. They are called by both:
+path. The HTTP router (``routers/records.py``) wraps them in HTTPException
+translation, FastAPI dependencies, and ``record_to_model`` conversion to
+the wire-format ``AerospikeRecord``.
 
-* the HTTP router (``routers/records.py``) — which wraps them in
-  HTTPException translation, FastAPI dependencies, and ``record_to_model``
-  conversion to the wire-format ``AerospikeRecord``, and
-* the MCP tool layer (added in a later task) — which calls them directly
-  from MCP tool handlers.
-
-To stay reusable from both sides, this module **must not** import ``fastapi``
+To stay reusable from any caller, this module **must not** import ``fastapi``
 or other HTTP-shaping libraries. Domain failures are signalled by plain
 exceptions defined here, which the router translates to HTTP status codes.
 
@@ -69,8 +65,8 @@ logger = logging.getLogger(__name__)
 
 
 # ``PkType``, ``PrimaryKeyMissing``, and ``SetRequiredForPkLookup`` are
-# re-exported from this module for backward compatibility (``mcp.errors``
-# and tests still import them from here). Their canonical home is
+# re-exported from this module for backward compatibility (tests still
+# import them from here). Their canonical home is
 # :mod:`aerospike_cluster_manager_api.pk`.
 __all__ = [
     "FilterRecordsResult",
@@ -260,8 +256,8 @@ async def create_record(
     """Create a record, failing if one already exists at the same key.
 
     Uses the ``POLICY_EXISTS_CREATE_ONLY`` write policy so a collision raises
-    :class:`aerospike_py.RecordExistsError` (which the MCP error mapper
-    translates to ``code="record_exists"``).
+    :class:`aerospike_py.RecordExistsError` (which the HTTP router translates
+    to a 409 response).
 
     Raises:
         RecordExistsError: a record already exists at ``(namespace, set, pk)``.
@@ -283,10 +279,10 @@ async def update_record(
     """Update an existing record, failing if it does not already exist.
 
     Uses ``POLICY_EXISTS_UPDATE_ONLY`` so a missing record raises
-    :class:`aerospike_py.RecordNotFound` (translated by the MCP error mapper
-    to ``code="record_not_found"``). The plain ``UPDATE`` policy would
-    *create* the record on a miss — :func:`create_record` is the explicit
-    create path; this primitive is strictly an update.
+    :class:`aerospike_py.RecordNotFound` (translated by the HTTP router
+    to a 404 response). The plain ``UPDATE`` policy would *create* the
+    record on a miss — :func:`create_record` is the explicit create path;
+    this primitive is strictly an update.
 
     Raises:
         RecordNotFound: no record exists at ``(namespace, set, pk)``.
@@ -510,7 +506,7 @@ async def filter_records(client: aerospike_py.AsyncClient, body: FilteredQueryRe
     if body.predicate:
         # build_predicate raises ``UnknownPredicateOperator`` (a ``ValueError``)
         # for unknown operators — the HTTP router catches it via
-        # ``utils.build_predicate``'s adapter, MCP tools via the error mapper.
+        # ``utils.build_predicate``'s adapter.
         q.where(build_predicate(body.predicate))
 
     if body.select_bins:

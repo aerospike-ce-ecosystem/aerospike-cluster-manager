@@ -7,13 +7,11 @@ the predicate tuple aerospike-py expects on a query's ``where`` clause.
 Design rules:
 
 * Must not import ``fastapi`` or any HTTP-shaping libraries — service
-  callers (``query_service``, ``records_service``) and MCP tool wrappers
-  share the same code.
+  callers (``query_service``, ``records_service``) share the same code.
 * Unknown operators surface as :class:`UnknownPredicateOperator` (a
   :class:`ValueError` subclass). HTTP-boundary callers (``utils.py``)
   catch it and re-raise as :class:`fastapi.HTTPException` with status
-  400; the MCP error mapper translates it via
-  :func:`mcp.errors.map_aerospike_errors` to ``code="invalid_argument"``.
+  400.
 
 Previously :func:`utils.build_predicate` raised
 :class:`fastapi.HTTPException` directly, leaking HTTP coupling into the

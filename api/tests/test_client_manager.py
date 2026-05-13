@@ -150,10 +150,10 @@ class TestClientManagerConcurrency:
 class TestClientManagerSessionKeying:
     """Per-session cache keying -- Stream B / #303.
 
-    The MCP registry decorator stashes the session id on
-    ``_SESSION_CTXVAR`` before the tool body runs. The same conn_id seen
-    from two different sessions must produce two separate cached
-    AsyncClient instances; closing one must not evict the other.
+    Callers may stash a session id on ``_SESSION_CTXVAR`` before the
+    request body runs. The same conn_id seen from two different sessions
+    must produce two separate cached AsyncClient instances; closing one
+    must not evict the other.
 
     The REST API path (``session_id=None``) is the regression check --
     every existing test in this file implicitly exercises it, but we

@@ -4,8 +4,6 @@ import json
 import os
 import re
 
-from aerospike_cluster_manager_api.mcp.access_profile import AccessProfile, parse_profile
-
 
 def _get_int(name: str, default: int) -> int:
     """Parse an integer environment variable with validation."""
@@ -201,96 +199,3 @@ OIDC_EXCLUDE_PATHS: list[str] = _parse_str_list(
 # table. Read once at module import time so request hot-paths avoid an
 # os.environ lookup on every call.
 ACM_OIDC_OWNER_CLAIM: str = os.getenv("ACM_OIDC_OWNER_CLAIM", "sub")
-
-# ---------------------------------------------------------------------------
-# MCP (Model Context Protocol) server — phase 1
-# ---------------------------------------------------------------------------
-# When enabled, ``main.py`` mounts the FastMCP streamable-http transport at
-# ``ACM_MCP_PATH``. The mount is opt-in so deployments that don't need the
-# AI/agent surface pay no extra import or routing cost. The path is kept
-# outside ``/api/*`` on purpose — REST and MCP serve different consumers
-# and should be reasoned about as independent surfaces. Authentication still
-# applies via the OIDC middleware when ``OIDC_ENABLED`` is true.
-ACM_MCP_ENABLED: bool = _get_bool("ACM_MCP_ENABLED", False)
-ACM_MCP_PATH: str = os.getenv("ACM_MCP_PATH", "/mcp")
-# M2 — validate ACM_MCP_PATH at import time so a misconfigured deployment
-# (e.g. ``ACM_MCP_PATH=mcp`` without leading slash, or ``ACM_MCP_PATH=/``
-# which would shadow every route) fails loudly on process start instead
-# of producing a quietly-broken mount. Canonicalize by trimming the
-# trailing slash so the path-segment check in ``mcp/auth.py`` (M1) and
-# the FastAPI ``app.mount`` call agree on the same string.
-if not ACM_MCP_PATH.startswith("/") or ACM_MCP_PATH == "/":
-    raise ValueError(f"ACM_MCP_PATH must start with '/' and not be '/' alone; got {ACM_MCP_PATH!r}")
-ACM_MCP_PATH = ACM_MCP_PATH.rstrip("/")
-# Optional shared-secret bearer token for the ``/mcp`` surface. When set
-# alongside ``ACM_MCP_ENABLED=true``, the MCPBearerTokenMiddleware enforces
-# ``Authorization: Bearer <token>`` on requests that OIDC has not already
-# authenticated. Empty string (default) disables the bearer leg entirely
-# and defers to OIDC. Used by clients that cannot perform a full OAuth
-# Authorization Code flow (CI agents, headless scripts).
-ACM_MCP_TOKEN: str = os.getenv("ACM_MCP_TOKEN", "")
-# Call-time access gate. ``READ_ONLY`` (default) blocks WRITE tools
-# at the call site even though the registry still advertises them. ``FULL``
-# allows all tools. See ``mcp/access_profile.py`` for the WRITE list.
-ACM_MCP_ACCESS_PROFILE: AccessProfile = parse_profile(os.getenv("ACM_MCP_ACCESS_PROFILE", "read_only"))
-# B2 — escape hatch for the anonymous-MCP-exposure refusal in main.py.
-# Without this flag the API process refuses to start when
-# ``ACM_MCP_ENABLED=true`` AND OIDC is disabled AND ``ACM_MCP_TOKEN`` is
-# empty, because that combination publishes the MCP surface to the
-# entire network with no auth. Operators who are genuinely on a localhost
-# loopback or behind a sealed-off ingress can opt back in here, but the
-# refusal is the default for a reason.
-ACM_MCP_ALLOW_ANONYMOUS: bool = _get_bool("ACM_MCP_ALLOW_ANONYMOUS", False)
-
-# DNS rebinding protection — Host/Origin header allow-list for the streamable-HTTP
-# transport.
-#
-# The MCP Python SDK (``mcp.server.lowlevel.server.streamable_http_app``)
-# auto-enables DNS rebinding protection whenever the transport ``host`` falls
-# back to its default of ``127.0.0.1`` and no explicit ``TransportSecuritySettings``
-# is supplied. Because :func:`mcp.server.server.streamable_http_asgi` calls
-# ``mcp.streamable_http_app()`` without arguments, that default kicks in and the
-# transport rejects any request whose ``Host`` header is not in
-# ``["127.0.0.1:*", "localhost:*", "[::1]:*"]`` with HTTP 421 ``Invalid Host header``.
-#
-# That is the correct default for ``mcp run`` on a developer laptop, but it
-# breaks production deployments where the API is reached through an ingress /
-# LoadBalancer / Gateway with a public hostname (e.g.
-# ``aerospike-api.example.com``). Operators set this env to a comma-separated
-# list of allowed Host values, e.g.::
-#
-#     ACM_MCP_ALLOWED_HOSTS=aerospike-api.example.com,aerospike-api.example.com:*
-#
-# Each entry is matched as-is by the SDK's :class:`TransportSecurityMiddleware`,
-# which also supports the ``host:*`` wildcard-port pattern. The localhost
-# loopback entries are merged in automatically so direct in-pod debugging
-# (``kubectl exec ... curl http://localhost:8000/mcp``) keeps working.
-#
-# When the list is empty (default) we preserve the SDK auto-default behavior —
-# only loopback hosts are allowed. This matches what users got before this knob
-# existed and avoids silently widening the trust boundary on upgrade.
-ACM_MCP_ALLOWED_HOSTS: list[str] = [h.strip() for h in os.getenv("ACM_MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]
-
-# Origin allow-list for the streamable-HTTP transport. Browser-style clients
-# send an ``Origin`` header on cross-origin requests; SDK's
-# :class:`TransportSecurityMiddleware` matches it against this list.
-#
-# When empty (default), :func:`mcp.server.server.build_mcp_app` derives
-# ``http://<host>`` + ``https://<host>`` entries from ``ACM_MCP_ALLOWED_HOSTS``.
-# That works for plain ingress URLs (``aerospike-api.example.com`` →
-# ``http://aerospike-api.example.com`` + ``https://...``) and is what you want
-# in the common case.
-#
-# Set this env explicitly when the public Origin form differs from Host — e.g.::
-#
-#   * non-standard port:     ACM_MCP_ALLOWED_ORIGINS=https://app.example.com:8443
-#   * CDN / proxy rewriting: ACM_MCP_ALLOWED_ORIGINS=https://acm.cdn-domain.com
-#   * strict-scheme:         ACM_MCP_ALLOWED_ORIGINS=https://aerospike-api.example.com
-#                            (only https — no http auto-derivation)
-#
-# Localhost loopback origins (``http://127.0.0.1:*``, ``http://localhost:*``,
-# ``http://[::1]:*``) are merged in automatically — explicit operator entries
-# never need to repeat them.
-ACM_MCP_ALLOWED_ORIGINS: list[str] = [
-    o.strip() for o in os.getenv("ACM_MCP_ALLOWED_ORIGINS", "").split(",") if o.strip()
-]

@@ -153,12 +153,9 @@ class OIDCAuthMiddleware(BaseHTTPMiddleware):
         if not self.enabled:
             return await call_next(request)
 
-        # If an outer middleware (e.g. MCPBearerTokenMiddleware running for
-        # /mcp paths) has already authenticated this request, defer to it.
-        # This is what makes the documented OIDC-OR-bearer gate on /mcp work
-        # when both OIDC_ENABLED=true and ACM_MCP_TOKEN are configured: the
-        # bearer-only token would otherwise fail JWT decode here and 401
-        # before MCP middleware ever runs.
+        # If an outer middleware has already authenticated this request,
+        # defer to it. Kept as a defensive hook so future auth layers can
+        # short-circuit OIDC by populating ``request.state.user_claims``.
         if getattr(request.state, "user_claims", None) is not None:
             return await call_next(request)
 

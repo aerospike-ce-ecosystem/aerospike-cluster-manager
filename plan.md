@@ -1,5 +1,9 @@
 # Aerospike Cluster Manager — Set/Record Note 기능 설계
 
+> **DEPRECATED**: 이 문서는 MCP 툴 레이어 기준으로 작성된 working/scratch 설계 노트입니다.
+> MCP 서버는 제거되었고(ackoctl CLI가 동등 기능을 제공), MCP 관련 동사/툴 언급은 더 이상 유효하지 않습니다.
+> 노트 기능 자체는 REST API (`/api/v1/notes`) 로 살아 있으며 그 부분만 참조용으로 유지합니다.
+>
 > Status: FINAL — 사용자 결정 반영 완료 (네이밍=`note`, 스코프=connection, record=userKey only)
 
 ## Context

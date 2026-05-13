@@ -1,8 +1,8 @@
 """Unit tests for the records service layer.
 
 These tests exercise ``services.records_service`` directly — without going
-through FastAPI — so the same functions can be reused by an MCP tool layer.
-The router-layer regression net lives in ``test_records_router.py``.
+through FastAPI — so the service contract stays stable independent of the
+REST router. The router-layer regression net lives in ``test_records_router.py``.
 """
 
 from __future__ import annotations
@@ -278,7 +278,7 @@ class TestRecordExists:
     async def test_record_not_found_treated_as_false(self):
         # Some aerospike-py builds may raise RecordNotFound rather than
         # returning meta=None for a missing record. The service treats both
-        # signals as "absent" so the MCP tool can answer with exists=False.
+        # signals as "absent" so the REST endpoint can answer with exists=False.
         client = AsyncMock()
         client.exists = AsyncMock(side_effect=RecordNotFound("nope"))
 

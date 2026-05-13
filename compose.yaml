@@ -138,12 +138,6 @@ services:
       - OIDC_JWKS_CACHE_TTL=${OIDC_JWKS_CACHE_TTL:-10m}
       - OIDC_EXCLUDE_PATHS=${OIDC_EXCLUDE_PATHS:-/api/health,/api/openapi.json,/api/docs}
       - ACM_OIDC_OWNER_CLAIM=${ACM_OIDC_OWNER_CLAIM:-sub}
-      # ── MCP (off by default) ──────────────────────────────────────
-      - ACM_MCP_ENABLED=${ACM_MCP_ENABLED:-false}
-      - ACM_MCP_PATH=${ACM_MCP_PATH:-/mcp}
-      - ACM_MCP_TOKEN=${ACM_MCP_TOKEN:-}
-      - ACM_MCP_ACCESS_PROFILE=${ACM_MCP_ACCESS_PROFILE:-read_only}
-      - ACM_MCP_ALLOW_ANONYMOUS=${ACM_MCP_ALLOW_ANONYMOUS:-false}
       # ── Kubernetes management (off by default) ────────────────────
       - K8S_MANAGEMENT_ENABLED=${K8S_MANAGEMENT_ENABLED:-false}
       - K8S_VERIFY_SSL=${K8S_VERIFY_SSL:-true}

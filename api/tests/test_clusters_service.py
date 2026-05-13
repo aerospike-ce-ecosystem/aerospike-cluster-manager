@@ -1,8 +1,9 @@
 """Unit tests for the clusters service layer.
 
 These tests exercise ``services.clusters_service`` directly — without going
-through FastAPI — so the same functions can be reused by an MCP tool layer.
-The router-layer regression net lives in ``test_cluster_batch.py`` and friends.
+through FastAPI — so the service contract stays stable independent of the
+REST router. The router-layer regression net lives in ``test_cluster_batch.py``
+and friends.
 """
 
 from __future__ import annotations
@@ -343,9 +344,9 @@ class TestExecuteInfoReadOnly:
         with pytest.raises(InfoVerbNotAllowed) as exc:
             await clusters_service.execute_info_read_only(client, "set-config:context=service;migrate-threads=2")
         assert exc.value.verb == "set-config"
-        # Wire message guides the LLM to retry with a valid verb.
+        # Wire message guides the caller to retry with a valid verb.
         assert "set-config" in str(exc.value)
-        assert "execute_info" in str(exc.value)
+        assert "read-only asinfo whitelist" in str(exc.value)
         # Critical: the wire was NOT touched. The whitelist gate fires
         # before any client call so a malicious verb can't even establish
         # an info round-trip.

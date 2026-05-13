@@ -3,20 +3,19 @@
 These functions are the single source of truth for the cluster read-path:
 
 * ``list_namespaces`` / ``list_sets`` / ``get_nodes`` — primitives that drive
-  the dashboard, and are also exposed verbatim by the MCP tool layer added
-  in a later task.
+  the dashboard and the REST API.
 * ``execute_info`` / ``execute_info_on_node`` — thin wrappers around the
-  Aerospike info protocol so MCP tools can run arbitrary diagnostic
+  Aerospike info protocol so callers can run arbitrary diagnostic
   commands without each redoing parameter validation.
 * ``get_cluster_info`` — the full composition used by the
   ``GET /clusters/{conn_id}`` endpoint.
 * ``configure_namespace`` — dynamic ``set-config`` for a runtime-tunable
   namespace.
 
-To stay reusable from both HTTP and MCP entry points, this module **must not**
-import ``fastapi`` or other HTTP-shaping libraries.  Domain failures are
-signalled by plain exceptions defined here, which the router translates to
-HTTP status codes and MCP tools translate to MCP error responses.
+To stay reusable from any caller, this module **must not** import
+``fastapi`` or other HTTP-shaping libraries.  Domain failures are
+signalled by plain exceptions defined here, which the router translates
+to HTTP status codes.
 """
 
 from __future__ import annotations
@@ -196,8 +195,8 @@ async def execute_info(client: aerospike_py.AsyncClient, command: str) -> list[I
     """Run an info command on every node and return the per-node responses.
 
     Thin wrapper around :py:meth:`aerospike_py.AsyncClient.info_all` exposed
-    as a service entry point so MCP tools and HTTP routes can share argument
-    validation / logging in one place.
+    as a service entry point so HTTP routes share argument validation /
+    logging in one place.
 
     Returns:
         A list of :class:`aerospike_py.types.InfoNodeResult` named tuples
@@ -234,17 +233,15 @@ async def execute_info_read_only(
 
     Validates the verb against :data:`info_verbs.READ_ONLY_INFO_VERBS`
     *before* hitting the wire — a bad verb raises
-    :class:`info_verbs.InfoVerbNotAllowed` (mapped to
-    ``code=invalid_argument`` at the MCP boundary). The whitelist is the
-    single source of truth for what ``ACM_MCP_ACCESS_PROFILE=read_only``
-    can call via ``execute_info_read_only``; mutation tools
-    (``execute_info``, ``execute_info_on_node``) remain unrestricted under
-    ``FULL`` access.
+    :class:`info_verbs.InfoVerbNotAllowed` (mapped to HTTP 400 at the REST
+    boundary). The whitelist is the single source of truth for what the
+    read-only info endpoint can call; the unrestricted variants
+    (``execute_info``, ``execute_info_on_node``) accept any verb.
 
     Returns a ``(node_name, response)`` tuple. With ``node_name=None`` we
     fan out via ``info_all`` and pick the first node that returned a
     non-error response — the returned ``node_name`` is the real cluster
-    node, so the LLM can re-issue follow-up calls against it. With an
+    node, so callers can re-issue follow-up calls against it. With an
     explicit ``node_name`` we filter the same fan-out to the named node
     and raise :class:`NodeNotFoundError` if it didn't respond.
     """
@@ -409,7 +406,7 @@ async def configure_namespace(client: aerospike_py.AsyncClient, body: CreateName
         NamespaceConfigError: the cluster rejected the ``set-config`` call.
 
     Returns:
-        A success message suitable for direct inclusion in an HTTP or MCP
+        A success message suitable for direct inclusion in an HTTP
         response.
     """
     existing = await list_namespaces(client)
