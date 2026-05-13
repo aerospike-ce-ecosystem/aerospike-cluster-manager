@@ -93,9 +93,12 @@ if [[ -n "${ACKO_FULLNAME_OVERRIDE}" ]]; then
 fi
 
 if [[ "${ACKO_UI_ENABLED}" == "true" ]]; then
-  _helm_args+=(--set "ui.enabled=true")
+  # The chart toggles UI api/web independently via ui.api.enabled and
+  # ui.web.enabled; there is no top-level ui.enabled key. Set both so the
+  # rendered manifests are deterministic regardless of chart defaults.
+  _helm_args+=(--set "ui.api.enabled=true" --set "ui.web.enabled=true")
   if [[ "${ACKO_UI_LOCAL_BUILD}" == "true" ]]; then
-    log "UI mode: ui.enabled=true with locally-built images (tag: ${ACKO_UI_IMAGE_TAG}, pullPolicy=Never)"
+    log "UI mode: ui.api/web enabled with locally-built images (tag: ${ACKO_UI_IMAGE_TAG}, pullPolicy=Never)"
     _helm_args+=(
       --set "ui.api.image.repository=${ACKO_UI_API_IMAGE}"
       --set "ui.api.image.tag=${ACKO_UI_IMAGE_TAG}"
@@ -105,10 +108,14 @@ if [[ "${ACKO_UI_ENABLED}" == "true" ]]; then
       --set "ui.web.image.pullPolicy=Never"
     )
   else
-    log "UI mode: ui.enabled=true with chart-default images (ghcr.io, tag: latest)"
+    log "UI mode: ui.api/web enabled with chart-default images (ghcr.io, tag: latest)"
   fi
 else
-  _helm_args+=(--set "ui.enabled=false")
+  # Disable BOTH UI deployments. Previously this only set ui.enabled=false,
+  # which is not a chart key and silently fell through to the chart's
+  # default (api.enabled=true, web.enabled=true) — the UI pods then
+  # deployed, hit ImagePullBackOff on ghcr.io, and helm --wait timed out.
+  _helm_args+=(--set "ui.api.enabled=false" --set "ui.web.enabled=false")
 fi
 
 log "helm upgrade --install ${ACKO_RELEASE} ${ACKO_CHART_PATH}"
