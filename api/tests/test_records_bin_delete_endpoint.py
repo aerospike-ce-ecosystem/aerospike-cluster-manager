@@ -1,7 +1,6 @@
 """Tests for the DELETE /records/{conn_id}/{ns}/{set}/{pk}/bins/{bin_name} endpoint.
 
-Mirrors :func:`mcp.tools.records.delete_bin` so ackoctl reaches MCP
-parity through the REST surface.
+ackoctl drives bin deletion through this REST surface.
 """
 
 from __future__ import annotations

@@ -1,7 +1,6 @@
 """Tests for the POST /sets/{conn_id}/{ns}/{set_name}/truncate endpoint.
 
-Mirrors :func:`mcp.tools.records.truncate_set` so ackoctl reaches MCP
-parity through the REST surface.
+ackoctl drives set truncation through this REST surface.
 """
 
 from __future__ import annotations
