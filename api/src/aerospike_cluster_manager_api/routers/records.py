@@ -279,10 +279,10 @@ async def delete_record_bin(
 ) -> Response:
     """Remove a single bin from an existing record.
 
-    Mirrors :func:`mcp.tools.records.delete_bin` so ackoctl reaches MCP
-    parity through the REST surface. Removing the last bin causes the
-    whole record to disappear server-side — that's standard Aerospike
-    behaviour, not something this endpoint papers over.
+    Exposed as ``DELETE /records/{conn_id}/{namespace}/{set_name}/{pk}/bins/{bin_name}``;
+    ackoctl drives bin deletion through this REST surface. Removing the
+    last bin causes the whole record to disappear server-side — that's
+    standard Aerospike behaviour, not something this endpoint papers over.
 
     ``pk_type`` semantics match :func:`update_record_note` and
     :func:`delete_record_note`: ``auto`` (default) lets the heuristic

@@ -206,9 +206,11 @@ class TestIndexesIdempotency:
 
         assert response.status_code == 500
         body = response.json()
-        # The improved 500 handler now surfaces requestId + error message.
+        # The 500 handler surfaces requestId for log correlation but keeps the
+        # error field generic — raw exception text must not leak to clients.
         assert "requestId" in body
-        assert "real failure" in body.get("error", "")
+        assert body["error"] == "Internal server error"
+        assert "real failure" not in str(body)
 
     async def test_delete_returns_204_when_drop_raises_but_index_already_gone(
         self,
@@ -251,7 +253,7 @@ class TestIndexesIdempotency:
 
 
 class TestInternalErrorBody:
-    async def test_500_body_includes_request_id_and_error_message(self, http_client: AsyncClient):
+    async def test_500_body_includes_request_id_and_generic_error_message(self, http_client: AsyncClient):
         mock_client = AsyncMock()
         mock_client.index_integer_create = AsyncMock(side_effect=AerospikeError("boom"))
         mock_client.info_random_node = AsyncMock(return_value="")
@@ -269,5 +271,7 @@ class TestInternalErrorBody:
         body = response.json()
         assert body["detail"] == "An internal server error occurred"
         assert body["requestId"] == "abcd1234abcd1234abcd1234abcd1234"
-        assert body["error"] == "boom"
+        # error field stays generic — raw exception text ("boom") must not leak.
+        assert body["error"] == "Internal server error"
+        assert "boom" not in str(body)
         assert response.headers.get("X-Request-ID") == "abcd1234abcd1234abcd1234abcd1234"

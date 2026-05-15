@@ -63,9 +63,8 @@ class CreateNamespaceRequest(BaseModel):
 class ExecuteInfoRequest(BaseModel):
     """Request body for ``POST /clusters/{conn_id}/info``.
 
-    Mirrors the MCP ``execute_info`` / ``execute_info_on_node`` /
-    ``execute_info_read_only`` tools so ackoctl can ship ``ackoctl info``
-    without a separate MCP transport.
+    Backs ``ackoctl info`` — node-scoped and read-only info execution are
+    expressed through this single REST endpoint via the fields below.
 
     Semantics:
       * ``node`` unset  → fan out via ``info_all`` to every node.

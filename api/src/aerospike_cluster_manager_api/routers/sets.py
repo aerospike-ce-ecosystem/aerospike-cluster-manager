@@ -1,10 +1,8 @@
 """REST endpoints scoped to a single Aerospike set.
 
-Currently exposes a single destructive operation -- ``truncate``. The
-endpoint mirrors :func:`mcp.tools.records.truncate_set` so ackoctl can
-reach MCP parity through the REST surface; the MCP wrapper does not get
-deleted in this PR, but with this router in place a future PR can drop
-the MCP tool without orphaning the operation.
+Currently exposes a single destructive operation -- ``truncate`` via
+``POST /sets/{conn_id}/{namespace}/{set_name}/truncate``. ackoctl drives
+this set truncation through the REST surface.
 
 Workspace ACL: ``VerifiedConnId`` already gates the connection by
 workspace before the body runs -- identity-404 if the caller cannot see

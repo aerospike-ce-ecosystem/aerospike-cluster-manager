@@ -295,18 +295,23 @@ app.add_middleware(TraceIDMiddleware)
 # ---------------------------------------------------------------------------
 
 
-def _internal_error_response(message: str) -> JSONResponse:
-    """Build a 500 JSON response that surfaces requestId + the underlying error.
+def _internal_error_response() -> JSONResponse:
+    """Build a 500 JSON response that surfaces requestId for log correlation.
 
     Issues #257 and #260 specifically asked for log-correlation context in 500
     bodies. TraceIDMiddleware populates ``request_id_var`` for the duration of
     every request, so the handler can read it without a dependency on
     request.state.
+
+    The body intentionally carries only a generic message — the underlying
+    ``str(exc)`` / traceback can leak internal detail (hostnames, query
+    fragments, stack context) to API clients, so callers must log the full
+    error server-side and clients correlate via ``requestId``.
     """
     from aerospike_cluster_manager_api.middleware.trace_id import REQUEST_ID_HEADER, request_id_var
 
     request_id = request_id_var.get()
-    body: dict[str, str] = {"detail": "An internal server error occurred", "error": message}
+    body: dict[str, str] = {"detail": "An internal server error occurred", "error": "Internal server error"}
     if request_id and request_id != "-":
         body["requestId"] = request_id
     response = JSONResponse(status_code=500, content=body)
@@ -371,7 +376,7 @@ try:
                 },
             )
         logger.warning("Unrecognized ServerError: %s", msg)
-        return _internal_error_response(msg)
+        return _internal_error_response()
 
     @app.exception_handler(AerospikeTimeoutError)
     async def _timeout_error(_req: Request, exc: AerospikeTimeoutError) -> JSONResponse:
@@ -417,8 +422,8 @@ try:
 
     @app.exception_handler(AerospikeError)
     async def _aerospike_error(_req: Request, exc: AerospikeError) -> JSONResponse:
-        logger.exception("Aerospike error")
-        return _internal_error_response(str(exc))
+        logger.exception("Aerospike error: %s", exc)
+        return _internal_error_response()
 
 except ImportError:
     pass
