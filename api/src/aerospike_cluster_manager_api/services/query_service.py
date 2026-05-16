@@ -23,7 +23,13 @@ from typing import Any, NamedTuple
 
 import aerospike_py
 from aerospike_py import Record
-from aerospike_py.exception import AerospikeError, RecordNotFound
+from aerospike_py.exception import (
+    AerospikeError,
+    AerospikeTimeoutError,
+    BackpressureError,
+    ClusterError,
+    RecordNotFound,
+)
 
 from aerospike_cluster_manager_api.constants import MAX_QUERY_RECORDS, POLICY_QUERY, POLICY_READ
 from aerospike_cluster_manager_api.models.query import QueryRequest
@@ -154,7 +160,12 @@ async def execute_query(client: aerospike_py.AsyncClient, body: QueryRequest) ->
     # underlying scan raise. Treat as no records rather than 500.
     try:
         raw_results = await q.results(policy)
-    except AerospikeError:
+    except AerospikeError as exc:
+        # Infrastructure-class failures must surface as 503/504 via the
+        # global handler — silently returning an empty page would hide
+        # outages from callers.
+        if isinstance(exc, (ClusterError, AerospikeTimeoutError, BackpressureError)):
+            raise
         logger.exception(
             "Query failed for ns=%s set=%s; returning empty result",
             body.namespace,

@@ -225,8 +225,12 @@ export async function apiFetch<T>(
       }
     }
     if (response.status === 401) {
-      // Permanent failure → kick off login redirect; throw so caller sees it.
+      // Permanent failure → kick off login redirect and stop executing the
+      // rest of apiFetch. Without this `return throw`, the function would
+      // continue into the `!response.ok` branch below, racing the
+      // navigation and producing unhandled-rejection noise during redirect.
       void redirectToLogin()
+      throw new ApiError(401, "Session expired", null)
     }
   }
 

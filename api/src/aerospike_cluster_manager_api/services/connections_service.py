@@ -380,5 +380,5 @@ async def test_connection(req: TestConnectionRequest) -> TestConnectionResult:
             with contextlib.suppress(AerospikeError, OSError):
                 await client.close()
     except Exception as e:
-        logger.exception("Test connection failed")
-        return TestConnectionResult(success=False, message=str(e))
+        logger.warning("Test connection failed: %s", type(e).__name__)
+        return TestConnectionResult(success=False, message="connection failed")
