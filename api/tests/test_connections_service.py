@@ -318,7 +318,7 @@ class TestTestConnection:
             result = await connections_service.test_connection(_TestConnectionRequest(hosts=["unreachable"], port=3000))
 
         assert result.success is False
-        assert "Connection refused" in result.message
+        assert result.message == "connection failed"
 
     async def test_passes_credentials(self, init_test_db):
         mock_client = AsyncMock()
