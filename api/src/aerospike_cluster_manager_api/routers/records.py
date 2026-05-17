@@ -187,6 +187,11 @@ async def get_record_detail(
     except ValueError as exc:
         # Explicit pk_type with unparseable pk → 400.
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RecordNotFound as exc:
+        raise HTTPException(
+            status_code=404,
+            detail="Record not found (tried both string and integer key types)",
+        ) from exc
     model = record_to_model(raw_result)
     # Use the resolved (post-auto-fallback) particle type from the raw key —
     # not the request's ``pk_type`` query param, which may be 'auto'. This
@@ -205,7 +210,12 @@ async def get_record_detail(
     description="Write a record to Aerospike with the specified key, bins, and optional TTL.",
 )
 @limiter.limit("30/minute")
-async def put_record(request: Request, body: RecordWriteRequest, client: AerospikeClient) -> AerospikeRecord:
+async def put_record(
+    request: Request,
+    body: RecordWriteRequest,
+    client: AerospikeClient,
+    conn_id: VerifiedConnId,
+) -> AerospikeRecord:
     """Write a record to Aerospike with the specified key, bins, and optional TTL.
 
     The key's particle type comes from ``body.key.pk_type`` ("auto" by default).
@@ -213,6 +223,11 @@ async def put_record(request: Request, body: RecordWriteRequest, client: Aerospi
     so callers that care should pass an explicit ``pk_type`` to avoid creating
     a record under a particle type that subsequent reads can't find.
     """
+    # ``conn_id`` is unused inside the body — its only job is to trigger
+    # the workspace ACL via :data:`VerifiedConnId` before the destructive
+    # call reaches the service layer. Keep the parameter present so the
+    # dependency runs.
+    _ = conn_id
     try:
         result = await records_service.put_record(client, body)
     except PrimaryKeyMissing as exc:

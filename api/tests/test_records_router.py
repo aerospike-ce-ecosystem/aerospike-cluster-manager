@@ -104,7 +104,7 @@ class TestGetRecordDetail:
             )
 
         assert response.status_code == 404
-        assert response.json() == {"detail": "Record not found"}
+        assert response.json() == {"detail": "Record not found (tried both string and integer key types)"}
 
     async def test_rust_panic_returns_422(self, client: AsyncClient):
         """aerospike-py #280: a record with a particle type the native client
