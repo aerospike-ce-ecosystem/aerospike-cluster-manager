@@ -62,7 +62,7 @@
     "@typescript-eslint/parser": "^8.59.1",
     "@vitejs/plugin-react": "^4.7.0",
     "@vitest/coverage-v8": "^4.1.6",
-    "eslint": "^8.57.1",
+    "eslint": "^10.4.0",
     "eslint-config-next": "14.2.23",
     "jsdom": "^25.0.1",
     "postcss": "^8.5.13",
