@@ -24,7 +24,7 @@ without touching the application image.
                                                                  |
                                                 +----------------+----------------+
                                                 v                                 v
-                                         Loki / Elastic /                  Datadog / Sentry /
+                                         Loki / Elastic /                  Datadog / Splunk /
                                          Tempo / Sentry                    your-vendor-bridge
 ```
 
