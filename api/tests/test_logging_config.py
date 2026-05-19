@@ -1,8 +1,9 @@
-"""Tests for the pluggable logging config (LOG_HANDLERS / LOGGING_CONFIG_FILE / entry-points)."""
+"""Tests for the pluggable logging config (LOG_HANDLERS / LOGGING_CONFIG_FILE / LOG_FILE_PATH / entry-points)."""
 
 from __future__ import annotations
 
 import logging
+import logging.handlers
 import sys
 from pathlib import Path
 from typing import ClassVar
@@ -189,6 +190,127 @@ def test_log_handlers_unknown_name_logs_error(monkeypatch):
         plugin_logger.removeHandler(cap)
 
     assert any("ghost" in r.getMessage() for r in captured)
+
+
+# ---------------------------------------------------------------------------
+# LOG_FILE_PATH (rotating file mirror for sidecar tailing)
+# ---------------------------------------------------------------------------
+
+
+def test_log_file_path_attaches_rotating_file_handler(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("LOGGING_CONFIG_FILE", raising=False)
+    monkeypatch.delenv("LOG_HANDLERS", raising=False)
+    log_file = tmp_path / "logs" / "acm-api.log"
+    monkeypatch.setenv("LOG_FILE_PATH", str(log_file))
+
+    logging_config.setup_logging("INFO", "text")
+
+    root = logging.getLogger(ROOT_LOGGER_NAME)
+    file_handlers = [h for h in root.handlers if isinstance(h, logging.handlers.RotatingFileHandler)]
+    assert len(file_handlers) == 1
+    fh = file_handlers[0]
+    # parent dir was created on demand
+    assert log_file.parent.exists()
+    # records actually land in the file
+    logging.getLogger(ROOT_LOGGER_NAME).info("hello-file-mirror")
+    fh.flush()
+    fh.close()
+    assert "hello-file-mirror" in log_file.read_text(encoding="utf-8")
+
+
+def test_log_file_path_respects_rotation_overrides(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("LOGGING_CONFIG_FILE", raising=False)
+    monkeypatch.delenv("LOG_HANDLERS", raising=False)
+    log_file = tmp_path / "acm.log"
+    monkeypatch.setenv("LOG_FILE_PATH", str(log_file))
+    monkeypatch.setenv("LOG_FILE_MAX_BYTES", "12345")
+    monkeypatch.setenv("LOG_FILE_BACKUP_COUNT", "7")
+
+    logging_config.setup_logging("INFO", "text")
+
+    root = logging.getLogger(ROOT_LOGGER_NAME)
+    fh = next(h for h in root.handlers if isinstance(h, logging.handlers.RotatingFileHandler))
+    assert fh.maxBytes == 12345
+    assert fh.backupCount == 7
+
+
+def test_log_file_path_invalid_rotation_falls_back_to_default(tmp_path: Path, monkeypatch):
+    """Bad LOG_FILE_MAX_BYTES must not crash startup — fall back to default."""
+    monkeypatch.delenv("LOGGING_CONFIG_FILE", raising=False)
+    monkeypatch.delenv("LOG_HANDLERS", raising=False)
+    log_file = tmp_path / "acm.log"
+    monkeypatch.setenv("LOG_FILE_PATH", str(log_file))
+    monkeypatch.setenv("LOG_FILE_MAX_BYTES", "not-an-int")
+    monkeypatch.setenv("LOG_FILE_BACKUP_COUNT", "-3")
+
+    logging_config.setup_logging("INFO", "text")
+
+    root = logging.getLogger(ROOT_LOGGER_NAME)
+    fh = next(h for h in root.handlers if isinstance(h, logging.handlers.RotatingFileHandler))
+    assert fh.maxBytes == logging_config._DEFAULT_LOG_FILE_MAX_BYTES
+    assert fh.backupCount == logging_config._DEFAULT_LOG_FILE_BACKUP_COUNT
+
+
+def test_log_file_path_unwritable_directory_does_not_abort(tmp_path: Path, monkeypatch, capsys):
+    monkeypatch.delenv("LOGGING_CONFIG_FILE", raising=False)
+    monkeypatch.delenv("LOG_HANDLERS", raising=False)
+    # Use a path under tmp_path with a parent component that is an existing
+    # *file* — Path.mkdir raises NotADirectoryError, which is an OSError.
+    blocker = tmp_path / "blocker"
+    blocker.write_text("not a directory")
+    bad_path = blocker / "acm.log"
+    monkeypatch.setenv("LOG_FILE_PATH", str(bad_path))
+
+    logging_config.setup_logging("INFO", "text")
+
+    root = logging.getLogger(ROOT_LOGGER_NAME)
+    file_handlers = [h for h in root.handlers if isinstance(h, logging.handlers.RotatingFileHandler)]
+    # stdout-only fallback, no file handler attached
+    assert file_handlers == []
+    # And a stderr warning explaining why
+    err = capsys.readouterr().err
+    assert "LOG_FILE_PATH" in err
+    assert "stdout-only" in err
+
+
+def test_log_file_path_empty_is_noop(monkeypatch):
+    monkeypatch.delenv("LOGGING_CONFIG_FILE", raising=False)
+    monkeypatch.delenv("LOG_HANDLERS", raising=False)
+    monkeypatch.setenv("LOG_FILE_PATH", "  ")
+
+    logging_config.setup_logging("INFO", "text")
+
+    root = logging.getLogger(ROOT_LOGGER_NAME)
+    file_handlers = [h for h in root.handlers if isinstance(h, logging.handlers.RotatingFileHandler)]
+    assert file_handlers == []
+
+
+def test_log_file_path_ignored_when_logging_config_file_set(tmp_path: Path, monkeypatch):
+    """LOGGING_CONFIG_FILE takes full ownership; LOG_FILE_PATH must not double-attach."""
+    cfg_path = tmp_path / "logging.yaml"
+    cfg_path.write_text(
+        """
+version: 1
+disable_existing_loggers: false
+handlers:
+  console:
+    class: logging.StreamHandler
+loggers:
+  aerospike_cluster_manager_api:
+    level: INFO
+    handlers: [console]
+    propagate: false
+""".strip()
+    )
+    monkeypatch.setenv("LOGGING_CONFIG_FILE", str(cfg_path))
+    monkeypatch.setenv("LOG_FILE_PATH", str(tmp_path / "should-not-exist.log"))
+
+    logging_config.setup_logging("INFO", "text")
+
+    root = logging.getLogger(ROOT_LOGGER_NAME)
+    file_handlers = [h for h in root.handlers if isinstance(h, logging.handlers.RotatingFileHandler)]
+    assert file_handlers == []
+    assert not (tmp_path / "should-not-exist.log").exists()
 
 
 # ---------------------------------------------------------------------------

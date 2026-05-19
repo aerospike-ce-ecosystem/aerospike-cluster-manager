@@ -27,8 +27,13 @@ There are three configuration modes, selected by environment variables:
 3. **LOGGING_CONFIG_FILE** — path to a YAML/JSON dictConfig file.
    The file is loaded as-is via ``logging.config.dictConfig`` and given
    full control over every formatter, handler, filter, and logger.
-   ``LOG_HANDLERS`` and ``LOG_LEVEL`` / ``LOG_FORMAT`` are ignored in
-   this mode.
+   ``LOG_HANDLERS``, ``LOG_LEVEL``, ``LOG_FORMAT``, and ``LOG_FILE_PATH``
+   are ignored in this mode.
+
+Across modes 1 and 2, setting ``LOG_FILE_PATH`` additionally attaches a
+``RotatingFileHandler`` that mirrors records to a file. This is the
+recommended pairing with a logging sidecar (fluent-bit, vector, promtail)
+that tails a shared ``emptyDir`` volume — see Example C below.
 
 ## Example A — NELO via LOG_HANDLERS
 
@@ -110,6 +115,65 @@ The chart writes the dictConfig payload into a ConfigMap, mounts it at
 ``/etc/asm/logging.yaml``, and sets ``LOGGING_CONFIG_FILE`` to that
 path.  Pod restart applies the new config.
 
+## Example C — Sidecar log shipper via ``LOG_FILE_PATH``
+
+When the operator wants to forward logs through a generic agent
+(fluent-bit, vector, promtail) instead of an in-process SDK, the sidecar
+needs a stable file to tail. The ACM API writes records to
+``LOG_FILE_PATH`` in addition to stdout — the sidecar mounts the same
+``emptyDir`` volume and runs ``tail -F`` (or its equivalent).
+
+helm values:
+
+```yaml
+ui:
+  api:
+    logging:
+      # Both knobs are wired up by the ACKO helm chart — see ACKO's
+      # values.yaml for the chart-side defaults. Setting fileMirror
+      # also auto-mounts the shared emptyDir at /var/log/acm.
+      fileMirror:
+        enabled: true
+        path: /var/log/acm/api.log
+        maxBytes: 52428800   # 50 MiB
+        backupCount: 3
+      sidecar:
+        enabled: true
+        image: cr.fluentbit.io/fluent/fluent-bit:3.2
+        # configFile is rendered into a ConfigMap and mounted at
+        # /fluent-bit/etc/fluent-bit.conf inside the sidecar.
+        configFile: |
+          [SERVICE]
+              Flush 1
+          [INPUT]
+              Name tail
+              Path /var/log/acm/*.log
+              Refresh_Interval 5
+          [OUTPUT]
+              Name stdout
+              Match *
+```
+
+Equivalent raw env (bare ACM image, no helm):
+
+```bash
+LOG_FILE_PATH=/var/log/acm/api.log
+LOG_FILE_MAX_BYTES=52428800
+LOG_FILE_BACKUP_COUNT=3
+LOG_FORMAT=json   # recommended so the sidecar can parse fields directly
+```
+
+Why a file and not ``kubectl logs``? Container-runtime log paths
+(``/var/log/containers/...``) differ across Docker, containerd, and
+CRI-O, and the sidecar would need elevated privileges to read them.
+A shared ``emptyDir`` works the same way on every runtime and stays
+inside the pod's security boundary.
+
+If ``LOG_FILE_PATH`` is unwritable (parent directory missing
+permissions, etc.) the API logs a single warning to stderr and falls
+back to stdout-only — the pod still starts so the operator can
+investigate via ``kubectl logs``.
+
 ## Registering an entry-point alias (third-party packages)
 
 A package that wants to be addressable by a short name in
@@ -149,3 +213,8 @@ No additional configuration required.
 - ``extraPipPackages`` in the helm chart runs ``pip install --target``
   in an init container. This requires PyPI egress from the cluster.
   In airgap environments, build a custom image instead (see Example B).
+- ``LOG_FILE_PATH`` rotation uses Python's stdlib
+  ``RotatingFileHandler`` — size-based, not time-based. Default 50 MiB
+  per file, 3 backups. Tune via ``LOG_FILE_MAX_BYTES`` /
+  ``LOG_FILE_BACKUP_COUNT`` or supply a full ``LOGGING_CONFIG_FILE`` if
+  you need a different rotation policy (e.g. ``TimedRotatingFileHandler``).

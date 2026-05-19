@@ -844,6 +844,11 @@ All environment variables with their defaults and descriptions. See `api/src/aer
 |---|---|---|
 | `LOG_LEVEL` | `INFO` | API log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 | `LOG_FORMAT` | `text` | Log output format: `text` for local dev, `json` for structured container logging |
+| `LOG_HANDLERS` | _(empty)_ | Comma-separated handler specs (`module:Class` or entry-point name) attached in addition to stdout. See [docs/logging.md](docs/logging.md). |
+| `LOGGING_CONFIG_FILE` | _(empty)_ | Path to a YAML/JSON `dictConfig` file. Takes full ownership of logging when set. |
+| `LOG_FILE_PATH` | _(empty)_ | When set, mirror logs to a rotating file in addition to stdout. Designed for sidecar log shippers tailing a shared `emptyDir`. |
+| `LOG_FILE_MAX_BYTES` | `52428800` | Per-file size cap (bytes) for `LOG_FILE_PATH` rotation. Default 50 MiB. |
+| `LOG_FILE_BACKUP_COUNT` | `3` | Number of rotated backups kept on disk. |
 
 ## Production Deployment
 
