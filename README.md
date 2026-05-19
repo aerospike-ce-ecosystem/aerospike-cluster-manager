@@ -158,7 +158,7 @@ Related targets: `make kind-up/down/status`, `make acko-install/uninstall/verify
 - **AQL Terminal** — Web-based AQL command execution
 - **Prometheus Metrics** — Cluster metrics export
 - **OpenTelemetry Observability** — Traces, metrics, and logs via standard OTel SDK env vars; HTTP server, asyncpg, and aerospike-py spans auto-emit. See [docs/observability.md](docs/observability.md).
-- **Pluggable Logging Handlers** — Forward logs to NELO, Datadog, Loki, or any ``logging.Handler`` via ``LOG_HANDLERS=module:Class`` (or entry-point alias) without forking the image. See [docs/logging.md](docs/logging.md).
+- **Structured stdout logs ready for OTel Collector** — JSON output with `request_id` / `otelTraceID` / `otelSpanID` correlation fields. Optional rotating-file mirror (`LOG_FILE_PATH`) lets a pod-internal sidecar tail logs on a shared `emptyDir` and forward them via OTLP to an external OpenTelemetry Collector for vendor-specific routing (NELO, Datadog, Loki, Elasticsearch, ...). See [docs/logging.md](docs/logging.md).
 - **Sample Data Generator** — Generate deterministic sample records with optional indexes and UDFs
 - **K8s Cluster Management** — Full lifecycle management of Aerospike clusters on Kubernetes (see below)
   - ACL/Security configuration with role and user management via wizard
@@ -843,10 +843,8 @@ All environment variables with their defaults and descriptions. See `api/src/aer
 | Variable | Default | Description |
 |---|---|---|
 | `LOG_LEVEL` | `INFO` | API log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
-| `LOG_FORMAT` | `text` | Log output format: `text` for local dev, `json` for structured container logging |
-| `LOG_HANDLERS` | _(empty)_ | Comma-separated handler specs (`module:Class` or entry-point name) attached in addition to stdout. See [docs/logging.md](docs/logging.md). |
-| `LOGGING_CONFIG_FILE` | _(empty)_ | Path to a YAML/JSON `dictConfig` file. Takes full ownership of logging when set. |
-| `LOG_FILE_PATH` | _(empty)_ | When set, mirror logs to a rotating file in addition to stdout. Designed for sidecar log shippers tailing a shared `emptyDir`. |
+| `LOG_FORMAT` | `text` | Log output format: `text` for local dev, `json` for structured container logging (recommended when shipping to an OTel Collector) |
+| `LOG_FILE_PATH` | _(empty)_ | When set, mirror logs to a rotating file in addition to stdout. Designed for a pod-internal sidecar that tails the file and forwards records via OTLP to an external OTel Collector. See [docs/logging.md](docs/logging.md). |
 | `LOG_FILE_MAX_BYTES` | `52428800` | Per-file size cap (bytes) for `LOG_FILE_PATH` rotation. Default 50 MiB. |
 | `LOG_FILE_BACKUP_COUNT` | `3` | Number of rotated backups kept on disk. |
 

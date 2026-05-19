@@ -1,58 +1,52 @@
 """Logging configuration for the application.
 
-Three layered modes:
+A single stdout handler with either text or JSON output (selected by
+``LOG_FORMAT``), plus an optional rotating file mirror.
 
-1. ``LOGGING_CONFIG_FILE`` is set
-   The file is loaded as YAML/JSON and applied verbatim via
-   :func:`logging.config.dictConfig`. The user owns every formatter, handler,
-   filter, and logger. ``LOG_LEVEL`` / ``LOG_FORMAT`` / ``LOG_HANDLERS`` /
-   ``LOG_FILE_PATH`` are ignored. Use this when you need full programmatic
-   control (third-party handlers with non-trivial constructors, complex
-   routing, etc.).
+External log routing — PII redaction, sampling, vendor-specific exporters
+(NELO, Datadog, Loki, Elasticsearch, ...) — is the responsibility of an
+OpenTelemetry Collector that receives this process's stdout (or tails the
+``LOG_FILE_PATH`` rotating file via a pod-internal sidecar). The OTel
+Collector spec already covers every transform-pipeline use case that
+earlier ACM releases implemented with pluggable in-process handlers, so
+that hook (``LOG_HANDLERS`` / ``LOGGING_CONFIG_FILE`` /
+``aerospike_cluster_manager.log_handlers`` entry-point group) was removed.
 
-2. ``LOG_HANDLERS`` is set (and ``LOGGING_CONFIG_FILE`` is not)
-   The default stdout handler is configured first, then each spec in
-   ``LOG_HANDLERS`` is resolved and attached. A spec is either
-   ``module.path:ClassName`` or an entry-point name registered under
-   ``aerospike_cluster_manager.log_handlers``. Each handler is constructed
-   with no arguments and is expected to read its own configuration from the
-   environment (e.g. ``pynelo``'s ``NELO_HOST`` / ``NELO_PROJECT_TOKEN``).
-   A failure to load one handler is logged and skipped — it does not abort
-   startup or remove other handlers.
+Two layered modes remain:
 
-3. Neither is set
-   Default behaviour preserved: a single stdout handler with a text or JSON
-   formatter (selected by ``LOG_FORMAT``), the existing ``RequestIDFilter``
-   for X-Request-ID propagation, and ``otelTraceID`` / ``otelSpanID`` fields
-   for OTel correlation when the logging instrumentor has patched the
+1. ``LOG_FILE_PATH`` is set
+   Attach a ``RotatingFileHandler`` *in addition to* stdout so a pod-
+   internal sidecar (fluent-bit, vector, promtail, ...) sharing an
+   ``emptyDir`` volume can tail the file and forward records to an
+   external OTel Collector OTLP endpoint. Rotation policy is controlled
+   by ``LOG_FILE_MAX_BYTES`` (default 50 MiB) and ``LOG_FILE_BACKUP_COUNT``
+   (default 3). Failure to open the file (parent dir unwritable, etc.)
+   is reported to stderr and the application falls back to stdout-only
+   logging instead of failing startup.
+
+2. Default
+   A single stdout handler with the existing ``RequestIDFilter`` for
+   X-Request-ID propagation and ``otelTraceID`` / ``otelSpanID`` fields
+   for OTel correlation when the LoggingInstrumentor has patched the
    LogRecord factory.
 
-In modes 2 and 3, setting ``LOG_FILE_PATH`` additionally attaches a rotating
-file handler so a logging sidecar (fluent-bit, vector, promtail, ...) sharing
-an ``emptyDir`` volume can tail logs without scraping ``kubectl logs``. The
-rotation policy is controlled by ``LOG_FILE_MAX_BYTES`` (default 50 MiB) and
-``LOG_FILE_BACKUP_COUNT`` (default 3). Failure to open the file (parent dir
-unwritable, etc.) is reported to stderr and the application falls back to
-stdout-only logging instead of failing startup.
+For the in-process SDK pattern that earlier releases supported via
+``LOG_HANDLERS``, deploy an OTel Collector with the appropriate
+processor pipeline (``attributes/redact``, ``probabilistic_sampler``,
+``transform`` for fixed fields) and exporter for the vendor backend.
+See docs/logging.md for the full migration guide.
 """
 
 from __future__ import annotations
 
-import importlib
 import logging
-import logging.config
 import logging.handlers
 import os
 import sys
-from importlib.metadata import entry_points
 from pathlib import Path
-from typing import Any
-
-import yaml
 
 from aerospike_cluster_manager_api.middleware.trace_id import RequestIDFilter
 
-ENTRY_POINT_GROUP = "aerospike_cluster_manager.log_handlers"
 _LOGGER_NAME = "aerospike_cluster_manager_api"
 
 # Rotation defaults applied when LOG_FILE_PATH is set but the size / backup-
@@ -65,48 +59,17 @@ _DEFAULT_LOG_FILE_BACKUP_COUNT = 3
 
 
 def setup_logging(level: str = "INFO", log_format: str = "text") -> None:
-    """Configure structured logging for the application.
+    """Configure stdout (and optional file-mirror) logging.
 
     Args:
         level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
-        log_format: Output format — "text" for human-readable, "json" for structured JSON.
+        log_format: Output format — "text" for human-readable, "json" for
+            structured JSON. Pick "json" when shipping to an OTel Collector
+            with a JSON parser.
     """
-    config_file = os.getenv("LOGGING_CONFIG_FILE", "").strip()
-    if config_file:
-        _apply_dictconfig_file(config_file)
-        return
-
     formatter = _build_formatter(log_format)
     _setup_default_logging(level, formatter)
     _attach_file_mirror(os.getenv("LOG_FILE_PATH", ""), formatter)
-    _attach_extra_handlers(os.getenv("LOG_HANDLERS", ""))
-
-
-# ---------------------------------------------------------------------------
-# Mode 1: external dictConfig file
-# ---------------------------------------------------------------------------
-
-
-def _apply_dictconfig_file(path: str) -> None:
-    p = Path(path)
-    if not p.exists():
-        # fail-fast: silently falling back to defaults would make the
-        # misconfiguration nearly impossible to debug ("why are my logs not
-        # going to NELO?"). Crashing on startup forces the operator to fix
-        # the path or unset the env var.
-        raise FileNotFoundError(f"LOGGING_CONFIG_FILE not found: {path}")
-    with p.open() as f:
-        cfg: Any = yaml.safe_load(f)
-    if not isinstance(cfg, dict):
-        raise ValueError(
-            f"LOGGING_CONFIG_FILE must contain a dictConfig mapping at the top level, got {type(cfg).__name__}"
-        )
-    logging.config.dictConfig(cfg)
-
-
-# ---------------------------------------------------------------------------
-# Mode 2 + 3: default stdout handler + optional plugin handlers
-# ---------------------------------------------------------------------------
 
 
 def _build_formatter(log_format: str) -> logging.Formatter:
@@ -163,11 +126,12 @@ def _setup_default_logging(level: str, formatter: logging.Formatter) -> None:
 def _attach_file_mirror(path: str, formatter: logging.Formatter) -> None:
     """Mirror logs to a rotating file when ``LOG_FILE_PATH`` is set.
 
-    Intended for sidecar log shippers that tail a file on a shared ``emptyDir``
-    volume — kubectl-logs scraping is the alternative but it forces operators
-    to also configure container-runtime log paths, which is brittle across
-    Docker, containerd, and CRI-O. The file handler reuses the same formatter
-    as stdout so the on-disk format matches what ``kubectl logs`` shows.
+    Intended for a pod-internal sidecar log shipper (fluent-bit / vector /
+    promtail / ...) that tails a file on a shared ``emptyDir`` volume and
+    forwards records via OTLP to an external OTel Collector. ``kubectl logs``
+    scraping is the alternative but requires the sidecar (or a node-level
+    DaemonSet) to know the container-runtime's per-host log path, which is
+    brittle across Docker, containerd, and CRI-O.
 
     Failures are non-fatal: an unwritable directory or insufficient
     permissions emit a warning to stderr (logging is not yet usable for its
@@ -231,56 +195,3 @@ def _get_int_env(name: str, default: int) -> int:
         )
         return default
     return value
-
-
-def _attach_extra_handlers(spec: str) -> None:
-    spec = spec.strip()
-    if not spec:
-        return
-    root = logging.getLogger(_LOGGER_NAME)
-    self_logger = logging.getLogger(__name__)
-    discovered = _load_entry_points()
-    for raw in (s.strip() for s in spec.split(",") if s.strip()):
-        try:
-            handler_cls = _resolve_handler(raw, discovered)
-            instance = handler_cls()
-        except Exception as e:
-            # Per-handler isolation: one failed plugin must not silently disable
-            # the rest or abort startup. Visible at INFO logs since attached
-            # handlers are also reported there.
-            self_logger.error("failed to attach log handler %r: %s", raw, e)
-            continue
-        # The default stdout handler attaches RequestIDFilter to itself; we
-        # also attach it to plugin handlers so they get a populated
-        # `request_id` field without each one having to opt in.
-        instance.addFilter(RequestIDFilter())
-        root.addHandler(instance)
-        self_logger.info("attached log handler: %s", raw)
-
-
-def _load_entry_points() -> dict[str, type[logging.Handler]]:
-    out: dict[str, type[logging.Handler]] = {}
-    try:
-        eps = entry_points(group=ENTRY_POINT_GROUP)
-    except Exception:
-        return out
-    for ep in eps:
-        try:
-            out[ep.name] = ep.load()
-        except Exception as e:
-            logging.getLogger(__name__).error("entry-point %s load failed: %s", ep.name, e)
-    return out
-
-
-def _resolve_handler(spec: str, ep_cache: dict[str, type[logging.Handler]]) -> type[logging.Handler]:
-    if ":" in spec:
-        mod_name, _, cls_name = spec.partition(":")
-        if not mod_name or not cls_name:
-            raise ValueError(f"invalid 'module:Class' spec: {spec!r}")
-        mod = importlib.import_module(mod_name)
-        return getattr(mod, cls_name)
-    if spec in ep_cache:
-        return ep_cache[spec]
-    raise ValueError(
-        f"unknown handler {spec!r}: not a 'module:Class' spec and not in entry-points group {ENTRY_POINT_GROUP!r}"
-    )

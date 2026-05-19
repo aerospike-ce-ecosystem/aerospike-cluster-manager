@@ -4,217 +4,145 @@ The API server uses Python's standard ``logging`` module. The default
 configuration emits a single stdout handler with either text or JSON
 output (selected by ``LOG_FORMAT``).
 
-When that is not enough, two extension points are provided so you can
-forward logs to NELO, Datadog, Loki, Sentry, or any other system without
-forking the image.
+External log routing — PII redaction, sampling, field enrichment,
+vendor-specific exporters (NELO, Datadog, Loki, Elasticsearch, ...) —
+is delegated to an **OpenTelemetry Collector** that receives this
+process's logs. The ACM image deliberately does not embed in-process
+SDK handlers anymore: any pipeline you would have implemented inside
+Python (`attributes/redact`, per-record sampling, fixed-field injection,
+tenant-aware fan-out) is already covered by OTel Collector
+processors/exporters, and centralizing it there avoids per-vendor
+Python wrappers and lets operators swap backends from helm values
+alone.
+
+## Architecture
+
+```
++----------------+         +------------------+         +-----------------+
+| ACM api        | stdout  | pod-internal     |  OTLP   | OTel Collector  |
+| (stdout +      | + file  | sidecar          | -----> | (cluster /      |
+| LOG_FILE_PATH) | ------> | (fluent-bit /    |         | namespace,      |
+|                |         | vector / ...)    |         | NOT inside this |
++----------------+         +------------------+         | helm chart)     |
+                                                        +-----------------+
+                                                                 |
+                                                +----------------+----------------+
+                                                v                                 v
+                                         Loki / Elastic /                 NELO / Datadog /
+                                         Tempo / Sentry                   sentry-otel-bridge
+```
+
+The OTel Collector itself is **not** deployed by the ACKO helm chart —
+the assumption is that the cluster already has one (a DaemonSet for
+node-level, a Deployment for namespace-level, or one per-namespace
+when isolation matters). The chart only opt-in deploys the **sidecar
+that forwards to it**.
 
 ## Modes
 
-There are three configuration modes, selected by environment variables:
+Two modes:
 
-1. **Default** — neither ``LOGGING_CONFIG_FILE`` nor ``LOG_HANDLERS`` is
-   set. A single stdout handler (text or JSON) with the existing
-   ``RequestIDFilter`` and OpenTelemetry trace/span ID injection.
+1. **Default — stdout only**
+   A single ``StreamHandler(sys.stdout)`` with the existing
+   ``RequestIDFilter`` and OpenTelemetry trace/span ID injection. Pick
+   this when a node-level OTel Collector DaemonSet scrapes container
+   logs (e.g. via the Collector's ``filelog`` receiver against
+   ``/var/log/containers/*.log``).
 
-2. **LOG_HANDLERS** — comma-separated list of handler specs.  Each spec
-   is either a ``module.path:ClassName`` (importlib import) or an
-   entry-point name registered under the
-   ``aerospike_cluster_manager.log_handlers`` group. Each handler is
-   constructed with **no arguments** and is expected to read its own
-   configuration from environment variables. The default stdout handler
-   stays attached; ``LOG_HANDLERS`` adds to it.
+2. **Stdout + rotating file mirror — ``LOG_FILE_PATH``**
+   Attach a ``RotatingFileHandler`` so a pod-internal sidecar sharing
+   an ``emptyDir`` volume can tail the file and forward records via
+   OTLP. Rotation is size-based: ``LOG_FILE_MAX_BYTES`` (default 50
+   MiB) and ``LOG_FILE_BACKUP_COUNT`` (default 3). Failure to open the
+   file (parent dir unwritable, etc.) is reported to stderr and the
+   application falls back to stdout-only logging instead of failing
+   startup.
 
-3. **LOGGING_CONFIG_FILE** — path to a YAML/JSON dictConfig file.
-   The file is loaded as-is via ``logging.config.dictConfig`` and given
-   full control over every formatter, handler, filter, and logger.
-   ``LOG_HANDLERS``, ``LOG_LEVEL``, ``LOG_FORMAT``, and ``LOG_FILE_PATH``
-   are ignored in this mode.
+When ``LOG_FORMAT=json``, both stdout and the rotating file emit JSON
+records with the same schema. OTel Collector's ``filelog`` receiver
+parses them via the ``json_parser`` operator.
 
-Across modes 1 and 2, setting ``LOG_FILE_PATH`` additionally attaches a
-``RotatingFileHandler`` that mirrors records to a file. This is the
-recommended pairing with a logging sidecar (fluent-bit, vector, promtail)
-that tails a shared ``emptyDir`` volume — see Example C below.
+## Example — fluent-bit OTLP forwarder sidecar (helm)
 
-## Example A — NELO via LOG_HANDLERS
-
-[``pynelo``](https://github.com/naver/pynelo) is a logging.Handler that
-configures itself from ``NELO_HOST`` / ``NELO_PORT`` /
-``NELO_PROJECT_NAME`` / ``NELO_PROJECT_TOKEN`` environment variables, so
-no Python wrapping is needed.
-
-helm values:
+The ACKO chart's default values for the logging sidecar do exactly this
+pattern. The relevant knobs:
 
 ```yaml
 ui:
-  api:
-    extraPipPackages:
-      - "pynelo>=1.0.0"
-    logging:
-      handlers: "pynelo:AsyncNeloHandler"
-    extraEnv:
-      - name: NELO_HOST
-        value: nelo-collector.svc.cluster.local
-      - name: NELO_PORT
-        value: "10006"
-      - name: NELO_PROJECT_NAME
-        value: ad-ai-aerospike
-    extraEnvFrom:
-      - secretRef:
-          name: nelo-token
-```
-
-Verify by looking for the attach line in pod logs:
-
-```
-kubectl logs -n <ns> deploy/<release>-aerospike-ce-kubernetes-operator-ui-api -c api \
-  | grep "attached log handler"
-# attached log handler: pynelo:AsyncNeloHandler
-```
-
-## Example B — Datadog via dictConfig
-
-Building a custom image once is more reliable than ``extraPipPackages``
-when you need to install non-Python build dependencies or run in an
-airgap cluster.
-
-``Dockerfile``:
-
-```dockerfile
-FROM ghcr.io/aerospike-ce-ecosystem/aerospike-cluster-manager-api:latest
-RUN pip install ddtrace
-```
-
-helm values:
-
-```yaml
-ui:
-  api:
-    image:
-      repository: my-registry.example.com/asm-api-with-datadog
-      tag: latest
-    logging:
-      dictConfig:
-        version: 1
-        disable_existing_loggers: false
-        formatters:
-          json:
-            "()": pythonjsonlogger.json.JsonFormatter
-            fmt: "%(asctime)s %(levelname)s %(name)s %(message)s %(otelTraceID)s %(otelSpanID)s"
-        handlers:
-          console:
-            class: logging.StreamHandler
-            formatter: json
-        loggers:
-          aerospike_cluster_manager_api:
-            level: INFO
-            handlers: [console]
-            propagate: false
-```
-
-The chart writes the dictConfig payload into a ConfigMap, mounts it at
-``/etc/asm/logging.yaml``, and sets ``LOGGING_CONFIG_FILE`` to that
-path.  Pod restart applies the new config.
-
-## Example C — Sidecar log shipper via ``LOG_FILE_PATH``
-
-When the operator wants to forward logs through a generic agent
-(fluent-bit, vector, promtail) instead of an in-process SDK, the sidecar
-needs a stable file to tail. The ACM API writes records to
-``LOG_FILE_PATH`` in addition to stdout — the sidecar mounts the same
-``emptyDir`` volume and runs ``tail -F`` (or its equivalent).
-
-helm values:
-
-```yaml
-ui:
+  env:
+    logFormat: "json"           # recommended for downstream parsing
   api:
     logging:
-      # Both knobs are wired up by the ACKO helm chart — see ACKO's
-      # values.yaml for the chart-side defaults. Setting fileMirror
-      # also auto-mounts the shared emptyDir at /var/log/acm.
       fileMirror:
-        enabled: true
-        path: /var/log/acm/api.log
-        maxBytes: 52428800   # 50 MiB
-        backupCount: 3
+        enabled: true           # writes /var/log/acm/api.log on a shared emptyDir
       sidecar:
-        enabled: true
-        image: cr.fluentbit.io/fluent/fluent-bit:3.2
-        # configFile is rendered into a ConfigMap and mounted at
-        # /fluent-bit/etc/fluent-bit.conf inside the sidecar.
-        configFile: |
-          [SERVICE]
-              Flush 1
-          [INPUT]
-              Name tail
-              Path /var/log/acm/*.log
-              Refresh_Interval 5
-          [OUTPUT]
-              Name stdout
-              Match *
+        enabled: true           # fluent-bit container, mounts the same emptyDir read-only
+        otlp:
+          endpoint: "otel-collector.observability.svc.cluster.local:4317"
+          # headers: "x-tenant=acm,authorization=Bearer ..."
 ```
 
-Equivalent raw env (bare ACM image, no helm):
+The chart pre-bakes a fluent-bit config that:
 
-```bash
-LOG_FILE_PATH=/var/log/acm/api.log
-LOG_FILE_MAX_BYTES=52428800
-LOG_FILE_BACKUP_COUNT=3
-LOG_FORMAT=json   # recommended so the sidecar can parse fields directly
-```
+- tails ``LOG_FILE_PATH`` with the ``tail`` input + ``json_parser``
+- forwards records to ``otlp.endpoint`` via the ``opentelemetry`` output
+- propagates ``otlp.headers`` as OTLP HTTP/gRPC metadata
 
-Why a file and not ``kubectl logs``? Container-runtime log paths
-(``/var/log/containers/...``) differ across Docker, containerd, and
-CRI-O, and the sidecar would need elevated privileges to read them.
-A shared ``emptyDir`` works the same way on every runtime and stays
-inside the pod's security boundary.
+Operators who need a different shipper (vector, promtail, vendor agent)
+can override ``sidecar.image`` and ``sidecar.config.content`` — the
+schema is documented in the ACKO chart's ``values.yaml``.
 
-If ``LOG_FILE_PATH`` is unwritable (parent directory missing
-permissions, etc.) the API logs a single warning to stderr and falls
-back to stdout-only — the pod still starts so the operator can
-investigate via ``kubectl logs``.
+## Migrating from pre-0.X.0 ``LOG_HANDLERS`` / ``LOGGING_CONFIG_FILE``
 
-## Registering an entry-point alias (third-party packages)
+Earlier ACM releases shipped two in-process extension hooks:
 
-A package that wants to be addressable by a short name in
-``LOG_HANDLERS`` can declare:
+- ``LOG_HANDLERS=module:Class`` (or entry-point name registered under
+  ``aerospike_cluster_manager.log_handlers``) — attached additional
+  ``logging.Handler`` instances such as ``pynelo.AsyncNeloHandler``.
+- ``LOGGING_CONFIG_FILE`` — path to a YAML/JSON ``dictConfig`` file
+  given full ownership of the logging pipeline.
 
-```toml
-# pyproject.toml of the third-party package
-[project.entry-points."aerospike_cluster_manager.log_handlers"]
-nelo = "pynelo:AsyncNeloHandler"
-```
+Both hooks were removed in this release. Each prior use case maps to an
+OTel Collector primitive:
 
-Then ``LOG_HANDLERS=nelo`` works identically to
-``LOG_HANDLERS=pynelo:AsyncNeloHandler``.
+| Old pattern | OTel Collector equivalent |
+|---|---|
+| Vendor SDK handler (NELO, Datadog, ...) | Run the vendor exporter (or an OTLP→vendor bridge) on the cluster's Collector. ACM stays vendor-neutral. |
+| Per-record PII redaction inside the handler | Pipeline with the `attributes` / `redaction` / `transform` processor. |
+| Sampling inside the handler (`error 100% / info 1%`) | `probabilistic_sampler` or `tail_sampling` processor. |
+| Fixed extra fields (`service`, `env`, `tenant`) | `resource` / `attributes` processor; or set OTel SDK resource attributes via env. |
+| Multi-sink fan-out (stdout + vendor) | Multiple exporters on the same Collector pipeline. |
+| Full ``dictConfig`` for routing/level overrides | Collector ``service.pipelines.logs`` configuration. |
+
+If a use case truly cannot be expressed in the Collector (extremely
+high-cardinality per-record context that has to be derived inside the
+application process), file an issue with the specific transform you
+need — we will reconsider, but the bar for re-introducing in-process
+hooks is high because each one becomes a per-vendor Python dependency
+that complicates the airgap and dependency-pin story.
 
 ## OpenTelemetry trace correlation
 
 When OpenTelemetry is enabled (see ``observability.md``), the
 ``opentelemetry-instrumentation-logging`` library injects
 ``otelTraceID`` and ``otelSpanID`` attributes onto every ``LogRecord``.
-The default JSON formatter renames these to ``trace_id`` /``span_id`` in
-the output, and any third-party handler that serializes
-``LogRecord.__dict__`` (like ``pynelo``) will forward them automatically.
-No additional configuration required.
+The default JSON formatter renames these to ``trace_id`` / ``span_id``
+in the output. Downstream Collector pipelines forward them as OTel log
+attributes so logs are linkable to spans in the same backend without
+any extra configuration.
 
 ## Constraints to be aware of
 
-- Each plugin handler is constructed with **no arguments** (``cls()``).
-  Wrap your handler in a no-arg adaptor if its constructor needs
-  positional arguments.
-- A failure to load one handler is logged at ``ERROR`` level on
-  ``aerospike_cluster_manager_api.logging_config`` and skipped.  Other
-  handlers in the list keep loading.  Missing module / missing
-  entry-point / constructor exception all behave the same way.
-- ``LOGGING_CONFIG_FILE`` failure (file missing, top-level not a
-  mapping) raises and aborts startup. Falling back to defaults silently
-  would make the misconfiguration impossible to debug.
-- ``extraPipPackages`` in the helm chart runs ``pip install --target``
-  in an init container. This requires PyPI egress from the cluster.
-  In airgap environments, build a custom image instead (see Example B).
 - ``LOG_FILE_PATH`` rotation uses Python's stdlib
-  ``RotatingFileHandler`` — size-based, not time-based. Default 50 MiB
-  per file, 3 backups. Tune via ``LOG_FILE_MAX_BYTES`` /
-  ``LOG_FILE_BACKUP_COUNT`` or supply a full ``LOGGING_CONFIG_FILE`` if
-  you need a different rotation policy (e.g. ``TimedRotatingFileHandler``).
+  ``RotatingFileHandler`` — size-based, not time-based. Tune via
+  ``LOG_FILE_MAX_BYTES`` / ``LOG_FILE_BACKUP_COUNT``. For
+  time-based rotation, point the sidecar at the Collector and let
+  the Collector's batch/queue settings govern flush cadence instead.
+- The file path must live on a volume the sidecar also mounts. The
+  ACKO chart wires this via a shared ``emptyDir`` automatically when
+  ``ui.api.logging.fileMirror.enabled=true`` and
+  ``ui.api.logging.sidecar.enabled=true``.
+- Sidecar without ``fileMirror`` is rejected at ``helm install`` time
+  — the sidecar would otherwise have nothing to tail. Either enable
+  both, or skip the sidecar and rely on a node-level DaemonSet OTel
+  Collector scraping ``/var/log/containers/*.log``.
