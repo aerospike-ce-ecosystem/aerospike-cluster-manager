@@ -4,15 +4,13 @@ A single stdout handler with either text or JSON output (selected by
 ``LOG_FORMAT``), plus an optional rotating file mirror.
 
 External log routing — PII redaction, sampling, vendor-specific exporters
-(NELO, Datadog, Loki, Elasticsearch, ...) — is the responsibility of an
+(Datadog, Loki, Elasticsearch, Sentry, ...) — is the responsibility of an
 OpenTelemetry Collector that receives this process's stdout (or tails the
-``LOG_FILE_PATH`` rotating file via a pod-internal sidecar). The OTel
-Collector spec already covers every transform-pipeline use case that
-earlier ACM releases implemented with pluggable in-process handlers, so
-that hook (``LOG_HANDLERS`` / ``LOGGING_CONFIG_FILE`` /
-``aerospike_cluster_manager.log_handlers`` entry-point group) was removed.
+``LOG_FILE_PATH`` rotating file via a pod-internal sidecar). Any transform
+pipeline lives in the Collector configuration, so operators swap backends
+from helm values alone without touching the application image.
 
-Two layered modes remain:
+Two modes:
 
 1. ``LOG_FILE_PATH`` is set
    Attach a ``RotatingFileHandler`` *in addition to* stdout so a pod-
@@ -30,11 +28,8 @@ Two layered modes remain:
    for OTel correlation when the LoggingInstrumentor has patched the
    LogRecord factory.
 
-For the in-process SDK pattern that earlier releases supported via
-``LOG_HANDLERS``, deploy an OTel Collector with the appropriate
-processor pipeline (``attributes/redact``, ``probabilistic_sampler``,
-``transform`` for fixed fields) and exporter for the vendor backend.
-See docs/logging.md for the full migration guide.
+See docs/logging.md for OTel Collector deployment shapes and an
+example fluent-bit sidecar configuration.
 """
 
 from __future__ import annotations

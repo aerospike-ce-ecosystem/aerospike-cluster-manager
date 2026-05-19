@@ -158,7 +158,7 @@ Related targets: `make kind-up/down/status`, `make acko-install/uninstall/verify
 - **AQL Terminal** — Web-based AQL command execution
 - **Prometheus Metrics** — Cluster metrics export
 - **OpenTelemetry Observability** — Traces, metrics, and logs via standard OTel SDK env vars; HTTP server, asyncpg, and aerospike-py spans auto-emit. See [docs/observability.md](docs/observability.md).
-- **Structured stdout logs ready for OTel Collector** — JSON output with `request_id` / `otelTraceID` / `otelSpanID` correlation fields. Optional rotating-file mirror (`LOG_FILE_PATH`) lets a pod-internal sidecar tail logs on a shared `emptyDir` and forward them via OTLP to an external OpenTelemetry Collector for vendor-specific routing (NELO, Datadog, Loki, Elasticsearch, ...). See [docs/logging.md](docs/logging.md).
+- **Structured stdout logs ready for OTel Collector** — JSON output with `request_id` / `otelTraceID` / `otelSpanID` correlation fields. Optional rotating-file mirror (`LOG_FILE_PATH`) lets a pod-internal sidecar tail logs on a shared `emptyDir` and forward them via OTLP to an external OpenTelemetry Collector for vendor-specific routing (Datadog, Loki, Elasticsearch, Sentry, ...). See [docs/logging.md](docs/logging.md).
 - **Sample Data Generator** — Generate deterministic sample records with optional indexes and UDFs
 - **K8s Cluster Management** — Full lifecycle management of Aerospike clusters on Kubernetes (see below)
   - ACL/Security configuration with role and user management via wizard
