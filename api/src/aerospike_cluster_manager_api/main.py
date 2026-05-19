@@ -46,9 +46,8 @@ if config.K8S_MANAGEMENT_ENABLED:
     from aerospike_cluster_manager_api.routers import k8s_clusters
 
 # OTel must initialize BEFORE setup_logging so LoggingInstrumentor can patch
-# the LogRecord factory before the first log line is emitted. Both calls are
-# no-ops when their respective env vars are at their defaults
-# (OTEL_SDK_DISABLED=true / LOG_HANDLERS empty / LOGGING_CONFIG_FILE empty).
+# the LogRecord factory before the first log line is emitted. setup_observability
+# is a no-op when OTEL_SDK_DISABLED=true.
 setup_observability()
 setup_logging(config.LOG_LEVEL, config.LOG_FORMAT)
 logger = logging.getLogger(__name__)

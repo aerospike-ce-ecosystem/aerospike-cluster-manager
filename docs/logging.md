@@ -5,15 +5,11 @@ configuration emits a single stdout handler with either text or JSON
 output (selected by ``LOG_FORMAT``).
 
 External log routing — PII redaction, sampling, field enrichment,
-vendor-specific exporters (NELO, Datadog, Loki, Elasticsearch, ...) —
+vendor-specific exporters (Datadog, Loki, Elasticsearch, Sentry, ...) —
 is delegated to an **OpenTelemetry Collector** that receives this
-process's logs. The ACM image deliberately does not embed in-process
-SDK handlers anymore: any pipeline you would have implemented inside
-Python (`attributes/redact`, per-record sampling, fixed-field injection,
-tenant-aware fan-out) is already covered by OTel Collector
-processors/exporters, and centralizing it there avoids per-vendor
-Python wrappers and lets operators swap backends from helm values
-alone.
+process's logs. Any transform pipeline lives in the Collector
+configuration, so operators swap backends from helm values alone
+without touching the application image.
 
 ## Architecture
 
@@ -28,8 +24,8 @@ alone.
                                                                  |
                                                 +----------------+----------------+
                                                 v                                 v
-                                         Loki / Elastic /                 NELO / Datadog /
-                                         Tempo / Sentry                   sentry-otel-bridge
+                                         Loki / Elastic /                  Datadog / Sentry /
+                                         Tempo / Sentry                    your-vendor-bridge
 ```
 
 The OTel Collector itself is **not** deployed by the ACKO helm chart —
@@ -91,35 +87,6 @@ The chart pre-bakes a fluent-bit config that:
 Operators who need a different shipper (vector, promtail, vendor agent)
 can override ``sidecar.image`` and ``sidecar.config.content`` — the
 schema is documented in the ACKO chart's ``values.yaml``.
-
-## Migrating from pre-0.X.0 ``LOG_HANDLERS`` / ``LOGGING_CONFIG_FILE``
-
-Earlier ACM releases shipped two in-process extension hooks:
-
-- ``LOG_HANDLERS=module:Class`` (or entry-point name registered under
-  ``aerospike_cluster_manager.log_handlers``) — attached additional
-  ``logging.Handler`` instances such as ``pynelo.AsyncNeloHandler``.
-- ``LOGGING_CONFIG_FILE`` — path to a YAML/JSON ``dictConfig`` file
-  given full ownership of the logging pipeline.
-
-Both hooks were removed in this release. Each prior use case maps to an
-OTel Collector primitive:
-
-| Old pattern | OTel Collector equivalent |
-|---|---|
-| Vendor SDK handler (NELO, Datadog, ...) | Run the vendor exporter (or an OTLP→vendor bridge) on the cluster's Collector. ACM stays vendor-neutral. |
-| Per-record PII redaction inside the handler | Pipeline with the `attributes` / `redaction` / `transform` processor. |
-| Sampling inside the handler (`error 100% / info 1%`) | `probabilistic_sampler` or `tail_sampling` processor. |
-| Fixed extra fields (`service`, `env`, `tenant`) | `resource` / `attributes` processor; or set OTel SDK resource attributes via env. |
-| Multi-sink fan-out (stdout + vendor) | Multiple exporters on the same Collector pipeline. |
-| Full ``dictConfig`` for routing/level overrides | Collector ``service.pipelines.logs`` configuration. |
-
-If a use case truly cannot be expressed in the Collector (extremely
-high-cardinality per-record context that has to be derived inside the
-application process), file an issue with the specific transform you
-need — we will reconsider, but the bar for re-introducing in-process
-hooks is high because each one becomes a per-vendor Python dependency
-that complicates the airgap and dependency-pin story.
 
 ## OpenTelemetry trace correlation
 
