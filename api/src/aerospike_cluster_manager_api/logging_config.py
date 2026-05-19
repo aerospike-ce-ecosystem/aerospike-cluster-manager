@@ -148,7 +148,12 @@ def _setup_default_logging(level: str, formatter: logging.Formatter) -> None:
     # Clear existing handlers before attaching a new one. Repeated calls
     # (test fixtures, uvicorn --reload) would otherwise accumulate handlers
     # with mismatched filter coverage and produce duplicate log lines.
+    # Close before remove so any RotatingFileHandler attached on a previous
+    # setup_logging() call releases its file descriptor immediately rather
+    # than waiting for GC — important on Windows / under pytest where the
+    # next tmp_path cleanup races against the leaked fd.
     for h in list(root.handlers):
+        h.close()
         root.removeHandler(h)
     root.setLevel(log_level)
     root.addHandler(handler)
@@ -174,12 +179,13 @@ def _attach_file_mirror(path: str, formatter: logging.Formatter) -> None:
         return
     try:
         target = Path(path)
-        if target.parent:
-            # parents=True creates missing intermediates; exist_ok=True keeps
-            # this idempotent across pod restarts. mkdir on a path whose
-            # parent already exists as a regular file raises NotADirectoryError
-            # (OSError subclass) and is reported via the except branch below.
-            target.parent.mkdir(parents=True, exist_ok=True)
+        # parents=True creates missing intermediates; exist_ok=True keeps
+        # this idempotent across pod restarts. mkdir on a path whose
+        # parent already exists as a regular file raises NotADirectoryError
+        # (OSError subclass) and is reported via the except branch below.
+        # Bare filenames have parent == Path(".") which is always present,
+        # so an explicit truthy guard would never short-circuit anyway.
+        target.parent.mkdir(parents=True, exist_ok=True)
         max_bytes = _get_int_env("LOG_FILE_MAX_BYTES", _DEFAULT_LOG_FILE_MAX_BYTES)
         backup_count = _get_int_env("LOG_FILE_BACKUP_COUNT", _DEFAULT_LOG_FILE_BACKUP_COUNT)
         # delay=False forces the file to be opened during setup so a bad

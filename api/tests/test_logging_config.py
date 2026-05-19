@@ -24,7 +24,12 @@ def restore_root_logger():
     saved_handlers = list(root.handlers)
     saved_propagate = root.propagate
     yield
+    # close() before removeHandler() so RotatingFileHandler instances release
+    # their file descriptors immediately — otherwise the leaked fd races
+    # tmp_path cleanup (PermissionError on Windows; silent inode pin on Linux).
     for h in list(root.handlers):
+        if h not in saved_handlers:
+            h.close()
         root.removeHandler(h)
     for h in saved_handlers:
         root.addHandler(h)
@@ -283,6 +288,29 @@ def test_log_file_path_empty_is_noop(monkeypatch):
     root = logging.getLogger(ROOT_LOGGER_NAME)
     file_handlers = [h for h in root.handlers if isinstance(h, logging.handlers.RotatingFileHandler)]
     assert file_handlers == []
+
+
+def test_log_file_path_double_call_does_not_accumulate_handlers(tmp_path: Path, monkeypatch):
+    """uvicorn --reload / repeated setup_logging() must not leak file descriptors."""
+    monkeypatch.delenv("LOGGING_CONFIG_FILE", raising=False)
+    monkeypatch.delenv("LOG_HANDLERS", raising=False)
+    log_file = tmp_path / "acm.log"
+    monkeypatch.setenv("LOG_FILE_PATH", str(log_file))
+
+    logging_config.setup_logging("INFO", "text")
+    first_pass_handlers = list(logging.getLogger(ROOT_LOGGER_NAME).handlers)
+    logging_config.setup_logging("INFO", "text")
+
+    root = logging.getLogger(ROOT_LOGGER_NAME)
+    file_handlers = [h for h in root.handlers if isinstance(h, logging.handlers.RotatingFileHandler)]
+    # Exactly one RotatingFileHandler — the one from the second call.
+    assert len(file_handlers) == 1
+    # And the prior handler is closed (no leaked fd). RotatingFileHandler.close
+    # sets ``self.stream`` to None.
+    for prior in first_pass_handlers:
+        assert prior not in root.handlers
+        if isinstance(prior, logging.handlers.RotatingFileHandler):
+            assert prior.stream is None
 
 
 def test_log_file_path_ignored_when_logging_config_file_set(tmp_path: Path, monkeypatch):
