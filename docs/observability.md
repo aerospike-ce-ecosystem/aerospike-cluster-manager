@@ -11,9 +11,26 @@ variables for any of them.
 
 ## Quick start: send everything to a local collector
 
+``compose.yaml`` ships an ``otel-collector`` service (config in
+``otel/otel-collector.yaml``) behind the ``observability`` profile. Start the
+full stack with OTel turned on:
+
 ```bash
-docker run --rm -d --name otel-collector \
+OTEL_SDK_DISABLED=false podman compose --profile observability up
+```
+
+Then tail the collector to watch every signal arrive:
+
+```bash
+podman logs -f otel-collector
+```
+
+To run the API outside compose against a standalone collector:
+
+```bash
+podman run --rm -d --name otel-collector \
   -p 4317:4317 -p 4318:4318 \
+  -v "$PWD/otel/otel-collector.yaml:/etc/otelcol-contrib/otel-collector.yaml:ro" \
   otel/opentelemetry-collector-contrib:latest \
   --config=/etc/otelcol-contrib/otel-collector.yaml
 
@@ -27,8 +44,9 @@ uvicorn aerospike_cluster_manager_api.main:app --host 0.0.0.0 --port 8000
 Open the collector logs and you will see:
 
 - HTTP server spans for every API request (``/api/v1/clusters/...`` etc.)
-- ``aerospike.<op>`` spans emitted automatically by ``aerospike-py[otel]``
-  for every Aerospike operation
+- ``aerospike.<op>`` spans for every Aerospike operation — emitted by
+  aerospike-py's Rust core once ACM starts its exporter at boot (see
+  [aerospike-py native instrumentation](#aerospike-py-native-instrumentation))
 - ``asm.events.collect`` / ``asm.events.broadcast`` spans for the SSE event loop
 - ``asm.aerospike.client.connect`` / ``...close`` spans for the
   connection-pool lifecycle
@@ -55,6 +73,52 @@ The exporter selection in the API picks the right module per
 ``OTEL_EXPORTER_OTLP_PROTOCOL`` — ``grpc`` imports
 ``opentelemetry.exporter.otlp.proto.grpc`` and ``http`` /
 ``http/protobuf`` imports ``opentelemetry.exporter.otlp.proto.http``.
+
+## aerospike-py native instrumentation
+
+ACM's Aerospike client, ``aerospike-py``, runs an async Rust core. That core
+carries its own observability surface, and ACM opts into both halves of it.
+
+### Traces — ``aerospike.<op>`` spans
+
+The Rust core emits one span per Aerospike operation (``aerospike.get``,
+``aerospike.put``, ``aerospike.batch_read``, …) carrying ``db.*`` and
+``server.*`` attributes. The ``aerospike-py[otel]`` extra ACM depends on only
+wires **W3C context propagation** — so those spans nest under ACM's active
+FastAPI/handler span — it does **not** start span emission. Emission requires
+an explicit ``init_tracing()`` call, which builds aerospike-py's own OTLP
+exporter from the standard ``OTEL_EXPORTER_OTLP_*`` env vars.
+
+ACM makes that call in ``observability.setup_observability()`` whenever OTel is
+enabled, and flushes it in ``shutdown_observability()`` at lifespan shutdown.
+Before this wiring, ACM produced FastAPI and asyncpg spans but silently dropped
+every Aerospike-operation span.
+
+> **OTLP/gRPC only.** aerospike-py's Rust exporter speaks OTLP/gRPC.
+> ``OTEL_EXPORTER_OTLP_ENDPOINT`` must reach a gRPC-capable collector port
+> (4317). If you set ``OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`` for ACM's
+> own Python SDK, aerospike-py still needs a gRPC endpoint or its spans are
+> dropped — ACM logs a warning at startup when it detects this mismatch.
+
+### Logs — Rust-core log bridge
+
+The Rust core forwards its log records into the stdlib ``logging`` tree under
+the ``aerospike_py`` / ``_aerospike`` / ``aerospike_core`` loggers. ACM opens
+that bridge at startup via ``set_log_level()``, so client-core records share
+ACM's formatter and — when OTel is enabled — the OTLP log pipeline, exactly
+like any other ACM log line. ``shutdown_observability()`` additionally surfaces
+``dropped_log_count()`` if the core had to drop records under GIL contention.
+
+### Configuration
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| ``AEROSPIKE_PY_LOG_LEVEL`` | Verbosity of the aerospike-py Rust-core log bridge. Accepts standard level names (``DEBUG``, ``INFO``, ``WARNING``, ``ERROR``) plus ``TRACE`` and ``OFF``. Kept separate from ``LOG_LEVEL`` because the core is very chatty at ``DEBUG``/``TRACE``. | value of ``LOG_LEVEL`` |
+| ``AEROSPIKE_PY_TRACING`` | Start aerospike-py's native OTLP span exporter. Only takes effect when OTel is enabled; set falsy to suppress the high-volume per-operation spans. | ``true`` |
+
+All aerospike-py observability calls are best-effort: a failure in
+``init_tracing``, ``set_log_level``, or ``shutdown_tracing`` is caught and
+logged as a warning — it never blocks ACM startup or shutdown.
 
 ## Custom metrics emitted
 
@@ -86,6 +150,11 @@ ui:
       serviceName: aerospike-cluster-manager-api
       resourceAttributes: "deployment.environment=staging,team=platform"
       headers: ""
+      # aerospike-py Rust-core instrumentation (see "aerospike-py native
+      # instrumentation" above). Defaults are sensible — override only to
+      # tune log verbosity or to suppress the per-operation spans.
+      aerospikePyLogLevel: INFO
+      aerospikePyTracing: true
 ```
 
 When ``ui.api.otel.enabled=false`` (default), the deployment sets
@@ -99,7 +168,7 @@ produces:
 ```
 http.server (FastAPI)
 └── asm.events.collect (only if collector loop runs concurrently)
-└── aerospike.info (auto, from aerospike-py[otel])
+└── aerospike.info (from aerospike-py's Rust core)
 └── asm.aerospike.client.connect (first call only — pooled afterwards)
 ```
 

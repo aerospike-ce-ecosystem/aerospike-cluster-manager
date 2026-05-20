@@ -137,6 +137,24 @@ CM_SSE_BROADCAST_PER_CONNECTION: bool = os.getenv("CM_SSE_BROADCAST_PER_CONNECTI
 OTEL_ENABLED: bool = os.getenv("OTEL_SDK_DISABLED", "true").lower() not in ("true", "1", "yes")
 
 # ---------------------------------------------------------------------------
+# aerospike-py native instrumentation
+# ---------------------------------------------------------------------------
+# aerospike-py runs an async Rust core that carries its own observability
+# surface (a stdlib-logging bridge and an OTLP span exporter). ACM opts into
+# both — see observability.apply_aerospike_py_log_level / _init_aerospike_py_tracing
+# and docs/observability.md. Both knobs are read live from os.environ in
+# observability.py (so tests can monkeypatch them, matching how
+# setup_observability reads OTEL_SDK_DISABLED); they are documented here as the
+# canonical place to grep for "what env vars does ACM read?":
+#
+#   AEROSPIKE_PY_LOG_LEVEL — verbosity of the Rust-core log bridge into ACM's
+#     logging tree (DEBUG / INFO / WARNING / ERROR / TRACE / OFF). Defaults to
+#     LOG_LEVEL; a separate knob because the core is very chatty at DEBUG/TRACE.
+#   AEROSPIKE_PY_TRACING — "false" / "0" / "no" / "off" suppresses aerospike-py's
+#     OTLP span exporter. Defaults on; only takes effect when OTel is enabled.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
 # At-rest encryption for stored connection passwords
 # ---------------------------------------------------------------------------
 # Fernet key used by ``secrets_crypto.encrypt_password`` to wrap the

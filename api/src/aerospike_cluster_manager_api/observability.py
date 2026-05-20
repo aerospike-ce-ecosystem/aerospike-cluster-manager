@@ -24,6 +24,7 @@ import os
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any
 
+import aerospike_py
 from opentelemetry import metrics, trace
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
@@ -40,6 +41,12 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 logger = logging.getLogger(__name__)
 
 _initialized = False
+# Python OTel SDK providers, retained at module scope so shutdown_observability()
+# can flush and stop them deterministically instead of relying on interpreter
+# atexit ordering. None until setup_observability() runs the enabled path.
+_tracer_provider: TracerProvider | None = None
+_meter_provider: MeterProvider | None = None
+_logger_provider: LoggerProvider | None = None
 
 
 def _service_version() -> str:
@@ -78,12 +85,141 @@ def _otlp_exporters() -> tuple[type[Any], type[Any], type[Any]]:
     return GrpcSpanExporter, GrpcMetricExporter, GrpcLogExporter
 
 
+# ---------------------------------------------------------------------------
+# aerospike-py native instrumentation
+#
+# aerospike-py runs an async Rust core. It is a hard dependency of ACM and
+# carries its own observability surface that does NOT come for free with the
+# ``[otel]`` extra:
+#
+#   * Logs  — the Rust core forwards log records into the stdlib ``logging``
+#     tree (loggers ``aerospike_py`` / ``_aerospike`` / ``aerospike_core``),
+#     but only once ``set_log_level`` opens that bridge at a chosen verbosity.
+#   * Traces — the Rust core emits ``aerospike.<op>`` spans through its OWN
+#     OTLP exporter, started by ``init_tracing()``. The ``[otel]`` extra only
+#     wires W3C context *propagation* so those spans nest under ACM's active
+#     span — it does not start span *emission*. Before this wiring ACM
+#     produced FastAPI/asyncpg spans but silently dropped every
+#     Aerospike-operation span, despite docs/observability.md claiming
+#     otherwise.
+#
+# Every call below is wrapped so a failure can never break app startup or
+# shutdown — observability is best-effort, exactly like the log file mirror.
+# ---------------------------------------------------------------------------
+
+# stdlib logging level name -> aerospike_py.LOG_LEVEL_* constant.
+_AEROSPIKE_PY_LOG_LEVELS: dict[str, int] = {
+    "OFF": aerospike_py.LOG_LEVEL_OFF,
+    "NONE": aerospike_py.LOG_LEVEL_OFF,
+    "CRITICAL": aerospike_py.LOG_LEVEL_ERROR,
+    "FATAL": aerospike_py.LOG_LEVEL_ERROR,
+    "ERROR": aerospike_py.LOG_LEVEL_ERROR,
+    "WARNING": aerospike_py.LOG_LEVEL_WARN,
+    "WARN": aerospike_py.LOG_LEVEL_WARN,
+    "INFO": aerospike_py.LOG_LEVEL_INFO,
+    "NOTSET": aerospike_py.LOG_LEVEL_INFO,
+    "DEBUG": aerospike_py.LOG_LEVEL_DEBUG,
+    "TRACE": aerospike_py.LOG_LEVEL_TRACE,
+}
+
+
+def apply_aerospike_py_log_level(level_name: str | None = None) -> None:
+    """Route aerospike-py's Rust-core logs into the stdlib logging tree.
+
+    Call once at startup, after :func:`logging_config.setup_logging`, so the
+    records land in ACM's configured formatter (and, when OTel is on, the
+    OTLP log pipeline). Unlike tracing, this applies regardless of
+    ``OTEL_SDK_DISABLED`` — the Rust-core logs are useful on stdout alone.
+
+    ``level_name`` defaults to ``AEROSPIKE_PY_LOG_LEVEL`` and then to
+    ``LOG_LEVEL``. The Rust core is very chatty at DEBUG/TRACE, hence the
+    dedicated env var: keep ACM at INFO while turning the client core up (or
+    the reverse). Unknown names fall back to INFO.
+    """
+    name = (level_name or os.getenv("AEROSPIKE_PY_LOG_LEVEL") or os.getenv("LOG_LEVEL", "INFO")).strip().upper()
+    level = _AEROSPIKE_PY_LOG_LEVELS.get(name, aerospike_py.LOG_LEVEL_INFO)
+    try:
+        aerospike_py.set_log_level(level)
+    except Exception:  # observability must never break startup
+        logger.warning("aerospike-py set_log_level(%s) failed; Rust-core logs unrouted", name, exc_info=True)
+        return
+    logger.info("aerospike-py log level set to %s", name)
+
+
+def _init_aerospike_py_tracing() -> bool:
+    """Start aerospike-py's native OTLP span exporter. Idempotent.
+
+    Only meaningful when OTel is enabled — aerospike-py's ``init_tracing()``
+    honours ``OTEL_SDK_DISABLED`` itself, so this is reached only from the
+    enabled branch of :func:`setup_observability`. Set ``AEROSPIKE_PY_TRACING``
+    falsy to opt out (the per-operation spans can be high-volume).
+
+    Returns True if aerospike-py tracing was started, False if skipped/failed.
+    """
+    if os.getenv("AEROSPIKE_PY_TRACING", "true").strip().lower() in ("false", "0", "no", "off"):
+        logger.info("aerospike-py tracing skipped (AEROSPIKE_PY_TRACING is falsy)")
+        return False
+
+    # aerospike-py's Rust exporter speaks OTLP/gRPC only. If ACM itself is
+    # configured for HTTP, the endpoint must still accept gRPC (collector port
+    # 4317) or aerospike.<op> spans are silently dropped on export.
+    protocol = os.getenv("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc").strip().lower()
+    if protocol not in ("", "grpc"):
+        logger.warning(
+            "OTEL_EXPORTER_OTLP_PROTOCOL=%s but aerospike-py exports spans over OTLP/gRPC only; "
+            "point OTEL_EXPORTER_OTLP_ENDPOINT at a gRPC-capable collector port (4317) "
+            "or aerospike.<op> spans will be dropped",
+            protocol,
+        )
+
+    try:
+        aerospike_py.init_tracing()
+    except Exception:  # observability must never break startup
+        logger.warning("aerospike-py init_tracing() failed; Aerospike-operation spans disabled", exc_info=True)
+        return False
+    logger.info("aerospike-py OTLP span exporter started")
+    return True
+
+
+def shutdown_observability() -> None:
+    """Flush and stop the OTel pipeline. Call last in lifespan shutdown.
+
+    Both aerospike-py's Rust tracer and the Python OTel SDK providers buffer a
+    final batch of spans/metrics/logs. The Python SDK does register an atexit
+    flush, but shutting the providers down explicitly here exports that batch
+    deterministically — before the process tears down — rather than relying on
+    interpreter atexit ordering. Safe to call when observability was never
+    enabled: every step is a guarded no-op.
+    """
+    try:
+        dropped = aerospike_py.dropped_log_count()
+        if dropped:
+            logger.warning("aerospike-py dropped %d Rust-core log record(s) under GIL contention", dropped)
+        aerospike_py.shutdown_tracing()
+    except Exception:  # observability must never break shutdown
+        logger.warning("aerospike-py shutdown_tracing() failed", exc_info=True)
+
+    # Flush the Python SDK providers. shutdown() is idempotent in the SDK, so a
+    # later atexit call is harmless.
+    for name, provider in (
+        ("tracer", _tracer_provider),
+        ("meter", _meter_provider),
+        ("logger", _logger_provider),
+    ):
+        if provider is None:
+            continue
+        try:
+            provider.shutdown()
+        except Exception:  # observability must never break shutdown
+            logger.warning("OTel %s provider shutdown failed", name, exc_info=True)
+
+
 def setup_observability() -> bool:
     """Initialize OTel providers once. Idempotent.
 
     Returns True if observability was activated, False if disabled.
     """
-    global _initialized
+    global _initialized, _tracer_provider, _meter_provider, _logger_provider
     if _initialized:
         return True
     if os.getenv("OTEL_SDK_DISABLED", "true").lower() in ("true", "1", "yes"):
@@ -114,6 +250,11 @@ def setup_observability() -> bool:
     logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter_cls()))
     set_logger_provider(logger_provider)
 
+    # Retain the providers so shutdown_observability() can flush them explicitly.
+    _tracer_provider = tracer_provider
+    _meter_provider = meter_provider
+    _logger_provider = logger_provider
+
     # set_logging_format=False so we don't override the formatter that
     # logging_config.setup_logging configures. We only need the LogRecord
     # attribute injection (otelTraceID/otelSpanID).
@@ -125,6 +266,10 @@ def setup_observability() -> bool:
     # created afterwards. Without this, no HTTP request spans are produced and
     # asyncpg child spans float without an HTTP parent (see #264).
     FastAPIInstrumentor().instrument()
+
+    # Start aerospike-py's own OTLP span exporter so Aerospike-operation spans
+    # are actually emitted (the [otel] extra only wires context propagation).
+    _init_aerospike_py_tracing()
 
     _initialized = True
     logger.info("OpenTelemetry providers initialized")
