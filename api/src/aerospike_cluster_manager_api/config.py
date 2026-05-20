@@ -65,9 +65,7 @@ def _parse_str_list(raw: str | None) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
-CORS_ORIGINS: list[str] = [
-    o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3100").split(",") if o.strip()
-]
+CORS_ORIGINS: list[str] = _parse_str_list(os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3100"))
 
 HOST: str = os.getenv("HOST", "0.0.0.0")
 PORT: int = _get_int("PORT", 8000)
