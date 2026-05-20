@@ -31,7 +31,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_AW_GITHUB_TOKEN }}
         run: |
-          PR_REF=$(gh pr view ${{ env.PR_NUMBER }} --json headRefName --jq '.headRefName')
+          PR_REF=$(gh pr view ${{ env.PR_NUMBER }} --repo "${{ github.repository }}" --json headRefName --jq '.headRefName')
           echo "ref=$PR_REF" >> "$GITHUB_OUTPUT"
 
       - name: Checkout repository
@@ -54,7 +54,7 @@ jobs:
 
             ## Project Context
             - API: FastAPI (Python 3.13) in `api/`
-            - UI:  Next.js 16 (React 19) in `ui/`
+            - UI:  Next.js 14.2 (React 18.2) in `ui/`
 
             ## Task
             Review PR #${{ env.PR_NUMBER }} with auto-fix loop (max ${{ vars.CLAUDE_REVIEW_MAX_ITERATIONS }} iterations).

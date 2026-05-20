@@ -62,7 +62,7 @@ Next steps — open two terminals:
   # Terminal B — ui
   cd ui && npm run dev
 
-Then open http://localhost:3100/k8s/clusters
+Then open http://localhost:3100/clusters
 EOF
 fi
 

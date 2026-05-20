@@ -229,7 +229,7 @@ class EventCollector:
                         logger.warning("Failed to collect K8s events for %s/%s", ns, name, exc_info=True)
 
                     try:
-                        from aerospike_cluster_manager_api.routers.k8s_clusters import extract_health
+                        from aerospike_cluster_manager_api.services.k8s_service import extract_health
 
                         cr = await k8s_client.get_cluster(ns, name)
                         health = extract_health(cr)
