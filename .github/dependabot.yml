@@ -1,24 +1,40 @@
 version: 2
+# Major version bumps are intentionally excluded from every ecosystem below.
+# They routinely carry breaking changes that fail CI and need manual migration
+# (e.g. recharts 2->3, typescript 5->6, eslint 8->10, @vitejs/plugin-react 4->6).
+# Bump majors deliberately by hand, in a dedicated PR, with the migration done.
 updates:
   - package-ecosystem: "pip"
     directory: "/api"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "npm"
     directory: "/ui"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "monthly"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
