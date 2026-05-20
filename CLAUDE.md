@@ -42,7 +42,6 @@ npm run type-check       # TypeScript strict check
 npm run test             # Vitest unit tests
 npm run test:watch       # Vitest watch mode
 npm run test:coverage    # Vitest + coverage (v8)
-npm run test:e2e         # Playwright E2E tests
 ```
 
 ### Pre-commit

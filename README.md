@@ -108,7 +108,7 @@ podman compose -f compose.yaml up --build
 - API: http://localhost:8000
 - Aerospike: internal network only (use `podman exec -it aerospike-tools aql -h aerospike-node-1`)
 
-> Multi-cluster + Keycloak OIDC mode (`KEYCLOAK_ISSUER_URL`, `OIDC_AUDIENCE=acko-api`, JWKS-based JWT verification): see [ACKO multi-cluster docs](https://github.com/aerospike-ce-ecosystem/aerospike-ce-kubernetes-operator/blob/main/docs/multi-cluster-keycloak.md).
+> Multi-cluster + Keycloak OIDC mode (`OIDC_ISSUER_URL`, `OIDC_AUDIENCE=acko-api`, JWKS-based JWT verification): see [ACKO multi-cluster docs](https://github.com/aerospike-ce-ecosystem/aerospike-ce-kubernetes-operator/blob/main/docs/multi-cluster-keycloak.md).
 
 ### Local Development
 
@@ -123,7 +123,7 @@ uv run uvicorn aerospike_cluster_manager_api.main:app --reload
 ```bash
 cd ui
 npm install                        # Install dependencies
-npm run dev                        # http://localhost:3000
+npm run dev                        # http://localhost:3100
 ```
 
 > The UI dev server proxies `/api/*` requests to `http://localhost:8000`.
@@ -776,7 +776,6 @@ aerospike-cluster-manager/
 cd ui
 npm run test              # Unit tests (Vitest)
 npm run test:coverage     # With coverage report
-npm run test:e2e          # E2E tests (Playwright)
 ```
 
 ### Code Quality
@@ -805,7 +804,7 @@ All environment variables with their defaults and descriptions. See `api/src/aer
 
 | Variable | Default | Description |
 |---|---|---|
-| `AEROSPIKE_HOST` | `aerospike` | Aerospike server host (used in compose files for default connection) |
+| `AEROSPIKE_HOST` | `aerospike-node-1` | Aerospike server host (used in compose files for default connection) |
 | `AEROSPIKE_PORT` | `3000` | Aerospike service port |
 
 ### Database

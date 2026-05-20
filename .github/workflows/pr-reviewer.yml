@@ -54,7 +54,7 @@ jobs:
 
             ## Project Context
             - API: FastAPI (Python 3.13) in `api/`
-            - UI:  Next.js 16 (React 19) in `ui/`
+            - UI:  Next.js 14.2 (React 18.2) in `ui/`
 
             ## Task
             Review PR #${{ env.PR_NUMBER }} with auto-fix loop (max ${{ vars.CLAUDE_REVIEW_MAX_ITERATIONS }} iterations).

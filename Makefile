@@ -38,15 +38,13 @@ down:
 # Tests
 # ---------------------------------------------------------------------------
 
-test: test-api
+test: test-api test-ui
 
 test-api:
 	cd api && uv run pytest tests/ -v --tb=short
 
-# UI does not currently have a vitest setup; placeholder kept so future tests
-# can hook in without touching Makefile.
 test-ui:
-	@echo "ui/: no vitest tests configured yet"
+	cd ui && npm run test
 
 # ---------------------------------------------------------------------------
 # Linting & formatting
