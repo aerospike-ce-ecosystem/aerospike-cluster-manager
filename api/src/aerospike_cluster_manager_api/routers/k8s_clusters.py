@@ -240,12 +240,15 @@ async def list_k8s_clusters(
     # data leak. Mirrors the visibility rule used by
     # ``services/connections_service.list_connections``.
     connections = await db.get_all_connections()
-    try:
-        all_workspaces = await db.get_all_workspaces()
-    except db.DBNotInitialized:
-        all_workspaces = []
-    visible_ws_ids = {ws.id for ws in all_workspaces if ws.ownerId == caller_owner_id or ws.ownerId == SYSTEM_OWNER_ID}
-    connections = [c for c in connections if (c.workspaceId or DEFAULT_WORKSPACE_ID) in visible_ws_ids]
+    if caller_owner_id is not None:
+        try:
+            all_workspaces = await db.get_all_workspaces()
+        except db.DBNotInitialized:
+            all_workspaces = []
+        visible_ws_ids = {
+            ws.id for ws in all_workspaces if ws.ownerId == caller_owner_id or ws.ownerId == SYSTEM_OWNER_ID
+        }
+        connections = [c for c in connections if (c.workspaceId or DEFAULT_WORKSPACE_ID) in visible_ws_ids]
     conn_by_host: dict[str, str] = {}
     conn_by_name: dict[str, str] = {}
     for conn in connections:
