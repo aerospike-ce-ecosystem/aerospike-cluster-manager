@@ -10,7 +10,7 @@
 
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import { listWorkspaces } from "@/lib/api/workspaces"
 import { logFetchError } from "@/lib/api/log"
@@ -30,17 +30,31 @@ export function useWorkspaces(): UseWorkspacesResult {
   const [isLoading, setIsLoading] = useState(true)
   const rev = useDataRevisionStore((s) => s.workspacesRev)
 
+  // Hook-level mounted guard so the exposed refetch can drop late
+  // resolutions after unmount — a caller that triggers refetch and then
+  // navigates away would otherwise hit setState on an unmounted component.
+  // Mirrors the pattern in useConnections.
+  const isMountedRef = useRef(true)
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
   const refetch = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
       const result = await listWorkspaces()
+      if (!isMountedRef.current) return
       setData(result)
     } catch (err) {
       logFetchError("workspaces", err)
+      if (!isMountedRef.current) return
       setError(err instanceof Error ? err : new Error(String(err)))
     } finally {
-      setIsLoading(false)
+      if (isMountedRef.current) setIsLoading(false)
     }
   }, [])
 
@@ -49,17 +63,17 @@ export function useWorkspaces(): UseWorkspacesResult {
     ;(async () => {
       try {
         const result = await listWorkspaces()
-        if (!cancelled) {
+        if (!cancelled && isMountedRef.current) {
           setData(result)
           setError(null)
         }
       } catch (err) {
         logFetchError("workspaces", err)
-        if (!cancelled) {
+        if (!cancelled && isMountedRef.current) {
           setError(err instanceof Error ? err : new Error(String(err)))
         }
       } finally {
-        if (!cancelled) setIsLoading(false)
+        if (!cancelled && isMountedRef.current) setIsLoading(false)
       }
     })()
     return () => {

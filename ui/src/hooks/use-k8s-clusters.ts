@@ -31,17 +31,29 @@ export function useK8sClusters(
   const paramsKey = JSON.stringify(params ?? {})
   paramsRef.current = params
 
+  // Hook-level mounted guard so the exposed refetch can drop late
+  // resolutions after unmount. Mirrors the pattern in useConnections.
+  const isMountedRef = useRef(true)
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
   const refetch = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
       const result = await listK8sClusters(paramsRef.current)
+      if (!isMountedRef.current) return
       setData(result)
     } catch (err) {
       logFetchError("k8s-clusters", err)
+      if (!isMountedRef.current) return
       setError(err instanceof Error ? err : new Error(String(err)))
     } finally {
-      setIsLoading(false)
+      if (isMountedRef.current) setIsLoading(false)
     }
   }, [])
 
@@ -51,17 +63,17 @@ export function useK8sClusters(
     ;(async () => {
       try {
         const result = await listK8sClusters(paramsRef.current)
-        if (!cancelled) {
+        if (!cancelled && isMountedRef.current) {
           setData(result)
           setError(null)
         }
       } catch (err) {
         logFetchError("k8s-clusters", err)
-        if (!cancelled) {
+        if (!cancelled && isMountedRef.current) {
           setError(err instanceof Error ? err : new Error(String(err)))
         }
       } finally {
-        if (!cancelled) setIsLoading(false)
+        if (!cancelled && isMountedRef.current) setIsLoading(false)
       }
     })()
     return () => {
