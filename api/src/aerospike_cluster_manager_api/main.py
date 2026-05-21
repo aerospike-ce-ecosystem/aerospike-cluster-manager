@@ -23,7 +23,11 @@ from aerospike_cluster_manager_api.events.collector import collector
 from aerospike_cluster_manager_api.logging_config import setup_logging
 from aerospike_cluster_manager_api.middleware.oidc_auth import OIDCAuthMiddleware
 from aerospike_cluster_manager_api.middleware.trace_id import TraceIDMiddleware
-from aerospike_cluster_manager_api.observability import setup_observability
+from aerospike_cluster_manager_api.observability import (
+    apply_aerospike_py_log_level,
+    setup_observability,
+    shutdown_observability,
+)
 from aerospike_cluster_manager_api.rate_limit import limiter
 from aerospike_cluster_manager_api.routers import (
     admin_roles,
@@ -50,6 +54,9 @@ if config.K8S_MANAGEMENT_ENABLED:
 # is a no-op when OTEL_SDK_DISABLED=true.
 setup_observability()
 setup_logging(config.LOG_LEVEL, config.LOG_FORMAT)
+# Open aerospike-py's Rust-core log bridge now that the formatter is configured,
+# so client-core records share ACM's formatting and OTLP log pipeline.
+apply_aerospike_py_log_level()
 logger = logging.getLogger(__name__)
 
 
@@ -70,6 +77,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await client_manager.close_all()
     await db.close_db()
     logger.info("Shutdown complete")
+    # Flush the OTel pipeline last so the final spans/logs/metrics batch —
+    # including the line above — is exported before the exporters close.
+    shutdown_observability()
 
 
 app = FastAPI(
