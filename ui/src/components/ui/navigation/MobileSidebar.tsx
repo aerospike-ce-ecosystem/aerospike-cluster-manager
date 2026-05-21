@@ -10,13 +10,23 @@ import {
   DrawerTrigger,
 } from "@/components/Drawer"
 import { cx, focusRing } from "@/lib/utils"
-import { RiCodeSSlashLine, RiMenuLine, RiStackLine } from "@remixicon/react"
+import {
+  RiBookOpenLine,
+  RiCodeSSlashLine,
+  RiMenuLine,
+  RiStackLine,
+} from "@remixicon/react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { WorkspacesDropdown } from "./WorkspacesDropdown"
 
 const navigation = [
+  {
+    name: "Guides",
+    href: siteConfig.baseLinks.guides,
+    icon: RiBookOpenLine,
+  },
   { name: "Clusters", href: siteConfig.baseLinks.clusters, icon: RiStackLine },
   {
     name: "ACKO templates",

@@ -18,9 +18,11 @@ import { useUiStore } from "@/stores/ui-store"
 import * as AccordionPrimitives from "@radix-ui/react-accordion"
 import {
   RiArrowDownSLine,
+  RiBookOpenLine,
   RiBox3Line,
   RiCodeSSlashLine,
   RiDatabase2Line,
+  RiFileTextLine,
   RiFolder3Fill,
   RiStackLine,
 } from "@remixicon/react"
@@ -174,9 +176,28 @@ export function Sidebar() {
           <nav aria-label="core navigation" className="flex flex-1 flex-col">
             <Accordion
               type="multiple"
-              defaultValue={["clusters", "acko"]}
+              defaultValue={["guides", "clusters", "acko"]}
               className="flex flex-col gap-0.5"
             >
+              <GroupSection value="guides" icon={RiBookOpenLine} label="Guides">
+                <Link
+                  href={siteConfig.baseLinks.guides}
+                  className={cx(
+                    "flex items-center gap-x-2.5 rounded-md py-1.5 pl-2 pr-2 text-sm font-medium transition",
+                    isActive(siteConfig.baseLinks.guides)
+                      ? "text-indigo-600 dark:text-indigo-400"
+                      : "text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 hover:dark:bg-gray-900 hover:dark:text-gray-50",
+                    focusRing,
+                  )}
+                >
+                  <RiFileTextLine
+                    className="size-4 shrink-0"
+                    aria-hidden="true"
+                  />
+                  Operational guides
+                </Link>
+              </GroupSection>
+
               <GroupSection
                 value="clusters"
                 icon={RiDatabase2Line}

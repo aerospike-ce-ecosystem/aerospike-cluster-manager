@@ -18,10 +18,12 @@ from aerospike_cluster_manager_api import config
 from aerospike_cluster_manager_api.db._base import (
     build_merged_profile,
     build_merged_workspace,
+    row_to_guide,
     row_to_profile,
     row_to_workspace,
 )
 from aerospike_cluster_manager_api.models.connection import ConnectionProfile
+from aerospike_cluster_manager_api.models.guide import Guide
 from aerospike_cluster_manager_api.models.note import RecordNote, SetNote, StoredPkType
 from aerospike_cluster_manager_api.models.workspace import (
     DEFAULT_WORKSPACE_ID,
@@ -144,6 +146,24 @@ CREATE_RECORD_NOTES_INDEX_SQL = (
     "CREATE INDEX IF NOT EXISTS idx_record_notes_conn_ns_set ON record_notes(connection_id, namespace, set_name);"
 )
 
+# Operational guides — workspace-scoped Markdown policy documents. Identity is
+# (workspace_id, guide_type); the composite PK enforces "at most one guide of
+# each kind per workspace" and indexes the list_guides() scan for free.
+# FK CASCADE drops a workspace's guides when the workspace is deleted.
+CREATE_GUIDES_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS guides (
+    workspace_id TEXT NOT NULL,
+    guide_type   TEXT NOT NULL,
+    title        TEXT NOT NULL,
+    content      TEXT NOT NULL,
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL,
+    updated_by   TEXT,
+    PRIMARY KEY (workspace_id, guide_type),
+    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+);
+"""
+
 
 def _get_conn() -> aiosqlite.Connection:
     if _conn is None:
@@ -242,6 +262,7 @@ async def init_db() -> None:
         await conn.execute(CREATE_SET_NOTES_INDEX_SQL)
         await conn.execute(CREATE_RECORD_NOTES_TABLE_SQL)
         await conn.execute(CREATE_RECORD_NOTES_INDEX_SQL)
+        await conn.execute(CREATE_GUIDES_TABLE_SQL)
         await conn.commit()
         await _apply_migrations(conn)
         _conn = conn
@@ -850,3 +871,83 @@ async def batch_get_record_notes(
     async with conn.execute(sql, tuple(flat)) as cursor:
         rows = await cursor.fetchall()
     return {(row["pk_text"], row["pk_type"]): row["note"] for row in rows}
+
+
+# ---------------------------------------------------------------------------
+# Async public API — operational guides
+# ---------------------------------------------------------------------------
+
+
+async def upsert_guide(
+    workspace_id: str,
+    guide_type: str,
+    title: str,
+    content: str,
+    updated_by: str | None,
+) -> Guide:
+    """Insert or replace the guide identified by ``(workspace_id, guide_type)``.
+
+    Single-statement ``INSERT … ON CONFLICT … RETURNING *`` (SQLite 3.35+) so
+    the returned row is the row just written — no commit-then-SELECT race, the
+    same pattern :func:`upsert_set_note` uses. ``created_at`` is preserved on
+    update (only the INSERT branch sets it).
+    """
+    db_conn = _get_conn()
+    now = datetime.now(UTC).isoformat()
+    async with _get_write_lock():
+        try:
+            async with db_conn.execute(
+                """INSERT INTO guides (workspace_id, guide_type, title, content,
+                                       created_at, updated_at, updated_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(workspace_id, guide_type) DO UPDATE SET
+                       title = excluded.title,
+                       content = excluded.content,
+                       updated_at = excluded.updated_at,
+                       updated_by = excluded.updated_by
+                   RETURNING *""",
+                (workspace_id, guide_type, title, content, now, now, updated_by),
+            ) as cursor:
+                row = await cursor.fetchone()
+            await db_conn.commit()
+        except Exception:
+            await db_conn.rollback()
+            raise
+    if row is None:  # pragma: no cover — RETURNING * always emits on upsert
+        raise RuntimeError("guide vanished immediately after upsert")
+    return row_to_guide(row)
+
+
+async def get_guide(workspace_id: str, guide_type: str) -> Guide | None:
+    conn = _get_conn()
+    async with conn.execute(
+        "SELECT * FROM guides WHERE workspace_id = ? AND guide_type = ?",
+        (workspace_id, guide_type),
+    ) as cursor:
+        row = await cursor.fetchone()
+    return row_to_guide(row) if row else None
+
+
+async def list_guides(workspace_id: str) -> list[Guide]:
+    conn = _get_conn()
+    async with conn.execute(
+        "SELECT * FROM guides WHERE workspace_id = ? ORDER BY guide_type",
+        (workspace_id,),
+    ) as cursor:
+        rows = await cursor.fetchall()
+    return [row_to_guide(r) for r in rows]
+
+
+async def delete_guide(workspace_id: str, guide_type: str) -> bool:
+    db_conn = _get_conn()
+    async with _get_write_lock():
+        try:
+            cursor = await db_conn.execute(
+                "DELETE FROM guides WHERE workspace_id = ? AND guide_type = ?",
+                (workspace_id, guide_type),
+            )
+            await db_conn.commit()
+        except Exception:
+            await db_conn.rollback()
+            raise
+    return cursor.rowcount == 1
