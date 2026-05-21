@@ -6,7 +6,7 @@ This document describes how the Aerospike Cluster Manager integrates with the Ae
 
 The Aerospike Cluster Manager is a web-based GUI that provides two primary capabilities:
 
-1. **Aerospike Data Management** -- Direct interaction with Aerospike clusters (record browsing, queries, index management, ACL, UDFs, AQL terminal, metrics).
+1. **Aerospike Data Management** -- Direct interaction with Aerospike clusters (record browsing, queries, index management, ACL, UDFs, metrics).
 2. **Kubernetes Cluster Lifecycle Management** -- Full GUI for managing `AerospikeCluster` and `AerospikeClusterTemplate` custom resources deployed by the Aerospike CE Kubernetes Operator.
 
 ```
@@ -28,7 +28,6 @@ The Aerospike Cluster Manager is a web-based GUI that provides two primary capab
 |  |  indexes,     |  |  via asyncio.to_thread()    |  |
 |  |  admin,       |  |                             |  |
 |  |  udfs,        |  |                             |  |
-|  |  terminal,    |  |                             |  |
 |  |  metrics)     |  |                             |  |
 |  +-------+-------+  +-------------+---------------+  |
 |          |                        |                   |
@@ -67,7 +66,7 @@ The Aerospike Cluster Manager is a web-based GUI that provides two primary capab
 
 ### UI (Next.js 14)
 
-- **App Router** pages under `src/app/` for each feature area (`/browser`, `/cluster`, `/k8s/clusters`, `/k8s/templates`, `/admin`, `/indexes`, `/udfs`, `/terminal`, `/settings`).
+- **App Router** pages under `src/app/` for each feature area (`/browser`, `/cluster`, `/k8s/clusters`, `/k8s/templates`, `/admin`, `/indexes`, `/udfs`, `/settings`).
 - **Zustand stores** manage client-side state (`connection-store`, `k8s-cluster-store`, `browser-store`, `query-store`, `admin-store`, `metrics-store`, `filter-store`, `ui-store`, `toast-store`).
 - K8s features are conditionally shown based on whether `GET /api/k8s/clusters` returns a 404 (K8s disabled) or a successful response.
 - The **K8s cluster creation wizard** is a multi-step form with 11 steps (Step 0–10) covering creation mode, basic config, namespace/storage, monitoring, resources, ACL/security, rolling update, rack config, sidecars, advanced settings, and review.
@@ -251,7 +250,6 @@ The PostgreSQL connection pool is configurable via `DB_POOL_MIN_SIZE`, `DB_POOL_
 | Index Management | Yes | Yes |
 | Admin (Users/Roles) | Yes | Yes |
 | UDF Management | Yes | Yes |
-| AQL Terminal | Yes | Yes |
 | Sample Data Generator | Yes | Yes |
 | K8s Cluster Lifecycle | No | Yes |
 | K8s Template Management | No | Yes |

@@ -36,7 +36,7 @@ Common issues and their solutions when running the Aerospike Cluster Manager.
 
 1. **ACL enabled but credentials not provided** -- If the Aerospike server has security enabled, the connection profile must include valid username and password.
 
-2. **Namespace does not exist** -- Verify the target namespace exists on the server. Use the AQL terminal or cluster overview to check available namespaces.
+2. **Namespace does not exist** -- Verify the target namespace exists on the server. Use the cluster overview to check available namespaces.
 
 3. **Storage full** -- Check namespace memory/device usage in the cluster dashboard. Aerospike stops writes when high-water-mark thresholds are reached.
 

@@ -116,23 +116,6 @@ The UDFs page (`/udfs/{connId}`) manages Lua User-Defined Functions:
 - **Upload** -- Register a new Lua UDF module by pasting script content in the browser.
 - **Delete** -- Remove a registered UDF module by filename.
 
-## AQL Terminal
-
-The terminal page (`/terminal/{connId}`) provides a web-based AQL command execution interface. Supported commands:
-
-| Command | Description |
-|---------|-------------|
-| `show namespaces` | List all namespaces |
-| `show sets` | List all sets with object/tombstone counts |
-| `show bins` | List all bin names across namespaces |
-| `show indexes` / `show sindex` | List all secondary indexes |
-| `status` | Show server status |
-| `build` | Show server edition and build version |
-| `node` | Show current node identifier |
-| `statistics` | Show per-node statistics |
-
-Raw `asinfo` commands are also supported as a fallback for commands not covered above.
-
 ## Prometheus Metrics & Monitoring
 
 The cluster dashboard provides real-time metrics with historical time-series data:
@@ -150,7 +133,6 @@ Generate deterministic sample data for testing and demonstration:
 
 - **Record Generation** -- Create a configurable number of sample records in any namespace/set.
 - **Secondary Indexes** -- Optionally create indexes on sample data bins.
-- **UDF Registration** -- Optionally register bundled Lua UDF modules alongside sample data.
 
 ## Settings
 
@@ -159,7 +141,7 @@ The settings page (`/settings`) provides:
 - **Theme** -- Light, Dark, or System theme selection.
 - **CE Limitations** -- Reference card showing Aerospike Community Edition restrictions (max nodes, namespaces, data capacity, durable deletes, XDR).
 - **About** -- Application version and framework information.
-- **Keyboard Shortcuts** -- `Cmd+B` (toggle sidebar), `` Cmd+` `` (toggle terminal).
+- **Keyboard Shortcuts** -- `Cmd+B` (toggle sidebar).
 
 ## See also
 

@@ -64,13 +64,6 @@ export default function ClusterOverview({ params }: PageProps) {
           >
             Refresh
           </Button>
-          <Button
-            variant="primary"
-            disabled
-            title="Use the dedicated terminal page"
-          >
-            Open in AQL
-          </Button>
         </div>
       </header>
 
