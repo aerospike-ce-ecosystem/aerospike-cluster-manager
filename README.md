@@ -6,7 +6,7 @@
 
 A web-based GUI management tool for Aerospike Community Edition.
 
-Provides cluster monitoring, record browsing, query execution, index management, user/role management, UDF management, AQL terminal, and more.
+Provides cluster monitoring, record browsing, query execution, index management, user/role management, UDF management, and more.
 
 ## Overview
 
@@ -155,11 +155,10 @@ Related targets: `make kind-up/down/status`, `make acko-install/uninstall/verify
 - **Index Management** — Secondary index creation/deletion
 - **Admin** — User/role CRUD (with CE limitation indicators)
 - **UDF Management** — Lua UDF upload/delete
-- **AQL Terminal** — Web-based AQL command execution
 - **Prometheus Metrics** — Cluster metrics export
 - **OpenTelemetry Observability** — Traces, metrics, and logs via standard OTel SDK env vars; HTTP server, asyncpg, and aerospike-py spans auto-emit. See [docs/observability.md](docs/observability.md).
 - **Structured stdout logs ready for OTel Collector** — JSON output with `request_id` / `otelTraceID` / `otelSpanID` correlation fields. Optional rotating-file mirror (`LOG_FILE_PATH`) lets a pod-internal sidecar tail logs on a shared `emptyDir` and forward them via OTLP to an external OpenTelemetry Collector for vendor-specific routing (Datadog, Loki, Elasticsearch, Sentry, ...). See [docs/logging.md](docs/logging.md).
-- **Sample Data Generator** — Generate deterministic sample records with optional indexes and UDFs
+- **Sample Data Generator** — Generate deterministic sample records with optional secondary indexes
 - **K8s Cluster Management** — Full lifecycle management of Aerospike clusters on Kubernetes (see below)
   - ACL/Security configuration with role and user management via wizard
   - Rolling update strategy (batch size, max unavailable, PDB control)
@@ -253,20 +252,6 @@ Create and manage secondary indexes on Aerospike bins:
 - **Delete Index** — Remove indexes by name from a given namespace
 - **Index State** — View index status (ready, building, error) across all namespaces
 
-### AQL Terminal
-
-A web-based terminal for executing AQL-style commands against the connected cluster. Supported commands include:
-
-- `show namespaces` — List all namespaces
-- `show sets` — List all sets with object/tombstone counts
-- `show bins` — List all bin names across namespaces
-- `show indexes` / `show sindex` — List all secondary indexes
-- `status` — Show server status
-- `build` — Show server edition and build version
-- `node` — Show current node identifier
-- `statistics` — Show per-node statistics
-- Raw info commands are also supported as a fallback
-
 ### User & Role Management (ACL)
 
 Manage Aerospike access control lists (requires security to be enabled in `aerospike.conf`):
@@ -301,7 +286,6 @@ Generate deterministic sample data sets for testing and demonstration:
 
 - **Record Generation** — Create a configurable number of sample records in any namespace/set
 - **Secondary Indexes** — Optionally create indexes on sample data bins (numeric, string, geo2dsphere)
-- **UDF Registration** — Optionally register bundled Lua UDF modules alongside sample data
 
 ## Aerospike Data Management API Reference
 
@@ -377,12 +361,6 @@ All data management endpoints are prefixed with `/api` and require a `{conn_id}`
 | `POST` | `/api/udfs/{conn_id}` | Upload and register a Lua UDF module |
 | `DELETE` | `/api/udfs/{conn_id}?filename=...` | Delete a UDF module by filename |
 
-### Terminal API (`/api/terminal`)
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/api/terminal/{conn_id}` | Execute an AQL-style terminal command |
-
 ### Metrics API (`/api/metrics`)
 
 | Method | Endpoint | Description |
@@ -393,7 +371,7 @@ All data management endpoints are prefixed with `/api` and require a `{conn_id}`
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/api/sample-data/{conn_id}` | Generate sample records with optional indexes and UDFs |
+| `POST` | `/api/sample-data/{conn_id}` | Generate sample records with optional indexes |
 
 > Interactive API documentation (Swagger UI) is available at `http://localhost:8000/docs` when the api is running.
 

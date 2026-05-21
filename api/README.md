@@ -38,7 +38,6 @@ export AEROSPIKE_PORT=14790
 | `/api/admin/users/{conn_id}` | User management (Enterprise) |
 | `/api/admin/roles/{conn_id}` | Role management (Enterprise) |
 | `/api/udfs/{conn_id}` | UDF management |
-| `/api/terminal/{conn_id}` | AQL terminal |
 | `/api/metrics/{conn_id}` | Metrics & monitoring |
 | `/api/k8s/clusters` | K8s AerospikeCluster lifecycle (CRUD, scale, operations, HPA) |
 | `/api/k8s/templates` | K8s AerospikeClusterTemplate management |
