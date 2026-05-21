@@ -15,10 +15,12 @@ from aerospike_cluster_manager_api import config
 from aerospike_cluster_manager_api.db._base import (
     build_merged_profile,
     build_merged_workspace,
+    row_to_guide,
     row_to_profile,
     row_to_workspace,
 )
 from aerospike_cluster_manager_api.models.connection import ConnectionProfile
+from aerospike_cluster_manager_api.models.guide import Guide
 from aerospike_cluster_manager_api.models.note import RecordNote, SetNote, StoredPkType
 from aerospike_cluster_manager_api.models.workspace import (
     DEFAULT_WORKSPACE_ID,
@@ -102,6 +104,22 @@ CREATE TABLE IF NOT EXISTS record_notes (
 CREATE_RECORD_NOTES_INDEX_SQL = (
     "CREATE INDEX IF NOT EXISTS idx_record_notes_conn_ns_set ON record_notes(connection_id, namespace, set_name);"
 )
+
+# Operational guides — see _sqlite.py for the design rationale on the
+# composite (workspace_id, guide_type) PK. PG enforces FK CASCADE natively.
+CREATE_GUIDES_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS guides (
+    workspace_id TEXT NOT NULL,
+    guide_type   TEXT NOT NULL,
+    title        TEXT NOT NULL,
+    content      TEXT NOT NULL,
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL,
+    updated_by   TEXT,
+    PRIMARY KEY (workspace_id, guide_type),
+    FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+);
+"""
 
 
 def _get_pool() -> asyncpg.Pool:
@@ -224,6 +242,7 @@ async def init_db() -> None:
             await conn.execute(CREATE_SET_NOTES_INDEX_SQL)
             await conn.execute(CREATE_RECORD_NOTES_TABLE_SQL)
             await conn.execute(CREATE_RECORD_NOTES_INDEX_SQL)
+            await conn.execute(CREATE_GUIDES_TABLE_SQL)
             await _apply_migrations(conn)
         _pool = pool
     except Exception:
@@ -737,3 +756,72 @@ async def batch_get_record_notes(
         pk_types,
     )
     return {(row["pk_text"], row["pk_type"]): row["note"] for row in rows}
+
+
+# ---------------------------------------------------------------------------
+# Async public API — operational guides
+# ---------------------------------------------------------------------------
+
+
+async def upsert_guide(
+    workspace_id: str,
+    guide_type: str,
+    title: str,
+    content: str,
+    updated_by: str | None,
+) -> Guide:
+    """Insert or replace the guide identified by ``(workspace_id, guide_type)``.
+
+    ``created_at`` is preserved on update — only the INSERT branch sets it,
+    matching the SQLite backend.
+    """
+    pool = _get_pool()
+    now = datetime.now(UTC).isoformat()
+    row = await pool.fetchrow(
+        """INSERT INTO guides (workspace_id, guide_type, title, content,
+                               created_at, updated_at, updated_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (workspace_id, guide_type) DO UPDATE SET
+               title = EXCLUDED.title,
+               content = EXCLUDED.content,
+               updated_at = EXCLUDED.updated_at,
+               updated_by = EXCLUDED.updated_by
+           RETURNING *""",
+        workspace_id,
+        guide_type,
+        title,
+        content,
+        now,
+        now,
+        updated_by,
+    )
+    return row_to_guide(row)
+
+
+async def get_guide(workspace_id: str, guide_type: str) -> Guide | None:
+    pool = _get_pool()
+    row = await pool.fetchrow(
+        "SELECT * FROM guides WHERE workspace_id = $1 AND guide_type = $2",
+        workspace_id,
+        guide_type,
+    )
+    return row_to_guide(row) if row else None
+
+
+async def list_guides(workspace_id: str) -> list[Guide]:
+    pool = _get_pool()
+    rows = await pool.fetch(
+        "SELECT * FROM guides WHERE workspace_id = $1 ORDER BY guide_type",
+        workspace_id,
+    )
+    return [row_to_guide(r) for r in rows]
+
+
+async def delete_guide(workspace_id: str, guide_type: str) -> bool:
+    pool = _get_pool()
+    result = await pool.execute(
+        "DELETE FROM guides WHERE workspace_id = $1 AND guide_type = $2",
+        workspace_id,
+        guide_type,
+    )
+    return result == "DELETE 1"

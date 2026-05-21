@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from typing import Any, Protocol, runtime_checkable
 
 from aerospike_cluster_manager_api.models.connection import ConnectionProfile
+from aerospike_cluster_manager_api.models.guide import Guide
 from aerospike_cluster_manager_api.models.note import RecordNote, SetNote, StoredPkType
 from aerospike_cluster_manager_api.models.workspace import (
     DEFAULT_WORKSPACE_ID,
@@ -139,6 +140,24 @@ class DatabaseBackend(Protocol):
         """
         ...
 
+    # ----- Operational guides -----
+    async def upsert_guide(
+        self,
+        workspace_id: str,
+        guide_type: str,
+        title: str,
+        content: str,
+        updated_by: str | None,
+    ) -> Guide:
+        """Create or replace the guide identified by ``(workspace_id, guide_type)``."""
+        ...
+
+    async def get_guide(self, workspace_id: str, guide_type: str) -> Guide | None: ...
+
+    async def list_guides(self, workspace_id: str) -> list[Guide]: ...
+
+    async def delete_guide(self, workspace_id: str, guide_type: str) -> bool: ...
+
 
 def _decode_json_dict(value: object) -> dict[str, Any]:
     """Decode a JSON-encoded text column to ``dict[str, Any]``.
@@ -217,6 +236,25 @@ def row_to_workspace(row: Any) -> Workspace:
         ownerId=owner_id or SYSTEM_OWNER_ID,
         createdAt=row["created_at"],
         updatedAt=row["updated_at"],
+    )
+
+
+def row_to_guide(row: Any) -> Guide:
+    """Convert a database row (dict-like) to a Guide model.
+
+    Works with both ``sqlite3.Row`` and ``asyncpg.Record`` since both support
+    ``row["column_name"]`` access. The ``guides`` table always carries every
+    column, so unlike :func:`row_to_workspace` there is no defensive
+    ``key in row`` fallback here.
+    """
+    return Guide(
+        workspaceId=row["workspace_id"],
+        guideType=row["guide_type"],
+        title=row["title"],
+        content=row["content"],
+        createdAt=row["created_at"],
+        updatedAt=row["updated_at"],
+        updatedBy=row["updated_by"],
     )
 
 

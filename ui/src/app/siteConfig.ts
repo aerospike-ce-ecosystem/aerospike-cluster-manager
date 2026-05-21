@@ -5,6 +5,7 @@ export const siteConfig = {
   baseLinks: {
     home: "/",
     clusters: "/clusters",
+    guides: "/guides",
     ackoTemplates: "/acko/templates",
   },
 } as const

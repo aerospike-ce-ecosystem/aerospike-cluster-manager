@@ -15,6 +15,7 @@ from aerospike_cluster_manager_api.db._base import DatabaseBackend
 
 if TYPE_CHECKING:
     from aerospike_cluster_manager_api.models.connection import ConnectionProfile
+    from aerospike_cluster_manager_api.models.guide import Guide
     from aerospike_cluster_manager_api.models.note import RecordNote, SetNote, StoredPkType
     from aerospike_cluster_manager_api.models.workspace import Workspace
 
@@ -225,3 +226,30 @@ async def batch_get_record_notes(
     pks: list[tuple[str, StoredPkType]],
 ) -> dict[tuple[str, StoredPkType], str]:
     return await _get_backend().batch_get_record_notes(connection_id, namespace, set_name, pks)
+
+
+# ---------------------------------------------------------------------------
+# Operational guides
+# ---------------------------------------------------------------------------
+
+
+async def upsert_guide(
+    workspace_id: str,
+    guide_type: str,
+    title: str,
+    content: str,
+    updated_by: str | None,
+) -> Guide:
+    return await _get_backend().upsert_guide(workspace_id, guide_type, title, content, updated_by)
+
+
+async def get_guide(workspace_id: str, guide_type: str) -> Guide | None:
+    return await _get_backend().get_guide(workspace_id, guide_type)
+
+
+async def list_guides(workspace_id: str) -> list[Guide]:
+    return await _get_backend().list_guides(workspace_id)
+
+
+async def delete_guide(workspace_id: str, guide_type: str) -> bool:
+    return await _get_backend().delete_guide(workspace_id, guide_type)
