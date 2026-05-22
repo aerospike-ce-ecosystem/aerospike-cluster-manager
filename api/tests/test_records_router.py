@@ -533,6 +533,37 @@ class TestFilteredRecordsPkMatchMode:
         assert "value2" in resp.json()["detail"]
         mock_client.query.assert_not_called()
 
+    async def test_predicate_between_missing_value2_returns_400(self, client: AsyncClient):
+        """A ``predicate`` BETWEEN without value2 must map to 400 on the
+        filter endpoint. Before the fix this escaped as an opaque 500
+        because get_filtered_records did not catch the predicate
+        ValueError that build_predicate raises."""
+        mock_client = _build_query_mock()
+
+        with (
+            patch(
+                "aerospike_cluster_manager_api.dependencies.db.get_connection",
+                AsyncMock(return_value={"id": "conn-test"}),
+            ),
+            patch(
+                "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+                AsyncMock(return_value=mock_client),
+            ),
+        ):
+            resp = await client.post(
+                "/api/records/conn-test/filter",
+                json={
+                    "namespace": "test",
+                    "set": "demo",
+                    "predicate": {"bin": "age", "operator": "between", "value": 10},
+                },
+            )
+
+        assert resp.status_code == 400
+        assert "between" in resp.json()["detail"]
+        # The predicate is rejected before the scan executes.
+        mock_client.query.return_value.results.assert_not_called()
+
 
 class TestPutRecordRouter:
     """POST /records/{conn_id} — record write path."""

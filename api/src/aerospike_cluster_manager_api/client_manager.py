@@ -125,7 +125,20 @@ class ClientManager:
                 },
             ):
                 client = aerospike_py.AsyncClient(as_config)
-                await client.connect()
+                # ``connect()`` can raise *after* the constructor allocated
+                # Rust-side resources (a down/unreachable cluster, auth
+                # rejection, etc.). Without this guard each failed attempt
+                # leaks one half-open native client — and ``get_client``
+                # runs on every API request to that connection, so a single
+                # bad cluster bleeds native handles steadily. Close the
+                # half-open client before re-raising. Mirrors the fix in
+                # ``connections_service.test_connection``.
+                try:
+                    await client.connect()
+                except BaseException:
+                    with contextlib.suppress(AerospikeError, OSError):
+                        await client.close()
+                    raise
 
             old = self._clients.get(key)
             if old is not None:

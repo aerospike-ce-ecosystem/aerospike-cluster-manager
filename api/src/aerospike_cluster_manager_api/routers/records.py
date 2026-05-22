@@ -18,6 +18,7 @@ from aerospike_cluster_manager_api.models.record import (
     RecordListResponse,
     RecordWriteRequest,
 )
+from aerospike_cluster_manager_api.predicate import PredicateError
 from aerospike_cluster_manager_api.rate_limit import limiter
 from aerospike_cluster_manager_api.services import records_service
 from aerospike_cluster_manager_api.services.records_service import (
@@ -351,6 +352,12 @@ async def get_filtered_records(
     except InvalidFilterValueError as exc:
         # A missing / type-incompatible filter value is a client error —
         # 400, not the opaque 500 the raw int()/float() exception produced.
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except PredicateError as exc:
+        # A bad ``predicate`` (unknown operator, missing value/value2) is a
+        # client error. ``query.py`` already maps these via its generic
+        # ValueError catch; the filter endpoint must too — otherwise a bad
+        # predicate here escaped as an opaque 500.
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     models = [record_to_model(r) for r in result.records]

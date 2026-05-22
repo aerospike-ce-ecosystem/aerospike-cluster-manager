@@ -56,6 +56,53 @@ class TestClientManagerTendInterval:
             assert call_args["tend_interval"] == 1000
 
 
+class TestClientManagerConnectFailure:
+    """get_client must not leak a half-open native client when connect() raises."""
+
+    async def test_connect_failure_closes_half_open_client(self, mock_db_profile):
+        """connect() raising after the constructor allocated Rust-side
+        resources must trigger client.close() before the error propagates,
+        otherwise every failed attempt leaks one native handle."""
+        leaky_client = AsyncMock()
+        leaky_client.connect = AsyncMock(side_effect=ConnectionError("cluster unreachable"))
+
+        with patch(
+            "aerospike_cluster_manager_api.client_manager.aerospike_py.AsyncClient",
+            return_value=leaky_client,
+        ):
+            mgr = ClientManager()
+            with pytest.raises(ConnectionError, match="cluster unreachable"):
+                await mgr.get_client("conn-1")
+
+            # The half-open client must have been closed exactly once.
+            leaky_client.close.assert_awaited_once()
+            # Nothing got cached — a failed connect leaves no slot behind.
+            assert (None, "conn-1") not in mgr._clients
+
+    async def test_connect_failure_does_not_cache_client(self, mock_db_profile):
+        """After a failed connect, a subsequent successful get_client builds
+        a fresh client rather than handing back the dead one."""
+        good_client = AsyncMock()
+        good_client.is_connected.return_value = True
+
+        clients = [
+            AsyncMock(connect=AsyncMock(side_effect=ConnectionError("down"))),
+            good_client,
+        ]
+
+        with patch(
+            "aerospike_cluster_manager_api.client_manager.aerospike_py.AsyncClient",
+            side_effect=clients,
+        ):
+            mgr = ClientManager()
+            with pytest.raises(ConnectionError):
+                await mgr.get_client("conn-1")
+
+            result = await mgr.get_client("conn-1")
+            assert result is good_client
+            assert mgr._clients[(None, "conn-1")] is good_client
+
+
 class TestClientManagerConcurrency:
     async def test_concurrent_get_client_same_conn_creates_one_client(self, mock_db_profile):
         """Concurrent get_client() for the same conn_id should create only one AsyncClient."""

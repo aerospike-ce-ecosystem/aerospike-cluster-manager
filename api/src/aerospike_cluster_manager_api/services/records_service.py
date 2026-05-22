@@ -533,9 +533,9 @@ async def filter_records(client: aerospike_py.AsyncClient, body: FilteredQueryRe
     q = client.query(body.namespace, body.set or "")
 
     if body.predicate:
-        # build_predicate raises ``UnknownPredicateOperator`` (a ``ValueError``)
-        # for unknown operators — the HTTP router catches it via
-        # ``utils.build_predicate``'s adapter.
+        # build_predicate raises ``PredicateError`` (a ``ValueError``) for an
+        # unknown operator or a missing value/value2 — the records router
+        # catches it and maps it to HTTP 400.
         q.where(build_predicate(body.predicate))
 
     if body.select_bins:
