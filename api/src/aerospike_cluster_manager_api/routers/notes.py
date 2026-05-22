@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from pydantic import BaseModel
 from starlette.responses import Response
 
@@ -34,6 +34,7 @@ from aerospike_cluster_manager_api.models.note import (
 )
 from aerospike_cluster_manager_api.models.workspace import SYSTEM_OWNER_ID
 from aerospike_cluster_manager_api.pk import resolve_pk
+from aerospike_cluster_manager_api.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +105,9 @@ class SetNotesListResponse(BaseModel):
     summary="Upsert set note",
     description="Create or update an operator note attached to a set.",
 )
+@limiter.limit("20/minute")
 async def upsert_set_note(
+    request: Request,
     body: UpsertSetNoteRequest,
     caller_owner_id: CallerOwnerId,
     conn_id: str = Depends(_assert_caller_owns_connection),
@@ -127,7 +130,9 @@ async def upsert_set_note(
     summary="Delete set note",
     description="Remove the operator note attached to a set. No-op when no note exists.",
 )
+@limiter.limit("20/minute")
 async def delete_set_note(
+    request: Request,
     conn_id: str = Depends(_assert_caller_owns_connection),
     namespace: str = Path(..., min_length=1, max_length=31),
     set_name: str = Path(..., min_length=1, max_length=63),
@@ -163,7 +168,9 @@ class RecordNotesListResponse(BaseModel):
     summary="Upsert record note",
     description="Create or update an operator note on a single record.",
 )
+@limiter.limit("20/minute")
 async def upsert_record_note(
+    request: Request,
     body: UpsertRecordNoteRequest,
     caller_owner_id: CallerOwnerId,
     conn_id: str = Depends(_assert_caller_owns_connection),
@@ -192,7 +199,9 @@ async def upsert_record_note(
     summary="Delete record note",
     description="Remove the operator note on a single record. No-op when none exists.",
 )
+@limiter.limit("20/minute")
 async def delete_record_note(
+    request: Request,
     conn_id: str = Depends(_assert_caller_owns_connection),
     namespace: str = Path(..., min_length=1, max_length=31),
     set_name: str = Path(..., min_length=1, max_length=63),

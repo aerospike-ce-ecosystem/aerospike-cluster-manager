@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from aerospike_cluster_manager_api.dependencies import AerospikeClient, VerifiedConnId
 from aerospike_cluster_manager_api.info_verbs import InfoVerbNotAllowed, assert_read_only
@@ -14,6 +14,7 @@ from aerospike_cluster_manager_api.models.cluster import (
     InfoCommandResult,
 )
 from aerospike_cluster_manager_api.models.common import MessageResponse
+from aerospike_cluster_manager_api.rate_limit import limiter
 from aerospike_cluster_manager_api.services import clusters_service
 from aerospike_cluster_manager_api.services.clusters_service import (
     NamespaceConfigError,
@@ -43,7 +44,10 @@ async def get_cluster(client: AerospikeClient, conn_id: VerifiedConnId) -> Clust
     summary="Configure namespace",
     description="Update runtime-tunable parameters of an existing Aerospike namespace.",
 )
-async def configure_namespace(body: CreateNamespaceRequest, client: AerospikeClient) -> MessageResponse:
+@limiter.limit("10/minute")
+async def configure_namespace(
+    request: Request, body: CreateNamespaceRequest, client: AerospikeClient
+) -> MessageResponse:
     """Update runtime-tunable parameters of an existing Aerospike namespace."""
     try:
         message = await clusters_service.configure_namespace(client, body)

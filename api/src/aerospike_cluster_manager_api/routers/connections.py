@@ -90,7 +90,9 @@ async def get_connection(
 @router.put(
     "/{conn_id}", summary="Update connection", description="Update an existing connection profile with new settings."
 )
+@limiter.limit("10/minute")
 async def update_connection(
+    request: Request,
     body: UpdateConnectionRequest,
     caller_owner_id: CallerOwnerId,
     conn_id: str = Depends(_get_verified_connection),
