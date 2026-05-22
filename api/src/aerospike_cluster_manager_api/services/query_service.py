@@ -142,9 +142,9 @@ async def execute_query(client: aerospike_py.AsyncClient, body: QueryRequest) ->
     # ---- Scan branch ------------------------------------------------------
     q = client.query(body.namespace, body.set or "")
     if body.predicate:
-        # build_predicate raises ``UnknownPredicateOperator`` (a ``ValueError``)
-        # for unknown operators — the HTTP router catches it via
-        # ``utils.build_predicate``'s adapter.
+        # build_predicate raises ``PredicateError`` (a ``ValueError``) for an
+        # unknown operator or a missing value/value2 — the query router's
+        # generic ``ValueError`` catch maps it to HTTP 400.
         q.where(build_predicate(body.predicate))
     if body.selectBins:
         q.select(*body.selectBins)

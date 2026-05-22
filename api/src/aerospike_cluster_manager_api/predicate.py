@@ -28,7 +28,16 @@ if TYPE_CHECKING:
     from aerospike_cluster_manager_api.models.query import QueryPredicate
 
 
-class UnknownPredicateOperator(ValueError):
+class PredicateError(ValueError):
+    """Base class for all client-side predicate-construction failures.
+
+    A :class:`ValueError` subclass so HTTP-boundary callers that already
+    catch ``ValueError`` keep working; callers that want to handle every
+    predicate failure in one ``except`` can target this base directly.
+    """
+
+
+class UnknownPredicateOperator(PredicateError):
     """Raised when a :class:`QueryPredicate` carries an unrecognised operator.
 
     The pydantic model enumerates the supported operators in its
@@ -42,6 +51,19 @@ class UnknownPredicateOperator(ValueError):
         self.operator = operator
 
 
+class InvalidPredicateValue(PredicateError):
+    """Raised when a :class:`QueryPredicate` is missing a required value.
+
+    ``QueryPredicate.value`` is typed ``BinValue`` (``BinValue`` is
+    ``Any``) and ``value2`` defaults to ``None``, so pydantic accepts a
+    request that omits a value entirely or supplies a ``between`` without
+    an upper bound. The aerospike-py ``predicates.*`` builders then choke
+    on the ``None`` and the raw ``TypeError`` escaped to the generic 500
+    handler. The HTTP boundary catches this :class:`ValueError` subclass
+    and maps it to a 400 instead.
+    """
+
+
 def build_predicate(pred: QueryPredicate) -> tuple[Any, ...]:
     """Convert a :class:`QueryPredicate` into an Aerospike predicate tuple.
 
@@ -52,13 +74,23 @@ def build_predicate(pred: QueryPredicate) -> tuple[Any, ...]:
         UnknownPredicateOperator: ``pred.operator`` is not in the dispatch
             table. The HTTP boundary translates this to status 400 via
             :func:`utils.build_predicate`.
+        InvalidPredicateValue: a required ``value`` (or ``value2`` for
+            ``between``) is missing. Also a :class:`ValueError`, so the
+            HTTP boundary maps it to 400.
     """
     from aerospike_py import INDEX_TYPE_LIST, predicates
 
     op = pred.operator
+    # Every supported operator needs a non-None ``value``; ``between`` also
+    # needs a non-None ``value2``. Validate here so a missing bound surfaces
+    # as a clean 400 instead of an opaque 500 from the aerospike-py builder.
+    if pred.value is None:
+        raise InvalidPredicateValue(f"predicate operator {op!r} requires a 'value'")
     if op == "equals":
         return predicates.equals(pred.bin, pred.value)
     if op == "between":
+        if pred.value2 is None:
+            raise InvalidPredicateValue("predicate operator 'between' requires both 'value' and 'value2'")
         return predicates.between(pred.bin, pred.value, pred.value2)
     if op == "contains":
         return predicates.contains(pred.bin, INDEX_TYPE_LIST, pred.value)
