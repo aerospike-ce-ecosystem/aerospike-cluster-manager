@@ -373,6 +373,58 @@ async def test_unknown_kid_back_off_prevents_amplification():
 
 
 @pytest.mark.asyncio
+async def test_jwks_fetch_network_error_yields_401_not_500():
+    """A transient JWKS-endpoint network outage must be rejected cleanly (401)
+    rather than escaping as an unhandled HTTP 500 on every request."""
+    priv, jwk = _rsa_keypair()
+    token = _sign(priv, jwk["kid"])
+
+    def _failing_handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("JWKS endpoint unreachable")
+
+    transport = httpx.MockTransport(_failing_handler)
+    failing_client = httpx.AsyncClient(transport=transport, timeout=5.0)
+    app = _build_app(http_client=failing_client)
+    asgi = ASGITransport(app=app)
+    async with AsyncClient(transport=asgi, base_url="http://test") as ac:
+        resp = await ac.get("/api/me", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code in (401, 503)
+    assert resp.status_code != 500
+    assert "detail" in resp.json()
+
+
+@pytest.mark.asyncio
+async def test_jwks_fetch_non_200_yields_401_not_500():
+    """A non-200 response from the JWKS endpoint (e.g. 503 from the IdP) must
+    be rejected cleanly rather than crashing the request with an HTTP 500."""
+    priv, jwk = _rsa_keypair()
+    token = _sign(priv, jwk["kid"])
+
+    def _error_handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.endswith("/.well-known/openid-configuration"):
+            return httpx.Response(
+                200,
+                json={
+                    "issuer": ISSUER,
+                    "jwks_uri": f"{ISSUER}/protocol/openid-connect/certs",
+                },
+            )
+        # JWKS endpoint itself is down.
+        return httpx.Response(503, text="service unavailable")
+
+    transport = httpx.MockTransport(_error_handler)
+    failing_client = httpx.AsyncClient(transport=transport, timeout=5.0)
+    app = _build_app(http_client=failing_client)
+    asgi = ASGITransport(app=app)
+    async with AsyncClient(transport=asgi, base_url="http://test") as ac:
+        resp = await ac.get("/api/me", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code in (401, 503)
+    assert resp.status_code != 500
+    assert "detail" in resp.json()
+
+
+@pytest.mark.asyncio
 async def test_disabled_middleware_is_passthrough():
     mock = _JWKSMock([])
     app = _build_app(enabled=False, http_client=_client_for(mock))
