@@ -9,14 +9,9 @@ Design rules:
 * Must not import ``fastapi`` or any HTTP-shaping libraries — service
   callers (``query_service``, ``records_service``) share the same code.
 * Unknown operators surface as :class:`UnknownPredicateOperator` (a
-  :class:`ValueError` subclass). HTTP-boundary callers (``utils.py``)
-  catch it and re-raise as :class:`fastapi.HTTPException` with status
-  400.
-
-Previously :func:`utils.build_predicate` raised
-:class:`fastapi.HTTPException` directly, leaking HTTP coupling into the
-service layer (services imported it locally to dodge the issue). This
-module fixes the leak.
+  :class:`ValueError` subclass). The records and query routers catch
+  ``PredicateError`` / ``ValueError`` at the HTTP boundary and re-raise
+  as :class:`fastapi.HTTPException` with status 400.
 """
 
 from __future__ import annotations
@@ -72,8 +67,8 @@ def build_predicate(pred: QueryPredicate) -> tuple[Any, ...]:
 
     Raises:
         UnknownPredicateOperator: ``pred.operator`` is not in the dispatch
-            table. The HTTP boundary translates this to status 400 via
-            :func:`utils.build_predicate`.
+            table. The records / query routers translate this to status
+            400 at the HTTP boundary.
         InvalidPredicateValue: a required ``value`` (or ``value2`` for
             ``between``) is missing. Also a :class:`ValueError`, so the
             HTTP boundary maps it to 400.
