@@ -320,6 +320,28 @@ class TestTestConnection:
         assert result.success is False
         assert result.message == "connection failed"
 
+    async def test_closes_client_when_connect_raises(self, init_test_db):
+        """The constructed AsyncClient must be closed even when connect() fails.
+
+        connect() can raise *after* the constructor allocated Rust-side
+        resources. A close confined to a post-connect block would then leak
+        one half-open native client per failed probe.
+        """
+        mock_client = AsyncMock()
+        mock_client.connect = AsyncMock(side_effect=Exception("Connection refused"))
+        mock_client.is_connected = lambda: False
+        mock_client.close = AsyncMock()
+
+        with patch(
+            "aerospike_cluster_manager_api.services.connections_service.aerospike_py.AsyncClient",
+            return_value=mock_client,
+        ):
+            result = await connections_service.test_connection(_TestConnectionRequest(hosts=["unreachable"], port=3000))
+
+        assert result.success is False
+        assert result.message == "connection failed"
+        mock_client.close.assert_awaited_once()
+
     async def test_passes_credentials(self, init_test_db):
         mock_client = AsyncMock()
         mock_client.connect = AsyncMock()

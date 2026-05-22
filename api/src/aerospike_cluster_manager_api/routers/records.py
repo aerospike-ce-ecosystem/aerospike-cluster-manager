@@ -21,6 +21,7 @@ from aerospike_cluster_manager_api.models.record import (
 from aerospike_cluster_manager_api.rate_limit import limiter
 from aerospike_cluster_manager_api.services import records_service
 from aerospike_cluster_manager_api.services.records_service import (
+    InvalidFilterValueError,
     InvalidPkPattern,
     PrimaryKeyMissing,
     SetRequiredForPkLookup,
@@ -346,6 +347,10 @@ async def get_filtered_records(
     except SetRequiredForPkLookup as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except InvalidPkPattern as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except InvalidFilterValueError as exc:
+        # A missing / type-incompatible filter value is a client error —
+        # 400, not the opaque 500 the raw int()/float() exception produced.
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     models = [record_to_model(r) for r in result.records]

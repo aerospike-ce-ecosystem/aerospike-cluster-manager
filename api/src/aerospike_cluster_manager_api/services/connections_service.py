@@ -371,8 +371,12 @@ async def test_connection(req: TestConnectionRequest) -> TestConnectionResult:
             config["password"] = req.password
 
         client = aerospike_py.AsyncClient(config)
-        await client.connect()
+        # close() must cover the whole client lifetime: ``connect()`` can
+        # raise *after* the constructor allocated Rust-side resources, and a
+        # close confined to a post-connect block would then leak the
+        # half-open client (one orphaned native handle per failed probe).
         try:
+            await client.connect()
             if not client.is_connected():
                 return TestConnectionResult(success=False, message="Failed to connect")
             return TestConnectionResult(success=True, message="Connected successfully")

@@ -41,6 +41,7 @@ from aerospike_cluster_manager_api.constants import (
     info_sets,
 )
 from aerospike_cluster_manager_api.expression_builder import (
+    InvalidFilterValueError,
     InvalidPkPatternError,
     build_expression,
     build_pk_filter_expression,
@@ -70,6 +71,7 @@ logger = logging.getLogger(__name__)
 # :mod:`aerospike_cluster_manager_api.pk`.
 __all__ = [
     "FilterRecordsResult",
+    "InvalidFilterValueError",
     "InvalidPkPattern",
     "ListRecordsResult",
     "PkType",
