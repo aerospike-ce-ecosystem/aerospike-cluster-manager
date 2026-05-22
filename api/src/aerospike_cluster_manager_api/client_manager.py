@@ -144,6 +144,14 @@ class ClientManager:
             if old is not None:
                 with contextlib.suppress(AerospikeError, OSError):
                     await old.close()
+                # The stale client was counted +1 when it was first built.
+                # Closing it without the matching -1 makes the gauge over-
+                # count: a connection that flaps and reconnects climbs the
+                # ``active_aerospike_connections`` metric by one on every
+                # rebuild. Decrement here so the net effect of replacing a
+                # stale client is zero, and the +1 below reflects only the
+                # genuinely new native handle.
+                self._instruments["active_aerospike_connections"].add(-1, attributes=self._metric_attrs(conn_id))
             self._clients[key] = client
             self._instruments["active_aerospike_connections"].add(1, attributes=self._metric_attrs(conn_id))
 

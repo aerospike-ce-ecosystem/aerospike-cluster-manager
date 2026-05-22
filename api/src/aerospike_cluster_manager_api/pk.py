@@ -11,12 +11,12 @@ Design rules:
   libraries — the same code is reused by service-layer callers (which
   raise domain exceptions) and by any non-HTTP caller.
 * Domain failures surface as ``ValueError`` subclasses defined here.
-  HTTP-boundary callers (``utils.py``) catch them and re-raise as
-  :class:`fastapi.HTTPException` with the right status code.
+  HTTP-boundary callers (the records / query routers) catch them and
+  re-raise as :class:`fastapi.HTTPException` with the right status code.
 
-Previously these helpers were duplicated three times — ``services.query_service``,
-``services.records_service``, and ``utils`` each carried a near byte-identical
-copy, plus their own ``PkType`` ``Literal``. This module collapses them.
+Previously these helpers were duplicated across ``services.query_service``
+and ``services.records_service``, each carrying a near byte-identical copy
+plus its own ``PkType`` ``Literal``. This module collapses them.
 """
 
 from __future__ import annotations

@@ -197,3 +197,35 @@ class TestRecordToModel:
         assert data["key"]["digest"] == "abcd"
         assert data["meta"]["generation"] == 2
         assert data["bins"]["name"] == "Bob"
+
+    def test_never_expiring_record_ttl_minus_one(self):
+        """A never-expiring record (ttl=-1) must not 500 the read path.
+
+        Aerospike reports a record written with the namespace's "no expiry"
+        default as the negative TTL sentinel ``-1``. ``RecordMeta.ttl`` is
+        constrained ``ge=0``, so a raw ``-1`` would fail Pydantic validation
+        and surface as an opaque HTTP 500. The converter normalizes it to
+        ``0`` (the wire contract's existing "no expiry" value)."""
+        rec = Record(key=("test", "myset", "pk-1", b"\x00"), meta={"gen": 3, "ttl": -1}, bins={"x": 1})
+
+        record = record_to_model(rec)
+
+        assert record.meta.ttl == 0
+        assert record.meta.generation == 3
+
+    def test_dont_update_ttl_sentinel_minus_two(self):
+        """The ``-2`` ("don't update TTL") sentinel is also normalized to 0."""
+        rec = Record(key=("test", "myset", "pk-1", b"\x00"), meta={"gen": 1, "ttl": -2}, bins={"x": 1})
+
+        record = record_to_model(rec)
+
+        assert record.meta.ttl == 0
+
+    def test_negative_generation_clamped(self):
+        """A malformed negative generation is clamped to 0 instead of 500ing."""
+        rec = Record(key=("test", "myset", "pk-1", b"\x00"), meta={"gen": -5, "ttl": 100}, bins={"x": 1})
+
+        record = record_to_model(rec)
+
+        assert record.meta.generation == 0
+        assert record.meta.ttl == 100

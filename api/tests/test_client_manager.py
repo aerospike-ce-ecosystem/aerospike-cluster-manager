@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -316,3 +316,71 @@ class TestClientManagerSessionKeying:
         mgr = ClientManager()
         with pytest.raises(ValueError, match="non-None session id"):
             await mgr.close_session(None)  # type: ignore[arg-type]
+
+
+class TestClientManagerConnectionGauge:
+    """The ``active_aerospike_connections`` gauge must reflect reality.
+
+    Replacing a stale (disconnected) cached client used to add +1 to the
+    gauge without the matching -1 for the closed handle, so a flapping
+    connection's gauge climbed by one on every reconnect.
+    """
+
+    @staticmethod
+    def _net_delta(mgr: ClientManager) -> int:
+        """Sum of every value passed to the connection-gauge ``add``."""
+        instrument = mgr._instruments["active_aerospike_connections"]
+        return sum(call.args[0] for call in instrument.add.call_args_list)
+
+    async def test_replacing_stale_client_keeps_gauge_balanced(self, mock_db_profile):
+        """A reconnect after a dropped connection must net to +1, not +2.
+
+        First get_client builds + caches a client and adds +1. The cached
+        client then reports is_connected()=False (the cluster dropped it).
+        The next get_client closes the stale client and builds a fresh one
+        — the gauge must end at +1 total (one live native handle), not +2.
+        """
+        stale_client = AsyncMock(name="stale")
+        # ``is_connected`` is called synchronously (no await) in the manager,
+        # so it must be a plain MagicMock — an AsyncMock would return a
+        # truthy coroutine and the stale client would never be rebuilt.
+        # The first get_client builds against an empty cache (is_connected
+        # is never consulted). The second get_client finds the cached stale
+        # client and consults is_connected once → False forces a rebuild.
+        stale_client.is_connected = MagicMock(return_value=False)
+        fresh_client = AsyncMock(name="fresh")
+        fresh_client.is_connected = MagicMock(return_value=True)
+
+        with patch(
+            "aerospike_cluster_manager_api.client_manager.aerospike_py.AsyncClient",
+            side_effect=[stale_client, fresh_client],
+        ):
+            mgr = ClientManager()
+            mgr._instruments["active_aerospike_connections"] = MagicMock()
+
+            first = await mgr.get_client("conn-1")
+            assert first is stale_client
+
+            second = await mgr.get_client("conn-1")
+            assert second is fresh_client
+
+            # The stale client must have been closed exactly once.
+            stale_client.close.assert_awaited_once()
+            # Net gauge delta: +1 (build) -1 (close stale) +1 (build) = +1.
+            assert self._net_delta(mgr) == 1
+
+    async def test_single_build_adds_one(self, mock_db_profile):
+        """A plain build with no stale predecessor nets to exactly +1."""
+        mock_client = AsyncMock()
+        mock_client.is_connected = MagicMock(return_value=True)
+
+        with patch(
+            "aerospike_cluster_manager_api.client_manager.aerospike_py.AsyncClient",
+            return_value=mock_client,
+        ):
+            mgr = ClientManager()
+            mgr._instruments["active_aerospike_connections"] = MagicMock()
+
+            await mgr.get_client("conn-1")
+
+            assert self._net_delta(mgr) == 1

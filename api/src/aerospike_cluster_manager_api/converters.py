@@ -47,6 +47,20 @@ def record_to_model(rec: Record) -> AerospikeRecord:
         gen = 0
         ttl = 0
 
+    # Aerospike reports a never-expiring record (one written with the
+    # namespace default of "no expiry") as a negative TTL sentinel — the
+    # native client surfaces ``-1`` for "live forever" and ``-2`` for
+    # "don't update TTL". ``RecordMeta.ttl`` is constrained ``ge=0``, so a
+    # raw negative TTL would fail Pydantic validation and turn a perfectly
+    # valid read into an opaque HTTP 500. Normalize any negative sentinel
+    # to ``0``, which is the wire contract's existing "no expiry" value.
+    if isinstance(ttl, int) and ttl < 0:
+        ttl = 0
+    # Generation is likewise constrained ``ge=0``; clamp defensively so a
+    # malformed/uninitialised meta can never 500 the read path.
+    if isinstance(gen, int) and gen < 0:
+        gen = 0
+
     return AerospikeRecord(
         key=RecordKey(
             namespace=ns,
