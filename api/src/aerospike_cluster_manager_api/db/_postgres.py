@@ -191,37 +191,44 @@ async def _apply_migrations(conn: asyncpg.Connection | asyncpg.pool.PoolConnecti
 
         await conn.execute("ALTER TABLE connections ADD COLUMN IF NOT EXISTS labels JSONB")
         await conn.execute("ALTER TABLE connections ADD COLUMN IF NOT EXISTS workspace_id TEXT")
+
+        # workspaces.owner_id (issue #307 — Phase 0b). On PG the
+        # ``IF NOT EXISTS`` clause makes the migration idempotent and
+        # metadata-only on PG ≥ 11 (no full table rewrite). Existing rows
+        # backfill via the column ``DEFAULT 'system'``; the workspace ACL
+        # treats that sentinel as accessible to any authenticated caller
+        # (legacy single-tenant semantics).
+        #
+        # This block — owner_id add, default-workspace seed, and the
+        # connections.workspace_id backfill — MUST stay inside the advisory
+        # lock. The backfill writes the FK target (workspace_id) that the
+        # default-workspace INSERT just created; on a multi-replica rolling
+        # deploy, running it after pg_advisory_unlock lets a second replica
+        # interleave and violate the FK introduced in the same migration.
+        await conn.execute("ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS owner_id TEXT NOT NULL DEFAULT 'system'")
+
+        # Seed the built-in default workspace and back-fill any pre-existing
+        # connections. Idempotent: ON CONFLICT DO NOTHING / WHERE workspace_id IS NULL.
+        now = datetime.now(UTC).isoformat()
+        await conn.execute(
+            """INSERT INTO workspaces
+                   (id, name, color, description, is_default, owner_id, created_at, updated_at)
+               VALUES ($1, $2, $3, $4, TRUE, $5, $6, $7)
+               ON CONFLICT (id) DO NOTHING""",
+            DEFAULT_WORKSPACE_ID,
+            "Default",
+            "#6366F1",
+            "Default workspace",
+            SYSTEM_OWNER_ID,
+            now,
+            now,
+        )
+        await conn.execute(
+            "UPDATE connections SET workspace_id = $1 WHERE workspace_id IS NULL",
+            DEFAULT_WORKSPACE_ID,
+        )
     finally:
         await conn.execute("SELECT pg_advisory_unlock($1)", _MIGRATION_ADVISORY_LOCK_KEY)
-
-    # workspaces.owner_id (issue #307 — Phase 0b). On PG the
-    # ``IF NOT EXISTS`` clause makes the migration idempotent and
-    # metadata-only on PG ≥ 11 (no full table rewrite). Existing rows
-    # backfill via the column ``DEFAULT 'system'``; the workspace ACL
-    # treats that sentinel as accessible to any authenticated caller
-    # (legacy single-tenant semantics).
-    await conn.execute("ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS owner_id TEXT NOT NULL DEFAULT 'system'")
-
-    # Seed the built-in default workspace and back-fill any pre-existing
-    # connections. Idempotent: ON CONFLICT DO NOTHING / WHERE workspace_id IS NULL.
-    now = datetime.now(UTC).isoformat()
-    await conn.execute(
-        """INSERT INTO workspaces
-               (id, name, color, description, is_default, owner_id, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, TRUE, $5, $6, $7)
-           ON CONFLICT (id) DO NOTHING""",
-        DEFAULT_WORKSPACE_ID,
-        "Default",
-        "#6366F1",
-        "Default workspace",
-        SYSTEM_OWNER_ID,
-        now,
-        now,
-    )
-    await conn.execute(
-        "UPDATE connections SET workspace_id = $1 WHERE workspace_id IS NULL",
-        DEFAULT_WORKSPACE_ID,
-    )
 
 
 async def init_db() -> None:

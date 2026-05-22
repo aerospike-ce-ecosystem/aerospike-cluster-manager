@@ -82,10 +82,10 @@ async def client(init_test_db):
 
 
 @pytest.fixture(autouse=True)
-def _clear_cache():
-    info_cache.clear()
+async def _clear_cache():
+    await info_cache.clear()
     yield
-    info_cache.clear()
+    await info_cache.clear()
 
 
 class TestExecuteInfoSingleNodeReadOnly:

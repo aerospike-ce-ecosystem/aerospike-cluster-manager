@@ -305,3 +305,85 @@ class TestWorkspaceOwnerIdMigration:
         fetched = await db.get_workspace("ws-team-real")
         assert fetched is not None
         assert fetched.ownerId == "user-real"
+
+
+class TestPartialMigrationResume:
+    """A process killed mid-``_apply_migrations`` must resume cleanly.
+
+    ``_apply_migrations`` re-queries ``PRAGMA table_info`` before every step,
+    so a DB where only some of the post-schema columns were applied (the
+    crash window between two ``ALTER TABLE`` statements) finishes the rest
+    on the next startup instead of crashing on an already-applied step.
+    """
+
+    async def test_resumes_when_note_applied_but_labels_missing(self, tmp_path):
+        from aerospike_cluster_manager_api.db import _sqlite
+
+        db_path = str(tmp_path / "partial-migration.db")
+
+        # Simulate a crash *after* the description->note rename but *before*
+        # the labels / workspace_id ALTERs ran: note exists, the rest don't.
+        async with aiosqlite.connect(db_path) as conn:
+            await conn.execute(
+                """CREATE TABLE connections (
+                    id           TEXT PRIMARY KEY,
+                    name         TEXT NOT NULL,
+                    hosts        TEXT NOT NULL,
+                    port         INTEGER NOT NULL DEFAULT 3000,
+                    cluster_name TEXT,
+                    username     TEXT,
+                    password     TEXT,
+                    color        TEXT NOT NULL DEFAULT '#0097D3',
+                    note         TEXT,
+                    created_at   TEXT NOT NULL,
+                    updated_at   TEXT NOT NULL
+                )"""
+            )
+            await conn.execute(
+                """CREATE TABLE workspaces (
+                    id          TEXT PRIMARY KEY,
+                    name        TEXT NOT NULL,
+                    color       TEXT NOT NULL DEFAULT '#6366F1',
+                    description TEXT,
+                    is_default  INTEGER NOT NULL DEFAULT 0,
+                    created_at  TEXT NOT NULL,
+                    updated_at  TEXT NOT NULL
+                )"""
+            )
+            now = datetime.now(UTC).isoformat()
+            await conn.execute(
+                """INSERT INTO connections
+                       (id, name, hosts, port, color, note, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                ("conn-partial-1", "half-migrated", json.dumps(["h"]), 3000, "#FFFFFF", "kept note", now, now),
+            )
+            await conn.commit()
+
+        # Run the migration directly, twice — the second run proves every
+        # branch is idempotent against the live schema (resume-safe).
+        async with aiosqlite.connect(db_path) as conn:
+            import sqlite3 as _sqlite3
+
+            conn.row_factory = _sqlite3.Row
+            await conn.execute("PRAGMA foreign_keys=ON")
+            await _sqlite._apply_migrations(conn)
+            await _sqlite._apply_migrations(conn)
+            cols = await _sqlite._table_columns(conn, "connections")
+            ws_cols = await _sqlite._table_columns(conn, "workspaces")
+
+        # The missing columns were filled in; the pre-existing note survived.
+        assert {"note", "labels", "workspace_id"} <= cols
+        assert "owner_id" in ws_cols
+
+        with (
+            patch("aerospike_cluster_manager_api.config.ENABLE_POSTGRES", False),
+            patch("aerospike_cluster_manager_api.config.SQLITE_PATH", db_path),
+        ):
+            await db.init_db()
+            try:
+                profile = await db.get_connection("conn-partial-1")
+            finally:
+                await db.close_db()
+        assert profile is not None
+        assert profile.note == "kept note"
+        assert profile.workspaceId == DEFAULT_WORKSPACE_ID

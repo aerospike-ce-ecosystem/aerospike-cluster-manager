@@ -78,7 +78,7 @@ class TestInfoCache:
         await cache.get_or_fetch("conn-1", "build", fetcher, ttl=60.0)
         await cache.get_or_fetch("conn-1", "edition", fetcher, ttl=60.0)
 
-        cache.invalidate_connection("conn-1")
+        await cache.invalidate_connection("conn-1")
 
         v3 = await cache.get_or_fetch("conn-1", "build", fetcher, ttl=60.0)
         assert v3 == "v3"
@@ -92,7 +92,7 @@ class TestInfoCache:
         await cache.get_or_fetch("conn-1", "build", fetcher, ttl=60.0)
         await cache.get_or_fetch("conn-2", "build", fetcher, ttl=60.0)
 
-        cache.invalidate_connection("conn-1")
+        await cache.invalidate_connection("conn-1")
 
         v3 = await cache.get_or_fetch("conn-2", "build", fetcher, ttl=60.0)
         assert v3 == "b"  # Still cached
@@ -104,7 +104,7 @@ class TestInfoCache:
         fetcher = AsyncMock(side_effect=["v1", "v2"])
 
         await cache.get_or_fetch("conn-1", "build", fetcher, ttl=60.0)
-        cache.clear()
+        await cache.clear()
 
         v2 = await cache.get_or_fetch("conn-1", "build", fetcher, ttl=60.0)
         assert v2 == "v2"

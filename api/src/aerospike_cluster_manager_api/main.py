@@ -61,6 +61,23 @@ apply_aerospike_py_log_level()
 logger = logging.getLogger(__name__)
 
 
+def _find_oidc_middleware(app: FastAPI) -> OIDCAuthMiddleware | None:
+    """Locate the live OIDCAuthMiddleware instance in the built ASGI stack.
+
+    Starlette instantiates middleware lazily inside
+    ``build_middleware_stack()``; the resulting instances form a chain
+    via each layer's ``app`` attribute. We walk that chain so the
+    lifespan shutdown hook can close the middleware's JWKS HTTP client.
+    Returns ``None`` when OIDC is disabled (the middleware is never added).
+    """
+    node: object | None = app.middleware_stack
+    while node is not None:
+        if isinstance(node, OIDCAuthMiddleware):
+            return node
+        node = getattr(node, "app", None)
+    return None
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     logger.info("Starting Aerospike Cluster Manager API")
@@ -76,6 +93,12 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     if config.SSE_ENABLED:
         await collector.stop()
     await client_manager.close_all()
+    # Close the OIDC middleware's lazily-created JWKS HTTP client, if it
+    # built one. _find_oidc_middleware walks the built middleware stack;
+    # it returns None when OIDC is disabled (no middleware installed).
+    oidc_mw = _find_oidc_middleware(_app)
+    if oidc_mw is not None:
+        await oidc_mw.aclose()
     await db.close_db()
     logger.info("Shutdown complete")
     # Flush the OTel pipeline last so the final spans/logs/metrics batch —

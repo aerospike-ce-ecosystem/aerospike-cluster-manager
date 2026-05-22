@@ -575,3 +575,64 @@ async def test_main_request_logging_masks_query_token():
     output = buf.getvalue()
     assert "access_token=***" in output, f"expected masked token in log, got: {output!r}"
     assert "secret123" not in output, f"raw token leaked in log: {output!r}"
+
+
+# ---------------------------------------------------------------------------
+# JWKS HTTP client lifecycle — aclose()
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_aclose_closes_self_constructed_client():
+    """aclose() must close the lazily-created JWKS client and clear it."""
+    mw = OIDCAuthMiddleware(
+        app=lambda *a, **kw: None,  # type: ignore[arg-type]
+        enabled=False,
+        issuer_url=ISSUER,
+        audience=AUDIENCE,
+    )
+    # Lazily build the client the way _refresh_jwks does in production.
+    client = mw._get_http_client()
+    assert client is mw._http_client
+    assert mw._owns_http_client is True
+    assert client.is_closed is False
+
+    await mw.aclose()
+    assert client.is_closed is True
+    # Reference cleared so a second aclose() is a no-op.
+    assert mw._http_client is None
+    await mw.aclose()
+
+
+@pytest.mark.asyncio
+async def test_aclose_leaves_injected_client_untouched():
+    """An injected client is owned by the caller — aclose() must not close it."""
+    _priv, jwk = _rsa_keypair()
+    injected = _client_for(_JWKSMock([jwk]))
+    mw = OIDCAuthMiddleware(
+        app=lambda *a, **kw: None,  # type: ignore[arg-type]
+        enabled=False,
+        issuer_url=ISSUER,
+        audience=AUDIENCE,
+        http_client=injected,
+    )
+    assert mw._owns_http_client is False
+
+    await mw.aclose()
+    # The injected client's lifecycle belongs to the test, not the middleware.
+    assert injected.is_closed is False
+    await injected.aclose()
+
+
+@pytest.mark.asyncio
+async def test_aclose_noop_when_client_never_built():
+    """aclose() is safe when no JWKS fetch ever happened (cold middleware)."""
+    mw = OIDCAuthMiddleware(
+        app=lambda *a, **kw: None,  # type: ignore[arg-type]
+        enabled=False,
+        issuer_url=ISSUER,
+        audience=AUDIENCE,
+    )
+    assert mw._http_client is None
+    await mw.aclose()  # must not raise
+    assert mw._http_client is None
