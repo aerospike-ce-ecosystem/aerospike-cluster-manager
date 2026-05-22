@@ -375,7 +375,8 @@ async def put_record(client: aerospike_py.AsyncClient, body: RecordWriteRequest)
 
     Raises:
         PrimaryKeyMissing: ``body.key`` omits namespace, set, or pk.
-        ValueError: explicit ``pk_type`` rejected the resolved value.
+        ValueError: explicit ``pk_type`` rejected the resolved value, or
+            ``body.bins`` is empty (a write needs at least one bin).
     """
     k = body.key
     if not k.namespace:
@@ -384,6 +385,14 @@ async def put_record(client: aerospike_py.AsyncClient, body: RecordWriteRequest)
         raise PrimaryKeyMissing("set")
     if not k.pk:
         raise PrimaryKeyMissing("pk")
+    # ``RecordWriteRequest.bins`` is ``dict[str, BinValue]`` with no
+    # min-length constraint, so pydantic accepts ``bins={}``. An Aerospike
+    # write with zero bins is not a meaningful create/update — aerospike-py
+    # surfaces it as a server-side parameter error that would otherwise
+    # escape as an opaque HTTP 500. Reject it here so the router maps it to
+    # a clear 400 instead.
+    if not body.bins:
+        raise ValueError("at least one bin is required to write a record")
 
     key_tuple = (k.namespace, k.set, resolve_pk(k.pk, body.pk_type))
 

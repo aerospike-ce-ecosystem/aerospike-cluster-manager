@@ -532,3 +532,67 @@ class TestFilteredRecordsPkMatchMode:
         assert resp.status_code == 400
         assert "value2" in resp.json()["detail"]
         mock_client.query.assert_not_called()
+
+
+class TestPutRecordRouter:
+    """POST /records/{conn_id} — record write path."""
+
+    async def test_empty_bins_returns_400(self, client: AsyncClient):
+        """A write request with an empty ``bins`` object must surface as a
+        clean 400, not an opaque 500 from an aerospike-py parameter error.
+
+        ``RecordWriteRequest.bins`` has no min-length constraint so the
+        empty dict passes pydantic; the service-layer guard rejects it and
+        the router maps the ValueError to 400."""
+        mock_client = AsyncMock()
+        mock_client.put = AsyncMock(return_value=None)
+
+        with (
+            patch(
+                "aerospike_cluster_manager_api.dependencies.db.get_connection",
+                AsyncMock(return_value={"id": "conn-test"}),
+            ),
+            patch(
+                "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+                AsyncMock(return_value=mock_client),
+            ),
+        ):
+            resp = await client.post(
+                "/api/records/conn-test",
+                json={
+                    "key": {"namespace": "test", "set": "demo", "pk": "k1"},
+                    "bins": {},
+                },
+            )
+
+        assert resp.status_code == 400, resp.text
+        assert "bin" in resp.json()["detail"].lower()
+        # The Aerospike write must never be attempted for an invalid request.
+        mock_client.put.assert_not_awaited()
+
+
+class TestConnectionRaceOn404:
+    """Dependency-layer TOCTOU: connection deleted between the ACL check and
+    the client fetch must surface as 404, not an opaque 500."""
+
+    async def test_deleted_connection_race_returns_404(self, client: AsyncClient):
+        """``client_manager.get_client`` raises ``ValueError`` when the
+        profile vanished after ``_get_verified_connection`` cleared it.
+        ``_get_client`` must translate that to a 404."""
+        with (
+            patch(
+                "aerospike_cluster_manager_api.dependencies.db.get_connection",
+                AsyncMock(return_value={"id": "conn-test"}),
+            ),
+            patch(
+                "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+                AsyncMock(side_effect=ValueError("Connection profile 'conn-test' not found")),
+            ),
+        ):
+            resp = await client.get(
+                "/api/records/conn-test/detail",
+                params={"ns": "test", "set": "demo", "pk": "42"},
+            )
+
+        assert resp.status_code == 404, resp.text
+        assert "conn-test" in resp.json()["detail"]

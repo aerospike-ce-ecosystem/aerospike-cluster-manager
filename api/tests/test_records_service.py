@@ -240,6 +240,25 @@ class TestPutRecord:
         with pytest.raises(PrimaryKeyMissing):
             await records_service.put_record(client, body)
 
+    async def test_empty_bins_raises_value_error(self):
+        """A write with zero bins is rejected before reaching the client.
+
+        ``RecordWriteRequest.bins`` has no min-length constraint, so an
+        empty dict passes pydantic. Without this guard the empty-bins
+        ``put`` would surface as an opaque aerospike-py server error
+        (HTTP 500); the router maps the ValueError to a clean 400.
+        """
+        client = AsyncMock()
+        client.put = AsyncMock(return_value=None)
+        body = RecordWriteRequest(
+            key=RecordKey(namespace="test", set="demo", pk="k1"),
+            bins={},
+        )
+        with pytest.raises(ValueError, match="at least one bin"):
+            await records_service.put_record(client, body)
+        # The client write must never be attempted for an invalid request.
+        client.put.assert_not_awaited()
+
 
 # ---------------------------------------------------------------------------
 # record_exists
