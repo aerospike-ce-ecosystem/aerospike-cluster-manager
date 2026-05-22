@@ -152,9 +152,7 @@ async def get_connection_health(conn_id: str = Depends(_get_verified_connection)
             # random node and multiplying by node_count is wrong on an
             # unbalanced cluster.
             if namespaces:
-                ns_infos = await asyncio.gather(
-                    *[client.info_all(f"namespace/{ns_name}") for ns_name in namespaces]
-                )
+                ns_infos = await asyncio.gather(*[client.info_all(f"namespace/{ns_name}") for ns_name in namespaces])
             else:
                 ns_infos = []
 
