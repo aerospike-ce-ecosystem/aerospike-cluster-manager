@@ -78,7 +78,9 @@ async def get_workspace(
         "``ownerId`` is read-only and silently ignored — Phase 2 forbids workspace transfers."
     ),
 )
+@limiter.limit("10/minute")
 async def update_workspace(
+    request: Request,
     body: UpdateWorkspaceRequest,
     caller_owner_id: CallerOwnerId,
     workspace_id: str = Path(),

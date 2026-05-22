@@ -428,6 +428,64 @@ class TestTruncateSet:
 
 
 # ---------------------------------------------------------------------------
+# _get_set_object_count (info-command set total)
+# ---------------------------------------------------------------------------
+
+
+class TestGetSetObjectCount:
+    """The set-total helper backs ``total`` on list_records / run_filtered_query.
+
+    A transient cluster failure here must NOT be swallowed into ``0`` — that
+    would make a non-empty result set report ``total=0``. ClusterError /
+    AerospikeTimeoutError / BackpressureError must propagate so the global
+    handlers in ``main`` map them to 503/504, mirroring the scan path.
+    """
+
+    async def test_cluster_error_propagates_not_zero(self):
+        client = AsyncMock()
+        client.info_all = AsyncMock(side_effect=ClusterError("cluster down"))
+
+        with pytest.raises(ClusterError):
+            await records_service._get_set_object_count(client, "test", "demo")
+
+    async def test_timeout_error_propagates_not_zero(self):
+        client = AsyncMock()
+        client.info_all = AsyncMock(side_effect=AerospikeTimeoutError("timeout"))
+
+        with pytest.raises(AerospikeTimeoutError):
+            await records_service._get_set_object_count(client, "test", "demo")
+
+    async def test_backpressure_error_propagates_not_zero(self):
+        client = AsyncMock()
+        client.info_all = AsyncMock(side_effect=BackpressureError("queue full"))
+
+        with pytest.raises(BackpressureError):
+            await records_service._get_set_object_count(client, "test", "demo")
+
+    async def test_generic_aerospike_error_is_best_effort_zero(self):
+        """Non-infrastructure AerospikeError stays best-effort → 0."""
+        client = AsyncMock()
+        client.info_all = AsyncMock(side_effect=AerospikeError("sparse namespace"))
+
+        assert await records_service._get_set_object_count(client, "test", "demo") == 0
+
+    async def test_os_error_is_best_effort_zero(self):
+        client = AsyncMock()
+        client.info_all = AsyncMock(side_effect=OSError("socket hiccup"))
+
+        assert await records_service._get_set_object_count(client, "test", "demo") == 0
+
+    async def test_list_records_propagates_set_count_timeout(self):
+        """End-to-end: a timeout while computing the set total during a scan
+        must surface, not collapse the page into a fake total=0."""
+        client, _query = _build_query_mock([_make_record()])
+        client.info_all = AsyncMock(side_effect=AerospikeTimeoutError("info timeout"))
+
+        with pytest.raises(AerospikeTimeoutError):
+            await records_service.list_records(client, "test", "demo", page_size=25)
+
+
+# ---------------------------------------------------------------------------
 # list_records (scan with limit)
 # ---------------------------------------------------------------------------
 

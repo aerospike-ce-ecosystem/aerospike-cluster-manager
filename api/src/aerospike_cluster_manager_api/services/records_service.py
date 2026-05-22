@@ -151,6 +151,15 @@ async def _get_set_object_count(client: aerospike_py.AsyncClient, ns: str, set_n
 
     Fetches the namespace replication-factor first to de-duplicate counts
     across nodes, matching the same approach used in ``clusters_service``.
+
+    Connectivity / timeout / backpressure errors (``ClusterError``,
+    ``AerospikeTimeoutError``, ``BackpressureError``) are re-raised so the
+    global exception handlers in :mod:`main` can map them to 503/504. The
+    callers (:func:`list_records`, :func:`run_filtered_query`) deliberately
+    propagate those same classes — swallowing them here would make a
+    transient timeout report ``total=0`` on a non-empty set. Only narrow,
+    best-effort failures (other ``AerospikeError`` / ``OSError``) fall back
+    to 0.
     """
     if not set_name:
         return 0
@@ -164,6 +173,9 @@ async def _get_set_object_count(client: aerospike_py.AsyncClient, ns: str, set_n
         for s in agg:
             if s["name"] == set_name:
                 return s["objects"]
+    except (ClusterError, AerospikeTimeoutError, BackpressureError):
+        # Infrastructure failure — must surface as 503/504, not a fake 0.
+        raise
     except (AerospikeError, OSError):
         logger.debug("Failed to get set object count for %s.%s", ns, set_name, exc_info=True)
     return 0

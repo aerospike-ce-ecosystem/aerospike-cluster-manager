@@ -209,3 +209,50 @@ def test_limiter_carries_global_default_limits():
     # The Limiter's internal _default_limits is the runtime source of truth;
     # accessing the protected attribute here is a deliberate test-of-glue.
     assert limiter._default_limits, "Limiter must be constructed with default_limits"
+
+
+# ---------------------------------------------------------------------------
+# Per-route rate limits on mutation endpoints
+#
+# The global 60/minute default is a backstop; every destructive/write route
+# must additionally carry an explicit, stricter ``@limiter.limit(...)``. A
+# mutation route that forgets the decorator silently relies on the loose
+# global default — exactly the gap commit 5eb26da closed for create/delete
+# index and this follow-up closes for the rest of the mutation surface.
+# ---------------------------------------------------------------------------
+
+# (module, function) pairs for every per-route-limited mutation endpoint.
+# slowapi keys _route_limits by ``f"{func.__module__}.{func.__name__}"``.
+_RATE_LIMITED_MUTATION_ROUTES = [
+    ("aerospike_cluster_manager_api.routers.indexes", "create_index"),
+    ("aerospike_cluster_manager_api.routers.indexes", "delete_index"),
+    ("aerospike_cluster_manager_api.routers.connections", "create_connection"),
+    ("aerospike_cluster_manager_api.routers.connections", "update_connection"),
+    ("aerospike_cluster_manager_api.routers.connections", "delete_connection"),
+    ("aerospike_cluster_manager_api.routers.clusters", "configure_namespace"),
+    ("aerospike_cluster_manager_api.routers.notes", "upsert_set_note"),
+    ("aerospike_cluster_manager_api.routers.notes", "delete_set_note"),
+    ("aerospike_cluster_manager_api.routers.notes", "upsert_record_note"),
+    ("aerospike_cluster_manager_api.routers.notes", "delete_record_note"),
+    ("aerospike_cluster_manager_api.routers.guides", "upsert_guide"),
+    ("aerospike_cluster_manager_api.routers.guides", "delete_guide"),
+    ("aerospike_cluster_manager_api.routers.workspaces", "create_workspace"),
+    ("aerospike_cluster_manager_api.routers.workspaces", "update_workspace"),
+    ("aerospike_cluster_manager_api.routers.workspaces", "delete_workspace"),
+]
+
+
+@pytest.mark.parametrize(("module", "func_name"), _RATE_LIMITED_MUTATION_ROUTES)
+def test_mutation_route_carries_explicit_rate_limit(module: str, func_name: str):
+    """Every mutation endpoint must register an explicit per-route limit.
+
+    Importing the app wires up all routers, which runs the ``@limiter.limit``
+    decorators and populates ``limiter._route_limits``. A missing key means the
+    route fell back to the loose global default — the regression this guards.
+    """
+    # Importing main ensures every router module is loaded and decorated.
+    from aerospike_cluster_manager_api.main import app  # noqa: F401
+    from aerospike_cluster_manager_api.rate_limit import limiter
+
+    key = f"{module}.{func_name}"
+    assert key in limiter._route_limits, f"mutation route {key} is missing an explicit @limiter.limit(...) decorator"

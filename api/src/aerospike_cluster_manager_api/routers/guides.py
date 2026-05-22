@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Path
+from fastapi import APIRouter, HTTPException, Path, Request
 from pydantic import BaseModel
 from starlette.responses import Response
 
@@ -28,6 +28,7 @@ from aerospike_cluster_manager_api.models.guide import (
     GuideType,
     UpsertGuideRequest,
 )
+from aerospike_cluster_manager_api.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +91,9 @@ async def get_guide(
         "empty PUT body is rejected with 422."
     ),
 )
+@limiter.limit("20/minute")
 async def upsert_guide(
+    request: Request,
     body: UpsertGuideRequest,
     caller_owner_id: CallerOwnerId,
     workspace_id: VerifiedWorkspaceId,
@@ -106,7 +109,9 @@ async def upsert_guide(
     summary="Delete an operational guide",
     description="Remove an operational guide. No-op (still 204) when the guide does not exist.",
 )
+@limiter.limit("20/minute")
 async def delete_guide(
+    request: Request,
     workspace_id: VerifiedWorkspaceId,
     guide_type: GuideTypePath,
 ) -> Response:
