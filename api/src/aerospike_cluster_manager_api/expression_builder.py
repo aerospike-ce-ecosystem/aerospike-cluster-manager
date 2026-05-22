@@ -25,6 +25,19 @@ class InvalidPkPatternError(ValueError):
     """Raised when a user-supplied PK regex/prefix pattern is malformed."""
 
 
+class InvalidFilterValueError(ValueError):
+    """Raised when a filter condition's value is missing or type-incompatible.
+
+    ``FilterCondition.value`` / ``value2`` are typed ``BinValue | None``
+    (``BinValue`` is ``Any``), so pydantic accepts a request that omits a
+    value or supplies one that cannot be coerced to the declared
+    ``bin_type`` (e.g. ``binType=integer`` with ``value="abc"`` or no
+    ``value`` at all). Without this guard the raw ``int()``/``float()``
+    ``TypeError``/``ValueError`` escaped to the generic 500 handler; the
+    HTTP boundary catches this subclass and maps it to a 400 instead.
+    """
+
+
 # Hard cap on user-supplied regex length. 256 is comfortably above any
 # legitimate PK / bin pattern we've seen, well below the size at which
 # pathological backtracking becomes feasible.
@@ -81,11 +94,25 @@ def _bin_accessor(bin_name: str, bin_type: BinDataType) -> dict:
 
 
 def _val_accessor(value: object, bin_type: BinDataType) -> dict:
-    """Return the correct typed value expression."""
+    """Return the correct typed value expression.
+
+    Raises :class:`InvalidFilterValueError` when ``value`` is ``None`` or
+    cannot be coerced to a numeric ``bin_type`` — the request-model layer
+    permits ``BinValue | None`` so the type mismatch is a 400-class user
+    error, not a server fault.
+    """
+    if value is None:
+        raise InvalidFilterValueError(f"Filter value is required for bin_type={bin_type.value!r}")
     if bin_type == BinDataType.INTEGER:
-        return exp.int_val(int(value))  # type: ignore[arg-type]
+        try:
+            return exp.int_val(int(value))  # type: ignore[arg-type]
+        except (TypeError, ValueError) as exc:
+            raise InvalidFilterValueError(f"Filter value {value!r} is not a valid integer") from exc
     if bin_type == BinDataType.FLOAT:
-        return exp.float_val(float(value))  # type: ignore[arg-type]
+        try:
+            return exp.float_val(float(value))  # type: ignore[arg-type]
+        except (TypeError, ValueError) as exc:
+            raise InvalidFilterValueError(f"Filter value {value!r} is not a valid float") from exc
     if bin_type == BinDataType.STRING:
         return exp.string_val(str(value))
     if bin_type == BinDataType.BOOL:
@@ -120,20 +147,28 @@ def _build_condition(cond: FilterCondition) -> dict:
         return cmp_fn(_bin_accessor(bin_name, bin_type), _val_accessor(cond.value, bin_type))
 
     if op == FilterOperator.BETWEEN:
+        if cond.value is None or cond.value2 is None:
+            raise InvalidFilterValueError("BETWEEN requires both 'value' (lower bound) and 'value2' (upper bound)")
         return exp.and_(
             exp.ge(_bin_accessor(bin_name, bin_type), _val_accessor(cond.value, bin_type)),
             exp.le(_bin_accessor(bin_name, bin_type), _val_accessor(cond.value2, bin_type)),
         )
 
     if op == FilterOperator.CONTAINS:
+        if cond.value is None:
+            raise InvalidFilterValueError(f"Operator {op.value!r} requires a 'value'")
         pattern = f".*{re.escape(str(cond.value))}.*"
         return exp.regex_compare(pattern, REGEX_FLAG_ICASE, exp.string_bin(bin_name))
 
     if op == FilterOperator.NOT_CONTAINS:
+        if cond.value is None:
+            raise InvalidFilterValueError(f"Operator {op.value!r} requires a 'value'")
         pattern = f".*{re.escape(str(cond.value))}.*"
         return exp.not_(exp.regex_compare(pattern, REGEX_FLAG_ICASE, exp.string_bin(bin_name)))
 
     if op == FilterOperator.REGEX:
+        if cond.value is None:
+            raise InvalidFilterValueError(f"Operator {op.value!r} requires a 'value'")
         regex = str(cond.value)
         _validate_pattern(regex)
         return exp.regex_compare(regex, REGEX_FLAG_ICASE, exp.string_bin(bin_name))

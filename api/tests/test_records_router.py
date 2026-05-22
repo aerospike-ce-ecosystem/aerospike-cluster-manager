@@ -464,3 +464,71 @@ class TestFilteredRecordsPkMatchMode:
         assert body["hasMore"] is True
         assert body["returnedRecords"] == 5
         assert len(body["records"]) == 5
+
+    async def test_invalid_filter_value_returns_400(self, client: AsyncClient):
+        """A bin filter with a value that cannot be coerced to the declared
+        binType is a client error — 400, not the opaque 500 the raw int()
+        TypeError/ValueError used to produce."""
+        mock_client = _build_query_mock()
+
+        with (
+            patch(
+                "aerospike_cluster_manager_api.dependencies.db.get_connection",
+                AsyncMock(return_value={"id": "conn-test"}),
+            ),
+            patch(
+                "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+                AsyncMock(return_value=mock_client),
+            ),
+        ):
+            resp = await client.post(
+                "/api/records/conn-test/filter",
+                json={
+                    "namespace": "test",
+                    "set": "demo",
+                    "filters": {
+                        "logic": "and",
+                        "conditions": [
+                            {"bin": "age", "operator": "eq", "value": "not-a-number", "binType": "integer"},
+                        ],
+                    },
+                },
+            )
+
+        assert resp.status_code == 400
+        assert "integer" in resp.json()["detail"]
+        # The scan never executes when the filter cannot be built.
+        mock_client.query.assert_not_called()
+
+    async def test_between_missing_value2_returns_400(self, client: AsyncClient):
+        """BETWEEN with no upper bound must surface as 400, not a 500 from a
+        raw int(None) TypeError."""
+        mock_client = _build_query_mock()
+
+        with (
+            patch(
+                "aerospike_cluster_manager_api.dependencies.db.get_connection",
+                AsyncMock(return_value={"id": "conn-test"}),
+            ),
+            patch(
+                "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+                AsyncMock(return_value=mock_client),
+            ),
+        ):
+            resp = await client.post(
+                "/api/records/conn-test/filter",
+                json={
+                    "namespace": "test",
+                    "set": "demo",
+                    "filters": {
+                        "logic": "and",
+                        "conditions": [
+                            {"bin": "age", "operator": "between", "value": 10, "binType": "integer"},
+                        ],
+                    },
+                },
+            )
+
+        assert resp.status_code == 400
+        assert "value2" in resp.json()["detail"]
+        mock_client.query.assert_not_called()

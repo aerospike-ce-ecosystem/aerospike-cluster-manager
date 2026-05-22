@@ -7,6 +7,7 @@ from aerospike_py import exp
 
 from aerospike_cluster_manager_api.expression_builder import (
     REGEX_FLAG_ICASE,
+    InvalidFilterValueError,
     InvalidPkPatternError,
     _build_condition,
     build_expression,
@@ -203,3 +204,77 @@ class TestBuildExpressionWithPkConditions:
         pk_part = build_pk_filter_expression("usr_", "prefix")
         bin_part = exp.gt(exp.int_bin("age"), exp.int_val(21))
         assert expr == exp.and_(pk_part, bin_part)
+
+
+class TestFilterValueValidation:
+    """``FilterCondition.value``/``value2`` are ``BinValue | None``, so a
+    request can omit a value or supply one that cannot be coerced to the
+    declared bin_type. Those must surface as ``InvalidFilterValueError``
+    (mapped to HTTP 400) instead of a raw int()/float() exception escaping
+    to the generic 500 handler."""
+
+    def test_missing_value_for_comparison_raises(self):
+        cond = FilterCondition(bin="age", operator=FilterOperator.EQ, bin_type=BinDataType.INTEGER)
+        with pytest.raises(InvalidFilterValueError, match="required"):
+            _build_condition(cond)
+
+    def test_non_numeric_value_for_integer_bin_raises(self):
+        cond = FilterCondition(
+            bin="age",
+            operator=FilterOperator.GT,
+            value="not-a-number",
+            bin_type=BinDataType.INTEGER,
+        )
+        with pytest.raises(InvalidFilterValueError, match="not a valid integer"):
+            _build_condition(cond)
+
+    def test_non_numeric_value_for_float_bin_raises(self):
+        cond = FilterCondition(
+            bin="ratio",
+            operator=FilterOperator.LE,
+            value="abc",
+            bin_type=BinDataType.FLOAT,
+        )
+        with pytest.raises(InvalidFilterValueError, match="not a valid float"):
+            _build_condition(cond)
+
+    def test_between_without_value2_raises(self):
+        cond = FilterCondition(
+            bin="age",
+            operator=FilterOperator.BETWEEN,
+            value=10,
+            bin_type=BinDataType.INTEGER,
+        )
+        with pytest.raises(InvalidFilterValueError, match="value2"):
+            _build_condition(cond)
+
+    def test_contains_without_value_raises(self):
+        cond = FilterCondition(bin="name", operator=FilterOperator.CONTAINS, bin_type=BinDataType.STRING)
+        with pytest.raises(InvalidFilterValueError, match="requires a 'value'"):
+            _build_condition(cond)
+
+    def test_regex_without_value_raises(self):
+        cond = FilterCondition(bin="name", operator=FilterOperator.REGEX, bin_type=BinDataType.STRING)
+        with pytest.raises(InvalidFilterValueError, match="requires a 'value'"):
+            _build_condition(cond)
+
+    def test_valid_between_still_builds(self):
+        cond = FilterCondition(
+            bin="age",
+            operator=FilterOperator.BETWEEN,
+            value=10,
+            value2=20,
+            bin_type=BinDataType.INTEGER,
+        )
+        expr = _build_condition(cond)
+        expected = exp.and_(
+            exp.ge(exp.int_bin("age"), exp.int_val(10)),
+            exp.le(exp.int_bin("age"), exp.int_val(20)),
+        )
+        assert expr == expected
+
+    def test_invalid_filter_value_error_is_value_error_subclass(self):
+        # The records router relies on this being catchable distinctly from
+        # plain ValueError, but it must remain a ValueError for callers that
+        # only know the base type.
+        assert issubclass(InvalidFilterValueError, ValueError)
