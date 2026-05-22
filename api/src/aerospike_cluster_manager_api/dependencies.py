@@ -185,9 +185,25 @@ async def _get_connection_profile(
 
 
 async def _get_client(conn_id: str = Depends(_get_verified_connection)) -> aerospike_py.AsyncClient:
-    """Resolve *conn_id* and return a cached Aerospike async client."""
+    """Resolve *conn_id* and return a cached Aerospike async client.
+
+    ``_get_verified_connection`` runs first and 404s a missing connection,
+    but :meth:`client_manager.get_client` re-reads the profile from the DB
+    and raises ``ValueError`` when it is gone. That happens on a TOCTOU
+    race — the profile is deleted between the dependency's existence check
+    and this client fetch. Map it to 404 (the connection genuinely no
+    longer exists) so the race surfaces with the same wire shape as a
+    plain missing connection instead of escaping as an opaque 500.
+    """
     try:
         return await client_manager.get_client(conn_id)
+    except ValueError as e:
+        # Connection profile vanished between the ACL check and now.
+        logger.warning("Connection '%s' disappeared before client could be built: %s", conn_id, e)
+        raise HTTPException(
+            status_code=404,
+            detail=f"Connection '{conn_id}' not found",
+        ) from e
     except (AerospikeError, ClusterError, ConnectionRefusedError, OSError) as e:
         logger.warning("Failed to connect to Aerospike for connection '%s': %s", conn_id, e)
         raise HTTPException(
