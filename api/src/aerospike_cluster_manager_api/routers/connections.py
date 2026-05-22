@@ -8,9 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from starlette.responses import Response
 
 from aerospike_cluster_manager_api.client_manager import client_manager
-from aerospike_cluster_manager_api.constants import INFO_BUILD, INFO_EDITION, INFO_NAMESPACES
+from aerospike_cluster_manager_api.constants import INFO_BUILD, INFO_EDITION, INFO_NAMESPACES, NS_SUM_KEYS
 from aerospike_cluster_manager_api.dependencies import CallerOwnerId, _get_verified_connection
-from aerospike_cluster_manager_api.info_parser import parse_kv_pairs, parse_list, safe_int
+from aerospike_cluster_manager_api.info_parser import aggregate_node_kv, parse_list, safe_int
 from aerospike_cluster_manager_api.models.connection import (
     ConnectionProfileResponse,
     ConnectionStatus,
@@ -146,16 +146,20 @@ async def get_connection_health(conn_id: str = Depends(_get_verified_connection)
         disk_total = 0
 
         try:
-            # Fetch all namespace info in parallel
+            # Fetch all namespace info from every node in parallel. info_all
+            # returns per-node responses; aggregate_node_kv sums the size keys
+            # across nodes for an accurate cluster-wide total. Sampling a single
+            # random node and multiplying by node_count is wrong on an
+            # unbalanced cluster.
             if namespaces:
                 ns_infos = await asyncio.gather(
-                    *[client.info_random_node(f"namespace/{ns_name}") for ns_name in namespaces]
+                    *[client.info_all(f"namespace/{ns_name}") for ns_name in namespaces]
                 )
             else:
                 ns_infos = []
 
             for ns_info in ns_infos:
-                kv = parse_kv_pairs(ns_info)
+                kv = aggregate_node_kv(ns_info, keys_to_sum=NS_SUM_KEYS)
                 # CE 8 uses unified data_used_bytes/data_total_bytes for both memory and device.
                 # Fall back to legacy memory_used_bytes/memory-size for older versions.
                 ns_data_used = (
@@ -168,11 +172,10 @@ async def get_connection_health(conn_id: str = Depends(_get_verified_connection)
                     if "data_total_bytes" in kv
                     else safe_int(kv.get("memory-size"))
                 )
-                # Multiply per-node values by node count for cluster-wide estimate
-                memory_used += ns_data_used * node_count
-                memory_total += ns_data_total * node_count
-                disk_used += safe_int(kv.get("device_used_bytes")) * node_count
-                disk_total += safe_int(kv.get("device-total-bytes")) * node_count
+                memory_used += ns_data_used
+                memory_total += ns_data_total
+                disk_used += safe_int(kv.get("device_used_bytes"))
+                disk_total += safe_int(kv.get("device-total-bytes"))
         except Exception:
             logger.debug("Failed to collect namespace stats for connection '%s'", conn_id, exc_info=True)
 
