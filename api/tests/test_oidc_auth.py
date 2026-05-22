@@ -84,6 +84,10 @@ class _JWKSMock:
         self.jwks = list(jwks)
         self.well_known_calls = 0
         self.jwks_calls = 0
+        # When set, the JWKS endpoint simulates an issuer outage: the
+        # ``.well-known`` doc still serves (it is cached after the first
+        # hit anyway) but the certs endpoint raises a connection error.
+        self.outage = False
 
     def update(self, jwks: list[dict]) -> None:
         self.jwks = list(jwks)
@@ -101,6 +105,8 @@ class _JWKSMock:
             )
         if path.endswith("/protocol/openid-connect/certs"):
             self.jwks_calls += 1
+            if self.outage:
+                raise httpx.ConnectError("JWKS endpoint unreachable")
             return httpx.Response(200, json={"keys": list(self.jwks)})
         return httpx.Response(404)
 
@@ -422,6 +428,71 @@ async def test_jwks_fetch_non_200_yields_401_not_500():
     assert resp.status_code in (401, 503)
     assert resp.status_code != 500
     assert "detail" in resp.json()
+
+
+@pytest.mark.asyncio
+async def test_jwks_outage_after_warm_cache_serves_stale_keys():
+    """A JWKS-endpoint outage that strikes *after* the cache went stale must
+    not 401 every authenticated request. Within the stale-grace window the
+    middleware keeps verifying against the still-valid cached keys."""
+    priv, jwk = _rsa_keypair()
+    mock = _JWKSMock([jwk])
+    # TTL=0 forces a TTL-driven refresh attempt on every request, which is
+    # exactly the path that previously failed closed during an outage.
+    app = _build_app(http_client=_client_for(mock), jwks_cache_ttl_seconds=0)
+    token = _sign(priv, jwk["kid"])
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # Warm the cache with a successful fetch.
+        resp = await ac.get("/api/me", headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+
+        # Issuer goes down. The cached keys are still cryptographically valid.
+        mock.outage = True
+        for _ in range(5):
+            resp = await ac.get("/api/me", headers={"Authorization": f"Bearer {token}"})
+            assert resp.status_code == 200, "stale cached keys must still verify a valid token during an outage"
+            assert resp.json() == {"sub": "user-1"}
+
+
+@pytest.mark.asyncio
+async def test_jwks_outage_with_cold_cache_still_fails_closed():
+    """An outage with a cold cache (never warmed) has no keys to fall back on
+    and must fail closed — the stale-cache path must not weaken a cold start."""
+    priv, jwk = _rsa_keypair()
+    mock = _JWKSMock([jwk])
+    mock.outage = True  # down before the very first request
+    app = _build_app(http_client=_client_for(mock), jwks_cache_ttl_seconds=0)
+    token = _sign(priv, jwk["kid"])
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.get("/api/me", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code in (401, 503)
+    assert resp.status_code != 500
+    assert "detail" in resp.json()
+
+
+@pytest.mark.asyncio
+async def test_jwks_outage_rate_limits_refetch_attempts():
+    """While serving stale keys during an outage, the middleware must not
+    re-hit the down issuer on every request — repeated failed fetches are
+    rate-limited the same way the unknown-kid storm path is."""
+    priv, jwk = _rsa_keypair()
+    mock = _JWKSMock([jwk])
+    app = _build_app(http_client=_client_for(mock), jwks_cache_ttl_seconds=0)
+    token = _sign(priv, jwk["kid"])
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        await ac.get("/api/me", headers={"Authorization": f"Bearer {token}"})
+        mock.outage = True
+        baseline = mock.jwks_calls
+        for _ in range(10):
+            resp = await ac.get("/api/me", headers={"Authorization": f"Bearer {token}"})
+            assert resp.status_code == 200
+        # At most one re-fetch attempt within the back-off window.
+        assert mock.jwks_calls - baseline <= 1, (
+            "JWKS endpoint was re-hit on every request during an outage (back-off failed)"
+        )
 
 
 @pytest.mark.asyncio

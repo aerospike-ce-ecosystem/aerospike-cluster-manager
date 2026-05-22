@@ -12,6 +12,13 @@ Cache invalidation triggers (in order of strictness):
   JWKS is refetched **once** before declaring the token invalid; this covers
   Keycloak realm key rotation without requiring a process restart.
 
+Outage resilience: if a TTL-driven refetch fails because the issuer's JWKS
+endpoint is transiently unreachable, the middleware keeps verifying tokens
+against the *stale* cached keys for up to ``_STALE_JWKS_GRACE_SECONDS`` rather
+than 401-ing every authenticated request. A cold cache (never warmed) still
+fails closed. Signing keys rotate on the order of days, so a brief Keycloak
+restart no longer takes the whole API down.
+
 The middleware is installed unconditionally in ``main.py``; when
 ``OIDC_ENABLED=false`` (default) it returns immediately without inspecting the
 request, so non-prod deployments need no Keycloak.
@@ -69,6 +76,23 @@ _ALLOWED_ALGS: frozenset[str] = frozenset(
 # Prevents an attacker from amplifying a flood of bogus tokens into a flood
 # of HTTP requests against the issuer.
 _KID_MISS_BACKOFF_SECONDS: int = 30
+
+# Grace window for serving *stale* JWKS keys after a failed TTL refresh.
+#
+# When the cached JWKS has passed its TTL but the issuer's JWKS endpoint is
+# transiently unreachable (Keycloak restart, network blip), rejecting every
+# request with 401 would take the whole API down for all authenticated users
+# even though the cached keys are almost certainly still valid — IdP signing
+# keys rotate on the order of days/weeks, not minutes. Within this grace
+# window we keep verifying against the stale cache and only re-attempt the
+# fetch (rate-limited) on subsequent requests. Past the grace window the
+# cache is considered untrustworthy and requests fail closed again.
+_STALE_JWKS_GRACE_SECONDS: int = 3600
+
+# Back-off between failed TTL-driven refresh attempts while serving stale
+# keys. Without this, every request during an outage would re-hit the down
+# issuer; mirrors the amplification protection on the unknown-kid path.
+_STALE_REFRESH_BACKOFF_SECONDS: int = 30
 
 
 def _public_key_from_jwk(jwk_dict: dict[str, Any]) -> Any:
@@ -135,6 +159,10 @@ class OIDCAuthMiddleware(BaseHTTPMiddleware):
         # an attacker spamming bogus kids cannot turn each request into a
         # round-trip to the issuer.
         self._last_kid_miss_refresh_at: float = 0.0
+        # Last wall-clock time a TTL-driven refresh *failed*. Used to rate-
+        # limit re-attempts while serving stale keys during an issuer
+        # outage (see ``_STALE_REFRESH_BACKOFF_SECONDS``).
+        self._last_failed_refresh_at: float = 0.0
         # Cached well-known doc — only the ``jwks_uri`` value is used today,
         # but caching it avoids two HTTP round-trips on every refetch.
         self._jwks_uri: str | None = None
@@ -267,8 +295,34 @@ class OIDCAuthMiddleware(BaseHTTPMiddleware):
             kid_missing = kid not in self._jwks_by_kid
 
             if ttl_expired:
-                # Standard TTL refresh path.
-                await self._refresh_jwks()
+                # Standard TTL refresh path. A transient issuer outage must
+                # not take the whole API down: if we already hold cached
+                # keys, fall back to them (within the stale-grace window)
+                # rather than 401-ing every authenticated request. Signing
+                # keys rotate on the order of days, so a stale cache is
+                # overwhelmingly still correct during a brief outage.
+                #
+                # While serving stale keys we also rate-limit the re-fetch
+                # attempts: without the back-off every request during an
+                # outage would re-hit the down issuer.
+                in_refresh_backoff = (
+                    self._can_serve_stale(now) and now - self._last_failed_refresh_at < _STALE_REFRESH_BACKOFF_SECONDS
+                )
+                if not in_refresh_backoff:
+                    try:
+                        await self._refresh_jwks()
+                    except _AuthError:
+                        if self._can_serve_stale(now):
+                            self._last_failed_refresh_at = now
+                            logger.warning(
+                                "OIDC JWKS refresh failed; serving stale cached keys "
+                                "(%d key(s), within %ds grace window)",
+                                len(self._jwks_by_kid),
+                                _STALE_JWKS_GRACE_SECONDS,
+                            )
+                        else:
+                            # Cold cache, or grace window exhausted — fail closed.
+                            raise
             elif kid_missing and (now - self._last_kid_miss_refresh_at >= _KID_MISS_BACKOFF_SECONDS):
                 # Unknown-kid refresh, but rate-limited via back-off window so
                 # a flood of bogus kids cannot amplify into JWKS requests.
@@ -277,6 +331,18 @@ class OIDCAuthMiddleware(BaseHTTPMiddleware):
                 self._last_kid_miss_refresh_at = now
                 await self._refresh_jwks()
             return self._jwks_by_kid.get(kid)
+
+    def _can_serve_stale(self, now: float) -> bool:
+        """Return True if stale cached keys may still back a verification.
+
+        Requires (a) a non-empty cache (a cold start has nothing to fall
+        back on and must fail closed) and (b) the cache having gone stale
+        no longer than ``_STALE_JWKS_GRACE_SECONDS`` ago. Beyond the grace
+        window the keys are treated as untrustworthy.
+        """
+        if not self._jwks_by_kid:
+            return False
+        return now - self._jwks_expires_at <= _STALE_JWKS_GRACE_SECONDS
 
     async def _refresh_jwks(self) -> None:
         client = self._get_http_client()
