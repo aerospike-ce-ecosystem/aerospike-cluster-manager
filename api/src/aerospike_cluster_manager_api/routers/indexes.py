@@ -4,13 +4,14 @@ import logging
 from typing import Any, Literal, cast
 
 from aerospike_py.exception import AerospikeError, IndexFoundError, IndexNotFound
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from starlette.responses import Response
 
 from aerospike_cluster_manager_api.constants import INFO_NAMESPACES, info_sindex
 from aerospike_cluster_manager_api.dependencies import AerospikeClient
 from aerospike_cluster_manager_api.info_parser import parse_list, parse_records
 from aerospike_cluster_manager_api.models.index import CreateIndexRequest, SecondaryIndex
+from aerospike_cluster_manager_api.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,8 @@ async def get_indexes(client: AerospikeClient) -> list[SecondaryIndex]:
     summary="Create secondary index",
     description="Create a new secondary index on a specified namespace, set, and bin.",
 )
-async def create_index(body: CreateIndexRequest, client: AerospikeClient) -> SecondaryIndex:
+@limiter.limit("10/minute")
+async def create_index(request: Request, body: CreateIndexRequest, client: AerospikeClient) -> SecondaryIndex:
     """Create a new secondary index on a specified namespace, set, and bin.
 
     aerospike-py internally calls ``IndexTask.wait_till_complete`` after the
@@ -115,7 +117,9 @@ async def create_index(body: CreateIndexRequest, client: AerospikeClient) -> Sec
     summary="Delete secondary index",
     description="Remove a secondary index by name from the specified namespace.",
 )
+@limiter.limit("10/minute")
 async def delete_index(
+    request: Request,
     client: AerospikeClient,
     name: str = Query(..., min_length=1),
     ns: str = Query(..., min_length=1),

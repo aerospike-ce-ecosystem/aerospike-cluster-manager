@@ -60,9 +60,13 @@ export function useK8sClusters(
   useEffect(() => {
     let cancelled = false
     setIsLoading(true)
+    // Use the params parsed from paramsKey — the exact value the effect
+    // depends on — rather than paramsRef.current, which under React 18
+    // batching can be ahead of or behind paramsKey and cause a stale fetch.
+    const effectParams = JSON.parse(paramsKey) as ListK8sClustersParams
     ;(async () => {
       try {
-        const result = await listK8sClusters(paramsRef.current)
+        const result = await listK8sClusters(effectParams)
         if (!cancelled && isMountedRef.current) {
           setData(result)
           setError(null)

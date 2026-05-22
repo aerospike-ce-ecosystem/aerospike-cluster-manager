@@ -280,18 +280,27 @@ class OIDCAuthMiddleware(BaseHTTPMiddleware):
 
     async def _refresh_jwks(self) -> None:
         client = self._get_http_client()
-        if self._jwks_uri is None:
-            well_known = f"{self.issuer_url}/.well-known/openid-configuration"
-            resp = await client.get(well_known)
-            resp.raise_for_status()
-            doc = resp.json()
-            uri = doc.get("jwks_uri")
-            if not isinstance(uri, str) or not uri:
-                raise _AuthError("OIDC discovery document is missing jwks_uri")
-            self._jwks_uri = uri
+        # A transient JWKS-endpoint outage raises httpx.HTTPError
+        # (httpx.RequestError for network failures, httpx.HTTPStatusError for
+        # non-2xx). These are NOT _AuthError, so without translation they would
+        # escape _verify -> dispatch (which only catches _AuthError) and crash
+        # every authenticated request with an unhandled HTTP 500. Translate
+        # them into _AuthError so dispatch rejects the request cleanly (401).
+        try:
+            if self._jwks_uri is None:
+                well_known = f"{self.issuer_url}/.well-known/openid-configuration"
+                resp = await client.get(well_known)
+                resp.raise_for_status()
+                doc = resp.json()
+                uri = doc.get("jwks_uri")
+                if not isinstance(uri, str) or not uri:
+                    raise _AuthError("OIDC discovery document is missing jwks_uri")
+                self._jwks_uri = uri
 
-        resp = await client.get(self._jwks_uri)
-        resp.raise_for_status()
+            resp = await client.get(self._jwks_uri)
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise _AuthError(f"OIDC JWKS fetch failed: {exc}") from exc
         payload = resp.json()
         keys = payload.get("keys") if isinstance(payload, dict) else None
         if not isinstance(keys, list):
