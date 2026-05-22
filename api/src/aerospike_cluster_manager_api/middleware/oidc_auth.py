@@ -389,6 +389,19 @@ class OIDCAuthMiddleware(BaseHTTPMiddleware):
             self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(10.0))
         return self._http_client
 
+    async def aclose(self) -> None:
+        """Close the lazily-created JWKS HTTP client on app shutdown.
+
+        Only closes a client this middleware constructed itself
+        (``_owns_http_client``). A client injected by a test (or any
+        future caller) is left untouched — its lifecycle belongs to
+        whoever passed it in. Safe to call multiple times: the client
+        reference is cleared so a second call is a no-op.
+        """
+        if self._owns_http_client and self._http_client is not None:
+            await self._http_client.aclose()
+            self._http_client = None
+
 
 # ----------------------------------------------------------------------
 # Helpers

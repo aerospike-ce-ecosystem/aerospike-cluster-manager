@@ -97,11 +97,11 @@ async def client(init_test_db):
 
 
 @pytest.fixture(autouse=True)
-def _clear_cache():
+async def _clear_cache():
     """Ensure the info cache is clean for each test."""
-    info_cache.clear()
+    await info_cache.clear()
     yield
-    info_cache.clear()
+    await info_cache.clear()
 
 
 class TestGetClusterParallel:

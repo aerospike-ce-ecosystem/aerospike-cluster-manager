@@ -160,7 +160,7 @@ class ClientManager:
             # info_cache is keyed by conn_id only -- invalidating cross-
             # session is the conservative choice since the underlying
             # cluster info doesn't depend on which session asked.
-            info_cache.invalidate_connection(conn_id)
+            await info_cache.invalidate_connection(conn_id)
             if client is not None:
                 with (
                     _tracer.start_as_current_span(
@@ -194,7 +194,7 @@ class ClientManager:
                 self._conn_locks.pop(k, None)
         for key, client in zip(keys, clients, strict=True):
             conn_id = key[1]
-            info_cache.invalidate_connection(conn_id)
+            await info_cache.invalidate_connection(conn_id)
             with (
                 _tracer.start_as_current_span(
                     "asm.aerospike.client.close",
@@ -212,7 +212,7 @@ class ClientManager:
             )
 
     async def close_all(self) -> None:
-        info_cache.clear()
+        await info_cache.clear()
         async with self._global_lock:
             clients = list(self._clients.values())
             count = len(clients)

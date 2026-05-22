@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import tempfile
@@ -18,6 +19,12 @@ from aerospike_cluster_manager_api.rate_limit import limiter
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/udfs", tags=["udfs"])
+
+
+def _write_text(path: str, content: str) -> None:
+    """Write *content* to *path*. Runs in a worker thread via asyncio.to_thread."""
+    with open(path, "w") as f:
+        f.write(content)
 
 
 async def _list_udfs(c) -> list[UDFModule]:
@@ -65,8 +72,10 @@ async def upload_udf(request: Request, body: UploadUDFRequest, client: Aerospike
     """
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = os.path.join(tmpdir, body.filename)
-        with open(tmp_path, "w") as f:
-            f.write(body.content)
+        # The Lua source is written off the event loop — a synchronous
+        # open()/write() in an async handler blocks the whole loop while
+        # the file hits disk. asyncio.to_thread keeps the handler async.
+        await asyncio.to_thread(_write_text, tmp_path, body.content)
         await client.udf_put(tmp_path)
 
     # Re-fetch to get actual hash

@@ -175,10 +175,28 @@ def _get_conn() -> aiosqlite.Connection:
     return _conn
 
 
+async def _table_columns(conn: aiosqlite.Connection, table: str) -> set[str]:
+    """Return the current column-name set for ``table``.
+
+    Re-queried before every migration step so a process that crashed
+    mid-``_apply_migrations`` (rolling restart) resumes safely: each
+    branch decides idempotently against the live schema rather than a
+    stale snapshot taken at function entry. SQLite has no
+    ``ADD COLUMN IF NOT EXISTS`` before 3.35, so this explicit guard is
+    the portable equivalent.
+    """
+    async with conn.execute(f"PRAGMA table_info({table})") as cursor:
+        return {row[1] for row in await cursor.fetchall()}
+
+
 async def _apply_migrations(conn: aiosqlite.Connection) -> None:
-    """Add columns introduced after the initial schema."""
-    async with conn.execute("PRAGMA table_info(connections)") as cursor:
-        columns = {row[1] for row in await cursor.fetchall()}
+    """Add columns introduced after the initial schema.
+
+    Every step re-reads ``PRAGMA table_info`` immediately before acting
+    (via :func:`_table_columns`) so a mid-migration restart can resume
+    without crashing on an already-applied step.
+    """
+    columns = await _table_columns(conn, "connections")
 
     # description -> note rename. Idempotent across all DB ages:
     #   * fresh DB (CREATE TABLE has note already): both branches skip
@@ -192,15 +210,16 @@ async def _apply_migrations(conn: aiosqlite.Connection) -> None:
             logger.info("Migrating SQLite: adding connections.note column")
             await conn.execute("ALTER TABLE connections ADD COLUMN note TEXT")
         await conn.commit()
-        # refresh column set for downstream checks
-        async with conn.execute("PRAGMA table_info(connections)") as cursor:
-            columns = {row[1] for row in await cursor.fetchall()}
 
+    # Re-query before each remaining step so a partially-applied
+    # migration (process killed between two ALTERs) resumes cleanly.
+    columns = await _table_columns(conn, "connections")
     if "labels" not in columns:
         logger.info("Migrating SQLite: adding labels column")
         await conn.execute("ALTER TABLE connections ADD COLUMN labels TEXT")
         await conn.commit()
 
+    columns = await _table_columns(conn, "connections")
     if "workspace_id" not in columns:
         logger.info("Migrating SQLite: adding workspace_id column")
         await conn.execute("ALTER TABLE connections ADD COLUMN workspace_id TEXT")
@@ -213,8 +232,7 @@ async def _apply_migrations(conn: aiosqlite.Connection) -> None:
     # Existing rows backfill to ``'system'`` via the column default — the
     # workspace ACL treats that as accessible to any authenticated caller
     # (legacy single-tenant semantics).
-    async with conn.execute("PRAGMA table_info(workspaces)") as cursor:
-        ws_columns = {row[1] for row in await cursor.fetchall()}
+    ws_columns = await _table_columns(conn, "workspaces")
     if "owner_id" not in ws_columns:
         logger.info("Migrating SQLite: adding workspaces.owner_id column")
         await conn.execute("ALTER TABLE workspaces ADD COLUMN owner_id TEXT NOT NULL DEFAULT 'system'")

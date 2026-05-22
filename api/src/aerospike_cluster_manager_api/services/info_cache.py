@@ -73,17 +73,29 @@ class InfoCache:
             self._store[key] = _CacheEntry(value, ttl)
             return value
 
-    def invalidate_connection(self, conn_id: str) -> None:
-        """Remove all cached entries for *conn_id*."""
-        keys_to_remove = [k for k in self._store if k[0] == conn_id]
-        for k in keys_to_remove:
-            self._store.pop(k, None)
-            self._locks.pop(k, None)
+    async def invalidate_connection(self, conn_id: str) -> None:
+        """Remove all cached entries for *conn_id*.
 
-    def clear(self) -> None:
-        """Drop the entire cache."""
-        self._store.clear()
-        self._locks.clear()
+        Holds ``_global_lock`` while mutating ``_store`` / ``_locks`` so it
+        cannot race a concurrent :meth:`get_or_fetch` (which writes
+        ``_store`` under a per-key lock obtained via ``_get_lock``).
+        """
+        async with self._global_lock:
+            keys_to_remove = [k for k in self._store if k[0] == conn_id]
+            for k in keys_to_remove:
+                self._store.pop(k, None)
+                self._locks.pop(k, None)
+
+    async def clear(self) -> None:
+        """Drop the entire cache.
+
+        Guarded by ``_global_lock`` for the same reason as
+        :meth:`invalidate_connection` — a bare ``dict.clear()`` would race
+        concurrent ``get_or_fetch`` writers.
+        """
+        async with self._global_lock:
+            self._store.clear()
+            self._locks.clear()
 
 
 _STATIC_COMMANDS = frozenset({"build", "edition"})

@@ -33,11 +33,11 @@ def _info_all_result(name: str, resp: str) -> tuple[str, int | None, str]:
 
 
 @pytest.fixture(autouse=True)
-def _clear_info_cache():
+async def _clear_info_cache():
     """Ensure the info cache is clean for each test in this module."""
-    info_cache.clear()
+    await info_cache.clear()
     yield
-    info_cache.clear()
+    await info_cache.clear()
 
 
 def _make_mock_client() -> AsyncMock:
