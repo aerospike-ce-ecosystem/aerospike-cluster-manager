@@ -422,12 +422,18 @@ async def list_records(
         logger.exception("Query failed for ns=%s set=%s; returning empty page", namespace, set_name)
         raw_results = []
 
+    # When the scan returned a full page, there is more data regardless of
+    # set_total. set_total is an independent info-command estimate that can
+    # lag the actual scan on an eventually-consistent set, which would
+    # otherwise make has_more falsely False on a full page.
+    has_more = True if len(raw_results) >= limit else set_total > len(raw_results)
+
     return ListRecordsResult(
         records=raw_results,
         total=set_total,
         page=1,
         page_size=page_size,
-        has_more=set_total > len(raw_results),
+        has_more=has_more,
         total_estimated=True,
     )
 
