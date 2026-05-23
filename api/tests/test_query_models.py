@@ -16,6 +16,7 @@ from aerospike_cluster_manager_api.models.query import (
     FilterCondition,
     FilteredQueryRequest,
     FilterOperator,
+    QueryPredicate,
     QueryRequest,
 )
 
@@ -124,3 +125,46 @@ class TestFilterConditionBinName:
             value="user-",
         )
         assert cond.bin == PK_BIN_PLACEHOLDER
+
+
+class TestQueryPredicateBinValidation:
+    """``QueryPredicate.bin`` must enforce the same bin-name rules as
+    ``FilterCondition.bin`` (length 1..15, no control characters, no
+    leading/trailing whitespace) so malformed predicates fail at the API
+    boundary with a 422 instead of an opaque server-side 5xx.
+    """
+
+    def test_rejects_empty_bin_name(self):
+        with pytest.raises(ValidationError):
+            QueryPredicate(bin="", operator="equals", value=1)
+
+    def test_rejects_oversized_bin_name(self):
+        with pytest.raises(ValidationError):
+            QueryPredicate(bin="x" * 20, operator="equals", value=1)
+
+    def test_rejects_control_character_bin_name(self):
+        with pytest.raises(ValidationError):
+            QueryPredicate(bin="bad\x00name", operator="equals", value=1)
+
+    def test_rejects_del_character_bin_name(self):
+        with pytest.raises(ValidationError):
+            QueryPredicate(bin="bad\x7fname", operator="equals", value=1)
+
+    def test_rejects_leading_whitespace_bin_name(self):
+        with pytest.raises(ValidationError):
+            QueryPredicate(bin=" bin", operator="equals", value=1)
+
+    def test_rejects_trailing_whitespace_bin_name(self):
+        with pytest.raises(ValidationError):
+            QueryPredicate(bin="bin ", operator="equals", value=1)
+
+    def test_accepts_valid_bin_name(self):
+        pred = QueryPredicate(bin="age", operator="equals", value=30)
+        assert pred.bin == "age"
+
+    def test_accepts_pk_placeholder(self):
+        # QueryPredicate doesn't enforce PK-operator pairing like
+        # FilterCondition does, but the placeholder still satisfies bin-name
+        # rules so it round-trips cleanly.
+        pred = QueryPredicate(bin=PK_BIN_PLACEHOLDER, operator="equals", value="x")
+        assert pred.bin == PK_BIN_PLACEHOLDER

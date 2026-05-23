@@ -23,6 +23,7 @@ import {
 import { ApiError } from "@/lib/api/client"
 import { createIndex } from "@/lib/api/indexes"
 import type { SecondaryIndexType } from "@/lib/types/index"
+import { validateBinName } from "@/lib/validation"
 
 interface CreateIndexDialogProps {
   open: boolean
@@ -79,7 +80,11 @@ export function CreateIndexDialog({
 
     const name = form.name.trim()
     const namespace = form.namespace.trim()
-    const bin = form.bin.trim()
+    // Don't trim the bin name — validateBinName mirrors backend
+    // ``_validate_bin_names`` which rejects leading/trailing whitespace
+    // outright rather than silently fixing it. Surfacing the error keeps
+    // the local check aligned with the eventual 422 from the API.
+    const bin = form.bin
     const set = form.set.trim()
 
     if (!name) {
@@ -90,8 +95,9 @@ export function CreateIndexDialog({
       setError("Namespace is required.")
       return
     }
-    if (!bin) {
-      setError("Bin is required.")
+    const binError = validateBinName(bin)
+    if (binError) {
+      setError(binError)
       return
     }
 
