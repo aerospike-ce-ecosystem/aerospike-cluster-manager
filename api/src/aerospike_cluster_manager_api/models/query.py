@@ -18,10 +18,20 @@ def _check_select_bin_names(value: list[str] | None) -> list[str] | None:
 
 
 class QueryPredicate(BaseModel):
-    bin: str = Field(min_length=1, max_length=15)
+    # ``BinName`` enforces length 1..15; the ``_check_bin_name`` validator
+    # below layers in control-char / whitespace rules so malformed names
+    # surface as a 422 rather than an opaque server-side 5xx. Matches
+    # ``FilterCondition.bin`` / ``selectBins`` / ``RecordWriteRequest.bins``.
+    bin: BinName
     operator: Literal["equals", "between", "contains", "geo_within_region", "geo_contains_point"]
     value: BinValue
     value2: BinValue | None = None
+
+    @field_validator("bin")
+    @classmethod
+    def _check_bin_name(cls, value: str) -> str:
+        _validate_bin_names([value], field_label="bin name")
+        return value
 
 
 class QueryRequest(BaseModel):

@@ -16,6 +16,7 @@ import { Label } from "@/components/Label"
 import { ApiError } from "@/lib/api/client"
 import { putRecord } from "@/lib/api/records"
 import type { BinValue, PkType } from "@/lib/types/record"
+import { validateBinName } from "@/lib/validation"
 
 /**
  * Create a new record in (namespace, set). Mirrors the seed-record half of
@@ -49,28 +50,6 @@ const PK_TYPES: ReadonlyArray<{ value: PkType; label: string }> = [
 
 const SELECT_CLASSES =
   "h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-
-// Mirrors backend bin-name validation (api/models/record.py:_validate_bin_names
-// + the BinName Annotated alias) so users see a local error before the
-// request round-trips to a 422 from FastAPI.
-const MAX_BIN_NAME_LENGTH = 15
-
-function validateBinName(name: string): string | null {
-  if (name.length === 0) return "Bin name is required."
-  if (name.length > MAX_BIN_NAME_LENGTH) {
-    return `Bin name must be at most ${MAX_BIN_NAME_LENGTH} characters.`
-  }
-  if (name !== name.trim()) {
-    return "Bin name must not have leading or trailing whitespace."
-  }
-  for (let i = 0; i < name.length; i++) {
-    const code = name.charCodeAt(i)
-    if (code < 0x20 || code === 0x7f) {
-      return "Bin name must not contain control characters."
-    }
-  }
-  return null
-}
 
 interface CreateRecordDialogProps {
   open: boolean

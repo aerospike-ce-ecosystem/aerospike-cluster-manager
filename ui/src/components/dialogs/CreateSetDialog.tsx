@@ -15,6 +15,7 @@ import { Input } from "@/components/Input"
 import { Label } from "@/components/Label"
 import { ApiError } from "@/lib/api/client"
 import { putRecord } from "@/lib/api/records"
+import { validateBinName } from "@/lib/validation"
 
 /**
  * Aerospike sets are created implicitly when a record with a new `set` value is written.
@@ -59,8 +60,13 @@ export function CreateSetDialog({
     if (!set) return setError("Set name is required")
     const primaryKey = pk.trim()
     if (!primaryKey) return setError("Primary key is required")
-    const bin = binName.trim()
-    if (!bin) return setError("Bin name is required")
+    // Don't trim the bin name — validateBinName mirrors backend
+    // ``_validate_bin_names`` which rejects leading/trailing whitespace
+    // outright rather than silently fixing it. Surfacing the error keeps
+    // the local check aligned with the eventual 422.
+    const bin = binName
+    const binError = validateBinName(bin)
+    if (binError) return setError(binError)
 
     setLoading(true)
     try {
