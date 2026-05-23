@@ -92,11 +92,23 @@ class BinDataType(StrEnum):
 class FilterCondition(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    bin: str = Field(min_length=1, max_length=15)
+    # ``BinName`` enforces length 1..15. The ``_check_bin_name`` validator
+    # below layers in control-char / whitespace rules so malformed names
+    # surface as a 422 rather than an opaque server-side 5xx (e.g.
+    # ``BinNameTooLong``). PK operators use the ``PK_BIN_PLACEHOLDER``
+    # sentinel which passes these rules. Matches ``selectBins`` /
+    # ``RecordWriteRequest.bins`` validation.
+    bin: BinName
     operator: FilterOperator
     value: BinValue | None = None
     value2: BinValue | None = None
     bin_type: BinDataType = Field(default=BinDataType.STRING, alias="binType")
+
+    @field_validator("bin")
+    @classmethod
+    def _check_bin_name(cls, value: str) -> str:
+        _validate_bin_names([value], field_label="bin name")
+        return value
 
     @model_validator(mode="after")
     def _validate_pk_operator_pairing(self) -> FilterCondition:
