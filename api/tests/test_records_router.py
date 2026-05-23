@@ -601,6 +601,62 @@ class TestPutRecordRouter:
         # The Aerospike write must never be attempted for an invalid request.
         mock_client.put.assert_not_awaited()
 
+    async def test_oversized_bin_name_returns_422(self, client: AsyncClient):
+        """A write with a bin name longer than 15 chars must be rejected at
+        the pydantic boundary (422) instead of bubbling up as an opaque 5xx
+        from the Aerospike server (``BinNameTooLong``)."""
+        mock_client = AsyncMock()
+        mock_client.put = AsyncMock(return_value=None)
+
+        with (
+            patch(
+                "aerospike_cluster_manager_api.dependencies.db.get_connection",
+                AsyncMock(return_value={"id": "conn-test"}),
+            ),
+            patch(
+                "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+                AsyncMock(return_value=mock_client),
+            ),
+        ):
+            resp = await client.post(
+                "/api/records/conn-test",
+                json={
+                    "key": {"namespace": "test", "set": "demo", "pk": "k1"},
+                    "bins": {"x" * 20: 1},
+                },
+            )
+
+        assert resp.status_code == 422, resp.text
+        # The Aerospike write must never be attempted for an invalid request.
+        mock_client.put.assert_not_awaited()
+
+    async def test_control_char_bin_name_returns_422(self, client: AsyncClient):
+        """A write with a control char in a bin name must be rejected at the
+        pydantic boundary (422)."""
+        mock_client = AsyncMock()
+        mock_client.put = AsyncMock(return_value=None)
+
+        with (
+            patch(
+                "aerospike_cluster_manager_api.dependencies.db.get_connection",
+                AsyncMock(return_value={"id": "conn-test"}),
+            ),
+            patch(
+                "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+                AsyncMock(return_value=mock_client),
+            ),
+        ):
+            resp = await client.post(
+                "/api/records/conn-test",
+                json={
+                    "key": {"namespace": "test", "set": "demo", "pk": "k1"},
+                    "bins": {"bad\x00name": 1},
+                },
+            )
+
+        assert resp.status_code == 422, resp.text
+        mock_client.put.assert_not_awaited()
+
 
 class TestConnectionRaceOn404:
     """Dependency-layer TOCTOU: connection deleted between the ACL check and

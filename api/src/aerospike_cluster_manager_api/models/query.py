@@ -1,30 +1,19 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from .record import AerospikeRecord, BinValue
+from .record import AerospikeRecord, BinName, BinValue, _validate_bin_names
 
 # Sentinel bin name reserved for FilterConditions whose operator is PK_PREFIX
 # or PK_REGEX. PK operators target exp.key() rather than a bin accessor.
 PK_BIN_PLACEHOLDER = "__pk__"
 
-# Aerospike bin names: ASCII printable, no control chars / whitespace.
-# Server enforces max length 15; we reject 0x00-0x1F + 0x7F at the boundary
-# so malformed names surface as a 400 rather than an opaque server-side 5xx.
-BinName = Annotated[str, Field(min_length=1, max_length=15)]
 
-
-def _validate_bin_names(value: list[str] | None) -> list[str] | None:
-    if value is None:
-        return value
-    for name in value:
-        if any(ord(c) < 0x20 or ord(c) == 0x7F for c in name):
-            raise ValueError(f"selectBins entries must not contain control characters: {name!r}")
-        if name != name.strip():
-            raise ValueError(f"selectBins entries must not have leading/trailing whitespace: {name!r}")
+def _check_select_bin_names(value: list[str] | None) -> list[str] | None:
+    _validate_bin_names(value, field_label="selectBins entries")
     return value
 
 
@@ -49,7 +38,7 @@ class QueryRequest(BaseModel):
     @field_validator("selectBins")
     @classmethod
     def _check_select_bins(cls, value: list[str] | None) -> list[str] | None:
-        return _validate_bin_names(value)
+        return _check_select_bin_names(value)
 
 
 class QueryResponse(BaseModel):
@@ -157,7 +146,7 @@ class FilteredQueryRequest(BaseModel):
     @field_validator("select_bins")
     @classmethod
     def _check_select_bins(cls, value: list[str] | None) -> list[str] | None:
-        return _validate_bin_names(value)
+        return _check_select_bin_names(value)
 
     @model_validator(mode="after")
     def _validate_pk_fields(self) -> FilteredQueryRequest:
