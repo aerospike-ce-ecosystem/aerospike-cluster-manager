@@ -796,6 +796,13 @@ All environment variables with their defaults and descriptions. See `api/src/aer
 | `DB_POOL_MAX_SIZE` | `10` | Maximum number of connections in the database connection pool |
 | `DB_COMMAND_TIMEOUT` | `30` | SQL command execution timeout in seconds |
 
+### At-rest Encryption
+
+| Variable | Default | Description |
+|---|---|---|
+| `ACM_PASSWORD_KEK` | _(empty)_ | Fernet key used to encrypt stored Aerospike connection passwords. Required for persistent credentials |
+| `ACM_ALLOW_EPHEMERAL_KEK` | `false` | Dev-only escape hatch that generates a process-local key when `ACM_PASSWORD_KEK` is unset. Stored passwords become unreadable after restart |
+
 ### Kubernetes Management
 
 | Variable | Default | Description |
