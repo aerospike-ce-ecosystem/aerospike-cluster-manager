@@ -26,14 +26,14 @@ sidebar.
 | Icons           | `@remixicon/react`                                                  | Tremor's default icon set                                                                                    |
 | State           | `zustand`                                                           | Simple, store-per-domain                                                                                     |
 | Forms           | `react-hook-form` NOT used. Plain `useState` + zod parse at submit. | Keeps dialogs simple                                                                                         |
-| Package manager | **npm** (with `--legacy-peer-deps`)                                 | Template ships pnpm; we standardise on npm across the repo                                                   |
+| Package manager | **npm**                                                             | Template ships pnpm; we standardise on npm across the repo                                                   |
 
 ## Commands
 
 All commands run from `ui/`.
 
 ```bash
-npm install --legacy-peer-deps       # install deps (peer conflicts: react-day-picker 8 vs React 19)
+npm install                          # install deps
 npm run dev                          # dev server on http://localhost:3100
 npm run type-check                   # tsc --noEmit
 npm run lint                         # next lint
