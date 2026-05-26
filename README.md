@@ -48,52 +48,28 @@ Browse, create, edit, duplicate and delete records with server-side limiting and
 
 ## Quick Start
 
-### Container Image (Quickest)
+### Compose Stack (Quickest)
 
-Run Aerospike Cluster Manager as a single container. Connection profiles are stored in SQLite — no separate database required.
+Run Aerospike Cluster Manager with the checked-in Compose stack. It builds separate API and web containers from `Dockerfile.api` and `Dockerfile.web`. Connection profiles are stored in SQLite — no separate database required.
 
-**Step 1 — Start Aerospike CE (skip if you already have one running)**
-
-```bash
-podman network create aerospike-net
-podman run -d \
-  --name aerospike \
-  --network aerospike-net \
-  aerospike:ce-8.1.1.1_1
-
-# Docker
-docker network create aerospike-net
-docker run -d \
-  --name aerospike \
-  --network aerospike-net \
-  aerospike:ce-8.1.1.1_1
-```
-
-**Step 2 — Start Aerospike Cluster Manager**
+**Step 1 — Start the stack**
 
 ```bash
-# Podman
-podman run -d \
-  -p 3010:3000 \
-  --name aerospike-cluster-manager \
-  --network aerospike-net \
-  -v ~/.aerospike-cluster-manager:/app/data:U \
-  ghcr.io/aerospike-ce-ecosystem/aerospike-cluster-manager:latest
-
-# Docker
-docker run -d \
-  -p 3010:3000 \
-  --name aerospike-cluster-manager \
-  --network aerospike-net \
-  -v ~/.aerospike-cluster-manager:/app/data \
-  ghcr.io/aerospike-ce-ecosystem/aerospike-cluster-manager:latest
+cp .env.example .env
+podman compose -f compose.yaml up --build
 ```
 
-Open **http://localhost:3010** and add a connection with:
-- **Host**: `aerospike` (container name on the shared network)
+Docker Compose works with the same file:
+
+```bash
+docker compose -f compose.yaml up --build
+```
+
+Open **http://localhost:3100** and add a connection with:
+- **Host**: `aerospike-node-1` (container name on the shared network)
 - **Port**: `3000`
 
-Connection profiles are persisted to `~/.aerospike-cluster-manager/connections.db` on your host via the volume mount. The `:U` flag (Podman only) remaps the directory ownership to the container's user.
+Connection profiles are persisted in the Compose `app-data` volume.
 
 > **macOS / Windows — connecting to an external Aerospike** — if your Aerospike is running on the host (not in this network), use `host.containers.internal` (Podman) or `host.docker.internal` (Docker) as the host when adding the connection in the UI.
 
@@ -738,9 +714,8 @@ aerospike-cluster-manager/
 │   │   └── lib/            # API client, utils, types
 │   ├── proxy.js            # Production sidecar: forwards /api/* to API_URL
 │   └── package.json
-├── Dockerfile              # Multi-stage: combined api+ui image
 ├── Dockerfile.api          # Standalone api image
-├── Dockerfile.ui           # Standalone ui image
+├── Dockerfile.web          # Standalone web image
 ├── compose.yaml            # Full stack (all containers)
 ├── compose.dev.yaml        # Aerospike only (for local dev)
 └── .env.example
@@ -827,23 +802,30 @@ All environment variables with their defaults and descriptions. See `api/src/aer
 
 ## Production Deployment
 
-### Single Container Deployment
+### Split Container Deployment
 
-The project includes a multi-stage `Dockerfile` that bundles both the UI (Next.js standalone via `proxy.js` sidecar) and API (FastAPI/Uvicorn) into a single container image. The container runs as a non-root user (`appuser`) and exposes two ports:
+The project builds standalone API and web images from `Dockerfile.api` and `Dockerfile.web`. Both containers run as a non-root user (`appuser`) and expose one port each:
 
 - **Port 3100** — UI (Next.js standalone)
 - **Port 8000** — API (Uvicorn)
 
 ```bash
-# Build the container image
-podman build -t aerospike-cluster-manager .
+# Build the container images
+podman build -f Dockerfile.api -t aerospike-cluster-manager-api .
+podman build -f Dockerfile.web -t aerospike-cluster-manager-web .
 
-# Run with SQLite (default — no extra services needed)
+# Run with SQLite (default)
 podman run -d \
-  -p 3100:3100 \
+  --name aerospike-cluster-manager-api \
   -p 8000:8000 \
   -v ~/.aerospike-cluster-manager:/app/data:U \
-  aerospike-cluster-manager
+  aerospike-cluster-manager-api
+
+podman run -d \
+  --name aerospike-cluster-manager-web \
+  -p 3100:3100 \
+  -e API_URL=http://host.containers.internal:8000 \
+  aerospike-cluster-manager-web
 ```
 
 A built-in health check (`/api/health`) is configured with a 10-second interval and 15-second start period.
@@ -864,9 +846,10 @@ Mount a host directory to persist the database across container restarts:
 
 ```bash
 podman run -d \
-  -p 3100:3000 \
+  --name aerospike-cluster-manager-api \
+  -p 8000:8000 \
   -v ~/.aerospike-cluster-manager:/app/data:U \
-  aerospike-cluster-manager
+  aerospike-cluster-manager-api
 ```
 
 **PostgreSQL (optional — for high-availability or shared deployments):**
@@ -875,10 +858,11 @@ Set `ENABLE_POSTGRES=true` and provide a `DATABASE_URL`:
 
 ```bash
 podman run -d \
-  -p 3100:3000 \
+  --name aerospike-cluster-manager-api \
+  -p 8000:8000 \
   -e ENABLE_POSTGRES=true \
   -e DATABASE_URL=postgresql://user:password@your-db-host:5432/aerospike_manager \
-  aerospike-cluster-manager
+  aerospike-cluster-manager-api
 ```
 
 Or use the PostgreSQL Compose override:
@@ -910,7 +894,7 @@ server {
     }
 
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:3100;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

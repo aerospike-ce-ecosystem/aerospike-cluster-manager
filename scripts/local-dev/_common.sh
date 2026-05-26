@@ -23,7 +23,7 @@ export ACKO_NAMESPACE="${ACKO_NAMESPACE:-aerospike-operator}"
 # (`http://aerospike-ce-kubernetes-operator-ui-api:80`). A shorter release
 # name produces `aerospike-operator-aerospike-ce-kubernetes-operator-*` which
 # (a) breaks the baked API_URL and (b) exceeds the 63-char Service name
-# limit. See Dockerfile.ui for the baked URL.
+# limit. See Dockerfile.web for the baked URL.
 export ACKO_RELEASE="${ACKO_RELEASE:-aerospike-ce-kubernetes-operator}"
 export ACKO_CRDS_RELEASE="${ACKO_CRDS_RELEASE:-aerospike-ce-kubernetes-operator-crds}"
 export ACKO_CHART_VERSION="${ACKO_CHART_VERSION:-0.1.2}"
