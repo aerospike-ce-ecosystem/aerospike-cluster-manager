@@ -77,12 +77,17 @@
   background: var(--error-50);
 }
 
+/* color-mix() lands in Safari 16.2 / Chrome 111 / Firefox 113. Older clients
+   fall back to the warning-50 amber rgba below (parsed first, then overridden
+   if the browser understands color-mix). */
 @keyframes ace-pulse {
   0%,
   100% {
+    box-shadow: 0 0 0 0 rgba(250, 146, 0, 0.45);
     box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 45%, transparent);
   }
   50% {
+    box-shadow: 0 0 0 5px rgba(250, 146, 0, 0);
     box-shadow: 0 0 0 5px color-mix(in srgb, currentColor 0%, transparent);
   }
 }

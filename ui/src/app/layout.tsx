@@ -49,7 +49,6 @@ export default function RootLayout({
       <body
         data-app="ace"
         className="antialiased selection:bg-primary-95 selection:text-primary-40 dark:bg-bg"
-        suppressHydrationWarning
       >
         <ThemeProvider defaultTheme="light" attribute="data-theme">
           <AuthProvider>
