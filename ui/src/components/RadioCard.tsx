@@ -33,7 +33,7 @@ const RadioCardGroupIndicator = React.forwardRef<
         // background color
         "bg-white dark:bg-gray-950",
         // checked
-        "group-data-[state=checked]:border-0 group-data-[state=checked]:border-transparent group-data-[state=checked]:bg-indigo-600",
+        "group-data-[state=checked]:border-0 group-data-[state=checked]:border-transparent group-data-[state=checked]:bg-primary-50",
         // disabled
         "group-data-[disabled]:border",
         "group-data-[disabled]:border-gray-300 group-data-[disabled]:bg-gray-100 group-data-[disabled]:text-gray-400",
@@ -78,7 +78,7 @@ const RadioCardItem = React.forwardRef<
         "bg-white dark:bg-gray-950",
         // border color
         "border-gray-200 dark:border-gray-800",
-        "data-[state=checked]:border-indigo-600 data-[state=checked]:dark:border-indigo-600",
+        "data-[state=checked]:border-primary-50 data-[state=checked]:dark:border-primary-50",
         focusInput,
         className,
       )}

@@ -1,11 +1,12 @@
 "use client"
 
 import { Badge } from "@/components/Badge"
-import { Button } from "@/components/Button"
 import { Card } from "@/components/Card"
 import { RegisterUdfDialog } from "@/components/dialogs/RegisterUdfDialog"
 import { ErrorBanner } from "@/components/ErrorBanner"
 import { Input } from "@/components/Input"
+import { Button } from "@/components/Button"
+import { PageHead } from "@/components/PageHead"
 import {
   Table,
   TableBody,
@@ -56,39 +57,36 @@ export default function UdfsPage({ params }: PageProps) {
 
   return (
     <main className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <span className="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-500">
-            UDFs
-          </span>
-          <h1 className="mt-1 text-lg font-semibold text-gray-900 sm:text-xl dark:text-gray-50">
-            User-defined functions
-          </h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-500">
-            Registered Lua modules. Backend does not ship bundled UDFs — users
-            manage their own.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Input
-            type="search"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter modules..."
-            className="sm:w-60"
-          />
-          <Button
-            variant="secondary"
-            onClick={() => void load()}
-            isLoading={loading}
-          >
-            Refresh
-          </Button>
-          <Button variant="primary" onClick={() => setRegisterOpen(true)}>
-            Register UDF
-          </Button>
-        </div>
-      </header>
+      <PageHead
+        title="User-defined functions"
+        sub="Registered Lua modules. Backend does not ship bundled UDFs — users manage their own."
+      >
+        <Input
+          type="search"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filter modules..."
+          className="sm:w-60"
+        />
+        <Button
+          variant="secondary"
+          onClick={() => void load()}
+          disabled={loading}
+        >
+          Refresh
+        </Button>
+        <Button variant="primary" onClick={() => setRegisterOpen(true)}>
+          Register UDF
+        </Button>
+      </PageHead>
+      {error && (
+        <ErrorBanner
+          message={error}
+          onRetry={() => void load()}
+          disabled={loading}
+          staleData={!!udfs && udfs.length > 0}
+        />
+      )}
 
       <RegisterUdfDialog
         open={registerOpen}
@@ -98,15 +96,6 @@ export default function UdfsPage({ params }: PageProps) {
           void load()
         }}
       />
-
-      {error && (
-        <ErrorBanner
-          message={error}
-          onRetry={() => void load()}
-          disabled={loading}
-          staleData={!!udfs && udfs.length > 0}
-        />
-      )}
 
       <Card className="p-0">
         <TableRoot>

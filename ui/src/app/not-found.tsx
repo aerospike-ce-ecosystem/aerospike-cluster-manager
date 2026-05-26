@@ -10,7 +10,7 @@ export default function NotFound() {
       <Link href={siteConfig.baseLinks.home}>
         <DatabaseLogo className="mt-6 h-10" />
       </Link>
-      <p className="mt-6 text-4xl font-semibold text-indigo-600 sm:text-5xl dark:text-indigo-500">
+      <p className="mt-6 text-4xl font-semibold text-primary-40 sm:text-5xl dark:text-primary-45">
         404
       </p>
       <h1 className="mt-4 text-2xl font-semibold text-gray-900 dark:text-gray-50">

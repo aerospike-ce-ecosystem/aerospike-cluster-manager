@@ -4,6 +4,7 @@ import { Badge } from "@/components/Badge"
 import { Button } from "@/components/Button"
 import { Card } from "@/components/Card"
 import { ErrorBanner } from "@/components/ErrorBanner"
+import { PageHead } from "@/components/PageHead"
 import {
   Table,
   TableBody,
@@ -44,32 +45,21 @@ export default function AckoTemplatesPage() {
 
   return (
     <main className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <span className="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-500">
-            ACKO
-          </span>
-          <h1 className="mt-1 text-lg font-semibold text-gray-900 sm:text-xl dark:text-gray-50">
-            Cluster templates
-          </h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-500">
-            AerospikeClusterTemplate CRs — reusable shapes for creating clusters
-            via ACKO.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => void load()}
-            isLoading={loading}
-          >
-            Refresh
-          </Button>
-          <Button variant="primary" disabled title="Coming soon">
-            New template
-          </Button>
-        </div>
-      </header>
+      <PageHead
+        title="Cluster templates"
+        sub="AerospikeClusterTemplate CRs — reusable shapes for creating clusters via ACKO."
+      >
+        <Button
+          variant="secondary"
+          onClick={() => void load()}
+          disabled={loading}
+        >
+          Refresh
+        </Button>
+        <Button variant="primary" disabled title="Coming soon">
+          New template
+        </Button>
+      </PageHead>
 
       {error && (
         <ErrorBanner

@@ -1,11 +1,12 @@
 "use client"
 
 import { Badge } from "@/components/Badge"
-import { Button } from "@/components/Button"
 import { Card } from "@/components/Card"
 import { CreateIndexDialog } from "@/components/dialogs/CreateIndexDialog"
 import { ErrorBanner } from "@/components/ErrorBanner"
 import { Input } from "@/components/Input"
+import { Button } from "@/components/Button"
+import { PageHead } from "@/components/PageHead"
 import {
   Table,
   TableBody,
@@ -72,39 +73,33 @@ export default function SecondaryIndexesPage({ params }: PageProps) {
 
   return (
     <main className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <span className="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-500">
-            Secondary indexes
-          </span>
-          <h1 className="mt-1 text-lg font-semibold text-gray-900 sm:text-xl dark:text-gray-50">
-            Secondary indexes
-          </h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-500">
+      <PageHead
+        title="Secondary indexes"
+        sub={
+          <>
             Grouped per namespace. Backed by{" "}
             <span className="font-mono">sindex-list</span>.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Input
-            type="search"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter indexes..."
-            className="sm:w-60"
-          />
-          <Button
-            variant="secondary"
-            onClick={() => void load()}
-            isLoading={loading}
-          >
-            Refresh
-          </Button>
-          <Button variant="primary" onClick={() => setCreateOpen(true)}>
-            Create index
-          </Button>
-        </div>
-      </header>
+          </>
+        }
+      >
+        <Input
+          type="search"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Filter indexes..."
+          className="sm:w-60"
+        />
+        <Button
+          variant="secondary"
+          onClick={() => void load()}
+          disabled={loading}
+        >
+          Refresh
+        </Button>
+        <Button variant="primary" onClick={() => setCreateOpen(true)}>
+          Create index
+        </Button>
+      </PageHead>
 
       <CreateIndexDialog
         open={createOpen}

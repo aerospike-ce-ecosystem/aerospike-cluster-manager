@@ -44,7 +44,7 @@ export function ViewToggle({
             className={cx(
               "flex size-7 items-center justify-center rounded transition",
               active
-                ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400"
+                ? "dark:bg-primary-45/10 bg-primary-95 text-primary-40 dark:text-primary-65"
                 : "text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-500 hover:dark:bg-gray-900 hover:dark:text-gray-50",
               focusRing,
             )}

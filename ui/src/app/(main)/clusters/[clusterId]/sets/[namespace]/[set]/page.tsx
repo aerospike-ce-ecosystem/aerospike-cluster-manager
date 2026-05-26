@@ -119,7 +119,7 @@ function renderBin(v: unknown, name: string): React.ReactNode {
     )
   if (kind === "integer" || kind === "double")
     return (
-      <span className="font-mono text-xs tabular-nums text-indigo-700 dark:text-indigo-400">
+      <span className="font-mono text-xs tabular-nums text-primary-40 dark:text-primary-65">
         {String(v)}
       </span>
     )
@@ -491,7 +491,7 @@ export default function RecordBrowserPage({ params }: PageProps) {
                             params.set,
                             encodeURIComponent(r.key.pk),
                           )}
-                          className="text-indigo-600 hover:underline dark:text-indigo-400"
+                          className="text-primary-40 hover:underline dark:text-primary-65"
                         >
                           {r.key.pk}
                         </Link>

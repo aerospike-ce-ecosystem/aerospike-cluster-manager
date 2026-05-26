@@ -241,7 +241,7 @@ export function GuideEditorDialog({
                     className={cx(
                       "rounded px-2 py-1 text-xs font-medium capitalize transition",
                       tab === t
-                        ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300"
+                        ? "dark:bg-primary-10/40 bg-primary-95 text-primary-40 dark:text-primary-80"
                         : "text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-900",
                     )}
                   >

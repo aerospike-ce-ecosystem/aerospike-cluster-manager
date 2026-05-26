@@ -1,0 +1,204 @@
+/* =====================================================================
+   ACM — Base theme (minimal)
+
+   Only the `.ace-*` / shell classes ACM actually renders. Everything else
+   from the upstream design system (buttons, tables, KPI, sidebar, etc.)
+   is intentionally omitted — ACM uses Tremor Raw primitives in /components.
+   ===================================================================== */
+
+/* =====================================================================
+   Status bar (PageShell bottom strip, used by ShellStatusBar)
+   ===================================================================== */
+[data-app="ace"] .statusbar {
+  height: 28px;
+  background: var(--surface);
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 18px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--on-surface-muted);
+}
+[data-app="ace"] .statusbar .seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+[data-app="ace"] .statusbar .seg b {
+  color: var(--on-surface-variant);
+  font-weight: 600;
+}
+[data-app="ace"] .statusbar a {
+  color: var(--on-surface-muted);
+  text-decoration: none;
+}
+[data-app="ace"] .statusbar a:hover {
+  color: var(--primary-40);
+}
+
+/* =====================================================================
+   StatusDot
+   ===================================================================== */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.status-dot.is-running,
+.status-dot.is-awaiting {
+  background: var(--warning-50);
+  /* currentColor lets @keyframes ace-pulse reuse the dot color via color-mix. */
+  color: var(--warning-50);
+  animation: ace-pulse 1.6s ease-in-out infinite;
+}
+.status-dot.is-queued {
+  background: var(--on-surface-muted);
+}
+.status-dot.is-succeeded {
+  background: var(--positive-50);
+}
+.status-dot.is-failed {
+  background: var(--error-50);
+}
+.status-dot.is-cancelled {
+  background: var(--on-surface-disabled);
+}
+.status-dot.is-healthy {
+  background: var(--positive-50);
+}
+.status-dot.is-degraded {
+  background: var(--warning-50);
+}
+.status-dot.is-unreach {
+  background: var(--error-50);
+}
+
+/* color-mix() lands in Safari 16.2 / Chrome 111 / Firefox 113. Older clients
+   fall back to the warning-50 amber rgba below (parsed first, then overridden
+   if the browser understands color-mix). */
+@keyframes ace-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(250, 146, 0, 0.45);
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(250, 146, 0, 0);
+    box-shadow: 0 0 0 5px color-mix(in srgb, currentColor 0%, transparent);
+  }
+}
+
+/* =====================================================================
+   Page header — title + sub-text + action slot (used by <PageHead/>)
+   ===================================================================== */
+.ace-page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 22px;
+  gap: 16px;
+}
+.ace-page-head .lead {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.ace-page-head h1 {
+  font-family: var(--font-sans);
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  margin: 0;
+  line-height: 1.2;
+  color: var(--on-surface);
+}
+.ace-page-head .sub {
+  font-size: 13px;
+  color: var(--on-surface-muted);
+  margin-top: 4px;
+  font-family: var(--font-sans);
+}
+
+/* =====================================================================
+   Announcement banner — top-of-page notice
+   ===================================================================== */
+.ace-announce {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface);
+  font-size: 13.5px;
+  color: var(--on-surface);
+}
+.ace-announce.tone-info {
+  border-color: color-mix(in oklch, var(--primary-50) 35%, var(--border));
+  background: linear-gradient(90deg, var(--primary-95), var(--surface) 80%);
+}
+.ace-announce.tone-warning {
+  border-color: #f0cb7f;
+  background: linear-gradient(90deg, #fff6e1, var(--surface) 80%);
+}
+.ace-announce.tone-success {
+  border-color: #9cdeb4;
+  background: linear-gradient(90deg, #e9f8ef, var(--surface) 80%);
+}
+.ace-announce .ico {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.ace-announce.tone-info .ico {
+  background: var(--primary-95);
+  color: var(--primary-40);
+}
+.ace-announce.tone-warning .ico {
+  background: #ffeac9;
+  color: #8a5300;
+}
+.ace-announce.tone-success .ico {
+  background: #dcf4e4;
+  color: var(--positive-50);
+}
+.ace-announce .body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ace-announce .title {
+  font-weight: 700;
+  letter-spacing: -0.005em;
+}
+.ace-announce .desc {
+  font-size: 13px;
+  color: var(--on-surface-variant);
+  line-height: 1.5;
+}
+.ace-announce .actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.ace-announce a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ace-announce a:hover {
+  text-decoration: underline;
+}

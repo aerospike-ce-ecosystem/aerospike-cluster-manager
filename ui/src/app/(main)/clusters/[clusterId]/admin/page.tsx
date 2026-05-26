@@ -6,6 +6,7 @@ import { Card } from "@/components/Card"
 import { CreateRoleDialog } from "@/components/dialogs/CreateRoleDialog"
 import { CreateUserDialog } from "@/components/dialogs/CreateUserDialog"
 import { Input } from "@/components/Input"
+import { PageHead } from "@/components/PageHead"
 import {
   Table,
   TableBody,
@@ -103,20 +104,10 @@ export default function AdminPage({ params }: PageProps) {
 
   return (
     <main className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <span className="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-500">
-            Admin
-          </span>
-          <h1 className="mt-1 text-lg font-semibold text-gray-900 sm:text-xl dark:text-gray-50">
-            Users &amp; roles
-          </h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-500">
-            Aerospike ACL — available when security is enabled in
-            aerospike.conf.
-          </p>
-        </div>
-      </header>
+      <PageHead
+        title="Users & roles"
+        sub="Aerospike ACL — available when security is enabled in aerospike.conf."
+      />
 
       {securityDisabled ? (
         <SecurityDisabledState />
@@ -179,7 +170,7 @@ function SecurityDisabledState() {
         href="https://aerospike.com/docs/server/operations/configure/security"
         target="_blank"
         rel="noopener noreferrer"
-        className="text-xs font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+        className="text-xs font-medium text-primary-40 hover:underline dark:text-primary-65"
       >
         See Aerospike security docs →
       </a>
