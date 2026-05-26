@@ -6,13 +6,6 @@
    is intentionally omitted — ACM uses Tremor Raw primitives in /components.
    ===================================================================== */
 
-/* `<div className="body">` — paragraph-level body text. */
-.body {
-  font-size: var(--fs-body-md);
-  font-weight: var(--weight-regular);
-  line-height: var(--lh-body);
-}
-
 /* =====================================================================
    Status bar (PageShell bottom strip, used by ShellStatusBar)
    ===================================================================== */
@@ -55,12 +48,11 @@
   border-radius: 50%;
   flex-shrink: 0;
 }
-.status-dot.is-running {
-  background: var(--warning-50);
-  animation: ace-pulse 1.6s ease-in-out infinite;
-}
+.status-dot.is-running,
 .status-dot.is-awaiting {
   background: var(--warning-50);
+  /* currentColor lets @keyframes ace-pulse reuse the dot color via color-mix. */
+  color: var(--warning-50);
   animation: ace-pulse 1.6s ease-in-out infinite;
 }
 .status-dot.is-queued {
@@ -88,10 +80,10 @@
 @keyframes ace-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(232, 154, 28, 0.45);
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 45%, transparent);
   }
   50% {
-    box-shadow: 0 0 0 5px rgba(232, 154, 28, 0);
+    box-shadow: 0 0 0 5px color-mix(in srgb, currentColor 0%, transparent);
   }
 }
 

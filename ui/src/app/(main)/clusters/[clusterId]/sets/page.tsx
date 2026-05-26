@@ -260,7 +260,7 @@ function NamespaceCard({
           type="button"
           onClick={onCreateSet}
           className={cx(
-            "inline-flex items-center gap-1 rounded-md border border-dashed border-primary-80 px-2.5 py-1.5 text-xs font-medium text-primary-50 transition",
+            "inline-flex items-center gap-1 rounded-md border border-dashed border-primary-80 px-2.5 py-1.5 text-xs font-medium text-primary-40 transition",
             "dark:border-primary-30/60 dark:hover:bg-primary-10/30 hover:border-primary-65 hover:bg-primary-95 dark:text-primary-65",
           )}
         >

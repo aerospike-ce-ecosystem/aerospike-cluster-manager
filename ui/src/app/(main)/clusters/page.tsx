@@ -62,9 +62,9 @@ export default function ClustersPage() {
         <Button variant="secondary" onClick={() => setAddConnOpen(true)}>
           Add Connection
         </Button>
-        <Link href="/clusters/new" className="btn btn-primary">
-          Create Cluster
-        </Link>
+        <Button variant="primary" asChild>
+          <Link href="/clusters/new">Create Cluster</Link>
+        </Button>
       </PageHead>
 
       {combinedError && (

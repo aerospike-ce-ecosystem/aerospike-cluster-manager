@@ -185,7 +185,7 @@ export function Sidebar() {
                   className={cx(
                     "flex items-center gap-x-2.5 rounded-md py-1.5 pl-2 pr-2 text-sm font-medium transition",
                     isActive(siteConfig.baseLinks.guides)
-                      ? "text-primary-50 dark:text-primary-65"
+                      ? "text-primary-40 dark:text-primary-65"
                       : "text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 hover:dark:bg-gray-900 hover:dark:text-gray-50",
                     focusRing,
                   )}
@@ -237,7 +237,7 @@ export function Sidebar() {
                   className={cx(
                     "flex items-center gap-x-2.5 rounded-md py-1.5 pl-2 pr-2 text-sm font-medium transition",
                     isActive(siteConfig.baseLinks.ackoTemplates)
-                      ? "text-primary-50 dark:text-primary-65"
+                      ? "text-primary-40 dark:text-primary-65"
                       : "text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 hover:dark:bg-gray-900 hover:dark:text-gray-50",
                     focusRing,
                   )}
@@ -371,7 +371,7 @@ function ClusterNode({
         className={cx(
           "flex items-center rounded-md pr-1 hover:bg-gray-100 hover:dark:bg-gray-900",
           clusterActive
-            ? "text-primary-50 dark:text-primary-65"
+            ? "text-primary-40 dark:text-primary-65"
             : "text-gray-700 dark:text-gray-400",
         )}
       >
@@ -388,7 +388,7 @@ function ClusterNode({
               {displayName}
             </span>
             {cluster.managedBy === "ACKO" && (
-              <span className="dark:bg-primary-10/40 shrink-0 rounded bg-primary-95 px-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary-50 dark:text-primary-65">
+              <span className="dark:bg-primary-10/40 shrink-0 rounded bg-primary-95 px-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary-40 dark:text-primary-65">
                 ACKO
               </span>
             )}
@@ -456,7 +456,7 @@ function NamespaceNode({
             className={cx(
               "group flex items-center justify-between rounded-md py-1 pl-3 pr-2 text-sm hover:bg-gray-100 hover:dark:bg-gray-900",
               nsActive
-                ? "text-primary-50 dark:text-primary-65"
+                ? "text-primary-40 dark:text-primary-65"
                 : "text-gray-700 dark:text-gray-300",
             )}
           >
@@ -522,7 +522,7 @@ function NamespaceNode({
                           "relative flex items-center rounded-md py-1 pl-10 pr-2 font-mono text-sm transition",
                           "before:absolute before:left-[30px] before:top-1.5 before:h-4 before:w-0.5 before:rounded-sm",
                           active
-                            ? "font-medium text-primary-50 before:bg-primary-45 dark:text-primary-65"
+                            ? "font-medium text-primary-40 before:bg-primary-45 dark:text-primary-65"
                             : "text-gray-600 before:bg-transparent hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 hover:dark:bg-gray-900 hover:dark:text-gray-50",
                           focusRing,
                         )}

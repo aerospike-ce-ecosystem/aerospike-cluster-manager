@@ -7,11 +7,14 @@
    ===================================================================== */
 
 :root {
-  /* ---------- Primary (Naver brand green) ---------- */
-  --primary-10: #02160c;
-  --primary-30: #036c2d;
-  --primary-40: #038f3d;
-  --primary-45: #03a847;
+  /* ---------- Primary (Naver brand green) ----------
+     Brand color sits at --primary-50. The 30/40 steps are intentionally darker
+     than a pure HSL-stepped ramp so that `text-primary-40` clears WCAG AA body
+     contrast (4.5:1) on white and `bg-primary-95` surfaces. */
+  --primary-10: #001a0a;
+  --primary-30: #014b1d;
+  --primary-40: #006e2c; /* AA body text on white (5.95:1) */
+  --primary-45: #008f3a;
   --primary-50: #03c75a; /* Main — Naver brand green */
   --primary-55: #1fd16b;
   --primary-65: #4de48e;

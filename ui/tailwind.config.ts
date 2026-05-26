@@ -3,7 +3,9 @@ import acePreset from "./tailwind-preset"
 
 const config: Config = {
   presets: [acePreset],
-  darkMode: "selector",
+  // Match next-themes' `attribute="data-theme"` on <html> (see app/layout.tsx)
+  // so `dark:*` utilities activate alongside the token override in tokens.css.
+  darkMode: ["selector", '[data-theme="dark"]'],
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
   theme: {
     extend: {

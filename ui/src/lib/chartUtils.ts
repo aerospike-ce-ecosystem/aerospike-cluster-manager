@@ -43,7 +43,7 @@ export const chartColors = {
     bg: "bg-primary-50 dark:bg-primary-45",
     stroke: "stroke-primary-50 dark:stroke-primary-45",
     fill: "fill-primary-50 dark:fill-primary-45",
-    text: "text-primary-50 dark:text-primary-45",
+    text: "text-primary-40 dark:text-primary-45",
   },
   pink: {
     bg: "bg-pink-500",

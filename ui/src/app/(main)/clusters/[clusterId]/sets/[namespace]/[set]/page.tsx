@@ -491,7 +491,7 @@ export default function RecordBrowserPage({ params }: PageProps) {
                             params.set,
                             encodeURIComponent(r.key.pk),
                           )}
-                          className="text-primary-50 hover:underline dark:text-primary-65"
+                          className="text-primary-40 hover:underline dark:text-primary-65"
                         >
                           {r.key.pk}
                         </Link>

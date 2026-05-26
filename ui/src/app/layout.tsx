@@ -48,7 +48,6 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body
         data-app="ace"
-        data-theme="light"
         className="antialiased selection:bg-primary-95 selection:text-primary-40 dark:bg-bg"
         suppressHydrationWarning
       >
