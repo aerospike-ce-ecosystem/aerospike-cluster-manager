@@ -3,11 +3,7 @@ export default function Layout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  return (
-    <div className="relative">
-      <div className="p-4 sm:px-6 sm:pb-10 sm:pt-10 lg:px-10 lg:pt-7">
-        {children}
-      </div>
-    </div>
-  )
+  // Padding is handled by `.acm-main` in globals.css to match the Huginn
+  // shell layout (sidebar + topbar + statusbar grid). No extra padding here.
+  return <div className="relative">{children}</div>
 }

@@ -285,7 +285,7 @@ export function RecordFilters({
               )}
               <span>Add filter</span>
               {availableBins.length > 0 && (
-                <span className="ml-1 rounded-full bg-indigo-100 px-1.5 text-[10px] font-medium tabular-nums text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">
+                <span className="dark:bg-primary-10/60 ml-1 rounded-full bg-primary-95 px-1.5 text-[10px] font-medium tabular-nums text-primary-40 dark:text-primary-80">
                   {availableBins.length}
                 </span>
               )}
@@ -712,7 +712,7 @@ function ConditionEditor({
           value={val}
           onChange={(e) => setVal(e.target.value)}
           placeholder='{"type":"AeroCircle","coordinates":[[lng,lat],radius]}'
-          className="min-h-[80px] w-full rounded-md border border-gray-300 bg-white p-2 font-mono text-xs outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-gray-800 dark:bg-gray-950 dark:focus:border-indigo-700 dark:focus:ring-indigo-700/30"
+          className="dark:focus:ring-primary-40/30 min-h-[80px] w-full rounded-md border border-gray-300 bg-white p-2 font-mono text-xs outline-none transition focus:border-primary-45 focus:ring-2 focus:ring-primary-90 dark:border-gray-800 dark:bg-gray-950 dark:focus:border-primary-40"
         />
       )}
 

@@ -75,7 +75,7 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
             href={lm[2]}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-indigo-600 underline hover:text-indigo-700 dark:text-indigo-400"
+            className="text-primary-50 underline hover:text-primary-40 dark:text-primary-65"
           >
             {lm[1]}
           </a>,
@@ -193,7 +193,7 @@ function renderBlocks(md: string): React.ReactNode[] {
       blocks.push(
         <blockquote
           key={key++}
-          className="mt-3 border-l-2 border-indigo-300 pl-3 text-sm italic text-gray-600 dark:border-indigo-700 dark:text-gray-400"
+          className="mt-3 border-l-2 border-primary-80 pl-3 text-sm italic text-gray-600 dark:border-primary-40 dark:text-gray-400"
         >
           {renderInline(quote.join(" "), `bq${key}`)}
         </blockquote>,

@@ -19,6 +19,7 @@ import { ErrorBanner } from "@/components/ErrorBanner"
 import { GuideMarkdown } from "@/components/GuideMarkdown"
 import { InfoBanner } from "@/components/InfoBanner"
 import { GuideEditorDialog } from "@/components/dialogs/GuideEditorDialog"
+import { PageHead } from "@/components/PageHead"
 import { useGuides } from "@/hooks/use-guides"
 import { useWorkspaces } from "@/hooks/use-workspaces"
 import { mapApiError } from "@/lib/api/error-mapping"
@@ -62,22 +63,18 @@ export default function GuidesPage() {
 
   return (
     <main className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <span className="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-500">
-            Operations
-          </span>
-          <h1 className="mt-1 text-lg font-semibold text-gray-900 sm:text-xl dark:text-gray-50">
-            Operational guides
-          </h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-500">
+      <PageHead
+        title="Operational guides"
+        sub={
+          <>
             Org/team policy for workspace{" "}
-            <span className="font-medium text-gray-700 dark:text-gray-300">
+            <span className="font-medium text-on-surface-variant">
               {workspaceName}
             </span>{" "}
             — authored here, enforced everywhere.
-          </p>
-        </div>
+          </>
+        }
+      >
         <Button
           variant="secondary"
           onClick={() => void guides.refetch()}
@@ -85,7 +82,7 @@ export default function GuidesPage() {
         >
           Refresh
         </Button>
-      </header>
+      </PageHead>
 
       <InfoBanner title="Read before you operate">
         ackoctl and AI agents fetch these guides with{" "}

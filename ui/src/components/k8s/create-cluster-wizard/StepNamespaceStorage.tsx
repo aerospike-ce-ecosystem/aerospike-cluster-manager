@@ -378,7 +378,7 @@ function StorageTypeButton({
       className={cx(
         "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
         selected
-          ? "border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-400 dark:bg-indigo-950/40 dark:text-indigo-200"
+          ? "dark:bg-primary-10/40 border-primary-45 bg-primary-95 text-primary-40 dark:border-primary-65 dark:text-primary-90"
           : "border-gray-200 text-gray-700 hover:border-gray-300 dark:border-gray-800 dark:text-gray-300",
       )}
     >

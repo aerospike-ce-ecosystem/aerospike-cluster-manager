@@ -11,7 +11,10 @@ source "$(cd "$(dirname "$0")" && pwd)/_common.sh"
 require_bin kubectl
 require_bin helm
 
-if ! kubectl config get-contexts -o name | grep -qx "${KIND_CONTEXT}"; then
+# Capture first to avoid SIGPIPE breaking `set -o pipefail` when grep -q
+# exits early on a long contexts list.
+_contexts=$(kubectl config get-contexts -o name 2>/dev/null || true)
+if ! echo "${_contexts}" | grep -qx "${KIND_CONTEXT}"; then
   die "kubectl context '${KIND_CONTEXT}' not found — run 'make kind-up' first"
 fi
 kubectl config use-context "${KIND_CONTEXT}" >/dev/null

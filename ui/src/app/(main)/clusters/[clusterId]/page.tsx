@@ -1,12 +1,14 @@
 "use client"
 
 import { Badge } from "@/components/Badge"
-import { Button } from "@/components/Button"
 import { Card } from "@/components/Card"
 import { useCluster } from "@/hooks/use-cluster"
 import { useK8sClusters } from "@/hooks/use-k8s-clusters"
 import type { ClusterNode } from "@/lib/types/cluster"
 import type { K8sClusterSummary } from "@/lib/types/k8s"
+import { Button } from "@/components/Button"
+import { PageHead } from "@/components/PageHead"
+import { RiAlertLine } from "@remixicon/react"
 import { useMemo } from "react"
 
 type PageProps = { params: { clusterId: string } }
@@ -37,50 +39,51 @@ export default function ClusterOverview({ params }: PageProps) {
 
   return (
     <main className="flex flex-col gap-8">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            {cluster.data && cluster.data.nodes[0]?.edition && (
-              <Badge variant="default">{cluster.data.nodes[0].edition}</Badge>
-            )}
-            {cluster.data && <Badge variant="success">Connected</Badge>}
-          </div>
-          <h1 className="mt-3 font-mono text-lg font-semibold text-gray-900 sm:text-xl dark:text-gray-50">
-            {params.clusterId}
-          </h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-500">
+      <PageHead
+        title={<span className="font-mono">{params.clusterId}</span>}
+        sub={
+          <>
             {cluster.data
               ? `${cluster.data.nodes.length} nodes · ${cluster.data.namespaces.length} namespaces`
               : cluster.isLoading
                 ? "Loading cluster info…"
                 : "—"}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => cluster.refetch()}
-            isLoading={cluster.isLoading}
-          >
-            Refresh
-          </Button>
-        </div>
-      </header>
+          </>
+        }
+      >
+        {cluster.data && cluster.data.nodes[0]?.edition && (
+          <Badge variant="default">{cluster.data.nodes[0].edition}</Badge>
+        )}
+        {cluster.data && <Badge variant="success">Connected</Badge>}
+        <Button
+          variant="secondary"
+          onClick={() => cluster.refetch()}
+          disabled={cluster.isLoading}
+        >
+          Refresh
+        </Button>
+      </PageHead>
 
       {cluster.error && (
-        <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
-          {cluster.error.message}
+        <div className="ace-announce tone-warning" role="status">
+          <span className="ico">
+            <RiAlertLine className="size-4" aria-hidden="true" />
+          </span>
+          <div className="body">
+            <div className="title">Failed to load cluster</div>
+            <div className="desc">{cluster.error.message}</div>
+          </div>
         </div>
       )}
 
       {ackoInfo && (
         <section
           aria-label="ACKO overview"
-          className="flex flex-col gap-4 rounded-lg border border-indigo-100 bg-indigo-50/50 p-4 dark:border-indigo-900/40 dark:bg-indigo-950/30"
+          className="bg-primary-95/50 dark:border-primary-30/40 dark:bg-primary-10/30 flex flex-col gap-4 rounded-lg border border-primary-95 p-4"
         >
           <div className="flex items-start justify-between gap-4">
             <div>
-              <span className="text-xs font-medium uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
+              <span className="text-xs font-medium uppercase tracking-wider text-primary-40 dark:text-primary-80">
                 Managed by ACKO
               </span>
               <h2 className="mt-1 text-base font-semibold text-gray-900 dark:text-gray-50">

@@ -1,4 +1,4 @@
-// Tremor Raw Badge [v0.0.0]
+// Tremor Raw Badge [v0.0.0] — adapted to the ACM primary-* design tokens.
 
 import React from "react"
 import { tv, type VariantProps } from "tailwind-variants"
@@ -11,14 +11,8 @@ const badgeVariants = tv({
   ),
   variants: {
     variant: {
-      default: [
-        "bg-indigo-50 text-indigo-800 ring-indigo-500/30",
-        "dark:bg-indigo-400/10 dark:text-indigo-400 dark:ring-indigo-400/30",
-      ],
-      neutral: [
-        "bg-gray-50 text-gray-700 ring-gray-500/30",
-        "dark:bg-gray-400/10 dark:text-gray-300 dark:ring-gray-400/20",
-      ],
+      default: ["ring-primary-50/30 bg-primary-95 text-primary-40"],
+      neutral: ["ring-border/30 bg-surface-container text-on-surface-variant"],
       success: [
         "bg-emerald-50 text-emerald-800 ring-emerald-600/30",
         "dark:bg-emerald-400/10 dark:text-emerald-400 dark:ring-emerald-400/20",

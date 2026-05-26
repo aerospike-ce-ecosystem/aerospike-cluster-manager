@@ -36,7 +36,7 @@ export function ClusterCard({
       className={cx(
         "relative flex h-full flex-col gap-3 transition",
         row.connId &&
-          "hover:border-indigo-300 hover:shadow-sm dark:hover:border-indigo-700",
+          "hover:border-primary-80 hover:shadow-sm dark:hover:border-primary-40",
       )}
     >
       {row.connId && (
@@ -65,7 +65,7 @@ export function ClusterCard({
               {status.label}
             </span>
             {row.managedBy === "ACKO" && (
-              <span className="text-xs font-medium uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+              <span className="text-xs font-medium uppercase tracking-wider text-primary-50 dark:text-primary-65">
                 · ACKO
               </span>
             )}

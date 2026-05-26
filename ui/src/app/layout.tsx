@@ -1,17 +1,11 @@
 import type { Metadata } from "next"
 import { ThemeProvider } from "next-themes"
-import { Inter } from "next/font/google"
 import "./globals.css"
 import { siteConfig } from "./siteConfig"
 
 import { AuthProvider } from "@/components/AuthProvider"
+import { ShellStatusBar } from "@/components/ui/navigation/ShellStatusBar"
 import { Sidebar } from "@/components/ui/navigation/Sidebar"
-
-const inter = Inter({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-inter",
-})
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ??
@@ -53,17 +47,18 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${inter.className} overflow-y-scroll scroll-auto antialiased selection:bg-indigo-100 selection:text-indigo-700 dark:bg-gray-950`}
+        data-app="ace"
+        data-theme="light"
+        className="antialiased selection:bg-primary-95 selection:text-primary-40 dark:bg-bg"
         suppressHydrationWarning
       >
-        <div className="mx-auto max-w-screen-2xl">
-          <ThemeProvider defaultTheme="system" attribute="class">
-            <AuthProvider>
-              <Sidebar />
-              <main className="lg:pl-72">{children}</main>
-            </AuthProvider>
-          </ThemeProvider>
-        </div>
+        <ThemeProvider defaultTheme="light" attribute="data-theme">
+          <AuthProvider>
+            <Sidebar />
+            <main className="acm-main">{children}</main>
+            <ShellStatusBar />
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   )

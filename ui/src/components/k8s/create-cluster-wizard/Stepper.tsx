@@ -48,9 +48,9 @@ export function Stepper({
                 className={cx(
                   "flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
                   isCurrent
-                    ? "bg-indigo-600 text-white"
+                    ? "bg-primary-50 text-white"
                     : isDone
-                      ? "bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-950 dark:text-indigo-300"
+                      ? "bg-primary-95 text-primary-40 hover:bg-primary-90 dark:bg-primary-10 dark:text-primary-80"
                       : isReachable
                         ? "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300"
                         : "cursor-not-allowed bg-gray-50 text-gray-400 dark:bg-gray-900 dark:text-gray-600",
@@ -62,7 +62,7 @@ export function Stepper({
                     isCurrent
                       ? "bg-white/20"
                       : isDone
-                        ? "bg-indigo-600 text-white"
+                        ? "bg-primary-50 text-white"
                         : "bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300",
                   )}
                 >

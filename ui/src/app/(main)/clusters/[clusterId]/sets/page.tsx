@@ -1,7 +1,6 @@
 "use client"
 
 import { Badge } from "@/components/Badge"
-import { Button } from "@/components/Button"
 import { Card } from "@/components/Card"
 import { Input } from "@/components/Input"
 import { CreateSampleDataDialog } from "@/components/dialogs/CreateSampleDataDialog"
@@ -10,7 +9,9 @@ import { clusterSections } from "@/app/siteConfig"
 import { useCluster } from "@/hooks/use-cluster"
 import type { NamespaceInfo, SetInfo } from "@/lib/types/cluster"
 import { cx } from "@/lib/utils"
-import { RiAddLine, RiArrowRightSLine } from "@remixicon/react"
+import { Button } from "@/components/Button"
+import { PageHead } from "@/components/PageHead"
+import { RiAddLine, RiAlertLine, RiArrowRightSLine } from "@remixicon/react"
 import Link from "next/link"
 import { useMemo, useState } from "react"
 
@@ -71,32 +72,21 @@ export default function SetsPage({ params }: PageProps) {
 
   return (
     <main className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <span className="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-500">
-            Sets
-          </span>
-          <h1 className="mt-1 text-lg font-semibold text-gray-900 sm:text-xl dark:text-gray-50">
-            Namespaces &amp; sets
-          </h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-500">
-            Browse per-namespace sets. Click a set to open the record browser.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-500 dark:text-gray-500">
-            {namespaces.length} / 2 max{" "}
-            <span className="font-medium">(CE)</span>
-          </span>
-          <Button
-            variant="secondary"
-            onClick={() => setSampleOpen(true)}
-            disabled={nsNames.length === 0}
-          >
-            Sample data
-          </Button>
-        </div>
-      </header>
+      <PageHead
+        title="Namespaces & sets"
+        sub="Browse per-namespace sets. Click a set to open the record browser."
+      >
+        <span className="text-xs text-on-surface-muted">
+          {namespaces.length} / 2 max <span className="font-medium">(CE)</span>
+        </span>
+        <Button
+          variant="secondary"
+          onClick={() => setSampleOpen(true)}
+          disabled={nsNames.length === 0}
+        >
+          Sample data
+        </Button>
+      </PageHead>
 
       <Input
         type="search"
@@ -107,8 +97,14 @@ export default function SetsPage({ params }: PageProps) {
       />
 
       {cluster.error && (
-        <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
-          {cluster.error.message}
+        <div className="ace-announce tone-warning" role="status">
+          <span className="ico">
+            <RiAlertLine className="size-4" aria-hidden="true" />
+          </span>
+          <div className="body">
+            <div className="title">Failed to load namespaces</div>
+            <div className="desc">{cluster.error.message}</div>
+          </div>
         </div>
       )}
 
@@ -164,7 +160,7 @@ function NamespaceCard({
   const severity = nsSeverity(ns)
   const accent =
     severity === "ok"
-      ? "bg-indigo-500"
+      ? "bg-primary-45"
       : severity === "warning"
         ? "bg-amber-500"
         : "bg-red-500"
@@ -229,7 +225,7 @@ function NamespaceCard({
                   ? "bg-red-500"
                   : memPct > 60
                     ? "bg-amber-500"
-                    : "bg-indigo-500",
+                    : "bg-primary-45",
               )}
               style={{ width: `${Math.max(memPct, 1)}%` }}
             />
@@ -264,8 +260,8 @@ function NamespaceCard({
           type="button"
           onClick={onCreateSet}
           className={cx(
-            "inline-flex items-center gap-1 rounded-md border border-dashed border-indigo-300 px-2.5 py-1.5 text-xs font-medium text-indigo-600 transition",
-            "hover:border-indigo-400 hover:bg-indigo-50 dark:border-indigo-900/60 dark:text-indigo-400 dark:hover:bg-indigo-950/30",
+            "inline-flex items-center gap-1 rounded-md border border-dashed border-primary-80 px-2.5 py-1.5 text-xs font-medium text-primary-50 transition",
+            "dark:border-primary-30/60 dark:hover:bg-primary-10/30 hover:border-primary-65 hover:bg-primary-95 dark:text-primary-65",
           )}
         >
           <RiAddLine className="size-3.5" aria-hidden="true" />
@@ -312,7 +308,7 @@ function SetChip({
       href={clusterSections.set(clusterId, namespace, set.name)}
       className={cx(
         baseClass,
-        "border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/50 dark:border-gray-800 dark:bg-gray-950 hover:dark:border-indigo-900/60 hover:dark:bg-indigo-950/20",
+        "hover:bg-primary-95/50 hover:dark:border-primary-30/60 hover:dark:bg-primary-10/20 border-gray-200 bg-white hover:border-primary-80 dark:border-gray-800 dark:bg-gray-950",
       )}
       title={set.note ?? undefined}
     >
@@ -325,13 +321,13 @@ function SetChip({
       {set.note && (
         <span
           aria-label="Set has an operator note"
-          className="rounded bg-indigo-100 px-1 py-0.5 font-mono text-[9px] uppercase tracking-wide text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300"
+          className="dark:bg-primary-10/40 rounded bg-primary-95 px-1 py-0.5 font-mono text-[9px] uppercase tracking-wide text-primary-40 dark:text-primary-80"
         >
           note
         </span>
       )}
       <RiArrowRightSLine
-        className="size-3.5 text-gray-300 transition group-hover:text-indigo-500 dark:text-gray-700"
+        className="size-3.5 text-gray-300 transition group-hover:text-primary-45 dark:text-gray-700"
         aria-hidden="true"
       />
     </Link>

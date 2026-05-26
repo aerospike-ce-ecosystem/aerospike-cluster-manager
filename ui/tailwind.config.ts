@@ -1,6 +1,8 @@
 import type { Config } from "tailwindcss"
+import acePreset from "./tailwind-preset"
 
 const config: Config = {
+  presets: [acePreset],
   darkMode: "selector",
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
   theme: {

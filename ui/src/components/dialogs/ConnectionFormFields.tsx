@@ -18,10 +18,10 @@ interface ConnectionFormFieldsProps {
 }
 
 const SELECT_CLASSES =
-  "h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+  "h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-primary-45 focus:outline-none focus:ring-1 focus:ring-primary-45 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
 
 const TEXTAREA_CLASSES =
-  "block w-full resize-y rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 placeholder-gray-400 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-50 dark:placeholder-gray-500 dark:focus:ring-indigo-400/20"
+  "block w-full resize-y rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 placeholder-gray-400 shadow-sm outline-none transition focus:border-primary-45 focus:ring-2 focus:ring-primary-90 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-50 dark:placeholder-gray-500 dark:focus:ring-primary-65/20"
 
 export function ConnectionFormFields({
   form,

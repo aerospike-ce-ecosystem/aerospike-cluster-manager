@@ -17,7 +17,7 @@ export function NameLink({ row }: { row: ClusterRow }) {
         href={clusterSections.overview(row.connId)}
         title={row.displayName}
         className={cx(
-          "block truncate font-mono font-medium text-gray-900 transition hover:text-indigo-700 dark:text-gray-50 dark:hover:text-indigo-300",
+          "block truncate font-mono font-medium text-gray-900 transition hover:text-primary-40 dark:text-gray-50 dark:hover:text-primary-80",
           focusRing,
         )}
       >

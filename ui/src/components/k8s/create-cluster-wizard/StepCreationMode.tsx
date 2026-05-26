@@ -72,7 +72,7 @@ export function StepCreationMode({
                   className={cx(
                     "flex flex-col items-start gap-1 rounded-md border px-3 py-2 text-left text-sm transition-colors",
                     selectedTemplateName === t.name
-                      ? "border-indigo-500 bg-indigo-50 text-indigo-900 dark:border-indigo-400 dark:bg-indigo-950/40 dark:text-indigo-200"
+                      ? "dark:bg-primary-10/40 border-primary-45 bg-primary-95 text-primary-30 dark:border-primary-65 dark:text-primary-90"
                       : "border-gray-200 hover:border-gray-300 dark:border-gray-800 dark:hover:border-gray-700",
                   )}
                 >
@@ -115,7 +115,7 @@ function ModeCard({
       className={cx(
         "flex flex-col items-center gap-2 rounded-lg border px-4 py-6 text-center transition-colors",
         selected
-          ? "border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-950/40"
+          ? "dark:bg-primary-10/40 border-primary-45 bg-primary-95 dark:border-primary-65"
           : "border-gray-200 hover:border-gray-300 dark:border-gray-800 dark:hover:border-gray-700",
       )}
     >
@@ -124,7 +124,7 @@ function ModeCard({
         className={cx(
           "flex size-10 items-center justify-center rounded-full",
           selected
-            ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200"
+            ? "bg-primary-95 text-primary-40 dark:bg-primary-30 dark:text-primary-90"
             : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300",
         )}
       >

@@ -11,7 +11,7 @@ export function InfoBanner({ title, children }: InfoBannerProps) {
   return (
     <div
       role="status"
-      className="flex gap-2 rounded border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-700 dark:border-indigo-900/50 dark:bg-indigo-950/40 dark:text-indigo-300"
+      className="dark:border-primary-30/50 dark:bg-primary-10/40 flex gap-2 rounded border border-primary-90 bg-primary-95 px-3 py-2 text-xs text-primary-40 dark:text-primary-80"
     >
       <RiInformationLine
         className="mt-0.5 size-3.5 shrink-0"

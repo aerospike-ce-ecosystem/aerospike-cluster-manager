@@ -1,3 +1,58 @@
+/* Pretendard Variable from CDN (Korean-friendly sans). */
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css");
+
+/* Local design tokens + minimal base theme (Naver-green primary). */
+@import "../styles/tokens.css";
+@import "../styles/theme.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* =====================================================================
+   ACM shell layout
+     - 232 px fixed sidebar on the left
+     - 28 px statusbar pinned to the bottom
+     - main scrolls between them
+   ===================================================================== */
+
+@media (min-width: 1024px) {
+  body {
+    --acm-sidebar-w: 232px;
+    --acm-statusbar-h: 28px;
+  }
+
+  /* The existing Sidebar component is `lg:fixed lg:inset-y-0 lg:w-72` —
+     narrow it to 232 px. Chrome stays the same; only the width overrides. */
+  body[data-app="ace"] nav.lg\:w-72,
+  body[data-app="ace"] aside.lg\:w-72 {
+    width: var(--acm-sidebar-w);
+  }
+
+  body[data-app="ace"] .acm-statusbar {
+    position: fixed;
+    bottom: 0;
+    left: var(--acm-sidebar-w);
+    right: 0;
+    height: var(--acm-statusbar-h);
+    z-index: 30;
+  }
+
+  body[data-app="ace"] .acm-main {
+    margin-left: var(--acm-sidebar-w);
+    padding: 24px 28px calc(var(--acm-statusbar-h) + 16px);
+    min-height: 100vh;
+    background: var(--bg);
+  }
+}
+
+@media (max-width: 1023px) {
+  /* Mobile: keep the existing top navbar from the Sidebar component; hide
+     the desktop statusbar to avoid double chrome. */
+  body[data-app="ace"] .acm-statusbar {
+    display: none;
+  }
+  body[data-app="ace"] .acm-main {
+    padding: 16px;
+  }
+}
