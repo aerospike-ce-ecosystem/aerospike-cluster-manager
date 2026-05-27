@@ -28,6 +28,7 @@ selection here so the operator can switch protocol via env alone.
 
 from __future__ import annotations
 
+import importlib
 import logging
 import os
 from importlib.metadata import PackageNotFoundError, version
@@ -109,7 +110,7 @@ def _otlp_exporter_class(signal: str) -> type[Any] | None:
     grpc_module, http_module, class_name = _EXPORTER_MODULES[signal]
     protocol = os.getenv("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc").strip().lower()
     module_path = http_module if protocol in ("http/protobuf", "http") else grpc_module
-    module = __import__(module_path, fromlist=[class_name])
+    module = importlib.import_module(module_path)
     return getattr(module, class_name)
 
 
@@ -300,8 +301,9 @@ def setup_observability() -> bool:
 
     # Start aerospike-py's own OTLP span exporter so Aerospike-operation spans
     # are actually emitted (the [otel] extra only wires context propagation).
-    # Skip when traces are disabled — there is no global TracerProvider for the
-    # Rust core's spans to nest under, and the gRPC exporter would just churn.
+    # Skip when traces are disabled — OTEL_TRACES_EXPORTER=none should apply
+    # to aerospike-py's Rust OTLP exporter too, otherwise the Rust spans would
+    # keep being exported even after the Python side stopped.
     if span_exporter_cls is not None:
         _init_aerospike_py_tracing()
 

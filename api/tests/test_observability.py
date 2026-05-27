@@ -127,8 +127,9 @@ def test_setup_observability_skips_metrics_when_disabled(monkeypatch):
 
 def test_setup_observability_skips_traces_when_disabled(monkeypatch):
     """OTEL_TRACES_EXPORTER=none disables both Python TracerProvider AND
-    aerospike-py's Rust OTLP exporter — the Rust spans would nest under a NoOp
-    parent and the gRPC exporter would just churn endlessly otherwise.
+    aerospike-py's Rust OTLP exporter — disabling traces on the Python side
+    must propagate to the Rust side too, or aerospike.<op> spans keep flowing
+    while the Python pipeline reports traces=off.
     """
     monkeypatch.setenv("OTEL_SDK_DISABLED", "false")
     monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
