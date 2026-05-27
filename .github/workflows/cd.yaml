@@ -107,7 +107,7 @@ jobs:
           touch "/tmp/digests/${digest#sha256:}"
 
       - name: Upload digest
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: digests-${{ matrix.name }}-${{ steps.prep.outputs.platform_pair }}
           path: /tmp/digests/*
@@ -138,7 +138,7 @@ jobs:
           echo "IMAGE=ghcr.io/${REPO}${{ matrix.suffix }}" >> "$GITHUB_ENV"
 
       - name: Download digests
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           path: /tmp/digests
           pattern: digests-${{ matrix.name }}-*
