@@ -11,6 +11,15 @@ service-level convenience this module adds on top is
 ``OTEL_DEPLOYMENT_ENVIRONMENT`` mapped to the ``deployment.environment``
 resource attribute.
 
+Per-signal disable is honored: setting ``OTEL_TRACES_EXPORTER=none`` /
+``OTEL_METRICS_EXPORTER=none`` / ``OTEL_LOGS_EXPORTER=none`` skips construction
+of the matching provider so its NoOp default survives globally, while the
+remaining signals continue to export. This matters when the OTel collector only
+ships a subset of pipelines (e.g. traces+logs but no metrics receiver) — the
+all-or-nothing ``OTEL_SDK_DISABLED=true`` would otherwise force operators to
+choose between every signal or none. Reference:
+https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/#exporter-selection
+
 The OTel SDK does NOT auto-pick the exporter implementation from
 ``OTEL_EXPORTER_OTLP_PROTOCOL`` — the package layout requires the caller to
 import either the gRPC or the HTTP/protobuf exporter explicitly. We do that
@@ -19,6 +28,7 @@ selection here so the operator can switch protocol via env alone.
 
 from __future__ import annotations
 
+import importlib
 import logging
 import os
 from importlib.metadata import PackageNotFoundError, version
@@ -56,33 +66,50 @@ def _service_version() -> str:
         return "unknown"
 
 
-def _otlp_exporters() -> tuple[type[Any], type[Any], type[Any]]:
-    """Pick gRPC or HTTP/protobuf OTLP exporters per ``OTEL_EXPORTER_OTLP_PROTOCOL``."""
-    protocol = os.getenv("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc").lower()
-    if protocol in ("http/protobuf", "http"):
-        from opentelemetry.exporter.otlp.proto.http._log_exporter import (
-            OTLPLogExporter as HttpLogExporter,
-        )
-        from opentelemetry.exporter.otlp.proto.http.metric_exporter import (
-            OTLPMetricExporter as HttpMetricExporter,
-        )
-        from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
-            OTLPSpanExporter as HttpSpanExporter,
-        )
+# Maps OTel signal name -> (grpc_module_path, http_module_path, class_name). The
+# package layout differs per signal (note the leading underscore on log
+# exporters), so we keep this table central to make the selection code below
+# data-driven instead of branchy.
+_EXPORTER_MODULES: dict[str, tuple[str, str, str]] = {
+    "traces": (
+        "opentelemetry.exporter.otlp.proto.grpc.trace_exporter",
+        "opentelemetry.exporter.otlp.proto.http.trace_exporter",
+        "OTLPSpanExporter",
+    ),
+    "metrics": (
+        "opentelemetry.exporter.otlp.proto.grpc.metric_exporter",
+        "opentelemetry.exporter.otlp.proto.http.metric_exporter",
+        "OTLPMetricExporter",
+    ),
+    "logs": (
+        "opentelemetry.exporter.otlp.proto.grpc._log_exporter",
+        "opentelemetry.exporter.otlp.proto.http._log_exporter",
+        "OTLPLogExporter",
+    ),
+}
 
-        return HttpSpanExporter, HttpMetricExporter, HttpLogExporter
 
-    from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (
-        OTLPLogExporter as GrpcLogExporter,
-    )
-    from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import (
-        OTLPMetricExporter as GrpcMetricExporter,
-    )
-    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
-        OTLPSpanExporter as GrpcSpanExporter,
-    )
+def _otlp_exporter_class(signal: str) -> type[Any] | None:
+    """Return the OTLP exporter class for ``signal`` (traces/metrics/logs).
 
-    return GrpcSpanExporter, GrpcMetricExporter, GrpcLogExporter
+    Returns ``None`` when ``OTEL_<SIGNAL>_EXPORTER=none``, signalling that the
+    caller must skip provider construction for that signal so its NoOp global
+    default survives. ``OTEL_EXPORTER_OTLP_PROTOCOL`` selects gRPC vs HTTP.
+    """
+    selection = os.getenv(f"OTEL_{signal.upper()}_EXPORTER", "otlp").strip().lower()
+    if selection == "none":
+        return None
+    if selection != "otlp":
+        # Stay strict: silently accepting an unsupported value would let an
+        # operator believe Jaeger / console / Prometheus export is configured
+        # when in fact nothing happens. Surface the misconfig at startup.
+        raise ValueError(f"Unsupported OTEL_{signal.upper()}_EXPORTER={selection!r}; expected 'otlp' or 'none'")
+
+    grpc_module, http_module, class_name = _EXPORTER_MODULES[signal]
+    protocol = os.getenv("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc").strip().lower()
+    module_path = http_module if protocol in ("http/protobuf", "http") else grpc_module
+    module = importlib.import_module(module_path)
+    return getattr(module, class_name)
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +252,9 @@ def setup_observability() -> bool:
     if os.getenv("OTEL_SDK_DISABLED", "true").lower() in ("true", "1", "yes"):
         return False
 
-    span_exporter_cls, metric_exporter_cls, log_exporter_cls = _otlp_exporters()
+    span_exporter_cls = _otlp_exporter_class("traces")
+    metric_exporter_cls = _otlp_exporter_class("metrics")
+    log_exporter_cls = _otlp_exporter_class("logs")
 
     resource = Resource.create(
         {
@@ -236,24 +265,25 @@ def setup_observability() -> bool:
         }
     )
 
-    tracer_provider = TracerProvider(resource=resource)
-    tracer_provider.add_span_processor(BatchSpanProcessor(span_exporter_cls()))
-    trace.set_tracer_provider(tracer_provider)
+    if span_exporter_cls is not None:
+        tracer_provider = TracerProvider(resource=resource)
+        tracer_provider.add_span_processor(BatchSpanProcessor(span_exporter_cls()))
+        trace.set_tracer_provider(tracer_provider)
+        _tracer_provider = tracer_provider
 
-    meter_provider = MeterProvider(
-        resource=resource,
-        metric_readers=[PeriodicExportingMetricReader(metric_exporter_cls())],
-    )
-    metrics.set_meter_provider(meter_provider)
+    if metric_exporter_cls is not None:
+        meter_provider = MeterProvider(
+            resource=resource,
+            metric_readers=[PeriodicExportingMetricReader(metric_exporter_cls())],
+        )
+        metrics.set_meter_provider(meter_provider)
+        _meter_provider = meter_provider
 
-    logger_provider = LoggerProvider(resource=resource)
-    logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter_cls()))
-    set_logger_provider(logger_provider)
-
-    # Retain the providers so shutdown_observability() can flush them explicitly.
-    _tracer_provider = tracer_provider
-    _meter_provider = meter_provider
-    _logger_provider = logger_provider
+    if log_exporter_cls is not None:
+        logger_provider = LoggerProvider(resource=resource)
+        logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter_cls()))
+        set_logger_provider(logger_provider)
+        _logger_provider = logger_provider
 
     # set_logging_format=False so we don't override the formatter that
     # logging_config.setup_logging configures. We only need the LogRecord
@@ -269,10 +299,19 @@ def setup_observability() -> bool:
 
     # Start aerospike-py's own OTLP span exporter so Aerospike-operation spans
     # are actually emitted (the [otel] extra only wires context propagation).
-    _init_aerospike_py_tracing()
+    # Skip when traces are disabled — OTEL_TRACES_EXPORTER=none should apply
+    # to aerospike-py's Rust OTLP exporter too, otherwise the Rust spans would
+    # keep being exported even after the Python side stopped.
+    if span_exporter_cls is not None:
+        _init_aerospike_py_tracing()
 
     _initialized = True
-    logger.info("OpenTelemetry providers initialized")
+    logger.info(
+        "OpenTelemetry providers initialized (traces=%s metrics=%s logs=%s)",
+        "on" if span_exporter_cls else "off",
+        "on" if metric_exporter_cls else "off",
+        "on" if log_exporter_cls else "off",
+    )
     return True
 
 

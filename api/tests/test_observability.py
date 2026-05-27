@@ -62,14 +62,132 @@ def test_setup_observability_idempotent(monkeypatch):
 def test_otlp_exporter_selection(monkeypatch, protocol, expected_module):
     """OTEL_EXPORTER_OTLP_PROTOCOL determines which exporter module is imported."""
     monkeypatch.setenv("OTEL_EXPORTER_OTLP_PROTOCOL", protocol)
-    span_cls, _, _ = obs._otlp_exporters()
+    span_cls = obs._otlp_exporter_class("traces")
+    assert span_cls is not None
     assert span_cls.__module__ == expected_module
 
 
 def test_otlp_exporter_default_grpc(monkeypatch):
     monkeypatch.delenv("OTEL_EXPORTER_OTLP_PROTOCOL", raising=False)
-    span_cls, _, _ = obs._otlp_exporters()
+    span_cls = obs._otlp_exporter_class("traces")
+    assert span_cls is not None
     assert "grpc" in span_cls.__module__
+
+
+@pytest.mark.parametrize("signal", ["traces", "metrics", "logs"])
+def test_otlp_exporter_class_signal_disabled_returns_none(monkeypatch, signal):
+    """OTEL_<SIGNAL>_EXPORTER=none yields None so the caller skips that provider."""
+    monkeypatch.setenv(f"OTEL_{signal.upper()}_EXPORTER", "none")
+    assert obs._otlp_exporter_class(signal) is None
+
+
+@pytest.mark.parametrize("none_alias", ["none", "NONE", "None", " none "])
+def test_otlp_exporter_class_disable_is_case_and_whitespace_insensitive(monkeypatch, none_alias):
+    """Operators commonly set values with stray whitespace or mixed case; honor those."""
+    monkeypatch.setenv("OTEL_METRICS_EXPORTER", none_alias)
+    assert obs._otlp_exporter_class("metrics") is None
+
+
+def test_otlp_exporter_class_unsupported_value_raises(monkeypatch):
+    """Unknown exporter names must fail loud, not silently fall back to OTLP."""
+    monkeypatch.setenv("OTEL_TRACES_EXPORTER", "jaeger")
+    with pytest.raises(ValueError, match="Unsupported OTEL_TRACES_EXPORTER"):
+        obs._otlp_exporter_class("traces")
+
+
+def test_otlp_exporter_class_default_is_otlp(monkeypatch):
+    """Per the OTel SDK spec, an unset OTEL_<SIGNAL>_EXPORTER defaults to 'otlp'."""
+    monkeypatch.delenv("OTEL_TRACES_EXPORTER", raising=False)
+    assert obs._otlp_exporter_class("traces") is not None
+
+
+def test_setup_observability_skips_metrics_when_disabled(monkeypatch):
+    """OTEL_METRICS_EXPORTER=none must not construct a MeterProvider — a partial
+    collector (logs+traces but no metrics receiver) is a common deployment.
+    Regression for #403.
+    """
+    monkeypatch.setenv("OTEL_SDK_DISABLED", "false")
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc")
+    monkeypatch.setenv("OTEL_METRICS_EXPORTER", "none")
+    monkeypatch.delenv("AEROSPIKE_PY_TRACING", raising=False)
+
+    with (
+        patch("aerospike_cluster_manager_api.observability.TracerProvider") as mock_tp,
+        patch("aerospike_cluster_manager_api.observability.MeterProvider") as mock_mp,
+        patch("aerospike_cluster_manager_api.observability.LoggerProvider") as mock_lp,
+        patch.object(obs, "aerospike_py"),
+    ):
+        assert obs.setup_observability() is True
+
+    mock_tp.assert_called_once()
+    mock_mp.assert_not_called()
+    mock_lp.assert_called_once()
+
+
+def test_setup_observability_skips_traces_when_disabled(monkeypatch):
+    """OTEL_TRACES_EXPORTER=none disables both Python TracerProvider AND
+    aerospike-py's Rust OTLP exporter — disabling traces on the Python side
+    must propagate to the Rust side too, or aerospike.<op> spans keep flowing
+    while the Python pipeline reports traces=off.
+    """
+    monkeypatch.setenv("OTEL_SDK_DISABLED", "false")
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc")
+    monkeypatch.setenv("OTEL_TRACES_EXPORTER", "none")
+    monkeypatch.delenv("AEROSPIKE_PY_TRACING", raising=False)
+
+    with (
+        patch("aerospike_cluster_manager_api.observability.TracerProvider") as mock_tp,
+        patch("aerospike_cluster_manager_api.observability.MeterProvider") as mock_mp,
+        patch("aerospike_cluster_manager_api.observability.LoggerProvider") as mock_lp,
+        patch.object(obs, "aerospike_py") as mock_ap,
+    ):
+        assert obs.setup_observability() is True
+
+    mock_tp.assert_not_called()
+    mock_mp.assert_called_once()
+    mock_lp.assert_called_once()
+    mock_ap.init_tracing.assert_not_called()
+
+
+def test_setup_observability_skips_logs_when_disabled(monkeypatch):
+    monkeypatch.setenv("OTEL_SDK_DISABLED", "false")
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc")
+    monkeypatch.setenv("OTEL_LOGS_EXPORTER", "none")
+
+    with (
+        patch("aerospike_cluster_manager_api.observability.TracerProvider") as mock_tp,
+        patch("aerospike_cluster_manager_api.observability.MeterProvider") as mock_mp,
+        patch("aerospike_cluster_manager_api.observability.LoggerProvider") as mock_lp,
+        patch.object(obs, "aerospike_py"),
+    ):
+        assert obs.setup_observability() is True
+
+    mock_tp.assert_called_once()
+    mock_mp.assert_called_once()
+    mock_lp.assert_not_called()
+
+
+def test_setup_observability_all_signals_disabled_still_returns_true(monkeypatch):
+    """Disabling every signal individually is a valid no-op configuration — equivalent
+    to OTEL_SDK_DISABLED=true but reached by per-signal flags. Must not crash and
+    must not retain any of the SDK providers.
+    """
+    monkeypatch.setenv("OTEL_SDK_DISABLED", "false")
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc")
+    monkeypatch.setenv("OTEL_TRACES_EXPORTER", "none")
+    monkeypatch.setenv("OTEL_METRICS_EXPORTER", "none")
+    monkeypatch.setenv("OTEL_LOGS_EXPORTER", "none")
+
+    with patch.object(obs, "aerospike_py"):
+        assert obs.setup_observability() is True
+
+    assert obs._tracer_provider is None
+    assert obs._meter_provider is None
+    assert obs._logger_provider is None
 
 
 def test_make_instruments_returns_four_keys():
