@@ -1,11 +1,16 @@
 name: CD
-# On push to main: builds multi-arch (amd64/arm64) container images and pushes to GHCR.
+# On push to main or a v* tag: builds multi-arch (amd64/arm64) container images
+# and pushes them to GHCR.
 #
-# Builds three images per push:
+# Builds two images per push:
 #   - ghcr.io/<repo>-api      — FastAPI API only (Dockerfile.api)
 #   - ghcr.io/<repo>-web      — Next.js Web frontend (Dockerfile.web)
 #
-# The split images are what the ACKO UI deployments consume.
+# Each platform is built on its NATIVE runner (amd64 on ubuntu-latest, arm64
+# on ubuntu-24.04-arm) to avoid QEMU emulation, which previously caused the
+# web image's `npm ci` step to hit the 60-minute job timeout (#239, v0.30.0).
+# Per-platform digests are then merged into a single multi-arch manifest list
+# (with all tags) in a follow-on `merge` job.
 
 on:
   push:
@@ -21,10 +26,10 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  build-and-push:
-    name: Build & Push (${{ matrix.name }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+  build:
+    name: Build (${{ matrix.name }}/${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
@@ -35,20 +40,109 @@ jobs:
           - name: api
             dockerfile: Dockerfile.api
             suffix: -api
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - name: api
+            dockerfile: Dockerfile.api
+            suffix: -api
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
           - name: web
             dockerfile: Dockerfile.web
             suffix: -web
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - name: web
+            dockerfile: Dockerfile.web
+            suffix: -web
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
 
     steps:
       - uses: actions/checkout@v6
 
+      - name: Prepare names
+        id: prep
+        run: |
+          REPO="${GITHUB_REPOSITORY,,}"
+          PLATFORM_PAIR="${{ matrix.platform }}"
+          PLATFORM_PAIR="${PLATFORM_PAIR//\//-}"
+          echo "IMAGE=ghcr.io/${REPO}${{ matrix.suffix }}" >> "$GITHUB_ENV"
+          echo "platform_pair=${PLATFORM_PAIR}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract image labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          # Per-platform cache scope so amd64/arm64 don't overwrite each other.
+          # Only main writes — tags read but don't churn the cache.
+          cache-from: type=gha,scope=${{ matrix.name }}-${{ steps.prep.outputs.platform_pair }}
+          cache-to: ${{ github.ref == 'refs/heads/main' && format('type=gha,mode=max,scope={0}-{1}', matrix.name, steps.prep.outputs.platform_pair) || '' }}
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.name }}-${{ steps.prep.outputs.platform_pair }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: Merge manifests (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: api
+            suffix: -api
+          - name: web
+            suffix: -web
+
+    steps:
       - name: Set lowercase image name
         run: |
           REPO="${GITHUB_REPOSITORY,,}"
           echo "IMAGE=ghcr.io/${REPO}${{ matrix.suffix }}" >> "$GITHUB_ENV"
 
-      - name: Set up QEMU (for multi-arch builds)
-        uses: docker/setup-qemu-action@v4
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-${{ matrix.name }}-*
+          merge-multiple: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -72,18 +166,13 @@ jobs:
             type=sha,prefix=
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build & Push (multi-arch)
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ${{ matrix.dockerfile }}
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          # Read main's cache for every event (tag, dispatch, branch). Without
-          # this, tag pushes do a cold multi-arch build via QEMU and the
-          # ui job times out at 30 minutes (#239 release).
-          cache-from: type=gha,scope=${{ matrix.name }}
-          # Only main writes to the cache so tags don't churn it.
-          cache-to: ${{ github.ref == 'refs/heads/main' && format('type=gha,mode=max,scope={0}', matrix.name) || '' }}
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.IMAGE }}@sha256:%s ' *)
+
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect "${{ env.IMAGE }}:${{ steps.meta.outputs.version }}"
