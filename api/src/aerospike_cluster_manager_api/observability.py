@@ -103,9 +103,7 @@ def _otlp_exporter_class(signal: str) -> type[Any] | None:
         # Stay strict: silently accepting an unsupported value would let an
         # operator believe Jaeger / console / Prometheus export is configured
         # when in fact nothing happens. Surface the misconfig at startup.
-        raise ValueError(
-            f"Unsupported OTEL_{signal.upper()}_EXPORTER={selection!r}; expected 'otlp' or 'none'"
-        )
+        raise ValueError(f"Unsupported OTEL_{signal.upper()}_EXPORTER={selection!r}; expected 'otlp' or 'none'")
 
     grpc_module, http_module, class_name = _EXPORTER_MODULES[signal]
     protocol = os.getenv("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc").strip().lower()
