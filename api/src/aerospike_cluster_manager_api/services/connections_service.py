@@ -379,6 +379,15 @@ async def test_connection(req: TestConnectionRequest) -> TestConnectionResult:
             await client.connect()
             if not client.is_connected():
                 return TestConnectionResult(success=False, message="Failed to connect")
+            # Liveness probe: ``is_connected()`` only reflects the local
+            # client state. ``ping()`` round-trips an info request to a
+            # random node so a half-open / stale cluster handle surfaces
+            # as a real failure here rather than as a misleading success.
+            # ``hasattr`` guard keeps older aerospike-py (pre-0.0.5)
+            # builds working — those clients fall back to the
+            # ``is_connected()``-only check.
+            if hasattr(client, "ping"):
+                await client.ping()
             return TestConnectionResult(success=True, message="Connected successfully")
         finally:
             with contextlib.suppress(AerospikeError, OSError):
