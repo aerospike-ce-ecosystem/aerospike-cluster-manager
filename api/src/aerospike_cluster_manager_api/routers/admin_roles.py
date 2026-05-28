@@ -7,7 +7,7 @@ from aerospike_py.types import Privilege as AerospikePrivilege
 from fastapi import APIRouter, HTTPException, Query, Request
 from starlette.responses import Response
 
-from aerospike_cluster_manager_api.dependencies import AerospikeClient
+from aerospike_cluster_manager_api.dependencies import AerospikeClient, VerifiedConnId
 from aerospike_cluster_manager_api.models.admin import AerospikeRole, CreateRoleRequest, Privilege
 from aerospike_cluster_manager_api.rate_limit import limiter
 from aerospike_cluster_manager_api.routers._admin_utils import (
@@ -27,8 +27,14 @@ router = APIRouter(prefix="/admin", tags=["admin-roles"])
     description="Retrieve all Aerospike roles and their privileges. Requires security to be enabled in aerospike.conf.",
 )
 @admin_endpoint
-async def get_roles(client: AerospikeClient) -> list[AerospikeRole]:
+async def get_roles(client: AerospikeClient, conn_id: VerifiedConnId) -> list[AerospikeRole]:
     """Retrieve all Aerospike roles and their privileges. Requires security to be enabled in aerospike.conf."""
+    # ``conn_id`` is unused inside the body — its only job is to trigger
+    # the workspace ACL via :data:`VerifiedConnId` before the admin call
+    # reaches the Aerospike cluster. Without this gate a caller could
+    # manipulate ``conn_id`` in the path to read roles from a connection
+    # owned by a different workspace (cross-tenant data leak).
+    _ = conn_id
     raw_roles = await client.admin_query_roles()
     roles: list[AerospikeRole] = []
     for info in raw_roles:
@@ -78,8 +84,14 @@ async def get_roles(client: AerospikeClient) -> list[AerospikeRole]:
 )
 @limiter.limit("20/minute")
 @admin_endpoint
-async def create_role(request: Request, body: CreateRoleRequest, client: AerospikeClient) -> AerospikeRole:
+async def create_role(
+    request: Request,
+    body: CreateRoleRequest,
+    client: AerospikeClient,
+    conn_id: VerifiedConnId,
+) -> AerospikeRole:
     """Create a new Aerospike role with specified privileges. Requires security to be enabled in aerospike.conf."""
+    _ = conn_id
     if not body.name or not body.privileges:
         raise HTTPException(status_code=400, detail="Missing required fields: name, privileges")
 
@@ -130,9 +142,11 @@ async def create_role(request: Request, body: CreateRoleRequest, client: Aerospi
 async def delete_role(
     request: Request,
     client: AerospikeClient,
+    conn_id: VerifiedConnId,
     name: str = Query(..., min_length=1),
 ) -> Response:
     """Delete an Aerospike role by name. Requires security to be enabled in aerospike.conf."""
+    _ = conn_id
     await client.admin_drop_role(name)
 
     return Response(status_code=204)

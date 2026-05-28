@@ -533,11 +533,12 @@ class TestFilteredRecordsPkMatchMode:
         assert "value2" in resp.json()["detail"]
         mock_client.query.assert_not_called()
 
-    async def test_predicate_between_missing_value2_returns_400(self, client: AsyncClient):
-        """A ``predicate`` BETWEEN without value2 must map to 400 on the
-        filter endpoint. Before the fix this escaped as an opaque 500
-        because get_filtered_records did not catch the predicate
-        ValueError that build_predicate raises."""
+    async def test_predicate_between_missing_value2_returns_422(self, client: AsyncClient):
+        """A ``predicate`` BETWEEN without value2 must map to 422 on the
+        filter endpoint, aligning with the ``query.py`` mapping (PR #408).
+        ``PredicateError`` is a client-side schema-level error; routing it
+        through the generic ``ValueError`` → 400 branch would silently
+        degrade the more accurate 422 mapping."""
         mock_client = _build_query_mock()
 
         with (
@@ -559,8 +560,10 @@ class TestFilteredRecordsPkMatchMode:
                 },
             )
 
-        assert resp.status_code == 400
-        assert "between" in resp.json()["detail"]
+        assert resp.status_code == 422, resp.text
+        body = resp.json()
+        assert "predicate" in body["detail"].lower()
+        assert "between" in body["detail"]
         # The predicate is rejected before the scan executes.
         mock_client.query.return_value.results.assert_not_called()
 
