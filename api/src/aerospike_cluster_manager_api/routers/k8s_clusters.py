@@ -525,7 +525,11 @@ async def reset_circuit_breaker(
 ) -> dict[str, str]:
     """Reset the circuit breaker by patching status counters and annotating the CR."""
     cr = await _assert_caller_owns_k8s_cluster(namespace, name, caller_owner_id)
-    # 1. Reset status subresource (clear error state)
+    # 1. Reset status subresource (clear error state).
+    # ``expected_workspace_id`` closes the TOCTOU window between the
+    # ACL check above and the status apply: a concurrent re-label
+    # aborts with 409 instead of mutating a CR the caller no longer
+    # owns. Mirrors the guard already on patch_cluster below.
     await k8s_client.patch_cluster_status(
         namespace,
         name,
@@ -533,6 +537,7 @@ async def reset_circuit_breaker(
             "failedReconcileCount": 0,
             "lastReconcileError": "",
         },
+        expected_workspace_id=_cr_workspace_id(cr),
     )
     # 2. Annotate to trigger fresh reconciliation
     patch: dict[str, Any] = {
@@ -1073,11 +1078,16 @@ async def update_k8s_template(
     name: str = _K8S_NAME,
 ) -> K8sTemplateSummary:
 
-    await _assert_template_visible(name, caller_owner_id, for_mutation=True)
+    item = await _assert_template_visible(name, caller_owner_id, for_mutation=True)
     patch = build_template_update_patch(body)
     if not patch.get("spec"):
         raise HTTPException(status_code=400, detail="No fields to update")
-    result = await k8s_client.patch_template(name, patch)
+    # ``expected_workspace_id`` closes the TOCTOU window between
+    # ``_assert_template_visible`` and the patch apply: a concurrent
+    # re-labelling of the template aborts with 409 Conflict instead
+    # of mutating a template the caller no longer owns. Mirrors the
+    # guard on patch_cluster for AerospikeCluster CRs.
+    result = await k8s_client.patch_template(name, patch, expected_workspace_id=_cr_workspace_id(item))
     return extract_template_summary(result)
 
 
