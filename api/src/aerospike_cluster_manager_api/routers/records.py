@@ -252,6 +252,7 @@ async def put_record(
 async def delete_record(
     request: Request,
     client: AerospikeClient,
+    conn_id: VerifiedConnId,
     ns: str = Query(..., min_length=1),
     set: str = Query(..., min_length=1),
     pk: str = Query(..., min_length=1),
@@ -269,6 +270,11 @@ async def delete_record(
     via the global handler and break common UI / CLI retry patterns where the
     same DELETE is replayed after a network blip.
     """
+    # ``conn_id`` is unused inside the body — its only job is to trigger
+    # the workspace ACL via :data:`VerifiedConnId` before the destructive
+    # call reaches the service layer. Keep the parameter present so the
+    # dependency runs.
+    _ = conn_id
     try:
         await records_service.delete_record(client, ns, set, pk, pk_type)
     except RecordNotFound:

@@ -189,7 +189,7 @@ async def get_connection_health(conn_id: str = Depends(_get_verified_connection)
             memoryTotal=memory_total,
             diskUsed=disk_used,
             diskTotal=disk_total,
-            tendHealthy=await client.ping(),  # type: ignore[attr-defined]  # ping() added in aerospike-py 0.0.5
+            tendHealthy=await client.ping() if hasattr(client, "ping") else None,  # type: ignore[attr-defined]  # ping() added in aerospike-py 0.0.5
         )
     except AerospikeTimeoutError as exc:
         logger.warning("Health check timed out for connection '%s'", conn_id, exc_info=True)
