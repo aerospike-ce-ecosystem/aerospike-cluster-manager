@@ -130,6 +130,9 @@ services:
       - AEROSPIKE_HOST=${AEROSPIKE_HOST:-aerospike-node-1}
       - AEROSPIKE_PORT=${AEROSPIKE_PORT:-3000}
       - SQLITE_PATH=/app/data/connections.db
+      # ── At-rest encryption (stored connection passwords) ─────────────
+      - ACM_PASSWORD_KEK=${ACM_PASSWORD_KEK:-}
+      - ACM_ALLOW_EPHEMERAL_KEK=${ACM_ALLOW_EPHEMERAL_KEK:-false}
       # ── OIDC (off by default) ─────────────────────────────────────
       - OIDC_ENABLED=${OIDC_ENABLED:-false}
       - OIDC_ISSUER_URL=${OIDC_ISSUER_URL:-}
