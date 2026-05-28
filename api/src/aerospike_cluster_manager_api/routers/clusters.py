@@ -29,6 +29,7 @@ router = APIRouter(prefix="/clusters", tags=["clusters"])
 
 @router.get(
     "/{conn_id}",
+    response_model=ClusterInfo,
     summary="Get cluster info",
     description="Retrieve full cluster information including nodes, namespaces, and sets.",
 )
