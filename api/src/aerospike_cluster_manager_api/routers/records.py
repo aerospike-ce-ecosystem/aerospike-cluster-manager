@@ -359,10 +359,12 @@ async def get_filtered_records(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except PredicateError as exc:
         # A bad ``predicate`` (unknown operator, missing value/value2) is a
-        # client error. ``query.py`` already maps these via its generic
-        # ValueError catch; the filter endpoint must too — otherwise a bad
-        # predicate here escaped as an opaque 500.
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        # client-side schema-level error. Map to 422 to align with
+        # ``query.py`` (PR #408) — ``PredicateError`` is a ``ValueError``
+        # subclass so this branch MUST be ordered before any generic
+        # ``ValueError`` catch, otherwise the more accurate 422 would
+        # silently degrade to 400.
+        raise HTTPException(status_code=422, detail=f"Invalid predicate: {exc}") from exc
 
     models = [record_to_model(r) for r in result.records]
     # Filter scans always carry a set scope (SetRequiredForPkLookup is
