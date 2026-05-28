@@ -5,7 +5,7 @@
 
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import { getCluster } from "@/lib/api/clusters"
 import { logFetchError } from "@/lib/api/log"
@@ -25,18 +25,30 @@ export function useCluster(
   const [error, setError] = useState<Error | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(!!connId)
 
+  // Mounted guard so a refetch resolving after unmount doesn't setState.
+  // Mirrors useGuides / useConnections.
+  const isMountedRef = useRef(true)
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
   const refetch = useCallback(async () => {
     if (!connId) return
     setIsLoading(true)
     setError(null)
     try {
       const result = await getCluster(connId)
+      if (!isMountedRef.current) return
       setData(result)
     } catch (err) {
       logFetchError("cluster", err)
+      if (!isMountedRef.current) return
       setError(err instanceof Error ? err : new Error(String(err)))
     } finally {
-      setIsLoading(false)
+      if (isMountedRef.current) setIsLoading(false)
     }
   }, [connId])
 
