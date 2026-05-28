@@ -477,11 +477,52 @@ class K8sClient:
         logger.debug("_delete_cluster_sync(namespace=%s, name=%s)", namespace, name)
         return self._delete_custom_object_sync(PLURAL, namespace, name)
 
-    def _patch_cluster_status_sync(self, namespace: str, name: str, status_patch: dict[str, Any]) -> dict[str, Any]:
-        """Patch the status subresource of an AerospikeCluster CR."""
-        logger.debug("_patch_cluster_status_sync(namespace=%s, name=%s)", namespace, name)
+    def _patch_cluster_status_sync(
+        self,
+        namespace: str,
+        name: str,
+        status_patch: dict[str, Any],
+        *,
+        expected_workspace_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Patch the status subresource of an AerospikeCluster CR.
+
+        ``expected_workspace_id`` mirrors the P1-4 guard on
+        :meth:`_patch_cluster_sync`: when supplied, the CR is refetched
+        and its ``acm.aerospike.com/workspace`` label is re-verified
+        immediately before the status apply. A concurrent re-label that
+        slips between the caller's ACL check and the status patch aborts
+        with 409 ``Conflict`` instead of mutating a CR the caller no
+        longer owns.
+        """
+        logger.debug(
+            "_patch_cluster_status_sync(namespace=%s, name=%s, expected_workspace_id=%s)",
+            namespace,
+            name,
+            expected_workspace_id,
+        )
         self._ensure_initialized()
         try:
+            if expected_workspace_id is not None:
+                # Re-read the CR and re-verify the workspace label is
+                # still what the caller authorised. The status
+                # subresource patch path does not flow through
+                # ``_patch_with_resource_version``, so the verify hook
+                # has to be inlined here. A label mismatch raises 409
+                # exactly like the cluster-spec patch path does.
+                current = self._get_custom_object_sync(PLURAL, namespace, name)
+                workspace_label = "acm.aerospike.com/workspace"
+                labels = (current.get("metadata", {}) or {}).get("labels") or {}
+                actual = labels.get(workspace_label)
+                if actual != expected_workspace_id:
+                    raise K8sApiError(
+                        status=409,
+                        reason="Conflict",
+                        message=(
+                            f"Workspace label on cluster {namespace}/{name} changed "
+                            "between ACL check and status patch; refusing to apply."
+                        ),
+                    )
             body = {"status": status_patch}
             return cast(
                 dict[str, Any],
@@ -495,6 +536,11 @@ class K8sClient:
                     _request_timeout=_K8S_API_TIMEOUT,
                 ),
             )
+        except K8sApiError:
+            # Re-verify mismatch (and any K8sApiError raised by the
+            # nested fetch) propagates unwrapped so the router maps it
+            # to a stable Conflict / status code.
+            raise
         except Exception as e:
             raise self._wrap_api_exception(e) from e
 
@@ -587,13 +633,50 @@ class K8sClient:
         logger.debug("_create_template_sync()")
         return self._create_cluster_custom_object_sync(TEMPLATE_PLURAL, body)
 
-    def _patch_template_sync(self, name: str, body: dict[str, Any]) -> dict[str, Any]:
-        logger.debug("_patch_template_sync(name=%s)", name)
+    def _patch_template_sync(
+        self,
+        name: str,
+        body: dict[str, Any],
+        *,
+        expected_workspace_id: str | None = None,
+    ) -> dict[str, Any]:
+        logger.debug(
+            "_patch_template_sync(name=%s, expected_workspace_id=%s)",
+            name,
+            expected_workspace_id,
+        )
+
+        verify = None
+        if expected_workspace_id is not None:
+            workspace_label = "acm.aerospike.com/workspace"
+
+            def _assert_label_unchanged(current: dict[str, Any]) -> None:
+                # Mirrors the verify callback used by ``_patch_cluster_sync``:
+                # re-read the template's workspace label before each retry's
+                # apply, and abort with 409 Conflict if a concurrent
+                # re-labelling slipped between the router's ACL gate and
+                # this patch. Closes the TOCTOU window for template spec
+                # mutations.
+                labels = (current.get("metadata", {}) or {}).get("labels") or {}
+                actual = labels.get(workspace_label)
+                if actual != expected_workspace_id:
+                    raise K8sApiError(
+                        status=409,
+                        reason="Conflict",
+                        message=(
+                            f"Workspace label on template {name} changed "
+                            "between ACL check and patch; refusing to apply."
+                        ),
+                    )
+
+            verify = _assert_label_unchanged
+
         return self._patch_with_resource_version(
             fetch=lambda: self._get_cluster_custom_object_sync(TEMPLATE_PLURAL, name),
             apply=lambda payload: self._patch_cluster_custom_object_sync(TEMPLATE_PLURAL, name, payload),
             body=body,
             label=f"template {name}",
+            verify=verify,
         )
 
     def _delete_template_sync(self, name: str) -> dict[str, Any]:
@@ -819,8 +902,29 @@ class K8sClient:
     async def delete_cluster(self, namespace: str, name: str) -> dict[str, Any]:
         return await asyncio.to_thread(self._delete_cluster_sync, namespace, name)
 
-    async def patch_cluster_status(self, namespace: str, name: str, status_patch: dict[str, Any]) -> dict[str, Any]:
-        return await asyncio.to_thread(self._patch_cluster_status_sync, namespace, name, status_patch)
+    async def patch_cluster_status(
+        self,
+        namespace: str,
+        name: str,
+        status_patch: dict[str, Any],
+        *,
+        expected_workspace_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Patch an AerospikeCluster status subresource.
+
+        ``expected_workspace_id`` (P1-4) closes the TOCTOU window
+        between the caller's ACL check and the status apply: a
+        concurrent re-labelling of the CR aborts with 409
+        ``Conflict`` instead of leaking the mutation across tenants.
+        Mirrors the guard on :meth:`patch_cluster`.
+        """
+        return await asyncio.to_thread(
+            self._patch_cluster_status_sync,
+            namespace,
+            name,
+            status_patch,
+            expected_workspace_id=expected_workspace_id,
+        )
 
     async def list_namespaces(self) -> list[str]:
         return await asyncio.to_thread(self._list_namespaces_sync)
@@ -843,8 +947,19 @@ class K8sClient:
     async def create_template(self, body: dict[str, Any]) -> dict[str, Any]:
         return await asyncio.to_thread(self._create_template_sync, body)
 
-    async def patch_template(self, name: str, body: dict[str, Any]) -> dict[str, Any]:
-        return await asyncio.to_thread(self._patch_template_sync, name, body)
+    async def patch_template(
+        self,
+        name: str,
+        body: dict[str, Any],
+        *,
+        expected_workspace_id: str | None = None,
+    ) -> dict[str, Any]:
+        return await asyncio.to_thread(
+            self._patch_template_sync,
+            name,
+            body,
+            expected_workspace_id=expected_workspace_id,
+        )
 
     async def delete_template(self, name: str) -> dict[str, Any]:
         return await asyncio.to_thread(self._delete_template_sync, name)
