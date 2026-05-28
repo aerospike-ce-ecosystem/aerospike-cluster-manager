@@ -132,6 +132,7 @@ async def _get_record_note_text(
 
 @router.get(
     "/{conn_id}",
+    response_model=RecordListResponse,
     summary="List records",
     description="Retrieve records from a namespace and set with a server-side limit.",
 )
@@ -166,6 +167,7 @@ async def get_records(
 
 @router.get(
     "/{conn_id}/detail",
+    response_model=AerospikeRecord,
     summary="Get record detail",
     description="Retrieve a single record identified by namespace, set, and primary key.",
 )
@@ -208,6 +210,7 @@ async def get_record_detail(
 @router.post(
     "/{conn_id}",
     status_code=201,
+    response_model=AerospikeRecord,
     summary="Create or update record",
     description="Write a record to Aerospike with the specified key, bins, and optional TTL.",
 )
@@ -332,6 +335,7 @@ async def delete_record_bin(
 
 @router.post(
     "/{conn_id}/filter",
+    response_model=FilteredQueryResponse,
     summary="Filtered record scan",
     description="Scan records with optional expression filters and pagination.",
 )
