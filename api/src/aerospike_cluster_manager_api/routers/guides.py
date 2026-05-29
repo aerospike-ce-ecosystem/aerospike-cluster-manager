@@ -48,6 +48,7 @@ class GuidesListResponse(BaseModel):
 
 @router.get(
     "/{workspace_id}",
+    response_model=GuidesListResponse,
     summary="List operational guides",
     description=(
         "List the operational guides registered for a workspace. A workspace "
@@ -62,6 +63,7 @@ async def list_guides(workspace_id: VerifiedWorkspaceId) -> GuidesListResponse:
 
 @router.get(
     "/{workspace_id}/{guide_type}",
+    response_model=GuideResponse,
     summary="Get an operational guide",
     description=(
         "Fetch the Markdown body of one operational guide. Returns 404 when "
@@ -83,6 +85,7 @@ async def get_guide(
 
 @router.put(
     "/{workspace_id}/{guide_type}",
+    response_model=GuideResponse,
     summary="Register or update an operational guide",
     description=(
         "Create or replace the Markdown body of an operational guide. The "

@@ -28,6 +28,7 @@ router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
 @router.get(
     "",
+    response_model=list[WorkspaceResponse],
     summary="List workspaces",
     description=(
         "Retrieve workspaces visible to the caller. The built-in default sorts first. "
@@ -43,6 +44,7 @@ async def list_workspaces(caller_owner_id: CallerOwnerId) -> list[WorkspaceRespo
 @router.post(
     "",
     status_code=201,
+    response_model=WorkspaceResponse,
     summary="Create workspace",
     description="Create a new workspace. The id and ownerId are populated server-side.",
 )
@@ -57,6 +59,7 @@ async def create_workspace(
 
 @router.get(
     "/{workspace_id}",
+    response_model=WorkspaceResponse,
     summary="Get workspace",
     description="Retrieve a single workspace by id. Returns 404 when the row is invisible to the caller.",
 )
@@ -72,6 +75,7 @@ async def get_workspace(
 
 @router.put(
     "/{workspace_id}",
+    response_model=WorkspaceResponse,
     summary="Update workspace",
     description=(
         "Update a workspace's name, color, or description. The default workspace can be renamed. "
