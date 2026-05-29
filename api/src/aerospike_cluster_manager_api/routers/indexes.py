@@ -34,6 +34,7 @@ async def _index_exists(client: Any, namespace: str, name: str) -> bool:
 
 @router.get(
     "/{conn_id}",
+    response_model=list[SecondaryIndex],
     summary="List secondary indexes",
     description="Retrieve all secondary indexes across all namespaces in the cluster.",
 )
@@ -67,6 +68,7 @@ async def get_indexes(client: AerospikeClient) -> list[SecondaryIndex]:
 @router.post(
     "/{conn_id}",
     status_code=201,
+    response_model=SecondaryIndex,
     summary="Create secondary index",
     description="Create a new secondary index on a specified namespace, set, and bin.",
 )

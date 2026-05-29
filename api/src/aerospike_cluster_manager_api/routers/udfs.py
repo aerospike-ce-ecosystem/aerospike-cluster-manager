@@ -44,6 +44,7 @@ async def _list_udfs(c) -> list[UDFModule]:
 
 @router.get(
     "/{conn_id}",
+    response_model=list[UDFModule],
     summary="List UDF modules",
     description="Retrieve all registered UDF modules from the Aerospike cluster.",
 )
@@ -55,6 +56,7 @@ async def get_udfs(client: AerospikeClient) -> list[UDFModule]:
 @router.post(
     "/{conn_id}",
     status_code=201,
+    response_model=UDFModule,
     summary="Upload UDF module",
     description="Upload and register a Lua UDF module to the Aerospike cluster.",
 )

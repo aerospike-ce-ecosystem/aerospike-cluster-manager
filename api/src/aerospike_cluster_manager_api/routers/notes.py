@@ -102,6 +102,7 @@ class SetNotesListResponse(BaseModel):
 
 @router.put(
     "/sets/{conn_id}/{namespace}/{set_name}",
+    response_model=SetNote,
     summary="Upsert set note",
     description="Create or update an operator note attached to a set.",
 )
@@ -143,6 +144,7 @@ async def delete_set_note(
 
 @router.get(
     "/sets/{conn_id}",
+    response_model=SetNotesListResponse,
     summary="List set notes",
     description="List set-level operator notes for a connection, optionally filtered by namespace.",
 )
@@ -165,6 +167,7 @@ class RecordNotesListResponse(BaseModel):
 
 @router.put(
     "/records/{conn_id}/{namespace}/{set_name}/{pk}",
+    response_model=RecordNote,
     summary="Upsert record note",
     description="Create or update an operator note on a single record.",
 )
@@ -215,6 +218,7 @@ async def delete_record_note(
 
 @router.get(
     "/records/{conn_id}",
+    response_model=RecordNotesListResponse,
     summary="List record notes",
     description=(
         "List record-level notes for a (connection, namespace, set). This is the "

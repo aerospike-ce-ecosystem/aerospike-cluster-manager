@@ -30,7 +30,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/connections", tags=["connections"])
 
 
-@router.get("", summary="List connections", description="Retrieve all saved Aerospike connection profiles.")
+@router.get(
+    "",
+    response_model=list[ConnectionProfileResponse],
+    summary="List connections",
+    description="Retrieve all saved Aerospike connection profiles.",
+)
 async def list_connections(
     caller_owner_id: CallerOwnerId,
     workspace_id: str | None = Query(default=None, description="Filter by workspace id."),
@@ -47,7 +52,13 @@ async def list_connections(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.post("", status_code=201, summary="Create connection", description="Create a new Aerospike connection profile.")
+@router.post(
+    "",
+    status_code=201,
+    response_model=ConnectionProfileResponse,
+    summary="Create connection",
+    description="Create a new Aerospike connection profile.",
+)
 @limiter.limit("10/minute")
 async def create_connection(
     request: Request,
@@ -65,7 +76,12 @@ async def create_connection(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.get("/{conn_id}", summary="Get connection", description="Retrieve a single connection profile by its ID.")
+@router.get(
+    "/{conn_id}",
+    response_model=ConnectionProfileResponse,
+    summary="Get connection",
+    description="Retrieve a single connection profile by its ID.",
+)
 async def get_connection(
     caller_owner_id: CallerOwnerId,
     conn_id: str = Depends(_get_verified_connection),
@@ -88,7 +104,10 @@ async def get_connection(
 
 
 @router.put(
-    "/{conn_id}", summary="Update connection", description="Update an existing connection profile with new settings."
+    "/{conn_id}",
+    response_model=ConnectionProfileResponse,
+    summary="Update connection",
+    description="Update an existing connection profile with new settings.",
 )
 @limiter.limit("10/minute")
 async def update_connection(
