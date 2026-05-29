@@ -13,6 +13,7 @@ router = APIRouter(prefix="/sample-data", tags=["sample-data"])
 @router.post(
     "/{conn_id}",
     status_code=201,
+    response_model=CreateSampleDataResponse,
     summary="Create sample data set",
     description="Generate deterministic sample records with optional secondary indexes.",
 )

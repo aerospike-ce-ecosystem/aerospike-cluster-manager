@@ -551,7 +551,12 @@ async def reset_circuit_breaker(
     return {"message": "Circuit breaker reset triggered", "namespace": namespace, "name": name}
 
 
-@router.post("/clusters/import", status_code=201, summary="Import K8s Aerospike cluster from CR")
+@router.post(
+    "/clusters/import",
+    status_code=201,
+    response_model=K8sClusterSummary,
+    summary="Import K8s Aerospike cluster from CR",
+)
 @limiter.limit("20/minute")
 @_k8s_endpoint("import Kubernetes cluster")
 async def import_k8s_cluster(
@@ -614,7 +619,7 @@ async def import_k8s_cluster(
     return extract_summary(result)
 
 
-@router.post("/clusters", status_code=201, summary="Create K8s Aerospike cluster")
+@router.post("/clusters", status_code=201, response_model=K8sClusterSummary, summary="Create K8s Aerospike cluster")
 @limiter.limit("20/minute")
 @_k8s_endpoint("create Kubernetes cluster")
 async def create_k8s_cluster(
@@ -1034,7 +1039,9 @@ async def get_k8s_template(
     )
 
 
-@router.post("/templates", status_code=201, summary="Create K8s AerospikeClusterTemplate")
+@router.post(
+    "/templates", status_code=201, response_model=K8sTemplateSummary, summary="Create K8s AerospikeClusterTemplate"
+)
 @limiter.limit("20/minute")
 @_k8s_endpoint("create Kubernetes template")
 async def create_k8s_template(
@@ -1191,6 +1198,7 @@ class CloneClusterRequest(BaseModel):
 @router.post(
     "/clusters/{namespace}/{name}/clone",
     status_code=201,
+    response_model=K8sClusterSummary,
     summary="Clone an existing K8s Aerospike cluster",
 )
 @limiter.limit("20/minute")
