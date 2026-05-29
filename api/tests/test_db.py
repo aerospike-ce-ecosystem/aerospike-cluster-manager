@@ -8,9 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import sqlite3
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
 import pytest
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 
 from aerospike_cluster_manager_api import db
 from aerospike_cluster_manager_api.models.connection import ConnectionProfile
@@ -333,6 +337,42 @@ class TestGetBackendWithoutInit:
                 db._get_backend()
         finally:
             db._backend = original
+
+
+@asynccontextmanager
+async def _noop_lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """No-op lifespan so the app does not call db.init_db() on startup."""
+    yield
+
+
+class TestHealthEndpointUninitializedDb:
+    """Regression: /api/health?detail=true must report 'degraded' (HTTP 200)
+    rather than raising a 500 when the DB backend is uninitialized.
+
+    db.check_health() dispatches through _get_backend(), which raises
+    DBNotInitialized when init_db() has not run. The endpoint now guards that
+    call so an uninitialized/unready backend surfaces as degraded.
+    """
+
+    async def test_detail_health_reports_degraded_when_backend_uninitialized(self):
+        from aerospike_cluster_manager_api.main import app
+
+        original_backend = db._backend
+        original_lifespan = app.router.lifespan_context
+        app.router.lifespan_context = _noop_lifespan
+        db._backend = None
+        try:
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                resp = await ac.get("/api/health?detail=true")
+        finally:
+            app.router.lifespan_context = original_lifespan
+            db._backend = original_backend
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "degraded"
+        assert body["components"]["database"]["status"] == "error"
 
 
 class TestSqliteWriteConcurrency:
