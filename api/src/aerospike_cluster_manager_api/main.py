@@ -524,8 +524,18 @@ async def health_check(detail: bool = Query(False)) -> dict:
     if not detail:
         return {"status": "ok"}
 
-    # Check DB health
-    db_ok = await db.check_health()
+    # Check DB health. db.check_health() dispatches through _get_backend(),
+    # which raises DBNotInitialized when init_db() has not run (or is still
+    # running). The backends' own check_health() swallow errors and return
+    # False, but that guard sits BEFORE their try-block — so an uninitialized
+    # backend would surface as an unhandled 500 instead of a "degraded"
+    # report. Treat any failure as not-healthy so the endpoint always returns
+    # a structured 200 status the readiness probe can act on.
+    try:
+        db_ok = await db.check_health()
+    except Exception:
+        logger.warning("Health check: database is not ready", exc_info=True)
+        db_ok = False
 
     overall = "ok" if db_ok else "degraded"
     return {

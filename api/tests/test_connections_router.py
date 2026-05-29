@@ -8,9 +8,10 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+from aerospike_py.exception import AerospikeError
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
@@ -385,6 +386,83 @@ class TestTestConnection:
         call_args = mock_cls.call_args[0][0]
         assert call_args["user"] == "admin"
         assert call_args["password"] == "secret"
+
+
+class TestConnectionHealth:
+    """Robustness of GET /api/connections/{id}/health.
+
+    The endpoint always returns HTTP 200 and uses ``connected: false`` to
+    signal an unreachable cluster. A transient ``ping()`` failure must NOT be
+    mistaken for an unreachable cluster once namespaces/build/edition have
+    already been fetched successfully.
+    """
+
+    @staticmethod
+    def _make_reachable_client() -> AsyncMock:
+        """A mock AsyncClient where the cluster is reachable (info calls succeed)."""
+        mock = AsyncMock()
+        # get_node_names() is synchronous in the router.
+        mock.get_node_names = Mock(return_value=["node1", "node2"])
+
+        def info_random_node_side_effect(cmd: str) -> str:
+            if cmd == "namespaces":
+                return "test;bar"
+            if cmd == "build":
+                return "8.1.0.0"
+            if cmd == "edition":
+                return "Community Edition"
+            return ""
+
+        mock.info_random_node.side_effect = info_random_node_side_effect
+        # No namespace-level stats needed for this assertion; return empty.
+        mock.info_all.return_value = []
+        return mock
+
+    async def test_transient_ping_failure_keeps_connected_true(self, client: AsyncClient, sample_connection):
+        """namespaces/build/edition succeed but ping() raises -> connected=True, tendHealthy=None.
+
+        Regression: ping() was evaluated inside the success-path constructor,
+        so a transient AerospikeError leaked into the outer handler and the
+        endpoint wrongly reported the reachable cluster as disconnected.
+        """
+        from aerospike_cluster_manager_api import db
+
+        await db.create_connection(sample_connection)
+
+        mock_as_client = self._make_reachable_client()
+        mock_as_client.ping = AsyncMock(side_effect=AerospikeError("transient tend failure"))
+
+        with patch(
+            "aerospike_cluster_manager_api.routers.connections.client_manager.get_client",
+            return_value=mock_as_client,
+        ):
+            resp = await client.get(f"/api/connections/{sample_connection.id}/health")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["connected"] is True
+        assert body["tendHealthy"] is None
+        assert body["build"] == "8.1.0.0"
+
+    async def test_healthy_ping_reports_tend_healthy_true(self, client: AsyncClient, sample_connection):
+        """Sanity: a successful ping() surfaces tendHealthy=True alongside connected=True."""
+        from aerospike_cluster_manager_api import db
+
+        await db.create_connection(sample_connection)
+
+        mock_as_client = self._make_reachable_client()
+        mock_as_client.ping = AsyncMock(return_value=True)
+
+        with patch(
+            "aerospike_cluster_manager_api.routers.connections.client_manager.get_client",
+            return_value=mock_as_client,
+        ):
+            resp = await client.get(f"/api/connections/{sample_connection.id}/health")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["connected"] is True
+        assert body["tendHealthy"] is True
 
 
 class TestConnectionSSRF:

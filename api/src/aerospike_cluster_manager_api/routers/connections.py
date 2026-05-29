@@ -198,6 +198,20 @@ async def get_connection_health(conn_id: str = Depends(_get_verified_connection)
         except Exception:
             logger.debug("Failed to collect namespace stats for connection '%s'", conn_id, exc_info=True)
 
+        # Compute tend health defensively BEFORE the success-path constructor.
+        # namespaces/build/edition were already fetched successfully, so the
+        # cluster is reachable. A transient AerospikeError/OSError from ping()
+        # must NOT bubble into the outer `except (AerospikeError, OSError)` and
+        # flip the response to connected=false for an otherwise-healthy cluster
+        # — degrade tendHealthy to None instead.
+        tend_healthy: bool | None = None
+        if hasattr(client, "ping"):  # ping() added in aerospike-py 0.0.5
+            try:
+                tend_healthy = await client.ping()  # type: ignore[attr-defined]
+            except (AerospikeError, OSError):
+                logger.debug("ping() failed for connection '%s'; reporting tendHealthy=None", conn_id, exc_info=True)
+                tend_healthy = None
+
         return ConnectionStatus(
             connected=True,
             nodeCount=node_count,
@@ -208,7 +222,7 @@ async def get_connection_health(conn_id: str = Depends(_get_verified_connection)
             memoryTotal=memory_total,
             diskUsed=disk_used,
             diskTotal=disk_total,
-            tendHealthy=await client.ping() if hasattr(client, "ping") else None,  # type: ignore[attr-defined]  # ping() added in aerospike-py 0.0.5
+            tendHealthy=tend_healthy,
         )
     except AerospikeTimeoutError as exc:
         logger.warning("Health check timed out for connection '%s'", conn_id, exc_info=True)
