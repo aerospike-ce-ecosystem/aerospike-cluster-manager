@@ -43,6 +43,7 @@ async def list_workspaces(caller_owner_id: CallerOwnerId) -> list[WorkspaceRespo
 @router.post(
     "",
     status_code=201,
+    response_model=WorkspaceResponse,
     summary="Create workspace",
     description="Create a new workspace. The id and ownerId are populated server-side.",
 )

@@ -67,6 +67,7 @@ async def get_indexes(client: AerospikeClient) -> list[SecondaryIndex]:
 @router.post(
     "/{conn_id}",
     status_code=201,
+    response_model=SecondaryIndex,
     summary="Create secondary index",
     description="Create a new secondary index on a specified namespace, set, and bin.",
 )

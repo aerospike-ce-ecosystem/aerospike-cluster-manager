@@ -47,7 +47,13 @@ async def list_connections(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.post("", status_code=201, summary="Create connection", description="Create a new Aerospike connection profile.")
+@router.post(
+    "",
+    status_code=201,
+    response_model=ConnectionProfileResponse,
+    summary="Create connection",
+    description="Create a new Aerospike connection profile.",
+)
 @limiter.limit("10/minute")
 async def create_connection(
     request: Request,

@@ -79,6 +79,7 @@ async def get_roles(client: AerospikeClient, conn_id: VerifiedConnId) -> list[Ae
 @router.post(
     "/{conn_id}/roles",
     status_code=201,
+    response_model=AerospikeRole,
     summary="Create role",
     description="Create a new Aerospike role with specified privileges. Requires security to be enabled in aerospike.conf.",
 )

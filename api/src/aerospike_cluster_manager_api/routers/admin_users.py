@@ -48,6 +48,7 @@ async def get_users(client: AerospikeClient, conn_id: VerifiedConnId) -> list[Ae
 @router.post(
     "/{conn_id}/users",
     status_code=201,
+    response_model=AerospikeUser,
     summary="Create user",
     description="Create a new Aerospike user with specified roles. Requires security to be enabled in aerospike.conf.",
 )
