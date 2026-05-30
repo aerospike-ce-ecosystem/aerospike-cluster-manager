@@ -77,7 +77,14 @@ def aggregate_node_kv(
 
     * Keys in *keys_to_sum* are summed as integers across nodes.
     * Keys in *keys_to_min* take the minimum value across nodes.
-    * All other keys use the first node's value.
+    * All other keys use the first node that *reported that key*.
+
+    Nodes can legitimately report different key sets (version skew,
+    feature flags, per-node-only stats). Each passthrough key is taken
+    from the first node that carries it -- using the *first node's whole
+    response* would silently drop any key absent from that one node, and
+    because ``info_all()`` results are unordered the dropped set would be
+    nondeterministic across calls.
 
     Error responses (``err is not None``) are silently skipped.
     """
@@ -89,9 +96,11 @@ def aggregate_node_kv(
         if err:
             continue
         kv = parse_kv_pairs(resp)
-        if not merged:
-            merged.update(kv)
         for k, v in kv.items():
+            # Passthrough keys: keep the first-seen value across all nodes
+            # so a key present only on a later node is not lost.
+            if k not in keys_to_sum and k not in keys_to_min and k not in merged:
+                merged[k] = v
             if k in keys_to_sum:
                 sum_accum[k] = sum_accum.get(k, 0) + safe_int(v)
             elif k in keys_to_min:

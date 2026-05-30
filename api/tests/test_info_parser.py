@@ -276,6 +276,52 @@ class TestAggregateNodeKv:
         merged = aggregate_node_kv(results, keys_to_sum={"objects"})
         assert merged["objects"] == "10"
 
+    def test_passthrough_key_only_on_later_node_is_kept(self):
+        # A passthrough key present only on a non-first node must not be
+        # dropped just because the first responder lacked it. ``info_all()``
+        # results are unordered, so losing such keys would be a
+        # nondeterministic regression in the merged cluster view.
+        results = [
+            self._make_result("node1", "objects=100;cluster_size=3"),
+            self._make_result("node2", "objects=200;cluster_size=3;edition=Community"),
+        ]
+        merged = aggregate_node_kv(results, keys_to_sum={"objects"})
+        assert merged["objects"] == "300"
+        assert merged["cluster_size"] == "3"
+        assert merged["edition"] == "Community"
+
+    def test_passthrough_first_seen_value_wins_when_first_node_lacks_key(self):
+        # When the key is absent from the first node, the first node that
+        # actually reports it owns the value (first-seen, not last-seen).
+        results = [
+            self._make_result("node1", "objects=100"),
+            self._make_result("node2", "build=6.4.0.1"),
+            self._make_result("node3", "build=6.4.0.9"),
+        ]
+        merged = aggregate_node_kv(results)
+        assert merged["build"] == "6.4.0.1"
+
+    def test_passthrough_first_node_value_still_wins(self):
+        # Regression guard: when every node reports the key, the first
+        # node's value must still win (documented contract).
+        results = [
+            self._make_result("node1", "version=6.0"),
+            self._make_result("node2", "version=6.1"),
+        ]
+        merged = aggregate_node_kv(results)
+        assert merged["version"] == "6.0"
+
+    def test_passthrough_key_missing_from_first_responding_node(self):
+        # The first node errors; the key only appears on the second
+        # (first *responding*) node and must be present.
+        results = [
+            self._make_error("node1"),
+            self._make_result("node2", "edition=Community;objects=50"),
+        ]
+        merged = aggregate_node_kv(results, keys_to_sum={"objects"})
+        assert merged["edition"] == "Community"
+        assert merged["objects"] == "50"
+
 
 # ---- aggregate_set_records --------------------------------------------------
 
