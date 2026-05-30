@@ -405,3 +405,26 @@ class TestGeoFilterValueValidation:
             exp.geo_val('{"type": "Point", "coordinates": [0.0, 0.0]}'),
         )
         assert expr == expected
+
+    @pytest.mark.parametrize(
+        ("value", "geo_str"),
+        [
+            (
+                '{"type":"Point","coordinates":[0.0,0.0]}',
+                '{"type":"Point","coordinates":[0.0,0.0]}',
+            ),
+            (
+                {"type": "Point", "coordinates": [0.0, 0.0]},
+                '{"type": "Point", "coordinates": [0.0, 0.0]}',
+            ),
+        ],
+    )
+    def test_eq_on_geo_bin_with_geojson_value_builds(self, value: object, geo_str: str):
+        # EQ on a geo bin routes through _val_accessor -> _geo_val (not the
+        # geo_compare branch). A valid GeoJSON str or dict must build a geo_val
+        # comparison without raising — the rejection-path guard must not break
+        # the happy path through this call site.
+        cond = FilterCondition(bin="loc", operator=FilterOperator.EQ, value=value, bin_type=BinDataType.GEO)
+        expr = _build_condition(cond)
+        expected = exp.eq(exp.geo_bin("loc"), exp.geo_val(geo_str))
+        assert expr == expected
