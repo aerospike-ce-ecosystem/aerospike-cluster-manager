@@ -497,6 +497,28 @@ class TestConnectionHealth:
         assert body["connected"] is True
         assert body["tendHealthy"] is True
 
+    async def test_profile_deleted_mid_health_check_returns_disconnected(self, client: AsyncClient, sample_connection):
+        """TOCTOU: profile vanishes between the dependency check and get_client().
+
+        get_client() raises a plain ValueError, which is NOT an Aerospike/OS
+        error. Without an explicit handler it escapes to the global 500 handler
+        and breaks the documented "always HTTP 200 / connected=false" contract.
+        """
+        from aerospike_cluster_manager_api import db
+
+        await db.create_connection(sample_connection)
+
+        with patch(
+            "aerospike_cluster_manager_api.routers.connections.client_manager.get_client",
+            side_effect=ValueError(f"Connection profile '{sample_connection.id}' not found"),
+        ):
+            resp = await client.get(f"/api/connections/{sample_connection.id}/health")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["connected"] is False
+        assert body["errorType"] == "not_found"
+
 
 class TestConnectionSSRF:
     """P1-1 regression: test_connection rejects loopback / link-local

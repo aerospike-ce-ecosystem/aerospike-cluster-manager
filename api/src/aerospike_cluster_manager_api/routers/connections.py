@@ -225,6 +225,12 @@ async def get_connection_health(conn_id: str = Depends(_get_verified_connection)
             diskTotal=disk_total,
             tendHealthy=tend_healthy,
         )
+    except ValueError as exc:
+        # Profile vanished between the route dependency check and the client
+        # fetch (TOCTOU) — get_client() raises a plain ValueError. Surface as
+        # the disconnected shape, not an opaque 500.
+        logger.warning("Connection '%s' disappeared during health check", conn_id, exc_info=True)
+        return _disconnected_health(str(exc), "not_found")
     except AerospikeTimeoutError as exc:
         logger.warning("Health check timed out for connection '%s'", conn_id, exc_info=True)
         return _disconnected_health(str(exc), "timeout")
