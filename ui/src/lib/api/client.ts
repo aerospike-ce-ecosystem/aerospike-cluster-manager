@@ -132,10 +132,18 @@ async function executeRequest(
 
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+  // Bridge an externally-supplied signal into this request's controller.
+  // The listener must be removed in the `finally` below: `executeRequest`
+  // can run more than once per `apiFetch` (the 401 silent-refresh retry),
+  // and a caller that reuses one long-lived `AbortSignal` across many
+  // requests would otherwise accumulate one listener per request on that
+  // shared signal — each pinning a now-dead controller in a closure. The
+  // `{ once: true }` option does not help here because the signal usually
+  // never aborts, so the listener is never auto-removed.
+  const onExternalAbort = () => controller.abort()
   if (signal) {
     if (signal.aborted) controller.abort()
-    else
-      signal.addEventListener("abort", () => controller.abort(), { once: true })
+    else signal.addEventListener("abort", onExternalAbort)
   }
 
   const finalHeaders = new Headers(headers)
@@ -159,6 +167,7 @@ async function executeRequest(
     })
   } finally {
     clearTimeout(timeoutId)
+    if (signal) signal.removeEventListener("abort", onExternalAbort)
   }
 }
 
