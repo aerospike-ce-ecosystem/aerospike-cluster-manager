@@ -16,6 +16,7 @@ from aerospike_cluster_manager_api.models.connection import (
     ConnectionStatus,
     CreateConnectionRequest,
     TestConnectionRequest,
+    TestConnectionResponse,
     UpdateConnectionRequest,
 )
 from aerospike_cluster_manager_api.rate_limit import limiter
@@ -252,6 +253,7 @@ def _disconnected_health(error: str, error_type: str) -> Response:
 
 @router.post(
     "/test",
+    response_model=TestConnectionResponse,
     summary="Test connection",
     description="Test connectivity to an Aerospike cluster without saving the profile.",
 )
@@ -260,7 +262,7 @@ async def test_connection(
     request: Request,
     body: TestConnectionRequest,
     caller_owner_id: CallerOwnerId,
-) -> dict[str, bool | str]:
+) -> TestConnectionResponse:
     """Test connectivity to an Aerospike cluster without saving the profile.
 
     Failure messages are normalised to a generic ``"connection failed"``
@@ -279,8 +281,8 @@ async def test_connection(
             body.port,
             result.message,
         )
-        return {"success": False, "message": "connection failed"}
-    return {"success": True, "message": result.message}
+        return TestConnectionResponse(success=False, message="connection failed")
+    return TestConnectionResponse(success=True, message=result.message)
 
 
 @router.delete(
