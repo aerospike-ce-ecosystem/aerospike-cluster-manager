@@ -567,6 +567,41 @@ class TestFilteredRecordsPkMatchMode:
         # The predicate is rejected before the scan executes.
         mock_client.query.return_value.results.assert_not_called()
 
+    async def test_explicit_int_pk_type_with_non_integer_pk_returns_400(self, client: AsyncClient):
+        """An exact PK lookup with ``pkType=int`` but a non-integer pk must
+        surface as 400, not the opaque 500 the bare ``resolve_pk`` ValueError
+        used to produce. This aligns the filter endpoint with the records-
+        detail and query endpoints, which already map this client error to
+        400."""
+        mock_client = _build_query_mock()
+
+        with (
+            patch(
+                "aerospike_cluster_manager_api.dependencies.db.get_connection",
+                AsyncMock(return_value={"id": "conn-test"}),
+            ),
+            patch(
+                "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+                AsyncMock(return_value=mock_client),
+            ),
+        ):
+            resp = await client.post(
+                "/api/records/conn-test/filter",
+                json={
+                    "namespace": "test",
+                    "set": "demo",
+                    "pkPattern": "not-a-number",
+                    "pkMatchMode": "exact",
+                    "pkType": "int",
+                },
+            )
+
+        assert resp.status_code == 400, resp.text
+        assert "int" in resp.json()["detail"]
+        # The bad pk is rejected before any client call (get or scan) runs.
+        mock_client.get.assert_not_called()
+        mock_client.query.assert_not_called()
+
 
 class TestPutRecordRouter:
     """POST /records/{conn_id} — record write path."""

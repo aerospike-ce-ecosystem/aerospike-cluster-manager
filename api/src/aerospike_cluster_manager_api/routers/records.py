@@ -371,6 +371,15 @@ async def get_filtered_records(
         # ``ValueError`` catch, otherwise the more accurate 422 would
         # silently degrade to 400.
         raise HTTPException(status_code=422, detail=f"Invalid predicate: {exc}") from exc
+    except ValueError as exc:
+        # Explicit pk_type with an unparseable pk → resolve_pk raises a plain
+        # ValueError (e.g. pkType=int with primaryKey="abc", or pkType=bytes
+        # with invalid hex). That is a client error, so map it to 400 to match
+        # the records-detail and query endpoints. Without this catch the bare
+        # ValueError escaped to the global handler as an opaque HTTP 500. This
+        # branch MUST stay last so the more specific ValueError subclasses
+        # above keep their dedicated status codes.
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     models = [record_to_model(r) for r in result.records]
     # Filter scans always carry a set scope (SetRequiredForPkLookup is
