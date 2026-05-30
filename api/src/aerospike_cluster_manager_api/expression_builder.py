@@ -43,6 +43,41 @@ class InvalidFilterValueError(ValueError):
 # pathological backtracking becomes feasible.
 _MAX_REGEX_PATTERN_LENGTH = 256
 
+# String spellings accepted for a ``bin_type=bool`` filter value. JSON clients
+# routinely send booleans as strings ("false", "0"), and the naive ``bool(str)``
+# coercion treats every non-empty string as ``True`` — so ``value="false"``
+# would silently build a filter matching ``True``. Parse explicitly instead.
+_BOOL_TRUE_STRINGS = frozenset({"true", "1", "yes", "on"})
+_BOOL_FALSE_STRINGS = frozenset({"false", "0", "no", "off"})
+
+
+def _coerce_bool(value: object) -> bool:
+    """Coerce a filter value to ``bool`` without the ``bool(str)`` footgun.
+
+    ``bool("false")`` and ``bool("0")`` are both ``True`` in Python because
+    any non-empty string is truthy. A filter for a boolean bin equal to
+    ``false`` is commonly sent over JSON as the string ``"false"`` (or
+    ``"0"``), so the naive coercion silently inverts the user's intent.
+
+    Rules:
+        - genuine ``bool`` → returned as-is.
+        - ``int`` / ``float`` → standard truthiness (``0`` → ``False``).
+        - ``str`` → parsed case-insensitively against the known true/false
+          spellings; anything else raises :class:`InvalidFilterValueError`.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int | float):
+        return bool(value)
+    if isinstance(value, str):
+        token = value.strip().lower()
+        if token in _BOOL_TRUE_STRINGS:
+            return True
+        if token in _BOOL_FALSE_STRINGS:
+            return False
+    raise InvalidFilterValueError(f"Filter value {value!r} is not a valid boolean")
+
+
 # Heuristic detector for the classic "evil regex" shapes that drive
 # catastrophic backtracking in Python's ``re`` engine: a quantifier
 # wrapped in a quantified group, e.g. ``(a+)+``, ``(a*)*``, ``(a?)+``,
@@ -116,7 +151,7 @@ def _val_accessor(value: object, bin_type: BinDataType) -> dict:
     if bin_type == BinDataType.STRING:
         return exp.string_val(str(value))
     if bin_type == BinDataType.BOOL:
-        return exp.bool_val(bool(value))
+        return exp.bool_val(_coerce_bool(value))
     if bin_type == BinDataType.GEO:
         geo_str = value if isinstance(value, str) else json.dumps(value)
         return exp.geo_val(geo_str)

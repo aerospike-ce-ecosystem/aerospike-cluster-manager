@@ -278,3 +278,71 @@ class TestFilterValueValidation:
         # plain ValueError, but it must remain a ValueError for callers that
         # only know the base type.
         assert issubclass(InvalidFilterValueError, ValueError)
+
+
+class TestBoolFilterValueCoercion:
+    """A ``bin_type=bool`` filter value arrives as ``BinValue`` (``Any``), so a
+    JSON client commonly sends booleans as the strings ``"true"`` / ``"false"``.
+
+    The previous ``bool(value)`` coercion was a footgun: ``bool("false")`` and
+    ``bool("0")`` are both ``True`` in Python (any non-empty string is truthy),
+    so a filter for ``is_active == false`` silently built one matching ``True``
+    and returned the opposite set of records.
+    """
+
+    @pytest.mark.parametrize("falsey", ["false", "False", "FALSE", " false ", "0", "no", "off"])
+    def test_string_false_spellings_build_false_filter(self, falsey: str):
+        cond = FilterCondition(
+            bin="active",
+            operator=FilterOperator.EQ,
+            value=falsey,
+            bin_type=BinDataType.BOOL,
+        )
+        expr = _build_condition(cond)
+        assert expr == exp.eq(exp.bool_bin("active"), exp.bool_val(False))
+
+    @pytest.mark.parametrize("truthy", ["true", "True", "TRUE", " true ", "1", "yes", "on"])
+    def test_string_true_spellings_build_true_filter(self, truthy: str):
+        cond = FilterCondition(
+            bin="active",
+            operator=FilterOperator.EQ,
+            value=truthy,
+            bin_type=BinDataType.BOOL,
+        )
+        expr = _build_condition(cond)
+        assert expr == exp.eq(exp.bool_bin("active"), exp.bool_val(True))
+
+    def test_genuine_bool_false_is_preserved(self):
+        cond = FilterCondition(
+            bin="active",
+            operator=FilterOperator.EQ,
+            value=False,
+            bin_type=BinDataType.BOOL,
+        )
+        expr = _build_condition(cond)
+        assert expr == exp.eq(exp.bool_bin("active"), exp.bool_val(False))
+
+    def test_integer_zero_is_false(self):
+        cond = FilterCondition(
+            bin="active",
+            operator=FilterOperator.EQ,
+            value=0,
+            bin_type=BinDataType.BOOL,
+        )
+        expr = _build_condition(cond)
+        assert expr == exp.eq(exp.bool_bin("active"), exp.bool_val(False))
+
+    def test_missing_value_for_bool_raises(self):
+        cond = FilterCondition(bin="active", operator=FilterOperator.EQ, bin_type=BinDataType.BOOL)
+        with pytest.raises(InvalidFilterValueError, match="required"):
+            _build_condition(cond)
+
+    def test_unrecognized_string_for_bool_raises(self):
+        cond = FilterCondition(
+            bin="active",
+            operator=FilterOperator.EQ,
+            value="maybe",
+            bin_type=BinDataType.BOOL,
+        )
+        with pytest.raises(InvalidFilterValueError, match="not a valid boolean"):
+            _build_condition(cond)
