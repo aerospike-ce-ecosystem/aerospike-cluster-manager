@@ -510,6 +510,22 @@ class TestConnectionSSRF:
         assert response.json()["success"] is False
         mock_cls.assert_not_called()
 
+    async def test_loopback_bare_ipv6_rejected(self, client: AsyncClient):
+        """Bare (unbracketed) IPv6 loopback ``::1`` must trip the SSRF
+        gate just like the bracketed ``[::1]`` form. Regression for the
+        parse_host_port last-colon split that mangled ``::1`` -> ``":"``
+        and slipped past _is_blocked_target."""
+        with patch(
+            "aerospike_cluster_manager_api.services.connections_service.aerospike_py.AsyncClient",
+        ) as mock_cls:
+            response = await client.post(
+                "/api/connections/test",
+                json={"hosts": ["::1"], "port": 3000},
+            )
+        assert response.status_code == 200
+        assert response.json()["success"] is False
+        mock_cls.assert_not_called()
+
     async def test_loopback_allowed_when_env_override_set(self, client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
         """``ACM_CONNECTION_TEST_ALLOW_PRIVATE=true`` lets dev deployments
         target the loopback Aerospike running alongside the API."""

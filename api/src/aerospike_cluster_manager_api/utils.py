@@ -21,7 +21,31 @@ __all__ = ["parse_host_port"]
 
 
 def parse_host_port(host_str: str, default_port: int) -> tuple[str, int]:
-    """Parse a host string that may contain an optional ``:port`` suffix."""
+    """Parse a host string that may contain an optional ``:port`` suffix.
+
+    Handles IPv6 correctly so a bare IPv6 literal is never split on one of
+    its own colons (a naive ``rsplit(":", 1)`` turns ``"::1"`` into
+    ``(":", 1)``):
+
+    * Bracketed IPv6 (``[::1]``, ``[2001:db8::1]:3000``) -- strip brackets,
+      take the optional trailing ``:port``.
+    * Bare IPv6 literal (2+ colons, unbracketed) -- the whole string is the
+      host; ``default_port`` is used (there is no unambiguous port suffix).
+    * ``host:port`` (single colon) -- split on the last colon.
+    * Bare host (no colon) -- host with ``default_port``.
+
+    A non-integer port falls back to ``default_port``.
+    """
+    if host_str.startswith("["):  # bracketed IPv6, optional :port
+        host, _, port_str = host_str[1:].partition("]")
+        if port_str.startswith(":"):
+            try:
+                return (host, int(port_str[1:]))
+            except ValueError:
+                return (host, default_port)
+        return (host, default_port)
+    if host_str.count(":") >= 2:  # bare IPv6 literal -- no port suffix
+        return (host_str, default_port)
     if ":" in host_str:
         host, port_str = host_str.rsplit(":", 1)
         try:
