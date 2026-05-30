@@ -161,9 +161,22 @@ class DeleteResponse(BaseModel):
 
 
 def _map_k8s_error(e: K8sApiError) -> HTTPException:
-    """Map K8sApiError status codes to appropriate HTTPException responses."""
-    status_map = {400: 400, 401: 401, 403: 403, 404: 404, 408: 408, 409: 409, 422: 422, 429: 429, 503: 503}
-    http_status = status_map.get(e.status, 500)
+    """Map a :class:`K8sApiError` status to an :class:`HTTPException`.
+
+    ``K8sApiError.status`` already carries the real HTTP status the Kubernetes
+    API server returned (``_wrap_api_exception`` passes the ``ApiException``
+    status through verbatim). Surface any genuine client/server error status
+    (4xx/5xx) transparently so the operator and UI see the actual cause —
+    e.g. ``410 Gone`` (stale resourceVersion), ``412 Precondition Failed``
+    (optimistic-concurrency conflict on update), or ``502``/``504`` from an
+    aggregated/proxied API server. The previous identity allowlist collapsed
+    every status outside a fixed set to a generic ``500 Failed to <op>``,
+    hiding the real failure.
+
+    Anything that is not a valid HTTP error status (e.g. ``0`` for a connection
+    failure, or an out-of-range value) defaults to ``500``.
+    """
+    http_status = e.status if 400 <= e.status <= 599 else 500
     return HTTPException(status_code=http_status, detail=e.message or e.reason)
 
 
