@@ -55,3 +55,36 @@ class TestBuildPredicateValidation:
         catch ValueError (e.g. the query router) keep working."""
         assert issubclass(PredicateError, ValueError)
         assert issubclass(InvalidPredicateValue, PredicateError)
+
+
+class TestBuildPredicateGeoValidation:
+    """The geo branches ``json.dumps`` any non-str value with no shape check,
+    so a scalar like ``5`` became ``"5"`` and reached the aerospike-py builder
+    as non-GeoJSON, surfacing as an opaque 500. Only str/dict/list (the shapes
+    that can serialise to GeoJSON) are accepted; anything else is a 400."""
+
+    @pytest.mark.parametrize("operator", ["geo_within_region", "geo_contains_point"])
+    def test_non_geojson_scalar_value_raises(self, operator: str):
+        pred = QueryPredicate(bin="loc", operator=operator, value=5)
+        with pytest.raises(InvalidPredicateValue, match="GeoJSON"):
+            build_predicate(pred)
+
+    @pytest.mark.parametrize("operator", ["geo_within_region", "geo_contains_point"])
+    def test_geojson_string_value_builds_ok(self, operator: str):
+        pred = QueryPredicate(
+            bin="loc",
+            operator=operator,
+            value='{"type":"Point","coordinates":[0.0,0.0]}',
+        )
+        result = build_predicate(pred)
+        assert isinstance(result, tuple)
+
+    @pytest.mark.parametrize("operator", ["geo_within_region", "geo_contains_point"])
+    def test_geojson_dict_value_builds_ok(self, operator: str):
+        pred = QueryPredicate(
+            bin="loc",
+            operator=operator,
+            value={"type": "Point", "coordinates": [0.0, 0.0]},
+        )
+        result = build_predicate(pred)
+        assert isinstance(result, tuple)

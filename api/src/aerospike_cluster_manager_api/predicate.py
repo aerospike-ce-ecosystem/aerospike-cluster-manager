@@ -89,10 +89,18 @@ def build_predicate(pred: QueryPredicate) -> tuple[Any, ...]:
         return predicates.between(pred.bin, pred.value, pred.value2)
     if op == "contains":
         return predicates.contains(pred.bin, INDEX_TYPE_LIST, pred.value)
-    if op == "geo_within_region":
+    if op in ("geo_within_region", "geo_contains_point"):
+        # ``value`` must be GeoJSON: a str (already-serialised GeoJSON) or a
+        # dict/list that ``json.dumps`` can turn into one. Anything else (e.g.
+        # an int) serialises to a non-GeoJSON scalar like ``"5"`` that the
+        # aerospike-py builder rejects as an opaque 500; reject it here as 400.
+        if not isinstance(pred.value, str | dict | list):
+            raise InvalidPredicateValue(
+                f"predicate operator {op!r} requires a GeoJSON 'value' (str, dict, or list); "
+                f"got {type(pred.value).__name__}"
+            )
         geo = pred.value if isinstance(pred.value, str) else json.dumps(pred.value)
-        return predicates.geo_within_geojson_region(pred.bin, geo)
-    if op == "geo_contains_point":
-        geo = pred.value if isinstance(pred.value, str) else json.dumps(pred.value)
+        if op == "geo_within_region":
+            return predicates.geo_within_geojson_region(pred.bin, geo)
         return predicates.geo_contains_geojson_point(pred.bin, geo)
     raise UnknownPredicateOperator(op)

@@ -227,6 +227,8 @@ def _build_condition(cond: FilterCondition) -> dict:
         return exp.eq(exp.bool_bin(bin_name), exp.bool_val(False))
 
     if op in {FilterOperator.GEO_WITHIN, FilterOperator.GEO_CONTAINS}:
+        if cond.value is None:
+            raise InvalidFilterValueError(f"Operator {op.value!r} requires a 'value'")
         geo_str = cond.value if isinstance(cond.value, str) else json.dumps(cond.value)
         return exp.geo_compare(exp.geo_bin(bin_name), exp.geo_val(geo_str))
 
