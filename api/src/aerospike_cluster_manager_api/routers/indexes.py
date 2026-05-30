@@ -122,13 +122,21 @@ async def delete_index(
 ) -> Response:
     """Remove a secondary index by name from the specified namespace.
 
+    DELETE is idempotent — if the index is already absent we still return 204,
+    mirroring ``delete_record``. Letting ``IndexNotFound`` propagate would
+    translate to 404 via the global handler and break common UI / CLI retry
+    patterns where the same DELETE is replayed after a network blip.
+
     Same idempotency guard as ``create_index`` (issue #260): if the drop call
-    raises but the index is already gone, treat the operation as successful.
+    raises a generic error but the index is already gone, treat the operation
+    as successful.
     """
     try:
         await client.index_remove(ns, name)
     except IndexNotFound:
-        raise
+        # Idempotent: the index is already absent, which is the desired
+        # post-condition of DELETE.
+        pass
     except AerospikeError:
         if await _index_exists(client, ns, name):
             raise

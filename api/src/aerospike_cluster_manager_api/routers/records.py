@@ -343,9 +343,17 @@ async def get_filtered_records(
     """Scan records with optional expression filters and pagination."""
     try:
         result = await records_service.filter_records(client, body)
+    # ``InvalidPkPattern`` subclasses ``ValueError`` — keep it first so its
+    # dedicated message wins over the generic ValueError handler below.
+    except InvalidPkPattern as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except SetRequiredForPkLookup as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except InvalidPkPattern as exc:
+    except (ValueError, TypeError) as exc:
+        # Malformed filter conditions (e.g. binType=integer with a non-numeric
+        # value, BETWEEN missing value2) make build_expression/build_predicate
+        # raise ValueError/TypeError. Map them to 400 instead of a generic 500,
+        # mirroring routers/query.py's ValueError→400 handling.
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     models = [record_to_model(r) for r in result.records]

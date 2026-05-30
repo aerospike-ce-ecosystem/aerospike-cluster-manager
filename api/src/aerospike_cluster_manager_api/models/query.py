@@ -68,6 +68,19 @@ class FilterOperator(StrEnum):
 # bin accessor. The condition's `bin` field is ignored (must be the placeholder).
 PK_OPERATORS: frozenset[FilterOperator] = frozenset({FilterOperator.PK_PREFIX, FilterOperator.PK_REGEX})
 
+# Operators that compare against the record without consuming a `value`. Every
+# other operator dereferences `value` (and BETWEEN also dereferences `value2`)
+# in expression_builder, so a missing value would raise ValueError/TypeError
+# deep in the builder. We reject those shapes up front instead.
+VALUELESS_OPERATORS: frozenset[FilterOperator] = frozenset(
+    {
+        FilterOperator.EXISTS,
+        FilterOperator.NOT_EXISTS,
+        FilterOperator.IS_TRUE,
+        FilterOperator.IS_FALSE,
+    }
+)
+
 
 class BinDataType(StrEnum):
     INTEGER = "integer"
@@ -107,6 +120,20 @@ class FilterCondition(BaseModel):
             raise ValueError(
                 f"PK operator {self.operator.value!r} requires a string value; got {type(self.value).__name__}"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_value_presence(self) -> FilterCondition:
+        # Value-bearing operators dereference `value` (and BETWEEN also
+        # `value2`) in expression_builder. Reject missing values here so the
+        # error surfaces as a 422 (body validation) / 400 (programmatic build)
+        # instead of a generic 500 from int(None) deep in the builder.
+        if self.operator in VALUELESS_OPERATORS:
+            return self
+        if self.value is None:
+            raise ValueError(f"operator {self.operator.value!r} requires a non-null value")
+        if self.operator == FilterOperator.BETWEEN and self.value2 is None:
+            raise ValueError(f"operator {self.operator.value!r} requires a non-null value2")
         return self
 
 
