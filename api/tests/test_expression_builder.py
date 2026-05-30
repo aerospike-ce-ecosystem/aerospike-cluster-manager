@@ -346,3 +346,43 @@ class TestBoolFilterValueCoercion:
         )
         with pytest.raises(InvalidFilterValueError, match="not a valid boolean"):
             _build_condition(cond)
+
+
+class TestGeoFilterValueValidation:
+    """``FilterCondition.value`` defaults to ``None`` and the GEO_WITHIN /
+    GEO_CONTAINS branch passed it straight to ``json.dumps`` — ``None`` became
+    the literal ``"null"`` and reached ``exp.geo_val`` as a non-GeoJSON string,
+    surfacing as an opaque 500. A missing value must raise
+    ``InvalidFilterValueError`` (HTTP 400) like every other operator."""
+
+    @pytest.mark.parametrize("operator", [FilterOperator.GEO_WITHIN, FilterOperator.GEO_CONTAINS])
+    def test_missing_value_raises(self, operator: FilterOperator):
+        cond = FilterCondition(bin="loc", operator=operator, bin_type=BinDataType.GEO)
+        with pytest.raises(InvalidFilterValueError, match="requires a 'value'"):
+            _build_condition(cond)
+
+    def test_geojson_string_value_builds(self):
+        geojson = '{"type":"Point","coordinates":[0.0,0.0]}'
+        cond = FilterCondition(
+            bin="loc",
+            operator=FilterOperator.GEO_WITHIN,
+            value=geojson,
+            bin_type=BinDataType.GEO,
+        )
+        expr = _build_condition(cond)
+        expected = exp.geo_compare(exp.geo_bin("loc"), exp.geo_val(geojson))
+        assert expr == expected
+
+    def test_dict_value_is_json_serialised(self):
+        cond = FilterCondition(
+            bin="loc",
+            operator=FilterOperator.GEO_CONTAINS,
+            value={"type": "Point", "coordinates": [0.0, 0.0]},
+            bin_type=BinDataType.GEO,
+        )
+        expr = _build_condition(cond)
+        expected = exp.geo_compare(
+            exp.geo_bin("loc"),
+            exp.geo_val('{"type": "Point", "coordinates": [0.0, 0.0]}'),
+        )
+        assert expr == expected
