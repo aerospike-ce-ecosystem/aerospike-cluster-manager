@@ -114,6 +114,24 @@ def _validate_pattern(pattern: str) -> None:
         raise InvalidPkPatternError(f"Invalid regex pattern: {e}") from e
 
 
+def _geo_val(value: object, context: str) -> dict:
+    """Build a ``geo_val`` expression, rejecting non-GeoJSON scalar values.
+
+    GeoJSON arrives either already-serialised as a ``str`` or as a
+    ``dict`` / ``list`` that ``json.dumps`` can turn into one. A bare scalar
+    (``int`` / ``float`` / ``bool``) serialises to something like ``"5"`` or
+    ``"true"`` — valid JSON, but not GeoJSON — which ``exp.geo_val`` forwards
+    to the server as an opaque 500. Reject it here so the HTTP boundary maps
+    it to a 400, matching the predicate-path guard added in #417.
+    """
+    if not isinstance(value, str | dict | list):
+        raise InvalidFilterValueError(
+            f"{context} requires a GeoJSON value (str, dict, or list); got {type(value).__name__}"
+        )
+    geo_str = value if isinstance(value, str) else json.dumps(value)
+    return exp.geo_val(geo_str)
+
+
 def _bin_accessor(bin_name: str, bin_type: BinDataType) -> dict:
     """Return the correct typed bin accessor expression."""
     accessors = {
@@ -153,8 +171,7 @@ def _val_accessor(value: object, bin_type: BinDataType) -> dict:
     if bin_type == BinDataType.BOOL:
         return exp.bool_val(_coerce_bool(value))
     if bin_type == BinDataType.GEO:
-        geo_str = value if isinstance(value, str) else json.dumps(value)
-        return exp.geo_val(geo_str)
+        return _geo_val(value, f"bin_type={bin_type.value!r}")
     # LIST / MAP — fall back to string representation
     return exp.string_val(str(value))
 
@@ -229,8 +246,7 @@ def _build_condition(cond: FilterCondition) -> dict:
     if op in {FilterOperator.GEO_WITHIN, FilterOperator.GEO_CONTAINS}:
         if cond.value is None:
             raise InvalidFilterValueError(f"Operator {op.value!r} requires a 'value'")
-        geo_str = cond.value if isinstance(cond.value, str) else json.dumps(cond.value)
-        return exp.geo_compare(exp.geo_bin(bin_name), exp.geo_val(geo_str))
+        return exp.geo_compare(exp.geo_bin(bin_name), _geo_val(cond.value, op.value))
 
     raise ValueError(f"Unknown filter operator: {op}")
 

@@ -361,6 +361,25 @@ class TestGeoFilterValueValidation:
         with pytest.raises(InvalidFilterValueError, match="requires a 'value'"):
             _build_condition(cond)
 
+    @pytest.mark.parametrize("operator", [FilterOperator.GEO_WITHIN, FilterOperator.GEO_CONTAINS])
+    @pytest.mark.parametrize("value", [5, 3.14, True])
+    def test_non_geojson_scalar_value_raises(self, operator: FilterOperator, value: object):
+        # A bare scalar serialises to valid JSON ("5", "3.14", "true") but not
+        # GeoJSON; exp.geo_val would forward it to the server as an opaque 500.
+        # Must be rejected as a 400-class InvalidFilterValueError instead — the
+        # #417 predicate-path guard now applies to the expression path too.
+        cond = FilterCondition(bin="loc", operator=operator, value=value, bin_type=BinDataType.GEO)
+        with pytest.raises(InvalidFilterValueError, match="GeoJSON"):
+            _build_condition(cond)
+
+    @pytest.mark.parametrize("value", [5, 3.14, True])
+    def test_comparison_op_on_geo_bin_with_scalar_value_raises(self, value: object):
+        # _val_accessor is the other path that json.dumps'd a bare scalar into
+        # a non-GeoJSON string for a geo bin (e.g. EQ on a geo bin).
+        cond = FilterCondition(bin="loc", operator=FilterOperator.EQ, value=value, bin_type=BinDataType.GEO)
+        with pytest.raises(InvalidFilterValueError, match="GeoJSON"):
+            _build_condition(cond)
+
     def test_geojson_string_value_builds(self):
         geojson = '{"type":"Point","coordinates":[0.0,0.0]}'
         cond = FilterCondition(
