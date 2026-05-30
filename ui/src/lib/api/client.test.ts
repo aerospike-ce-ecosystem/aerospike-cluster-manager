@@ -129,6 +129,75 @@ describe("apiFetch (multi-cluster + auth)", () => {
     expect(retryHeaders.get("Authorization")).toBe("Bearer fresh")
   })
 
+  it("removes the external-signal abort listener after the request settles", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ok: true }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const controller = new AbortController()
+    const removeSpy = vi.spyOn(controller.signal, "removeEventListener")
+
+    await apiFetch("/clusters", { signal: controller.signal })
+
+    // The listener bridged onto the caller's signal must be cleaned up so a
+    // long-lived signal reused across requests does not accumulate listeners
+    // (and keep dead controllers alive in their closures).
+    expect(removeSpy).toHaveBeenCalledWith("abort", expect.any(Function))
+  })
+
+  it("does not leak listeners on the external signal across the 401 retry", async () => {
+    useAuthStore.setState({
+      accessToken: "stale",
+      claims: null,
+      refreshing: false,
+    })
+
+    const keycloak = await import("@/lib/auth/keycloak")
+    vi.mocked(keycloak.refreshToken).mockResolvedValue("fresh")
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ detail: "expired" }, 401))
+      .mockResolvedValueOnce(jsonResponse({ ok: true }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const controller = new AbortController()
+    const addSpy = vi.spyOn(controller.signal, "addEventListener")
+    const removeSpy = vi.spyOn(controller.signal, "removeEventListener")
+
+    await apiFetch("/clusters", { signal: controller.signal })
+
+    // executeRequest runs twice (original + retry); each add must be paired
+    // with a matching remove so nothing is left attached to the signal.
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const adds = addSpy.mock.calls.filter((c) => c[0] === "abort").length
+    const removes = removeSpy.mock.calls.filter((c) => c[0] === "abort").length
+    expect(adds).toBe(2)
+    expect(removes).toBe(2)
+  })
+
+  it("propagates an already-aborted external signal to the request", async () => {
+    // When the caller's signal is already aborted, the bridged controller
+    // must abort too, so fetch is invoked with an aborted signal and the
+    // request never hits the network for real.
+    const fetchMock = vi.fn((_url: string, init: RequestInit) => {
+      if (init.signal?.aborted) {
+        return Promise.reject(new DOMException("aborted", "AbortError"))
+      }
+      return Promise.resolve(jsonResponse({ ok: true }))
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      apiFetch("/clusters", { signal: controller.signal }),
+    ).rejects.toMatchObject({ status: 0 })
+    expect((fetchMock.mock.calls[0][1] as RequestInit).signal?.aborted).toBe(
+      true,
+    )
+  })
+
   it("kicks off login redirect after permanent 401", async () => {
     useAuthStore.setState({
       accessToken: "stale",
