@@ -312,6 +312,39 @@ class TestTestConnection:
         assert body["success"] is True
         assert body["message"] == "Connected successfully"
 
+    async def test_response_schema(self, client: AsyncClient):
+        """Response conforms to the TestConnectionResponse model.
+
+        Guards the response_model contract (follow-up to #413/#414): the
+        body carries exactly ``success`` (bool) and ``message`` (str) and
+        OpenAPI advertises that typed schema rather than ``Any``.
+        """
+        mock_client = AsyncMock()
+        mock_client.connect = AsyncMock()
+        mock_client.is_connected = lambda: True
+        mock_client.close = AsyncMock()
+
+        with patch(
+            "aerospike_cluster_manager_api.services.connections_service.aerospike_py.AsyncClient",
+            return_value=mock_client,
+        ):
+            response = await client.post(
+                "/api/connections/test",
+                json={"hosts": ["localhost"], "port": 3000},
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert set(body) == {"success", "message"}
+        assert isinstance(body["success"], bool)
+        assert isinstance(body["message"], str)
+
+        paths = app.openapi()["paths"]
+        path_key = next(p for p in paths if p.endswith("/connections/test"))
+        schema = paths[path_key]["post"]
+        ref = schema["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+        assert ref.endswith("/TestConnectionResponse")
+
     async def test_failure(self, client: AsyncClient):
         """Test connection endpoint when connection fails.
 

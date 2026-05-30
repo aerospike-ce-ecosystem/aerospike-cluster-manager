@@ -110,6 +110,18 @@ class TestConnectionRequest(BaseModel):
     password: str | None = None
 
 
+class TestConnectionResponse(BaseModel):
+    """Result of ``POST /connections/test`` — connectivity probe outcome.
+
+    ``message`` is normalised to a generic string on failure so the REST
+    surface never leaks host/port or driver internals (see the router
+    docstring); the original detail lives in the operator log only.
+    """
+
+    success: bool
+    message: str
+
+
 class ConnectionProfileResponse(BaseModel):
     """Connection profile without password — used in API responses.
 
