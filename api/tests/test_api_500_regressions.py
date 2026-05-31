@@ -330,3 +330,61 @@ class TestInternalErrorBody:
         assert body["error"] == "Internal server error"
         assert "boom" not in str(body)
         assert response.headers.get("X-Request-ID") == "abcd1234abcd1234abcd1234abcd1234"
+
+
+# ---------------------------------------------------------------------------
+# GET /metrics must not blank the whole dashboard when one namespace's
+# info call raises — partial-failure parity with GET /clusters (#430)
+# ---------------------------------------------------------------------------
+
+
+class TestMetricsPartialFailure:
+    async def test_returns_healthy_namespace_metrics_when_one_namespace_raises(
+        self,
+        http_client: AsyncClient,
+    ):
+        """``info_all("namespace/prod")`` raises but "test" succeeds — the metrics
+        endpoint must return 200 with connected=true and the healthy namespace,
+        rather than letting the failure degrade the whole payload to all-zeros."""
+
+        async def info_all_side_effect(command: str):
+            if command == "statistics":
+                return [("node1", None, "cluster_size=1;client_connections=5;uptime=3600")]
+            if command == "namespace/test":
+                return [("node1", None, "objects=100;replication-factor=1;data_used_bytes=1000;data_total_bytes=4000")]
+            raise AerospikeError("namespace info blew up for prod")
+
+        mock_client = AsyncMock()
+        mock_client.info_all = AsyncMock(side_effect=info_all_side_effect)
+        mock_client.info_random_node = AsyncMock(return_value="test;prod")
+
+        db_patch, client_patch = _patch_client(mock_client)
+        with db_patch, client_patch:
+            response = await http_client.get("/api/v1/metrics/conn-test")
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["connected"] is True
+        ns_names = {ns["namespace"] for ns in body["namespaces"]}
+        assert ns_names == {"test"}
+
+    async def test_returns_no_namespaces_when_all_namespaces_raise(self, http_client: AsyncClient):
+        """Every per-namespace info call raising must still yield 200 with an
+        empty namespace list — not a degraded/500 response."""
+
+        async def info_all_side_effect(command: str):
+            if command == "statistics":
+                return [("node1", None, "cluster_size=1;client_connections=5;uptime=3600")]
+            raise AerospikeError("namespace info blew up")
+
+        mock_client = AsyncMock()
+        mock_client.info_all = AsyncMock(side_effect=info_all_side_effect)
+        mock_client.info_random_node = AsyncMock(return_value="test;prod")
+
+        db_patch, client_patch = _patch_client(mock_client)
+        with db_patch, client_patch:
+            response = await http_client.get("/api/v1/metrics/conn-test")
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["namespaces"] == []

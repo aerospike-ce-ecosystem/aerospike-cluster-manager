@@ -95,10 +95,17 @@ async def build_cluster_metrics(client, conn_id: str) -> ClusterMetrics:
 
         total_nodes = len(stats_all)
 
-        # All per-namespace info calls in parallel
+        # All per-namespace info calls in parallel. ``return_exceptions=True`` so a
+        # transient ``info_all`` failure on a single namespace does not blow up the
+        # whole metrics view. Without this, gather() re-raises the first failure, the
+        # broad ``except`` below turns it into an all-zeros disconnected payload, and
+        # the dashboard goes blank even though the cluster and the other namespaces
+        # are perfectly healthy. We isolate the per-namespace failure in the loop
+        # below and return the namespaces that did respond — same partial-failure
+        # convention as GET /clusters/{conn_id} (#430).
         if ns_names:
             ns_tasks = [client.info_all(info_namespace(ns_name)) for ns_name in ns_names]
-            ns_results = await asyncio.gather(*ns_tasks)
+            ns_results = await asyncio.gather(*ns_tasks, return_exceptions=True)
         else:
             ns_results = []
 
@@ -113,6 +120,19 @@ async def build_cluster_metrics(client, conn_id: str) -> ClusterMetrics:
 
         for i, ns_name in enumerate(ns_names):
             ns_all = ns_results[i]
+
+            # Skip a namespace whose namespace/<ns> info call raised. Aggregating
+            # against the BaseException placeholder gather() inserted would itself
+            # crash, so drop the namespace from the metrics and carry on with the
+            # healthy ones instead of zeroing the entire dashboard.
+            if isinstance(ns_all, BaseException):
+                logger.warning(
+                    "Failed to fetch namespace info for namespace %s; omitting from metrics",
+                    ns_name,
+                    exc_info=ns_all,
+                )
+                continue
+
             ns_stats = aggregate_node_kv(ns_all, keys_to_sum=NS_SUM_KEYS)
 
             replication_factor = safe_int(ns_stats.get("replication-factor"), 1)
