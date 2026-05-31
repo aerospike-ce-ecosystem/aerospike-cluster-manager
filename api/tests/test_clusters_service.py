@@ -384,6 +384,58 @@ class TestGetClusterInfo:
         assert result.namespaces == []
         assert len(result.nodes) == 2
 
+    async def test_tolerates_per_namespace_info_failure(self):
+        """A transient ``info_all`` failure on one namespace must not 500 the
+        whole cluster view — the healthy namespace is still returned.
+
+        Regression: ``get_cluster_info`` used to ``asyncio.gather`` the
+        per-namespace info calls without ``return_exceptions=True``, so a single
+        failing namespace re-raised through gather and the global
+        AerospikeError handler turned the entire ``GET /clusters/{conn_id}``
+        dashboard endpoint into a 500. Mirrors the partial-failure convention
+        already enforced for GET /indexes (#429) and sample-data (#257).
+        """
+        from aerospike_py.exception import AerospikeError
+
+        client = _make_mock_client()
+        # Two namespaces: "good" responds normally, "bad" raises on its
+        # namespace/<ns> info call.
+        client.info_random_node.return_value = "good;bad"
+
+        good_ns_stats = (
+            "objects=200;tombstones=0;memory_used_bytes=1024;"
+            "memory-size=4096;device_used_bytes=0;device-total-bytes=0;"
+            "replication-factor=2;stop_writes=false;hwm_breached=false;"
+            "high-water-memory-pct=60;high-water-disk-pct=50;"
+            "nsup-period=120;default-ttl=0;allow-ttl-without-nsup=false"
+        )
+        sets_resp = "set=myset:objects=100:tombstones=0:memory_data_bytes=500:stop-writes-count=0"
+
+        def info_all_side_effect(cmd: str):
+            if cmd == "statistics":
+                return [_info_all_result("node1", "cluster_size=2;uptime=3600")]
+            if cmd in ("build", "edition", "service"):
+                return [_info_all_result("node1", "x")]
+            if cmd == "namespace/good":
+                return [_info_all_result("node1", good_ns_stats)]
+            if cmd == "namespace/bad":
+                # Simulate a transient per-namespace info failure.
+                raise AerospikeError("namespace info temporarily unavailable")
+            if cmd.startswith("sets/"):
+                return [_info_all_result("node1", sets_resp)]
+            return []
+
+        client.info_all.side_effect = info_all_side_effect
+
+        result = await clusters_service.get_cluster_info(client, "conn-test-1")
+
+        # The bad namespace is omitted; the good one survives. Node listing is
+        # unaffected (it comes from get_node_names() + the statistics fan-out,
+        # not the per-namespace calls).
+        ns_names = [ns.name for ns in result.namespaces]
+        assert ns_names == ["good"]
+        assert len(result.nodes) == 2
+
 
 # ---------------------------------------------------------------------------
 # configure_namespace

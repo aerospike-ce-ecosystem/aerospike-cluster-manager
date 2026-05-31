@@ -287,7 +287,17 @@ async def get_cluster_info(client: aerospike_py.AsyncClient, conn_id: str) -> Cl
         for ns_name in ns_names:
             ns_tasks.append(client.info_all(info_namespace(ns_name)))
             ns_tasks.append(client.info_all(info_sets(ns_name)))
-        ns_results = await asyncio.gather(*ns_tasks)
+        # ``return_exceptions=True`` so a transient ``info_all`` failure on a
+        # single namespace does not blow up the whole cluster view. Without
+        # this, gather() re-raises the first failure, the global AerospikeError
+        # handler turns it into a 500, and the dashboard goes blank even though
+        # every node and the other namespace are perfectly healthy. We isolate
+        # the per-namespace failure below and return the namespaces that did
+        # respond — same partial-failure convention as GET /indexes (#429) and
+        # sample_data_service (#257). Total cluster-unreachability still
+        # surfaces via the unguarded list_namespaces() / get_nodes() calls
+        # above (ClusterError -> 503).
+        ns_results = await asyncio.gather(*ns_tasks, return_exceptions=True)
     else:
         ns_results = []
 
@@ -295,6 +305,19 @@ async def get_cluster_info(client: aerospike_py.AsyncClient, conn_id: str) -> Cl
     for i, ns_name in enumerate(ns_names):
         ns_all = ns_results[i * 2]
         sets_all = ns_results[i * 2 + 1]
+
+        # Skip a namespace whose namespace/<ns> or sets/<ns> info call raised.
+        # Aggregating against the BaseException placeholder gather() inserted
+        # would itself crash, so drop the namespace from the listing and carry
+        # on with the healthy ones.
+        if isinstance(ns_all, BaseException) or isinstance(sets_all, BaseException):
+            failure = ns_all if isinstance(ns_all, BaseException) else sets_all
+            logger.warning(
+                "Failed to fetch namespace/set info for namespace %s; omitting from cluster view",
+                ns_name,
+                exc_info=failure,
+            )
+            continue
 
         ns_stats = aggregate_node_kv(ns_all, keys_to_sum=NS_SUM_KEYS)
 
