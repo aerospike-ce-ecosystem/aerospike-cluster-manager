@@ -45,7 +45,16 @@ async def get_indexes(client: AerospikeClient) -> list[SecondaryIndex]:
 
     indexes: list[SecondaryIndex] = []
     for ns in ns_names:
-        sindex_raw = await client.info_random_node(info_sindex(ns))
+        # Isolate per-namespace sindex failures so one bad namespace does not
+        # 500 the whole listing — return indexes from the healthy namespaces
+        # instead (matches the partial-failure convention from #257/#260 and
+        # sample_data_service). Total cluster-unreachability still surfaces via
+        # the unguarded INFO_NAMESPACES call above (ClusterError -> 503).
+        try:
+            sindex_raw = await client.info_random_node(info_sindex(ns))
+        except AerospikeError:
+            logger.warning("Failed to list secondary indexes for namespace %s", ns, exc_info=True)
+            continue
         for rec in parse_records(sindex_raw):
             raw_type = rec.get("type", rec.get("bin_type", "string")).lower()
             idx_type = cast(Literal["numeric", "string", "geo2dsphere"], _TYPE_MAP.get(raw_type, "string"))

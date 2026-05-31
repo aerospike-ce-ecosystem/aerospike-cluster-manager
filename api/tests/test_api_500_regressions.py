@@ -248,6 +248,61 @@ class TestIndexesIdempotency:
 
 
 # ---------------------------------------------------------------------------
+# GET /indexes must not 500 when one namespace's sindex info call raises
+# ---------------------------------------------------------------------------
+
+
+class TestGetIndexesPartialFailure:
+    async def test_returns_healthy_namespace_indexes_when_one_namespace_raises(
+        self,
+        http_client: AsyncClient,
+    ):
+        """sindex listing for "prod" raises, but "test" succeeds — the request
+        must return 200 with the indexes gathered from the healthy namespace
+        rather than 500-ing the whole listing."""
+
+        async def info_side_effect(command: str):
+            if command == "namespaces":
+                return "test;prod"
+            if "test" in command:
+                return "ns=test:indexname=qa_idx:set=demo:bin=score:type=numeric:state=RW"
+            raise AerospikeError("sindex info blew up for prod")
+
+        mock_client = AsyncMock()
+        mock_client.info_random_node = AsyncMock(side_effect=info_side_effect)
+
+        db_patch, client_patch = _patch_client(mock_client)
+        with db_patch, client_patch:
+            response = await http_client.get("/api/v1/indexes/conn-test")
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        names = {idx["name"] for idx in body}
+        namespaces = {idx["namespace"] for idx in body}
+        assert "qa_idx" in names
+        assert namespaces == {"test"}
+
+    async def test_returns_empty_list_when_all_namespaces_raise(self, http_client: AsyncClient):
+        """Every per-namespace sindex query raising must still yield 200 with an
+        empty list — not a 500."""
+
+        async def info_side_effect(command: str):
+            if command == "namespaces":
+                return "test;prod"
+            raise AerospikeError("sindex info blew up")
+
+        mock_client = AsyncMock()
+        mock_client.info_random_node = AsyncMock(side_effect=info_side_effect)
+
+        db_patch, client_patch = _patch_client(mock_client)
+        with db_patch, client_patch:
+            response = await http_client.get("/api/v1/indexes/conn-test")
+
+        assert response.status_code == 200, response.text
+        assert response.json() == []
+
+
+# ---------------------------------------------------------------------------
 # 500 handler — common ask in #257/#260: include requestId + error in body
 # ---------------------------------------------------------------------------
 
