@@ -20,6 +20,15 @@ from aerospike_cluster_manager_api.utils import parse_host_port
         ("[::1]", ("::1", 3000)),
         ("[::1]:3100", ("::1", 3100)),
         ("[2001:db8::1]:3000", ("2001:db8::1", 3000)),
+        # Non-integer / empty port on a single-colon host: fall back to the
+        # default port but keep ONLY the host part. Returning the raw
+        # "host:badport" string would defeat the SSRF gate in
+        # connections_service, which parses host_only as an IP literal.
+        ("127.0.0.1:abc", ("127.0.0.1", 3000)),
+        ("127.0.0.1:", ("127.0.0.1", 3000)),
+        ("host.example:notaport", ("host.example", 3000)),
+        # Bracketed IPv6 with a bad port already strips correctly — pin it.
+        ("[::1]:abc", ("::1", 3000)),
     ],
 )
 def test_parse_host_port(host_str: str, expected: tuple[str, int]):

@@ -34,7 +34,12 @@ def parse_host_port(host_str: str, default_port: int) -> tuple[str, int]:
     * ``host:port`` (single colon) -- split on the last colon.
     * Bare host (no colon) -- host with ``default_port``.
 
-    A non-integer port falls back to ``default_port``.
+    A non-integer port falls back to ``default_port`` while still returning
+    the parsed host portion (never the raw ``host:badport`` string). This
+    matters because ``connections_service`` feeds ``host_only`` straight into
+    the SSRF loopback/link-local gate: returning ``"127.0.0.1:x"`` instead of
+    ``"127.0.0.1"`` makes ``ipaddress.ip_address`` raise, the gate treat the
+    target as a non-literal hostname, and the block silently no-op.
     """
     if host_str.startswith("["):  # bracketed IPv6, optional :port
         host, _, port_str = host_str[1:].partition("]")
@@ -51,5 +56,8 @@ def parse_host_port(host_str: str, default_port: int) -> tuple[str, int]:
         try:
             return (host, int(port_str))
         except ValueError:
-            return (host_str, default_port)
+            # Non-integer port: keep the parsed host, drop the bad suffix.
+            # Returning the raw ``host:badport`` here would defeat the SSRF
+            # gate that parses ``host_only`` as an IP literal.
+            return (host, default_port)
     return (host_str, default_port)
