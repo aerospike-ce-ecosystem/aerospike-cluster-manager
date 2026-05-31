@@ -173,12 +173,37 @@ async def get_connection_health(conn_id: str = Depends(_get_verified_connection)
             # across nodes for an accurate cluster-wide total. Sampling a single
             # random node and multiplying by node_count is wrong on an
             # unbalanced cluster.
+            #
+            # ``return_exceptions=True`` so a transient ``info_all`` failure on a
+            # single namespace does not abandon the whole aggregation loop. Without
+            # it, gather() re-raises the first failure, the broad ``except`` below
+            # swallows it at debug level, and the health card reports
+            # memory/disk = 0 for the ENTIRE cluster even though every node and the
+            # other namespaces are healthy. We skip the failed namespace and sum the
+            # ones that did respond — same per-namespace partial-failure convention
+            # as GET /metrics/{conn_id} (#431) and GET /clusters/{conn_id} (#430).
             if namespaces:
-                ns_infos = await asyncio.gather(*[client.info_all(f"namespace/{ns_name}") for ns_name in namespaces])
+                ns_infos = await asyncio.gather(
+                    *[client.info_all(f"namespace/{ns_name}") for ns_name in namespaces],
+                    return_exceptions=True,
+                )
             else:
                 ns_infos = []
 
-            for ns_info in ns_infos:
+            for ns_name, ns_info in zip(namespaces, ns_infos, strict=True):
+                # Skip a namespace whose namespace/<ns> info call raised.
+                # Aggregating against the BaseException placeholder gather()
+                # inserted would itself crash, so drop it and carry on with the
+                # healthy namespaces instead of zeroing the whole summary.
+                if isinstance(ns_info, BaseException):
+                    logger.warning(
+                        "Failed to fetch namespace info for namespace %s on connection '%s'; "
+                        "omitting from health summary",
+                        ns_name,
+                        conn_id,
+                        exc_info=ns_info,
+                    )
+                    continue
                 kv = aggregate_node_kv(ns_info, keys_to_sum=NS_SUM_KEYS)
                 # CE 8 uses unified data_used_bytes/data_total_bytes for both memory and device.
                 # Fall back to legacy memory_used_bytes/memory-size for older versions.
