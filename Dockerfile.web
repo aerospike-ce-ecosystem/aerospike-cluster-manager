@@ -13,6 +13,7 @@ COPY ui/ .
 # /api/* is proxied to API_URL at runtime by the custom server.js, so no
 # build-time API_URL is needed (and would silently override the runtime env).
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV COPILOTKIT_TELEMETRY_DISABLED=true
 RUN npm run build
 
 # =============================================================================
@@ -39,6 +40,9 @@ USER appuser
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# CopilotKit anonymous telemetry — off by default for every deployment path
+# (compose, helm, bare podman); operators can re-enable with =false.
+ENV COPILOTKIT_TELEMETRY_DISABLED=true
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3100
 
