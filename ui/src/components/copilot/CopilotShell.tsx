@@ -6,7 +6,7 @@
  * tool/context/suggestion registrations.
  */
 
-import { CopilotKit, CopilotPopup } from "@copilotkit/react-core/v2"
+import { CopilotKit, CopilotSidebar } from "@copilotkit/react-core/v2"
 import * as React from "react"
 
 import { logCopilotError } from "@/lib/copilot/log"
@@ -75,7 +75,8 @@ export function CopilotShell({ children }: { children: React.ReactNode }) {
       <CopilotReadTools />
       <CopilotRenderTools />
       {children}
-      <CopilotPopup
+      <CopilotSidebar
+        width={440}
         labels={{
           modalHeaderTitle: "ACKO Agent",
           chatInputPlaceholder: "Ask ACKO Agent about your Aerospike clusters…",
