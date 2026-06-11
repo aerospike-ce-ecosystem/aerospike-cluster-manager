@@ -135,7 +135,7 @@ Related targets: `make kind-up/down/status`, `make acko-install/uninstall/verify
 - **OpenTelemetry Observability** — Traces, metrics, and logs via standard OTel SDK env vars; HTTP server, asyncpg, and aerospike-py spans auto-emit. See [docs/observability.md](docs/observability.md).
 - **Structured stdout logs ready for OTel Collector** — JSON output with `request_id` / `otelTraceID` / `otelSpanID` correlation fields. Optional rotating-file mirror (`LOG_FILE_PATH`) lets a pod-internal sidecar tail logs on a shared `emptyDir` and forward them via OTLP to an external OpenTelemetry Collector for vendor-specific routing (Datadog, Loki, Elasticsearch, Sentry, ...). See [docs/logging.md](docs/logging.md).
 - **Sample Data Generator** — Generate deterministic sample records with optional secondary indexes
-- **AI Copilot (optional, off by default)** — In-UI chat assistant (CopilotKit) for cluster health checks, record browsing, and query building. Enabled only when `COPILOT_MODEL` plus the matching `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` are set on the web container; without a key the UI is unchanged. Read-only in this release — every tool call is an ordinary browser request authorized by the API with the user's own session. Note: tool results (cluster info, record samples) are sent to the configured LLM provider.
+- **ACKO Agent (optional AI copilot, off by default)** — In-UI chat assistant (CopilotKit) for cluster health checks, record browsing, query building, and guided cluster creation. Enabled only when `COPILOT_MODEL` plus the matching `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` are set on the web container; without a key the UI is unchanged. Read-only in this release — every tool call is an ordinary browser request authorized by the API with the user's own session. Notes: tool results (cluster info, record samples) are sent to the configured LLM provider, and chat threads live in web-container memory, so keep the web Deployment at a single replica (the chart default) when the agent is enabled.
 - **K8s Cluster Management** — Full lifecycle management of Aerospike clusters on Kubernetes (see below)
   - ACL/Security configuration with role and user management via wizard
   - Rolling update strategy (batch size, max unavailable, PDB control)
@@ -798,7 +798,7 @@ All environment variables with their defaults and descriptions. See `api/src/aer
 | `HOST` | `0.0.0.0` | API bind address |
 | `PORT` | `8000` | API bind port |
 
-### Embedded AI Copilot (UI)
+### ACKO Agent — Embedded AI Copilot (UI)
 
 | Variable | Default | Description |
 |---|---|---|

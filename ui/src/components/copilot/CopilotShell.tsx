@@ -56,13 +56,16 @@ export function CopilotShell({ children }: { children: React.ReactNode }) {
   return (
     <CopilotKit
       runtimeUrl="/copilotkit"
-      // Pin the transport to multi-route ("rest"). The default ("auto")
-      // probes GET /copilotkit/info and silently falls back to the
-      // single-endpoint transport when that probe fails even transiently —
-      // after which every run POSTs to the bare base path and 404s.
+      // REQUIRED with our multi-route server handler: the CopilotKit bridge
+      // component defaults useSingleEndpoint to true, which makes every
+      // request POST to the bare /copilotkit path (single-endpoint
+      // envelope) and 404 against the multi-route runtime.
       useSingleEndpoint={false}
       headers={headers}
       showDevConsole={false}
+      // Unset, the inspector auto-mounts on localhost and pulls remote
+      // CopilotKit announcements — never appropriate for this admin UI.
+      enableInspector={false}
       onError={logCopilotError}
     >
       <CopilotStylesheet />
@@ -74,8 +77,8 @@ export function CopilotShell({ children }: { children: React.ReactNode }) {
       {children}
       <CopilotPopup
         labels={{
-          modalHeaderTitle: "ACM Copilot",
-          chatInputPlaceholder: "Ask about your Aerospike clusters…",
+          modalHeaderTitle: "ACKO Agent",
+          chatInputPlaceholder: "Ask ACKO Agent about your Aerospike clusters…",
         }}
       />
     </CopilotKit>

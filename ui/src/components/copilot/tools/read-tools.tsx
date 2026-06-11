@@ -25,27 +25,7 @@ import { listRecords } from "@/lib/api/records"
 import { CE_CONSTRAINTS } from "@/lib/copilot/ce-constraints"
 
 import { clampLimit, clampRecords, MAX_RESULT_ROWS } from "./clamp"
-
-interface ToolError {
-  error: string
-  status?: number
-  retryable: boolean
-}
-
-/**
- * Discriminates safeCall failures from successful API payloads. Checks both
- * keys because some response types carry their own `error` field (e.g.
- * ConnectionStatus) — `retryable` is unique to ToolError.
- */
-function isToolError(value: unknown): value is ToolError {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value) &&
-    typeof (value as ToolError).error === "string" &&
-    typeof (value as ToolError).retryable === "boolean"
-  )
-}
+import { isToolError, type ToolError } from "./tool-error"
 
 async function safeCall<T>(call: () => Promise<T>): Promise<T | ToolError> {
   try {

@@ -17,9 +17,12 @@ export function AuthTokenSync() {
   const { copilotkit } = useCopilotKit()
 
   React.useEffect(() => {
-    if (accessToken) {
-      copilotkit.setHeaders({ Authorization: `Bearer ${accessToken}` })
-    }
+    // setHeaders replaces the whole header set, so passing {} on logout
+    // drops the stale Authorization header instead of letting copilot
+    // requests keep sending a token the user just revoked.
+    copilotkit.setHeaders(
+      accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    )
   }, [copilotkit, accessToken])
 
   return null

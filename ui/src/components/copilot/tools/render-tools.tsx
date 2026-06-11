@@ -17,6 +17,8 @@ import type { ClusterInfo } from "@/lib/types/cluster"
 import type { ConnectionStatus } from "@/lib/types/connection"
 import type { AerospikeRecord } from "@/lib/types/record"
 
+import { isToolError, type ToolError } from "./tool-error"
+
 const connIdParams = z.object({ connId: z.string() })
 
 function parseResult<T>(result: string): T | null {
@@ -40,14 +42,6 @@ function PendingCard({ label }: { label: string }) {
     <CardShell>
       <span className="animate-pulse text-on-surface-variant">{label}…</span>
     </CardShell>
-  )
-}
-
-function isToolError(value: unknown): value is { error: string } {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as { error?: unknown }).error === "string"
   )
 }
 
@@ -203,7 +197,7 @@ export function CopilotRenderTools() {
       render: ({ status, result }) => {
         if (status !== "complete")
           return <PendingCard label="checking health" />
-        const parsed = parseResult<ConnectionStatus | { error: string }>(result)
+        const parsed = parseResult<ConnectionStatus | ToolError>(result)
         if (!parsed) return <></>
         if (isToolError(parsed)) return <ErrorCard error={parsed.error} />
         return <ClusterHealthCard status={parsed} />
@@ -220,7 +214,7 @@ export function CopilotRenderTools() {
         if (status !== "complete") {
           return <PendingCard label="loading cluster topology" />
         }
-        const parsed = parseResult<ClusterInfo | { error: string }>(result)
+        const parsed = parseResult<ClusterInfo | ToolError>(result)
         if (!parsed) return <></>
         if (isToolError(parsed)) return <ErrorCard error={parsed.error} />
         return <ClusterInfoCard info={parsed} connId={parameters.connId} />
@@ -241,7 +235,7 @@ export function CopilotRenderTools() {
         if (status !== "complete")
           return <PendingCard label="browsing records" />
         const parsed = parseResult<
-          { records: AerospikeRecord[]; hasMore: boolean } | { error: string }
+          { records: AerospikeRecord[]; hasMore: boolean } | ToolError
         >(result)
         if (!parsed) return <></>
         if (isToolError(parsed)) return <ErrorCard error={parsed.error} />
@@ -274,7 +268,7 @@ export function CopilotRenderTools() {
               returnedRecords: number
               truncatedRows: number
             }
-          | { error: string }
+          | ToolError
         >(result)
         if (!parsed) return <></>
         if (isToolError(parsed)) return <ErrorCard error={parsed.error} />
