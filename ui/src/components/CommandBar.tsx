@@ -6,7 +6,7 @@ import * as React from "react"
 import { cx, focusRing } from "@/lib/utils"
 
 const shortcutStyles = cx(
-  "hidden h-6 select-none items-center justify-center rounded-md bg-gray-800 px-2 font-mono text-xs text-gray-400 ring-1 ring-inset ring-gray-700 transition sm:flex",
+  "hidden h-6 items-center justify-center rounded-md bg-gray-800 px-2 font-mono text-xs text-gray-400 ring-1 ring-gray-700 transition select-none ring-inset sm:flex",
 )
 
 interface CommandBarProps extends React.PropsWithChildren {
@@ -65,7 +65,7 @@ const CommandBarValue = React.forwardRef<
     <div
       ref={ref}
       className={cx(
-        "px-3 py-2.5 text-sm tabular-nums text-gray-300",
+        "px-3 py-2.5 text-sm text-gray-300 tabular-nums",
         className,
       )}
       {...props}
@@ -152,7 +152,7 @@ const CommandBarCommand = React.forwardRef<HTMLButtonElement, CommandProps>(
     return (
       <span
         className={cx(
-          "flex items-center gap-x-2 rounded-lg bg-gray-900 p-1 text-base font-medium text-gray-50 outline-none transition focus:z-10 sm:text-sm",
+          "flex items-center gap-x-2 rounded-lg bg-gray-900 p-1 text-base font-medium text-gray-50 outline-hidden transition focus:z-10 sm:text-sm",
           "sm:last-of-type:-mr-1",
           className,
         )}

@@ -170,7 +170,7 @@ function SecurityDisabledState() {
         href="https://aerospike.com/docs/server/operations/configure/security"
         target="_blank"
         rel="noopener noreferrer"
-        className="text-xs font-medium text-primary-40 hover:underline dark:text-primary-65"
+        className="text-primary-40 dark:text-primary-65 text-xs font-medium hover:underline"
       >
         See Aerospike security docs →
       </a>
@@ -271,7 +271,7 @@ function UsersSection({
                     <TableCell className="text-right tabular-nums">
                       {u.writeQuota === 0 ? "—" : u.writeQuota.toLocaleString()}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums text-gray-500">
+                    <TableCell className="text-right text-gray-500 tabular-nums">
                       {u.connections ?? 0}
                     </TableCell>
                     <TableCell className="text-right">

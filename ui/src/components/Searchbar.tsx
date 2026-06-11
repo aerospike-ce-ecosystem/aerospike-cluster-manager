@@ -9,7 +9,7 @@ import { cx, focusInput, hasErrorInput } from "@/lib/utils"
 const inputStyles = tv({
   base: [
     // base
-    "relative block w-full appearance-none rounded-md border px-2.5 py-1.5 outline-none transition sm:text-sm",
+    "relative block w-full appearance-none rounded-md border px-2.5 py-1.5 outline-hidden transition sm:text-sm",
     // border color (border only used in dark mode for better aesthetics in filterbar)
     "border-transparent dark:border-gray-800",
     // text color
@@ -20,11 +20,11 @@ const inputStyles = tv({
     "bg-gray-100 dark:bg-gray-950",
     // disabled
     "disabled:border-gray-300 disabled:bg-gray-100 disabled:text-gray-400",
-    "disabled:dark:border-gray-700 disabled:dark:bg-gray-800 disabled:dark:text-gray-500",
+    "dark:disabled:border-gray-700 dark:disabled:bg-gray-800 dark:disabled:text-gray-500",
     // focus
     focusInput,
     // invalid (optional)
-    // "aria-[invalid=true]:dark:ring-red-400/20 aria-[invalid=true]:ring-2 aria-[invalid=true]:ring-red-200 aria-[invalid=true]:border-red-500 invalid:ring-2 invalid:ring-red-200 invalid:border-red-500"
+    // "dark:aria-invalid:ring-red-400/20 aria-invalid:ring-2 aria-invalid:ring-red-200 aria-invalid:border-red-500 invalid:ring-2 invalid:ring-red-200 invalid:border-red-500"
     // remove search cancel button (optional)
     "[&::--webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden",
   ],
@@ -78,10 +78,7 @@ const Searchbar = React.forwardRef<HTMLInputElement, InputProps>(
             "text-gray-400 dark:text-gray-600",
           )}
         >
-          <RiSearchLine
-            className="size-[1.125rem] shrink-0"
-            aria-hidden="true"
-          />
+          <RiSearchLine className="size-4.5 shrink-0" aria-hidden="true" />
         </div>
       </div>
     )

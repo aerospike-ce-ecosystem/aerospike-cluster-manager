@@ -303,7 +303,7 @@ export function CreateRoleDialog({
                       </span>
                     </label>
                     {checked && selected && (
-                      <div className="ml-6 mt-1 grid grid-cols-2 gap-2">
+                      <div className="mt-1 ml-6 grid grid-cols-2 gap-2">
                         <Input
                           aria-label={`${p.code} namespace scope`}
                           value={selected.ns}

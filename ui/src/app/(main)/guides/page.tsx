@@ -68,7 +68,7 @@ export default function GuidesPage() {
         sub={
           <>
             Org/team policy for workspace{" "}
-            <span className="font-medium text-on-surface-variant">
+            <span className="text-on-surface-variant font-medium">
               {workspaceName}
             </span>{" "}
             — authored here, enforced everywhere.

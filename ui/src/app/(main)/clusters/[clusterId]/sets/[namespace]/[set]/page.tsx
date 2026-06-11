@@ -110,7 +110,7 @@ function detectBinKind(v: unknown, name: string): BinKind {
 function renderBin(v: unknown, name: string): React.ReactNode {
   const kind = detectBinKind(v, name)
   if (kind === "null")
-    return <span className="italic text-gray-400 dark:text-gray-600">null</span>
+    return <span className="text-gray-400 italic dark:text-gray-600">null</span>
   if (kind === "bool")
     return (
       <span className="font-mono text-xs">
@@ -119,7 +119,7 @@ function renderBin(v: unknown, name: string): React.ReactNode {
     )
   if (kind === "integer" || kind === "double")
     return (
-      <span className="font-mono text-xs tabular-nums text-primary-40 dark:text-primary-65">
+      <span className="text-primary-40 dark:text-primary-65 font-mono text-xs tabular-nums">
         {String(v)}
       </span>
     )
@@ -127,7 +127,7 @@ function renderBin(v: unknown, name: string): React.ReactNode {
     const label = typeof v === "string" ? v : JSON.stringify(v)
     return (
       <Badge variant="success">
-        <span className="max-w-[14rem] truncate font-mono text-[10px]">
+        <span className="max-w-56 truncate font-mono text-[10px]">
           geo · {label.length > 32 ? label.slice(0, 32) + "…" : label}
         </span>
       </Badge>
@@ -348,7 +348,7 @@ export default function RecordBrowserPage({ params }: PageProps) {
 
       <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <span className="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-500">
+          <span className="text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-500">
             Records
           </span>
           <h1 className="mt-1 font-mono text-lg font-semibold text-gray-900 sm:text-xl dark:text-gray-50">
@@ -491,7 +491,7 @@ export default function RecordBrowserPage({ params }: PageProps) {
                             params.set,
                             encodeURIComponent(r.key.pk),
                           )}
-                          className="text-primary-40 hover:underline dark:text-primary-65"
+                          className="text-primary-40 dark:text-primary-65 hover:underline"
                         >
                           {r.key.pk}
                         </Link>
@@ -500,7 +500,7 @@ export default function RecordBrowserPage({ params }: PageProps) {
                         // primary-key column; the detail route requires a pk
                         // path segment, so we render an inert digest stub
                         // instead of a broken empty-string link.
-                        <span className="text-xs italic text-gray-400">
+                        <span className="text-xs text-gray-400 italic">
                           digest:{r.key.digest?.slice(0, 8) ?? ""}…
                         </span>
                       )}
@@ -508,7 +508,7 @@ export default function RecordBrowserPage({ params }: PageProps) {
                     <TableCell className="text-right font-mono text-xs tabular-nums">
                       {r.meta.generation}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-xs tabular-nums text-gray-500">
+                    <TableCell className="text-right font-mono text-xs text-gray-500 tabular-nums">
                       {formatTtl(r.meta.ttl)}
                     </TableCell>
                     {binColumns.map((b) => (
@@ -592,7 +592,7 @@ function StatusBar({
   return (
     <div className="flex flex-wrap items-center gap-3 text-xs">
       {meta.executionTimeMs > 0 && (
-        <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 font-mono text-[11px] font-semibold tabular-nums text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+        <span className="inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-emerald-700 tabular-nums dark:bg-emerald-950/40 dark:text-emerald-400">
           <RiTimerLine className="size-3" aria-hidden="true" />
           {meta.executionTimeMs}ms
         </span>
@@ -603,7 +603,7 @@ function StatusBar({
         aria-hidden="true"
       />
 
-      <span className="font-mono tabular-nums text-gray-500 dark:text-gray-400">
+      <span className="font-mono text-gray-500 tabular-nums dark:text-gray-400">
         <span className="font-semibold text-gray-900 dark:text-gray-50">
           {returned}
         </span>

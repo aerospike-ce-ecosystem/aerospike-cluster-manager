@@ -86,7 +86,7 @@ export default function ClustersPage() {
       ) : (
         <>
           <div className="flex items-center justify-between">
-            <p className="text-xs text-on-surface-muted">
+            <p className="text-on-surface-muted text-xs">
               {rows.length} {rows.length === 1 ? "cluster" : "clusters"} ·{" "}
               {groups.length} env group{groups.length === 1 ? "" : "s"}
             </p>

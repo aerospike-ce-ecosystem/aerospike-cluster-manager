@@ -27,17 +27,17 @@ const RadioCardGroupIndicator = React.forwardRef<
     <div
       className={cx(
         // base
-        "relative flex size-4 shrink-0 appearance-none items-center justify-center rounded-full border shadow-sm outline-none",
+        "relative flex size-4 shrink-0 appearance-none items-center justify-center rounded-full border shadow-sm outline-hidden",
         // border color
         "border-gray-300 dark:border-gray-800",
         // background color
         "bg-white dark:bg-gray-950",
         // checked
-        "group-data-[state=checked]:border-0 group-data-[state=checked]:border-transparent group-data-[state=checked]:bg-primary-50",
+        "group-data-[state=checked]:bg-primary-50 group-data-[state=checked]:border-0 group-data-[state=checked]:border-transparent",
         // disabled
-        "group-data-[disabled]:border",
-        "group-data-[disabled]:border-gray-300 group-data-[disabled]:bg-gray-100 group-data-[disabled]:text-gray-400",
-        "group-data-[disabled]:dark:border-gray-700 group-data-[disabled]:dark:bg-gray-800",
+        "group-data-disabled:border",
+        "group-data-disabled:border-gray-300 group-data-disabled:bg-gray-100 group-data-disabled:text-gray-400",
+        "dark:group-data-disabled:border-gray-700 dark:group-data-disabled:bg-gray-800",
         // focus
         focusRing,
         className,
@@ -55,7 +55,7 @@ const RadioCardGroupIndicator = React.forwardRef<
             // indicator
             "bg-white",
             // disabled
-            "group-data-[disabled]:bg-gray-400 group-data-[disabled]:dark:bg-gray-500",
+            "group-data-disabled:bg-gray-400 dark:group-data-disabled:bg-gray-500",
           )}
         />
       </RadioGroupPrimitives.Indicator>
@@ -73,12 +73,12 @@ const RadioCardItem = React.forwardRef<
       ref={forwardedRef}
       className={cx(
         // base
-        "group relative w-full rounded-md border p-4 text-left shadow-sm transition-all focus:outline-none",
+        "group relative w-full rounded-md border p-4 text-left shadow-sm transition-all focus:outline-hidden",
         // background color
         "bg-white dark:bg-gray-950",
         // border color
         "border-gray-200 dark:border-gray-800",
-        "data-[state=checked]:border-primary-50 data-[state=checked]:dark:border-primary-50",
+        "data-[state=checked]:border-primary-50 dark:data-[state=checked]:border-primary-50",
         focusInput,
         className,
       )}

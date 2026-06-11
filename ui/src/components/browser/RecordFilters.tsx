@@ -221,7 +221,7 @@ export function RecordFilters({
       <div className="flex flex-wrap items-center gap-2">
         {/* PK lookup */}
         <div className="flex min-w-[240px] items-center gap-1">
-          <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-500">
+          <span className="font-mono text-[10px] font-semibold tracking-wider text-gray-500 uppercase dark:text-gray-500">
             PK
           </span>
           <Select
@@ -285,7 +285,7 @@ export function RecordFilters({
               )}
               <span>Add filter</span>
               {availableBins.length > 0 && (
-                <span className="dark:bg-primary-10/60 ml-1 rounded-full bg-primary-95 px-1.5 text-[10px] font-medium tabular-nums text-primary-40 dark:text-primary-80">
+                <span className="dark:bg-primary-10/60 bg-primary-95 text-primary-40 dark:text-primary-80 ml-1 rounded-full px-1.5 text-[10px] font-medium tabular-nums">
                   {availableBins.length}
                 </span>
               )}
@@ -403,7 +403,7 @@ function BinPicker({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Filter by..."
-          className="w-full bg-transparent text-xs outline-none placeholder:text-gray-400 dark:placeholder:text-gray-600"
+          className="w-full bg-transparent text-xs outline-hidden placeholder:text-gray-400 dark:placeholder:text-gray-600"
         />
       </div>
 
@@ -503,7 +503,7 @@ function ConditionChip({
           <button
             type="button"
             onClick={onToggleLogic}
-            className="inline-flex h-6 items-center rounded bg-gray-100 px-1.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-gray-600 hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800"
+            className="inline-flex h-6 items-center rounded bg-gray-100 px-1.5 font-mono text-[10px] font-semibold tracking-wider text-gray-600 uppercase hover:bg-gray-200 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800"
           >
             {leadingLogic}
           </button>
@@ -712,7 +712,7 @@ function ConditionEditor({
           value={val}
           onChange={(e) => setVal(e.target.value)}
           placeholder='{"type":"AeroCircle","coordinates":[[lng,lat],radius]}'
-          className="dark:focus:ring-primary-40/30 min-h-[80px] w-full rounded-md border border-gray-300 bg-white p-2 font-mono text-xs outline-none transition focus:border-primary-45 focus:ring-2 focus:ring-primary-90 dark:border-gray-800 dark:bg-gray-950 dark:focus:border-primary-40"
+          className="dark:focus:ring-primary-40/30 focus:border-primary-45 focus:ring-primary-90 dark:focus:border-primary-40 min-h-[80px] w-full rounded-md border border-gray-300 bg-white p-2 font-mono text-xs outline-hidden transition focus:ring-2 dark:border-gray-800 dark:bg-gray-950"
         />
       )}
 

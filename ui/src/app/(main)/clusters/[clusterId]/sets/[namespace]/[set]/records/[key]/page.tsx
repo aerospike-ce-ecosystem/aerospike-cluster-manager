@@ -541,10 +541,10 @@ export default function RecordDetailPage({ params }: PageProps) {
 
       <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <span className="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-500">
+          <span className="text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-500">
             Record
           </span>
-          <h1 className="mt-1 break-all font-mono text-lg font-semibold text-gray-900 sm:text-xl dark:text-gray-50">
+          <h1 className="mt-1 font-mono text-lg font-semibold break-all text-gray-900 sm:text-xl dark:text-gray-50">
             {pk}
           </h1>
         </div>
@@ -610,13 +610,13 @@ export default function RecordDetailPage({ params }: PageProps) {
               <dt className="text-xs text-gray-500 dark:text-gray-500">
                 Generation
               </dt>
-              <dd className="font-mono text-sm font-medium tabular-nums text-gray-900 dark:text-gray-50">
+              <dd className="font-mono text-sm font-medium text-gray-900 tabular-nums dark:text-gray-50">
                 {meta?.generation ?? "—"}
               </dd>
             </div>
             <div>
               <dt className="text-xs text-gray-500 dark:text-gray-500">TTL</dt>
-              <dd className="font-mono text-sm font-medium tabular-nums text-gray-900 dark:text-gray-50">
+              <dd className="font-mono text-sm font-medium text-gray-900 tabular-nums dark:text-gray-50">
                 {isEditing ? (
                   <Input
                     value={ttlDraft}
@@ -646,7 +646,7 @@ export default function RecordDetailPage({ params }: PageProps) {
             </div>
             <div>
               <dt className="text-xs text-gray-500 dark:text-gray-500">Bins</dt>
-              <dd className="font-mono text-sm font-medium tabular-nums text-gray-900 dark:text-gray-50">
+              <dd className="font-mono text-sm font-medium text-gray-900 tabular-nums dark:text-gray-50">
                 {binCount}
               </dd>
             </div>
@@ -802,7 +802,7 @@ export default function RecordDetailPage({ params }: PageProps) {
                       </p>
                       <Badge variant="neutral">{detectBinType(value)}</Badge>
                     </div>
-                    <pre className="flex-1 overflow-x-auto whitespace-pre-wrap break-all rounded bg-gray-50 p-3 font-mono text-xs text-gray-800 dark:bg-gray-900 dark:text-gray-200">
+                    <pre className="flex-1 overflow-x-auto rounded bg-gray-50 p-3 font-mono text-xs break-all whitespace-pre-wrap text-gray-800 dark:bg-gray-900 dark:text-gray-200">
                       {formatBinValue(value)}
                     </pre>
                   </li>

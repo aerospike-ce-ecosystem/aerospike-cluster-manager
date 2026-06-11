@@ -12,7 +12,7 @@ const MAX_NOTE_LENGTH = 8192
 // Same Tailwind class set as ConnectionFormFields' textarea — keeps the
 // indigo focus ring consistent with other multi-line inputs in the app.
 const TEXTAREA_CLASSES =
-  "block w-full resize-y rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 placeholder-gray-400 shadow-sm outline-none transition focus:border-primary-45 focus:ring-2 focus:ring-primary-90 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-50 dark:placeholder-gray-500 dark:focus:ring-primary-65/20 disabled:cursor-not-allowed disabled:opacity-50"
+  "block w-full resize-y rounded-md border border-gray-300 bg-white px-2.5 py-2 text-sm text-gray-900 placeholder-gray-400 shadow-sm outline-hidden transition focus:border-primary-45 focus:ring-2 focus:ring-primary-90 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-50 dark:placeholder-gray-500 dark:focus:ring-primary-65/20 disabled:cursor-not-allowed disabled:opacity-50"
 
 interface NoteSectionProps {
   title: string
@@ -194,7 +194,7 @@ export function NoteSection({
           Add note
         </Button>
       ) : (
-        <p className="whitespace-pre-wrap break-words text-sm text-gray-800 dark:text-gray-200">
+        <p className="text-sm wrap-break-word whitespace-pre-wrap text-gray-800 dark:text-gray-200">
           {initial}
         </p>
       )}

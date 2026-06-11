@@ -102,7 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         <div className="flex flex-col items-center gap-3">
           <div
             aria-label="Loading"
-            className="size-8 animate-spin rounded-full border-2 border-gray-200 border-t-primary-45"
+            className="border-t-primary-45 size-8 animate-spin rounded-full border-2 border-gray-200"
           />
           <p className="text-sm text-gray-500 dark:text-gray-400">
             Signing you in…
@@ -128,7 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // login redirect). Render the loading shell rather than a blank page.
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="size-8 animate-spin rounded-full border-2 border-gray-200 border-t-primary-45" />
+        <div className="border-t-primary-45 size-8 animate-spin rounded-full border-2 border-gray-200" />
       </div>
     )
   }

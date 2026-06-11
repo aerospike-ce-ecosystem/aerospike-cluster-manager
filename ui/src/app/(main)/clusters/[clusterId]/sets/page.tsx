@@ -76,7 +76,7 @@ export default function SetsPage({ params }: PageProps) {
         title="Namespaces & sets"
         sub="Browse per-namespace sets. Click a set to open the record browser."
       >
-        <span className="text-xs text-on-surface-muted">
+        <span className="text-on-surface-muted text-xs">
           {namespaces.length} / 2 max <span className="font-medium">(CE)</span>
         </span>
         <Button
@@ -230,7 +230,7 @@ function NamespaceCard({
               style={{ width: `${Math.max(memPct, 1)}%` }}
             />
           </div>
-          <span className="text-[10px] tabular-nums text-gray-500 dark:text-gray-500">
+          <span className="text-[10px] text-gray-500 tabular-nums dark:text-gray-500">
             {memPct}%
           </span>
         </div>
@@ -238,7 +238,7 @@ function NamespaceCard({
 
       <div className="flex flex-wrap items-center gap-1.5 border-t border-gray-200 px-5 py-3 dark:border-gray-800">
         {ns.sets.length === 0 && (
-          <span className="text-xs italic text-gray-400 dark:text-gray-600">
+          <span className="text-xs text-gray-400 italic dark:text-gray-600">
             No sets in this namespace yet.
           </span>
         )}
@@ -260,7 +260,7 @@ function NamespaceCard({
           type="button"
           onClick={onCreateSet}
           className={cx(
-            "inline-flex items-center gap-1 rounded-md border border-dashed border-primary-80 px-2.5 py-1.5 text-xs font-medium text-primary-40 transition",
+            "border-primary-80 text-primary-40 inline-flex items-center gap-1 rounded-md border border-dashed px-2.5 py-1.5 text-xs font-medium transition",
             "dark:border-primary-30/60 dark:hover:bg-primary-10/30 hover:border-primary-65 hover:bg-primary-95 dark:text-primary-65",
           )}
         >
@@ -308,7 +308,7 @@ function SetChip({
       href={clusterSections.set(clusterId, namespace, set.name)}
       className={cx(
         baseClass,
-        "hover:bg-primary-95/50 hover:dark:border-primary-30/60 hover:dark:bg-primary-10/20 border-gray-200 bg-white hover:border-primary-80 dark:border-gray-800 dark:bg-gray-950",
+        "hover:bg-primary-95/50 dark:hover:border-primary-30/60 dark:hover:bg-primary-10/20 hover:border-primary-80 border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950",
       )}
       title={set.note ?? undefined}
     >
@@ -321,13 +321,13 @@ function SetChip({
       {set.note && (
         <span
           aria-label="Set has an operator note"
-          className="dark:bg-primary-10/40 rounded bg-primary-95 px-1 py-0.5 font-mono text-[9px] uppercase tracking-wide text-primary-40 dark:text-primary-80"
+          className="dark:bg-primary-10/40 bg-primary-95 text-primary-40 dark:text-primary-80 rounded px-1 py-0.5 font-mono text-[9px] tracking-wide uppercase"
         >
           note
         </span>
       )}
       <RiArrowRightSLine
-        className="size-3.5 text-gray-300 transition group-hover:text-primary-45 dark:text-gray-700"
+        className="group-hover:text-primary-45 size-3.5 text-gray-300 transition dark:text-gray-700"
         aria-hidden="true"
       />
     </Link>
@@ -345,7 +345,7 @@ function Metric({
 }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[9px] font-semibold uppercase tracking-[0.1em] text-gray-500 dark:text-gray-500">
+      <span className="text-[9px] font-semibold tracking-widest text-gray-500 uppercase dark:text-gray-500">
         {label}
       </span>
       <span

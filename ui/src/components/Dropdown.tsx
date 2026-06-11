@@ -36,15 +36,15 @@ const DropdownMenuSubMenuTrigger = React.forwardRef<
     ref={forwardedRef}
     className={cx(
       // base
-      "relative flex cursor-default select-none items-center rounded py-1.5 pl-2 pr-1 outline-none transition-colors data-[state=checked]:font-semibold sm:text-sm",
+      "relative flex cursor-default items-center rounded py-1.5 pr-1 pl-2 outline-hidden transition-colors select-none data-[state=checked]:font-semibold sm:text-sm",
       // text color
       "text-gray-900 dark:text-gray-50",
       // disabled
-      "data-[disabled]:pointer-events-none data-[disabled]:text-gray-400 data-[disabled]:hover:bg-none dark:data-[disabled]:text-gray-600",
+      "data-disabled:pointer-events-none data-disabled:text-gray-400 data-disabled:hover:bg-none dark:data-disabled:text-gray-600",
       // focus
-      "focus-visible:bg-gray-100 data-[state=open]:bg-gray-100 focus-visible:dark:bg-gray-900 data-[state=open]:dark:bg-gray-900",
+      "focus-visible:bg-gray-100 data-[state=open]:bg-gray-100 dark:focus-visible:bg-gray-900 dark:data-[state=open]:bg-gray-900",
       // hover
-      "hover:bg-gray-100 hover:dark:bg-gray-900",
+      "hover:bg-gray-100 dark:hover:bg-gray-900",
       //
       className,
     )}
@@ -69,11 +69,11 @@ const DropdownMenuSubMenuContent = React.forwardRef<
       collisionPadding={collisionPadding}
       className={cx(
         // base
-        "relative z-50 overflow-hidden rounded-md border p-1 shadow-xl shadow-black/[2.5%]",
+        "relative z-50 overflow-hidden rounded-md border p-1 shadow-xl shadow-black/2.5",
         // widths
         "min-w-32",
         // heights
-        "max-h-[var(--radix-popper-available-height)]",
+        "max-h-(--radix-popper-available-height)",
         // background color
         "bg-white dark:bg-gray-950",
         // text color
@@ -113,11 +113,11 @@ const DropdownMenuContent = React.forwardRef<
         ref={forwardedRef}
         className={cx(
           // base
-          "relative z-50 overflow-hidden rounded-md border p-1 shadow-xl shadow-black/[2.5%]",
+          "relative z-50 overflow-hidden rounded-md border p-1 shadow-xl shadow-black/2.5",
           // widths
           "min-w-[calc(var(--radix-dropdown-menu-trigger-width))]",
           // heights
-          "max-h-[var(--radix-popper-available-height)]",
+          "max-h-(--radix-popper-available-height)",
           // background color
           "bg-white dark:bg-gray-950",
           // text color
@@ -152,15 +152,15 @@ const DropdownMenuItem = React.forwardRef<
     ref={forwardedRef}
     className={cx(
       // base
-      "group/DropdownMenuItem relative flex cursor-pointer select-none items-center rounded py-1.5 pl-2 pr-1 outline-none transition-colors data-[state=checked]:font-semibold sm:text-sm",
+      "group/DropdownMenuItem relative flex cursor-pointer items-center rounded py-1.5 pr-1 pl-2 outline-hidden transition-colors select-none data-[state=checked]:font-semibold sm:text-sm",
       // text color
       "text-gray-900 dark:text-gray-50",
       // disabled
-      "data-[disabled]:pointer-events-none data-[disabled]:text-gray-400 data-[disabled]:hover:bg-none dark:data-[disabled]:text-gray-600",
+      "data-disabled:pointer-events-none data-disabled:text-gray-400 data-disabled:hover:bg-none dark:data-disabled:text-gray-600",
       // focus
-      "focus-visible:bg-gray-100 focus-visible:dark:bg-gray-900",
+      "focus-visible:bg-gray-100 dark:focus-visible:bg-gray-900",
       // hover
-      "hover:bg-gray-100 hover:dark:bg-gray-900",
+      "hover:bg-gray-100 dark:hover:bg-gray-900",
       className,
     )}
     {...props}
@@ -199,15 +199,15 @@ const DropdownMenuCheckboxItem = React.forwardRef<
       ref={forwardedRef}
       className={cx(
         // base
-        "relative flex cursor-pointer select-none items-center gap-x-2 rounded py-1.5 pl-8 pr-1 outline-none transition-colors data-[state=checked]:font-semibold sm:text-sm",
+        "relative flex cursor-pointer items-center gap-x-2 rounded py-1.5 pr-1 pl-8 outline-hidden transition-colors select-none data-[state=checked]:font-semibold sm:text-sm",
         // text color
         "text-gray-900 dark:text-gray-50",
         // disabled
-        "data-[disabled]:pointer-events-none data-[disabled]:text-gray-400 data-[disabled]:hover:bg-none dark:data-[disabled]:text-gray-600",
+        "data-disabled:pointer-events-none data-disabled:text-gray-400 data-disabled:hover:bg-none dark:data-disabled:text-gray-600",
         // focus
-        "focus-visible:bg-gray-100 focus-visible:dark:bg-gray-900",
+        "focus-visible:bg-gray-100 dark:focus-visible:bg-gray-900",
         // hover
-        "hover:bg-gray-100 hover:dark:bg-gray-900",
+        "hover:bg-gray-100 dark:hover:bg-gray-900",
         className,
       )}
       checked={checked}
@@ -261,15 +261,15 @@ const DropdownMenuRadioItem = React.forwardRef<
       ref={forwardedRef}
       className={cx(
         // base
-        "group/DropdownMenuRadioItem relative flex cursor-pointer select-none items-center gap-x-2 rounded py-1.5 pl-8 pr-1 outline-none transition-colors data-[state=checked]:font-semibold sm:text-sm",
+        "group/DropdownMenuRadioItem relative flex cursor-pointer items-center gap-x-2 rounded py-1.5 pr-1 pl-8 outline-hidden transition-colors select-none data-[state=checked]:font-semibold sm:text-sm",
         // text color
         "text-gray-900 dark:text-gray-50",
         // disabled
-        "data-[disabled]:pointer-events-none data-[disabled]:text-gray-400 data-[disabled]:hover:bg-none dark:data-[disabled]:text-gray-600",
+        "data-disabled:pointer-events-none data-disabled:text-gray-400 data-disabled:hover:bg-none dark:data-disabled:text-gray-600",
         // focus
-        "focus-visible:bg-gray-100 focus-visible:dark:bg-gray-900",
+        "focus-visible:bg-gray-100 dark:focus-visible:bg-gray-900",
         // hover
-        "hover:bg-gray-100 hover:dark:bg-gray-900",
+        "hover:bg-gray-100 dark:hover:bg-gray-900",
         className,
       )}
       {...props}
@@ -282,7 +282,7 @@ const DropdownMenuRadioItem = React.forwardRef<
           />
           <RiCheckboxBlankCircleLine
             aria-hidden="true"
-            className="size-full shrink-0 text-gray-300 group-data-[state=unchecked]/DropdownMenuRadioItem:flex group-data-[state=checked]/DropdownMenuRadioItem:hidden dark:text-gray-700"
+            className="size-full shrink-0 text-gray-300 group-data-[state=checked]/DropdownMenuRadioItem:hidden group-data-[state=unchecked]/DropdownMenuRadioItem:flex dark:text-gray-700"
           />
         </span>
       ) : iconType === "check" ? (
@@ -360,7 +360,7 @@ const DropdownMenuIconWrapper = ({
         // text color
         "text-gray-600 dark:text-gray-400",
         // disabled
-        "group-data-[disabled]/DropdownMenuItem:text-gray-400 group-data-[disabled]/DropdownMenuItem:dark:text-gray-700",
+        "group-data-disabled/DropdownMenuItem:text-gray-400 dark:group-data-disabled/DropdownMenuItem:text-gray-700",
         className,
       )}
       {...props}

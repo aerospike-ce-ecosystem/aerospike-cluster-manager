@@ -61,7 +61,7 @@ const TimeSegment = ({ segment, state }: TimeSegmentProps) => {
       ref={ref}
       className={cx(
         // base
-        "relative block w-full appearance-none rounded-md border px-2.5 py-1.5 text-left uppercase tabular-nums shadow-sm outline-none transition sm:text-sm",
+        "relative block w-full appearance-none rounded-md border px-2.5 py-1.5 text-left uppercase tabular-nums shadow-sm outline-hidden transition sm:text-sm",
         // border color
         "border-gray-300 dark:border-gray-800",
         // text color
@@ -71,14 +71,14 @@ const TimeSegment = ({ segment, state }: TimeSegmentProps) => {
         // focus
         focusInput,
         // invalid (optional)
-        "invalid:border-red-500 invalid:ring-2 invalid:ring-red-200 group-aria-[invalid=true]/time-input:border-red-500 group-aria-[invalid=true]/time-input:ring-2 group-aria-[invalid=true]/time-input:ring-red-200 group-aria-[invalid=true]/time-input:dark:ring-red-400/20",
+        "group-aria-invalid/time-input:border-red-500 group-aria-invalid/time-input:ring-2 group-aria-invalid/time-input:ring-red-200 invalid:border-red-500 invalid:ring-2 invalid:ring-red-200 dark:group-aria-invalid/time-input:ring-red-400/20",
         {
-          "!w-fit border-none bg-transparent px-0 text-gray-400 shadow-none":
+          "w-fit! border-none bg-transparent px-0 text-gray-400 shadow-none":
             isDecorator,
           hidden: isSpace,
           "border-gray-300 bg-gray-100 text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500":
             state.isDisabled,
-          "!bg-transparent !text-gray-400": !segment.isEditable,
+          "bg-transparent! text-gray-400!": !segment.isEditable,
         },
       )}
     >
@@ -155,7 +155,7 @@ TimeInput.displayName = "TimeInput"
 const triggerStyles = tv({
   base: [
     // base
-    "peer flex w-full cursor-pointer appearance-none items-center gap-x-2 truncate rounded-md border px-3 py-2 shadow-sm outline-none transition-all sm:text-sm",
+    "peer flex w-full cursor-pointer appearance-none items-center gap-x-2 truncate rounded-md border px-3 py-2 shadow-sm outline-hidden transition-all sm:text-sm",
     // background color
     "bg-white dark:bg-gray-950",
     // border color
@@ -165,15 +165,15 @@ const triggerStyles = tv({
     // placeholder color
     "placeholder-gray-400 dark:placeholder-gray-500",
     // hover
-    "hover:bg-gray-50 hover:dark:bg-gray-950/50",
+    "hover:bg-gray-50 dark:hover:bg-gray-950/50",
     // disabled
     "disabled:pointer-events-none",
     "disabled:bg-gray-100 disabled:text-gray-400",
-    "disabled:dark:border-gray-800 disabled:dark:bg-gray-800 disabled:dark:text-gray-500",
+    "dark:disabled:border-gray-800 dark:disabled:bg-gray-800 dark:disabled:text-gray-500",
     // focus
     focusInput,
     // invalid (optional)
-    // "aria-[invalid=true]:dark:ring-red-400/20 aria-[invalid=true]:ring-2 aria-[invalid=true]:ring-red-200 aria-[invalid=true]:border-red-500 invalid:ring-2 invalid:ring-red-200 invalid:border-red-500"
+    // "dark:aria-invalid:ring-red-400/20 aria-invalid:ring-2 aria-invalid:ring-red-200 aria-invalid:border-red-500 invalid:ring-2 invalid:ring-red-200 invalid:border-red-500"
   ],
   variants: {
     hasError: {
@@ -200,7 +200,7 @@ const Trigger = React.forwardRef<HTMLButtonElement, TriggerProps>(
           {...props}
         >
           <RiCalendar2Fill className="size-5 shrink-0 text-gray-400 dark:text-gray-600" />
-          <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-left text-gray-900 dark:text-gray-50">
+          <span className="flex-1 overflow-hidden text-left text-ellipsis whitespace-nowrap text-gray-900 dark:text-gray-50">
             {children ? (
               children
             ) : placeholder ? (
@@ -235,9 +235,9 @@ const CalendarPopover = React.forwardRef<
         onOpenAutoFocus={(e) => e.preventDefault()}
         className={cx(
           // base
-          "relative z-50 w-fit rounded-md border text-sm shadow-xl shadow-black/[2.5%]",
+          "relative z-50 w-fit rounded-md border text-sm shadow-xl shadow-black/2.5",
           // widths
-          "min-w-[calc(var(--radix-select-trigger-width)-2px)] max-w-[95vw]",
+          "max-w-[95vw] min-w-[calc(var(--radix-select-trigger-width)-2px)]",
           // border color
           "border-gray-200 dark:border-gray-800",
           // background color
@@ -368,7 +368,7 @@ const PresetContainer = <TPreset extends Preset, TValue>({
               title={preset.label}
               className={cx(
                 // base
-                "relative w-full overflow-hidden text-ellipsis whitespace-nowrap rounded border px-2.5 py-1.5 text-left text-base shadow-sm outline-none transition-all sm:border-none sm:py-2 sm:text-sm sm:shadow-none",
+                "relative w-full overflow-hidden rounded border px-2.5 py-1.5 text-left text-base text-ellipsis whitespace-nowrap shadow-sm outline-hidden transition-all sm:border-none sm:py-2 sm:text-sm sm:shadow-none",
                 // text color
                 "text-gray-700 dark:text-gray-300",
                 // border color
@@ -376,8 +376,8 @@ const PresetContainer = <TPreset extends Preset, TValue>({
                 // focus
                 focusRing,
                 // background color
-                "focus-visible:bg-gray-100 focus-visible:dark:bg-gray-900",
-                "hover:bg-gray-100 hover:dark:bg-gray-900",
+                "focus-visible:bg-gray-100 dark:focus-visible:bg-gray-900",
+                "hover:bg-gray-100 dark:hover:bg-gray-900",
                 {
                   "bg-gray-100 dark:bg-gray-900": matchesCurrent(preset),
                 },
@@ -624,7 +624,7 @@ const SingleDatePicker = ({
               <div
                 className={cx(
                   "relative flex h-14 w-full items-center sm:h-full sm:w-40",
-                  "border-b border-gray-200 sm:border-b-0 sm:border-r dark:border-gray-800",
+                  "border-b border-gray-200 sm:border-r sm:border-b-0 dark:border-gray-800",
                   "overflow-auto",
                 )}
               >
@@ -926,7 +926,7 @@ const RangeDatePicker = ({
               <div
                 className={cx(
                   "relative flex h-16 w-full items-center sm:h-full sm:w-40",
-                  "border-b border-gray-200 sm:border-b-0 sm:border-r dark:border-gray-800",
+                  "border-b border-gray-200 sm:border-r sm:border-b-0 dark:border-gray-800",
                   "overflow-auto",
                 )}
               >
@@ -988,7 +988,7 @@ const RangeDatePicker = ({
                 </div>
               )}
               <div className="border-t border-gray-200 p-3 sm:flex sm:items-center sm:justify-between dark:border-gray-800">
-                <p className="tabular-nums text-gray-900 dark:text-gray-50">
+                <p className="text-gray-900 tabular-nums dark:text-gray-50">
                   <span className="text-gray-700 dark:text-gray-300">
                     {translations?.range ?? "Range"}:
                   </span>{" "}

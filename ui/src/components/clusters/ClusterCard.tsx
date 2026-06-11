@@ -36,7 +36,7 @@ export function ClusterCard({
       className={cx(
         "relative flex h-full flex-col gap-3 transition",
         row.connId &&
-          "hover:border-primary-80 hover:shadow-sm dark:hover:border-primary-40",
+          "hover:border-primary-80 dark:hover:border-primary-40 hover:shadow-sm",
       )}
     >
       {row.connId && (
@@ -44,7 +44,7 @@ export function ClusterCard({
           href={clusterSections.overview(row.connId)}
           aria-label={`Open ${row.displayName}`}
           className={cx(
-            "absolute inset-0 z-0 rounded-md focus-visible:outline-none",
+            "absolute inset-0 z-0 rounded-md focus-visible:outline-hidden",
             focusRing,
           )}
         />
@@ -61,11 +61,11 @@ export function ClusterCard({
               className={`size-2 rounded-full ${status.dot}`}
               aria-hidden="true"
             />
-            <span className="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-500">
+            <span className="text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-500">
               {status.label}
             </span>
             {row.managedBy === "ACKO" && (
-              <span className="text-xs font-medium uppercase tracking-wider text-primary-40 dark:text-primary-65">
+              <span className="text-primary-40 dark:text-primary-65 text-xs font-medium tracking-wider uppercase">
                 · ACKO
               </span>
             )}
@@ -79,7 +79,7 @@ export function ClusterCard({
           {row.note && (
             <Tooltip
               content={
-                <div className="max-w-md whitespace-pre-wrap break-words text-xs">
+                <div className="max-w-md text-xs wrap-break-word whitespace-pre-wrap">
                   {row.note}
                 </div>
               }

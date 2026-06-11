@@ -20,7 +20,7 @@ interface StepBasicProps {
 }
 
 const SELECT_CLASSES =
-  "h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-primary-45 focus:outline-none focus:ring-1 focus:ring-primary-45 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+  "h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-primary-45 focus:outline-hidden focus:ring-1 focus:ring-primary-45 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
 
 export function StepBasic({
   form,
@@ -121,7 +121,7 @@ export function StepBasic({
               id="cluster-image"
               value={form.image ?? AEROSPIKE_IMAGES[0]}
               onChange={(e) => updateForm({ image: e.target.value })}
-              className="h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-primary-45 focus:outline-none focus:ring-1 focus:ring-primary-45 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+              className="focus:border-primary-45 focus:ring-primary-45 h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:ring-1 focus:outline-hidden dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
             >
               {AEROSPIKE_IMAGES.map((img) => (
                 <option key={img} value={img}>
