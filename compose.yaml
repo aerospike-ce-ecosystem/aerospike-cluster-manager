@@ -194,6 +194,17 @@ services:
       - "${UI_PORT:-3100}:3100"
     environment:
       - API_URL=http://aerospike-cluster-manager-api:8000
+      # ── Embedded AI copilot (optional, disabled unless a model+key pair
+      #    is provided; see ui/src/lib/copilot/server-config.ts) ──────────
+      - COPILOT_ENABLED=${COPILOT_ENABLED:-true}
+      - COPILOT_MODEL=${COPILOT_MODEL:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - COPILOT_REQUIRE_AUTH=${COPILOT_REQUIRE_AUTH:-false}
+      - COPILOT_OIDC_ISSUER_URL=${COPILOT_OIDC_ISSUER_URL:-}
+      - COPILOT_OIDC_AUDIENCE=${COPILOT_OIDC_AUDIENCE:-}
+      # CopilotKit anonymous telemetry — disabled by default for self-hosters.
+      - COPILOTKIT_TELEMETRY_DISABLED=${COPILOTKIT_TELEMETRY_DISABLED:-true}
     depends_on:
       aerospike-cluster-manager-api:
         condition: service_healthy

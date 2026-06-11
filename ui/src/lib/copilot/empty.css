@@ -1,0 +1,8 @@
+/*
+ * Intentionally empty. next.config.mjs substitutes this file for
+ * @copilotkit/react-core/dist/v2/index.css, whose Tailwind-v4-compiled
+ * `@layer` rules break this app's Tailwind v3 PostCSS pipeline. The real
+ * stylesheet is served as a static asset from /copilot/copilot-styles.css
+ * (copied by scripts/copy-copilot-css.mjs) and loaded by CopilotShell only
+ * when the copilot is enabled.
+ */

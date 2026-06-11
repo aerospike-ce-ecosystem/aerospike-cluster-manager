@@ -34,3 +34,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# CopilotKit stylesheet copied from node_modules by scripts/copy-copilot-css.mjs
+/public/copilot/

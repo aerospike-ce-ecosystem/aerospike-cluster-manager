@@ -4,6 +4,7 @@ import "./globals.css"
 import { siteConfig } from "./siteConfig"
 
 import { AuthProvider } from "@/components/AuthProvider"
+import { CopilotProvider } from "@/components/copilot/CopilotProvider"
 import { ShellStatusBar } from "@/components/ui/navigation/ShellStatusBar"
 import { Sidebar } from "@/components/ui/navigation/Sidebar"
 
@@ -52,9 +53,11 @@ export default function RootLayout({
       >
         <ThemeProvider defaultTheme="light" attribute="data-theme">
           <AuthProvider>
-            <Sidebar />
-            <main className="acm-main">{children}</main>
-            <ShellStatusBar />
+            <CopilotProvider>
+              <Sidebar />
+              <main className="acm-main">{children}</main>
+              <ShellStatusBar />
+            </CopilotProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>
