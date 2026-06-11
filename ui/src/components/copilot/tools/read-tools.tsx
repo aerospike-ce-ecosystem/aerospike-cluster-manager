@@ -32,6 +32,21 @@ interface ToolError {
   retryable: boolean
 }
 
+/**
+ * Discriminates safeCall failures from successful API payloads. Checks both
+ * keys because some response types carry their own `error` field (e.g.
+ * ConnectionStatus) — `retryable` is unique to ToolError.
+ */
+function isToolError(value: unknown): value is ToolError {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    typeof (value as ToolError).error === "string" &&
+    typeof (value as ToolError).retryable === "boolean"
+  )
+}
+
 async function safeCall<T>(call: () => Promise<T>): Promise<T | ToolError> {
   try {
     return await call()
@@ -98,7 +113,7 @@ export function CopilotReadTools() {
       parameters: z.object({ connId: connIdSchema }),
       handler: async ({ connId }) => {
         const result = await safeCall(() => getClusterMetrics(connId))
-        if ("error" in (result as ToolError)) return result
+        if (isToolError(result)) return result
         // Time-series arrays are chart fodder — strip them from LLM context.
         const {
           readTps,
@@ -149,7 +164,7 @@ export function CopilotReadTools() {
             pageSize: clampLimit(pageSize),
           }),
         )
-        if ("error" in (result as ToolError)) return result
+        if (isToolError(result)) return result
         const page = result as Awaited<ReturnType<typeof listRecords>>
         const clamped = clampRecords(page.records)
         return {
@@ -179,6 +194,10 @@ export function CopilotReadTools() {
           .string()
           .optional()
           .describe("exact PK lookup; leave empty for scans"),
+        // geo_within_region / geo_contains_point are intentionally omitted
+        // from QueryPredicateOperator here: geo predicates need GeoJSON
+        // payloads that don't fit a chat-tool schema. Use the Query Builder
+        // page for geo queries.
         predicate: z
           .object({
             bin: z.string().min(1),
@@ -213,7 +232,7 @@ export function CopilotReadTools() {
             maxRecords: clampLimit(maxRecords),
           }),
         )
-        if ("error" in (result as ToolError)) return result
+        if (isToolError(result)) return result
         const response = result as Awaited<ReturnType<typeof runQuery>>
         const clamped = clampRecords(response.records)
         return {

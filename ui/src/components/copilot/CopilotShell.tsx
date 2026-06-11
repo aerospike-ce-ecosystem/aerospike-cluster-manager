@@ -33,6 +33,11 @@ function CopilotStylesheet() {
     link.rel = "stylesheet"
     link.href = "/copilot/copilot-styles.css"
     document.head.appendChild(link)
+    // Remove only the link this mount created, so toggling the copilot off
+    // and on doesn't accumulate stylesheets.
+    return () => {
+      link.remove()
+    }
   }, [])
   return null
 }

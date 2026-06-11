@@ -12,10 +12,15 @@ const ENV_KEYS = [
 beforeEach(() => {
   // The host shell may export real LLM keys — neutralize them first.
   for (const key of ENV_KEYS) vi.stubEnv(key, "")
+  // Misconfiguration warnings are expected output of disabled(); silence
+  // them so test logs stay clean (warn-once behavior is per-reason and
+  // module-global, so individual tests can't assert call counts reliably).
+  vi.spyOn(console, "warn").mockImplementation(() => {})
 })
 
 afterEach(() => {
   vi.unstubAllEnvs()
+  vi.restoreAllMocks()
 })
 
 describe("resolveCopilotServerConfig", () => {

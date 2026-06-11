@@ -26,7 +26,9 @@ let warnedPresenceOnly = false
 async function getJwks(issuer: string): Promise<JWKSResolver> {
   if (jwks && jwksIssuer === issuer) return jwks
   const metadataUrl = `${issuer.replace(/\/$/, "")}/.well-known/openid-configuration`
-  const res = await fetch(metadataUrl)
+  // Fail fast when the IdP is unreachable instead of stalling the request
+  // until the runtime's own timeout fires.
+  const res = await fetch(metadataUrl, { signal: AbortSignal.timeout(5000) })
   if (!res.ok) {
     throw new Error(`OIDC metadata fetch failed: ${res.status} ${metadataUrl}`)
   }
