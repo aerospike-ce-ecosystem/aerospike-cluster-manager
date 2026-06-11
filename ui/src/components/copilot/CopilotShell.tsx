@@ -51,6 +51,11 @@ export function CopilotShell({ children }: { children: React.ReactNode }) {
   return (
     <CopilotKit
       runtimeUrl="/copilotkit"
+      // Pin the transport to multi-route ("rest"). The default ("auto")
+      // probes GET /copilotkit/info and silently falls back to the
+      // single-endpoint transport when that probe fails even transiently —
+      // after which every run POSTs to the bare base path and 404s.
+      useSingleEndpoint={false}
       headers={headers}
       showDevConsole={false}
       onError={logCopilotError}
