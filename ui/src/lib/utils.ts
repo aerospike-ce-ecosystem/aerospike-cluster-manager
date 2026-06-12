@@ -77,6 +77,22 @@ export const formatters: { [key: string]: any } = {
 }
 
 /**
+ * Decode a percent-encoded URL segment. App Router route params arrive
+ * URL-encoded (`my%20set` for a set named `my set`), so pages must decode
+ * them before using the value for API calls, display, or comparisons.
+ *
+ * Returns ``null`` for malformed input (e.g. a lone ``%``) so callers can
+ * branch to an explicit invalid state instead of crashing the render.
+ */
+export function safeDecodeURIComponent(value: string): string | null {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return null
+  }
+}
+
+/**
  * Convert ``#RRGGBB`` (or ``RRGGBB``) to a CSS rgba() string at the given alpha.
  *
  * Returns ``null`` for malformed input so callers can branch and fall back —

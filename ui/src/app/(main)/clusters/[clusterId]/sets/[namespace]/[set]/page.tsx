@@ -39,7 +39,7 @@ import { TableSkeleton } from "@/components/skeletons/TableSkeleton"
 import type { BinDataType } from "@/lib/types/query"
 import type { SecondaryIndex } from "@/lib/types/index"
 import type { AerospikeRecord } from "@/lib/types/record"
-import { cx } from "@/lib/utils"
+import { cx, safeDecodeURIComponent } from "@/lib/utils"
 import { RiRefreshLine, RiTimerLine } from "@remixicon/react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -161,6 +161,10 @@ function indexTypeToBinDataType(idx: SecondaryIndex): BinDataType {
 }
 
 export default function RecordBrowserPage({ params }: PageProps) {
+  // App Router route params arrive percent-encoded; decode once and use the
+  // raw names for API calls, display, and hrefs (clusterSections re-encodes).
+  const namespace = safeDecodeURIComponent(params.namespace) ?? params.namespace
+  const set = safeDecodeURIComponent(params.set) ?? params.set
   const [records, setRecords] = useState<AerospikeRecord[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -181,10 +185,10 @@ export default function RecordBrowserPage({ params }: PageProps) {
     // Single-set lookup endpoint isn't exposed (the API surface is list /
     // upsert / delete), so this scans the namespace's notes — small in
     // practice and re-uses the route the recovery UI already calls.
-    const notes = await listSetNotes(params.clusterId, params.namespace)
-    const match = notes.find((n) => n.setName === params.set)
+    const notes = await listSetNotes(params.clusterId, namespace)
+    const match = notes.find((n) => n.setName === set)
     setSetNote(match?.note ?? null)
-  }, [params.clusterId, params.namespace, params.set])
+  }, [params.clusterId, namespace, set])
 
   // Initial mount swallows reload failures (a 503 from the metaDB
   // shouldn't block the record browser from rendering), but the post-save
@@ -213,8 +217,8 @@ export default function RecordBrowserPage({ params }: PageProps) {
         const pk = target.pk.trim()
         const filters = draftToFilterConditions(target)
         const resp = await filterRecords(params.clusterId, {
-          namespace: params.namespace,
-          set: params.set,
+          namespace,
+          set,
           pageSize: size,
           pkPattern: pk || null,
           pkMatchMode: target.pkMatchMode,
@@ -235,7 +239,7 @@ export default function RecordBrowserPage({ params }: PageProps) {
         if (seq === fetchSeqRef.current) setLoading(false)
       }
     },
-    [params.clusterId, params.namespace, params.set],
+    [params.clusterId, namespace, set],
   )
 
   // Initial load + reload on set change.
@@ -283,8 +287,8 @@ export default function RecordBrowserPage({ params }: PageProps) {
     const byBin = new Map<string, SecondaryIndex>()
     for (const idx of indexes) {
       if (
-        idx.namespace === params.namespace &&
-        idx.set === params.set &&
+        idx.namespace === namespace &&
+        idx.set === set &&
         idx.state === "ready"
       ) {
         byBin.set(idx.bin, idx)
@@ -293,7 +297,7 @@ export default function RecordBrowserPage({ params }: PageProps) {
     return Array.from(byBin.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([name, idx]) => ({ name, type: indexTypeToBinDataType(idx) }))
-  }, [indexes, params.namespace, params.set])
+  }, [indexes, namespace, set])
 
   const dirty = useMemo(() => !draftEquals(draft, applied), [draft, applied])
 
@@ -338,12 +342,10 @@ export default function RecordBrowserPage({ params }: PageProps) {
         </Link>
         <span aria-hidden="true">/</span>
         <span className="font-mono text-gray-900 dark:text-gray-50">
-          {params.namespace}
+          {namespace}
         </span>
         <span aria-hidden="true">/</span>
-        <span className="font-mono text-gray-900 dark:text-gray-50">
-          {params.set}
-        </span>
+        <span className="font-mono text-gray-900 dark:text-gray-50">{set}</span>
       </nav>
 
       <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -352,7 +354,7 @@ export default function RecordBrowserPage({ params }: PageProps) {
             Records
           </span>
           <h1 className="mt-1 font-mono text-lg font-semibold text-gray-900 sm:text-xl dark:text-gray-50">
-            {params.namespace}.{params.set}
+            {namespace}.{set}
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-500">
             {records
@@ -388,13 +390,13 @@ export default function RecordBrowserPage({ params }: PageProps) {
         title="Set note"
         note={setNote}
         onSave={async (next) => {
-          await upsertSetNote(params.clusterId, params.namespace, params.set, {
+          await upsertSetNote(params.clusterId, namespace, set, {
             note: next,
           })
           await reloadSetNote()
         }}
         onDelete={async () => {
-          await deleteSetNote(params.clusterId, params.namespace, params.set)
+          await deleteSetNote(params.clusterId, namespace, set)
           await reloadSetNote()
         }}
       />
@@ -487,9 +489,9 @@ export default function RecordBrowserPage({ params }: PageProps) {
                         <Link
                           href={clusterSections.record(
                             params.clusterId,
-                            params.namespace,
-                            params.set,
-                            encodeURIComponent(r.key.pk),
+                            namespace,
+                            set,
+                            r.key.pk,
                           )}
                           className="text-primary-40 dark:text-primary-65 hover:underline"
                         >
@@ -524,9 +526,9 @@ export default function RecordBrowserPage({ params }: PageProps) {
                           <Link
                             href={clusterSections.record(
                               params.clusterId,
-                              params.namespace,
-                              params.set,
-                              encodeURIComponent(r.key.pk),
+                              namespace,
+                              set,
+                              r.key.pk,
                             )}
                           >
                             Open
@@ -555,19 +557,14 @@ export default function RecordBrowserPage({ params }: PageProps) {
         open={createOpen}
         onOpenChange={setCreateOpen}
         connId={params.clusterId}
-        namespace={params.namespace}
-        set={params.set}
+        namespace={namespace}
+        set={set}
         onSuccess={(pk) => {
           // Navigate to the freshly-written record so the user can add more
           // bins / edit metadata. The detail page re-fetches on mount, so
           // the new row is immediately visible.
           router.push(
-            clusterSections.record(
-              params.clusterId,
-              params.namespace,
-              params.set,
-              encodeURIComponent(pk),
-            ),
+            clusterSections.record(params.clusterId, namespace, set, pk),
           )
         }}
       />

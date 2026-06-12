@@ -13,7 +13,7 @@ import { useK8sClusters } from "@/hooks/use-k8s-clusters"
 import { getCluster } from "@/lib/api/clusters"
 import type { ConnectionProfileResponse } from "@/lib/types/connection"
 import type { K8sClusterSummary } from "@/lib/types/k8s"
-import { cx, focusRing } from "@/lib/utils"
+import { cx, focusRing, safeDecodeURIComponent } from "@/lib/utils"
 import { useUiStore } from "@/stores/ui-store"
 import * as AccordionPrimitives from "@radix-ui/react-accordion"
 import {
@@ -29,7 +29,7 @@ import {
 import Image from "next/image"
 import Link from "next/link"
 import { useParams, usePathname } from "next/navigation"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { ClusterSelector } from "./ClusterSelector"
 import MobileSidebar from "./MobileSidebar"
 import { UserProfileDesktop, UserProfileMobile } from "./UserProfile"
@@ -108,21 +108,39 @@ function buildClusterList(
 
 export function Sidebar() {
   const pathname = usePathname()
-  const params = useParams<{ clusterId?: string }>()
+  const params = useParams<{
+    clusterId?: string
+    namespace?: string
+    set?: string
+  }>()
   const conn = useConnections()
   const k8s = useK8sClusters()
   const nsByConn = useClusterNamespaces(params?.clusterId ?? null)
   const currentWorkspaceId = useUiStore((s) => s.currentWorkspaceId)
   const setCurrentWorkspaceId = useUiStore((s) => s.setCurrentWorkspaceId)
 
+  // Route params arrive percent-encoded; decode them so they compare equal to
+  // the raw namespace/set names returned by the API.
+  const routeNamespace = params?.namespace
+    ? safeDecodeURIComponent(params.namespace)
+    : null
+  const routeSet = params?.set ? safeDecodeURIComponent(params.set) : null
+
   // When the user navigates directly to a cluster URL whose connection lives
   // in a different workspace than the one currently selected (e.g. opening a
   // shared link), follow the URL: switch the persisted workspace so the
-  // cluster is visible in the sidebar drill-down.
+  // cluster is visible in the sidebar drill-down. Follow at most once per
+  // cluster visit — otherwise this effect re-runs when currentWorkspaceId
+  // changes and instantly reverts a manual switch made in WorkspacesDropdown
+  // while a cluster page is open.
+  const followedClusterIdRef = useRef<string | null>(null)
   useEffect(() => {
     if (!params?.clusterId || !conn.data) return
+    if (followedClusterIdRef.current === params.clusterId) return
     const target = conn.data.find((c) => c.id === params.clusterId)
-    if (target && target.workspaceId !== currentWorkspaceId) {
+    if (!target) return
+    followedClusterIdRef.current = params.clusterId
+    if (target.workspaceId !== currentWorkspaceId) {
       setCurrentWorkspaceId(target.workspaceId)
     }
   }, [params?.clusterId, conn.data, currentWorkspaceId, setCurrentWorkspaceId])
@@ -214,8 +232,9 @@ export function Sidebar() {
                     <ClusterNode
                       key={c.id}
                       cluster={c}
-                      pathname={pathname}
                       isActive={isActive}
+                      routeNamespace={routeNamespace}
+                      routeSet={routeSet}
                     />
                   ))}
                 </Accordion>
@@ -344,19 +363,21 @@ function GroupSection({
 
 function ClusterNode({
   cluster,
-  pathname,
   isActive,
+  routeNamespace,
+  routeSet,
 }: {
   cluster: ClusterSummary
-  pathname: string
   isActive: (href: string, exact?: boolean) => boolean
+  routeNamespace: string | null
+  routeSet: string | null
 }) {
   const clusterActive = isActive(`/clusters/${cluster.id}`)
-  const expandedNamespaces = cluster.namespaces
-    .filter((ns) =>
-      pathname.includes(`/clusters/${cluster.id}/sets/${ns.name}`),
-    )
-    .map((ns) => ns.name)
+  // Namespace/set params only describe this cluster when the URL is inside
+  // it — otherwise namespace "test" here would light up while browsing a
+  // namespace of the same name in another cluster.
+  const activeNamespace = clusterActive ? routeNamespace : null
+  const activeSet = clusterActive ? routeSet : null
   // Backend prepends "[K8s] " to connection names auto-created for ACKO
   // clusters. The ACKO badge already signals K8s origin, so drop the prefix
   // for display to avoid visual duplication (and give the name more width).
@@ -419,8 +440,8 @@ function ClusterNode({
               key={ns.name}
               clusterId={cluster.id}
               namespace={ns}
-              pathname={pathname}
-              defaultOpen={expandedNamespaces.includes(ns.name)}
+              active={activeNamespace === ns.name}
+              activeSet={activeNamespace === ns.name ? activeSet : null}
             />
           ))}
         </ul>
@@ -432,30 +453,31 @@ function ClusterNode({
 function NamespaceNode({
   clusterId,
   namespace,
-  pathname,
-  defaultOpen,
+  active,
+  activeSet,
 }: {
   clusterId: string
   namespace: NamespaceSummary
-  pathname: string
-  defaultOpen?: boolean
+  active: boolean
+  activeSet: string | null
 }) {
-  const nsActive = pathname.includes(
-    `/clusters/${clusterId}/sets/${namespace.name}`,
-  )
+  // Controlled accordion: defaultValue only applies on mount, so navigating
+  // into a set of this namespace from elsewhere (set chips, record links)
+  // would leave it collapsed. Force-open whenever the namespace becomes
+  // active while still letting the user toggle it manually.
+  const [open, setOpen] = useState<string>(active ? namespace.name : "")
+  useEffect(() => {
+    if (active) setOpen(namespace.name)
+  }, [active, namespace.name])
 
   return (
     <li>
-      <Accordion
-        type="single"
-        collapsible
-        defaultValue={defaultOpen || nsActive ? namespace.name : undefined}
-      >
+      <Accordion type="single" collapsible value={open} onValueChange={setOpen}>
         <AccordionItem value={namespace.name} className="border-none">
           <AccordionTrigger
             className={cx(
               "group flex items-center justify-between rounded-md py-1 pr-2 pl-3 text-sm hover:bg-gray-100 dark:hover:bg-gray-900",
-              nsActive
+              active
                 ? "text-primary-40 dark:text-primary-65"
                 : "text-gray-700 dark:text-gray-300",
             )}
@@ -491,8 +513,7 @@ function NamespaceNode({
                     namespace.name,
                     s.name,
                   )
-                  const active =
-                    pathname === href || pathname.startsWith(href + "/")
+                  const setActive = active && activeSet === s.name
                   if (s.objects === 0) {
                     return (
                       <li key={s.name}>
@@ -521,7 +542,7 @@ function NamespaceNode({
                         className={cx(
                           "relative flex items-center rounded-md py-1 pr-2 pl-10 font-mono text-sm transition",
                           "before:absolute before:top-1.5 before:left-[30px] before:h-4 before:w-0.5 before:rounded-sm",
-                          active
+                          setActive
                             ? "text-primary-40 before:bg-primary-45 dark:text-primary-65 font-medium"
                             : "text-gray-600 before:bg-transparent hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-900 dark:hover:text-gray-50",
                           focusRing,
