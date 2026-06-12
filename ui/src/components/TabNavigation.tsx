@@ -33,7 +33,7 @@ const TabNavigation = React.forwardRef<
     <NavigationMenuPrimitives.List
       className={cx(
         // base
-        "flex scrollbar-none items-center justify-start border-b whitespace-nowrap [&::-webkit-scrollbar]:hidden",
+        "flex scrollbar-none items-center justify-start overflow-x-auto border-b whitespace-nowrap [&::-webkit-scrollbar]:hidden",
         // border color
         "border-gray-200 dark:border-gray-800",
         className,

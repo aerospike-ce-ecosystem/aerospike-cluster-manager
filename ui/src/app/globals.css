@@ -26,6 +26,13 @@ layer(base);
   ::file-selector-button {
     border-color: var(--color-gray-200, currentcolor);
   }
+
+  /* Tailwind CSS v4 preflight switched buttons to `cursor: default`; the UI
+     was designed against the v3 behavior where buttons show a pointer. */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
 }
 
 /* =====================================================================

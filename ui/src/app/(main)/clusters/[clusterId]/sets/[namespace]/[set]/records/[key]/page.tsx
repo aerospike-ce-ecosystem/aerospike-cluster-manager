@@ -523,7 +523,9 @@ export default function RecordDetailPage({ params }: PageProps) {
           </span>
         </Link>
         <span aria-hidden="true">/</span>
-        <span className="font-mono text-gray-900 dark:text-gray-50">{pk}</span>
+        <span className="font-mono break-all text-gray-900 dark:text-gray-50">
+          {pk}
+        </span>
       </nav>
 
       <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">

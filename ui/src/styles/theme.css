@@ -97,6 +97,9 @@
    ===================================================================== */
 .ace-page-head {
   display: flex;
+  /* Title + action slot must wrap on narrow viewports — without this the
+     buttons/search input push the page wider than the phone screen. */
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   margin-bottom: 22px;
