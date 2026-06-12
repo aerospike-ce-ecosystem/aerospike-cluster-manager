@@ -62,12 +62,12 @@ const Tooltip = React.forwardRef<
               align="center"
               className={cx(
                 // base — refined card-like surface (lifted, light background)
-                "z-50 max-w-md select-none rounded-lg px-3 py-2 text-xs leading-relaxed",
+                "z-50 max-w-md rounded-lg px-3 py-2 text-xs leading-relaxed select-none",
                 // typography
                 "font-medium text-gray-700 dark:text-gray-200",
                 // surface — white card in light, near-black in dark, with hairline border + ring + soft layered shadow
                 "border border-gray-200/80 bg-white dark:border-gray-800 dark:bg-gray-900",
-                "ring-1 ring-black/[0.04] dark:ring-white/[0.04]",
+                "ring-1 ring-black/4 dark:ring-white/4",
                 "shadow-[0_10px_30px_-10px_rgba(15,23,42,0.18),0_4px_6px_-4px_rgba(15,23,42,0.08)] dark:shadow-[0_10px_30px_-10px_rgba(0,0,0,0.6),0_4px_6px_-4px_rgba(0,0,0,0.4)]",
                 // transition
                 "will-change-[transform,opacity]",

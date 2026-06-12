@@ -124,7 +124,7 @@ export function RegisterUdfDialog({
               onChange={(e) => setForm({ ...form, content: e.target.value })}
               rows={6}
               spellCheck={false}
-              className="dark:focus:ring-primary-65/20 block w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 font-mono text-sm text-gray-900 placeholder-gray-400 shadow-sm outline-none transition focus:border-primary-45 focus:ring-2 focus:ring-primary-90 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-50 dark:placeholder-gray-500"
+              className="dark:focus:ring-primary-65/20 focus:border-primary-45 focus:ring-primary-90 block w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 font-mono text-sm text-gray-900 placeholder-gray-400 shadow-sm outline-hidden transition focus:ring-2 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-50 dark:placeholder-gray-500"
               placeholder={`function example_fn(rec)\n  return rec.bin_name\nend`}
               required
             />

@@ -191,7 +191,7 @@ export function ClusterSelector() {
               </span>
               {selected && (
                 <RiCheckLine
-                  className="size-4 shrink-0 text-primary-40 dark:text-primary-65"
+                  className="text-primary-40 dark:text-primary-65 size-4 shrink-0"
                   aria-hidden="true"
                 />
               )}

@@ -30,7 +30,7 @@ function Chip({ k, v, tone }: ChipProps) {
           tone.valueRing,
         )}
       >
-        <span className="border-r border-black/[0.06] bg-white px-1.5 py-1 font-mono text-[10px] font-medium uppercase tracking-wider text-gray-500 dark:border-white/[0.06] dark:bg-gray-950 dark:text-gray-500">
+        <span className="border-r border-black/6 bg-white px-1.5 py-1 font-mono text-[10px] font-medium tracking-wider text-gray-500 uppercase dark:border-white/6 dark:bg-gray-950 dark:text-gray-500">
           {k}
         </span>
         <span
@@ -47,7 +47,7 @@ function Chip({ k, v, tone }: ChipProps) {
   }
   return (
     <span className="inline-flex items-stretch overflow-hidden rounded-md text-[11px] leading-none shadow-[0_1px_0_rgb(0_0_0/0.02)] ring-1 ring-gray-200 dark:shadow-none dark:ring-gray-800">
-      <span className="border-r border-gray-200 bg-gray-50 px-1.5 py-1 font-mono text-[10px] font-medium uppercase tracking-wider text-gray-500 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-500">
+      <span className="border-r border-gray-200 bg-gray-50 px-1.5 py-1 font-mono text-[10px] font-medium tracking-wider text-gray-500 uppercase dark:border-gray-800 dark:bg-gray-900 dark:text-gray-500">
         {k}
       </span>
       <span className="bg-white px-1.5 py-1 font-mono text-gray-800 dark:bg-gray-950 dark:text-gray-200">

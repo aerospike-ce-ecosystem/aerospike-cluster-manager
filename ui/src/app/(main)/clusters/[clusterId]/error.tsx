@@ -22,7 +22,7 @@ export default function ClusterError({ error, reset }: ErrorProps) {
     <main className="flex flex-col gap-6">
       <Card className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wider text-red-600 dark:text-red-400">
+          <span className="text-xs font-medium tracking-wider text-red-600 uppercase dark:text-red-400">
             Cluster error
           </span>
           <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-50">

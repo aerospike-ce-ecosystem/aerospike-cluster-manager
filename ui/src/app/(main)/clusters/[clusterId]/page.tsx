@@ -79,11 +79,11 @@ export default function ClusterOverview({ params }: PageProps) {
       {ackoInfo && (
         <section
           aria-label="ACKO overview"
-          className="bg-primary-95/50 dark:border-primary-30/40 dark:bg-primary-10/30 flex flex-col gap-4 rounded-lg border border-primary-95 p-4"
+          className="bg-primary-95/50 dark:border-primary-30/40 dark:bg-primary-10/30 border-primary-95 flex flex-col gap-4 rounded-lg border p-4"
         >
           <div className="flex items-start justify-between gap-4">
             <div>
-              <span className="text-xs font-medium uppercase tracking-wider text-primary-40 dark:text-primary-80">
+              <span className="text-primary-40 dark:text-primary-80 text-xs font-medium tracking-wider uppercase">
                 Managed by ACKO
               </span>
               <h2 className="mt-1 text-base font-semibold text-gray-900 dark:text-gray-50">
@@ -121,7 +121,7 @@ export default function ClusterOverview({ params }: PageProps) {
       <section aria-label="Nodes" className="flex flex-col gap-3">
         <div className="flex items-end justify-between">
           <div>
-            <span className="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-500">
+            <span className="text-xs font-medium tracking-wider text-gray-500 uppercase dark:text-gray-500">
               Nodes
             </span>
             <h2 className="mt-1 text-base font-semibold text-gray-900 dark:text-gray-50">
@@ -167,7 +167,7 @@ export default function ClusterOverview({ params }: PageProps) {
                       <p className="text-xs text-gray-500 dark:text-gray-500">
                         build {n.build}
                       </p>
-                      <p className="text-xs tabular-nums text-gray-500 dark:text-gray-500">
+                      <p className="text-xs text-gray-500 tabular-nums dark:text-gray-500">
                         uptime {formatUptime(n.uptime)}
                       </p>
                     </div>
@@ -191,7 +191,7 @@ function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <dt className="text-xs text-gray-500 dark:text-gray-500">{label}</dt>
-      <dd className="font-medium tabular-nums text-gray-900 dark:text-gray-50">
+      <dd className="font-medium text-gray-900 tabular-nums dark:text-gray-50">
         {value}
       </dd>
     </div>

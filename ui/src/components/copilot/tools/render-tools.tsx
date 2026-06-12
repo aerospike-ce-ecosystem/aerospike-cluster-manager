@@ -40,7 +40,7 @@ function CardShell({ children }: { children: React.ReactNode }) {
 function PendingCard({ label }: { label: string }) {
   return (
     <CardShell>
-      <span className="animate-pulse text-on-surface-variant">{label}…</span>
+      <span className="text-on-surface-variant animate-pulse">{label}…</span>
     </CardShell>
   )
 }
@@ -120,7 +120,7 @@ function ClusterInfoCard({
       </ul>
       <Link
         href={`/clusters/${encodeURIComponent(connId)}`}
-        className="mt-2 inline-block text-primary-40 hover:underline"
+        className="text-primary-40 mt-2 inline-block hover:underline"
       >
         Open cluster page →
       </Link>
@@ -183,7 +183,7 @@ function RecordsMiniTable({
         </table>
       </div>
       {footer ? (
-        <p className="mt-1 text-xs text-on-surface-variant">{footer}</p>
+        <p className="text-on-surface-variant mt-1 text-xs">{footer}</p>
       ) : null}
     </CardShell>
   )
@@ -292,7 +292,7 @@ export function CopilotRenderTools() {
   useDefaultRenderTool(
     {
       render: ({ name, status }) => (
-        <p className="my-1 text-xs text-on-surface-variant">
+        <p className="text-on-surface-variant my-1 text-xs">
           {status === "complete" ? "✓" : "⏳"} {name}
         </p>
       ),

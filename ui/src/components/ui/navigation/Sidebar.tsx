@@ -183,10 +183,10 @@ export function Sidebar() {
                 <Link
                   href={siteConfig.baseLinks.guides}
                   className={cx(
-                    "flex items-center gap-x-2.5 rounded-md py-1.5 pl-2 pr-2 text-sm font-medium transition",
+                    "flex items-center gap-x-2.5 rounded-md py-1.5 pr-2 pl-2 text-sm font-medium transition",
                     isActive(siteConfig.baseLinks.guides)
                       ? "text-primary-40 dark:text-primary-65"
-                      : "text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 hover:dark:bg-gray-900 hover:dark:text-gray-50",
+                      : "text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-900 dark:hover:text-gray-50",
                     focusRing,
                   )}
                 >
@@ -220,12 +220,12 @@ export function Sidebar() {
                   ))}
                 </Accordion>
                 {loading && clusterList.length === 0 && (
-                  <span className="block py-1 pl-2 text-xs italic text-gray-400 dark:text-gray-600">
+                  <span className="block py-1 pl-2 text-xs text-gray-400 italic dark:text-gray-600">
                     Loading…
                   </span>
                 )}
                 {!loading && clusterList.length === 0 && (
-                  <span className="block py-1 pl-2 text-xs italic text-gray-400 dark:text-gray-600">
+                  <span className="block py-1 pl-2 text-xs text-gray-400 italic dark:text-gray-600">
                     No clusters yet
                   </span>
                 )}
@@ -235,10 +235,10 @@ export function Sidebar() {
                 <Link
                   href={siteConfig.baseLinks.ackoTemplates}
                   className={cx(
-                    "flex items-center gap-x-2.5 rounded-md py-1.5 pl-2 pr-2 text-sm font-medium transition",
+                    "flex items-center gap-x-2.5 rounded-md py-1.5 pr-2 pl-2 text-sm font-medium transition",
                     isActive(siteConfig.baseLinks.ackoTemplates)
                       ? "text-primary-40 dark:text-primary-65"
-                      : "text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 hover:dark:bg-gray-900 hover:dark:text-gray-50",
+                      : "text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-900 dark:hover:text-gray-50",
                     focusRing,
                   )}
                 >
@@ -324,7 +324,7 @@ function GroupSection({
     <AccordionItem value={value} className="border-none">
       <AccordionTrigger
         className={cx(
-          "rounded-md px-2 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100 dark:text-gray-50 hover:dark:bg-gray-900",
+          "rounded-md px-2 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100 dark:text-gray-50 dark:hover:bg-gray-900",
           focusRing,
         )}
       >
@@ -333,7 +333,7 @@ function GroupSection({
           {label}
         </span>
       </AccordionTrigger>
-      <AccordionContent className="pb-1 pt-1">
+      <AccordionContent className="pt-1 pb-1">
         <div className="ml-[11px] flex flex-col border-l border-gray-200 pl-2 dark:border-gray-800">
           {children}
         </div>
@@ -369,7 +369,7 @@ function ClusterNode({
     <AccordionItem value={cluster.id} className="border-none">
       <AccordionPrimitives.Header
         className={cx(
-          "flex items-center rounded-md pr-1 hover:bg-gray-100 hover:dark:bg-gray-900",
+          "flex items-center rounded-md pr-1 hover:bg-gray-100 dark:hover:bg-gray-900",
           clusterActive
             ? "text-primary-40 dark:text-primary-65"
             : "text-gray-700 dark:text-gray-400",
@@ -388,7 +388,7 @@ function ClusterNode({
               {displayName}
             </span>
             {cluster.managedBy === "ACKO" && (
-              <span className="dark:bg-primary-10/40 shrink-0 rounded bg-primary-95 px-1.5 text-[10px] font-semibold uppercase tracking-wider text-primary-40 dark:text-primary-65">
+              <span className="dark:bg-primary-10/40 bg-primary-95 text-primary-40 dark:text-primary-65 shrink-0 rounded px-1.5 text-[10px] font-semibold tracking-wider uppercase">
                 ACKO
               </span>
             )}
@@ -397,7 +397,7 @@ function ClusterNode({
         <AccordionPrimitives.Trigger
           aria-label={`Toggle ${displayName} namespaces`}
           className={cx(
-            "group/chev flex size-6 shrink-0 items-center justify-center rounded-md text-gray-400 hover:bg-gray-200 hover:text-gray-900 dark:text-gray-500 hover:dark:bg-gray-800 hover:dark:text-gray-50",
+            "group/chev flex size-6 shrink-0 items-center justify-center rounded-md text-gray-400 hover:bg-gray-200 hover:text-gray-900 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-50",
             focusRing,
           )}
         >
@@ -410,7 +410,7 @@ function ClusterNode({
       <AccordionContent className="pt-1">
         <ul className="flex flex-col gap-0.5">
           {cluster.namespaces.length === 0 && (
-            <li className="py-1 pl-5 text-xs italic text-gray-400 dark:text-gray-600">
+            <li className="py-1 pl-5 text-xs text-gray-400 italic dark:text-gray-600">
               no namespaces
             </li>
           )}
@@ -454,7 +454,7 @@ function NamespaceNode({
         <AccordionItem value={namespace.name} className="border-none">
           <AccordionTrigger
             className={cx(
-              "group flex items-center justify-between rounded-md py-1 pl-3 pr-2 text-sm hover:bg-gray-100 hover:dark:bg-gray-900",
+              "group flex items-center justify-between rounded-md py-1 pr-2 pl-3 text-sm hover:bg-gray-100 dark:hover:bg-gray-900",
               nsActive
                 ? "text-primary-40 dark:text-primary-65"
                 : "text-gray-700 dark:text-gray-300",
@@ -475,7 +475,7 @@ function NamespaceNode({
           <AccordionContent className="pt-0.5">
             <ul className="flex flex-col gap-0.5">
               {namespace.sets.length === 0 && (
-                <li className="py-1 pl-10 text-xs italic text-gray-400 dark:text-gray-600">
+                <li className="py-1 pl-10 text-xs text-gray-400 italic dark:text-gray-600">
                   no sets
                 </li>
               )}
@@ -504,7 +504,7 @@ function NamespaceNode({
                           <span
                             aria-disabled="true"
                             className={cx(
-                              "relative flex cursor-not-allowed items-center rounded-md py-1 pl-10 pr-2 font-mono text-sm",
+                              "relative flex cursor-not-allowed items-center rounded-md py-1 pr-2 pl-10 font-mono text-sm",
                               "text-gray-400 opacity-70 dark:text-gray-600",
                             )}
                           >
@@ -519,11 +519,11 @@ function NamespaceNode({
                       <Link
                         href={href}
                         className={cx(
-                          "relative flex items-center rounded-md py-1 pl-10 pr-2 font-mono text-sm transition",
-                          "before:absolute before:left-[30px] before:top-1.5 before:h-4 before:w-0.5 before:rounded-sm",
+                          "relative flex items-center rounded-md py-1 pr-2 pl-10 font-mono text-sm transition",
+                          "before:absolute before:top-1.5 before:left-[30px] before:h-4 before:w-0.5 before:rounded-sm",
                           active
-                            ? "font-medium text-primary-40 before:bg-primary-45 dark:text-primary-65"
-                            : "text-gray-600 before:bg-transparent hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 hover:dark:bg-gray-900 hover:dark:text-gray-50",
+                            ? "text-primary-40 before:bg-primary-45 dark:text-primary-65 font-medium"
+                            : "text-gray-600 before:bg-transparent hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-900 dark:hover:text-gray-50",
                           focusRing,
                         )}
                       >

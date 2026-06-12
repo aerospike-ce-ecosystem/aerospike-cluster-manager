@@ -49,7 +49,7 @@ const PK_TYPES: ReadonlyArray<{ value: PkType; label: string }> = [
 ]
 
 const SELECT_CLASSES =
-  "h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-primary-45 focus:outline-none focus:ring-1 focus:ring-primary-45 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+  "h-9 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-primary-45 focus:outline-hidden focus:ring-1 focus:ring-primary-45 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
 
 interface CreateRecordDialogProps {
   open: boolean

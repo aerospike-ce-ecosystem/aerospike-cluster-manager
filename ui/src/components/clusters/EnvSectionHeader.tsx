@@ -24,13 +24,13 @@ export function EnvSectionHeader({
       />
       <span
         className={cx(
-          "text-[11px] font-bold uppercase tracking-[0.22em]",
+          "text-[11px] font-bold tracking-[0.22em] uppercase",
           tone.headerText,
         )}
       >
         {env}
       </span>
-      <span className="font-mono text-[11px] tabular-nums text-gray-500 dark:text-gray-500">
+      <span className="font-mono text-[11px] text-gray-500 tabular-nums dark:text-gray-500">
         {count} {count === 1 ? "cluster" : "clusters"}
       </span>
       <span aria-hidden="true" className={cx("h-px flex-1", tone.rule)} />

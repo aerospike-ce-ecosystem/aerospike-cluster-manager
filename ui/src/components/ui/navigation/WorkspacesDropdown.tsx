@@ -162,7 +162,7 @@ export function WorkspacesDropdown() {
                 </span>
                 {selected && (
                   <RiCheckLine
-                    className="size-4 shrink-0 text-primary-40 dark:text-primary-65"
+                    className="text-primary-40 dark:text-primary-65 size-4 shrink-0"
                     aria-hidden="true"
                   />
                 )}
@@ -175,7 +175,7 @@ export function WorkspacesDropdown() {
                     setEditTarget(ws)
                   }}
                   className={cx(
-                    "ml-1 flex size-6 shrink-0 items-center justify-center rounded text-gray-400 hover:bg-gray-200 hover:text-gray-900 dark:text-gray-500 hover:dark:bg-gray-800 hover:dark:text-gray-50",
+                    "ml-1 flex size-6 shrink-0 items-center justify-center rounded text-gray-400 hover:bg-gray-200 hover:text-gray-900 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-gray-50",
                     focusRing,
                   )}
                 >
@@ -185,7 +185,7 @@ export function WorkspacesDropdown() {
             )
           })}
           {visible && visible.length === 0 && !isLoading && (
-            <div className="px-2 py-1.5 text-sm italic text-gray-400 dark:text-gray-600">
+            <div className="px-2 py-1.5 text-sm text-gray-400 italic dark:text-gray-600">
               No workspaces
             </div>
           )}

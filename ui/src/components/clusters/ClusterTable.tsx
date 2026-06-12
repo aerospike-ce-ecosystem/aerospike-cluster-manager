@@ -85,7 +85,7 @@ export function ClusterTable({
                   {r.note ? (
                     <Tooltip
                       content={
-                        <div className="max-w-md whitespace-pre-wrap break-words text-xs">
+                        <div className="max-w-md text-xs wrap-break-word whitespace-pre-wrap">
                           {r.note}
                         </div>
                       }
@@ -119,7 +119,7 @@ export function ClusterTable({
                   {r.managedBy === "ACKO" ? (
                     <Badge
                       variant="default"
-                      className="text-[10px] uppercase tracking-wider"
+                      className="text-[10px] tracking-wider uppercase"
                     >
                       ACKO
                     </Badge>

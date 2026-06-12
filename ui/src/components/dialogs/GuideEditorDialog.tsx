@@ -79,7 +79,7 @@ agents must read this guide before creating, scaling or deleting clusters.
 }
 
 const TEXTAREA_CLASS = cx(
-  "block w-full rounded-md border px-2.5 py-2 font-mono text-xs leading-relaxed shadow-sm outline-none transition",
+  "block w-full rounded-md border px-2.5 py-2 font-mono text-xs leading-relaxed shadow-sm outline-hidden transition",
   "border-gray-300 bg-white text-gray-900 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-50",
   "placeholder-gray-400 dark:placeholder-gray-500",
   focusInput,
@@ -261,7 +261,7 @@ export function GuideEditorDialog({
                 placeholder="# Policy&#10;&#10;Write the guide in Markdown..."
               />
             ) : (
-              <div className="h-[26rem] overflow-y-auto rounded-md border border-gray-200 bg-white px-3 py-2 dark:border-gray-800 dark:bg-gray-950">
+              <div className="h-104 overflow-y-auto rounded-md border border-gray-200 bg-white px-3 py-2 dark:border-gray-800 dark:bg-gray-950">
                 <GuideMarkdown content={content} />
               </div>
             )}

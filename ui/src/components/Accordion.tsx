@@ -18,13 +18,13 @@ const AccordionTrigger = React.forwardRef<
     <AccordionPrimitives.Trigger
       className={cx(
         // base
-        "group flex flex-1 cursor-pointer items-center justify-between py-3 text-left text-sm font-medium leading-none",
+        "group flex flex-1 cursor-pointer items-center justify-between py-3 text-left text-sm leading-none font-medium",
         // text color
         "text-gray-900 dark:text-gray-50",
         // disabled
-        "data-[disabled]:cursor-default data-[disabled]:text-gray-400 dark:data-[disabled]:text-gray-600",
+        "data-disabled:cursor-default data-disabled:text-gray-400 dark:data-disabled:text-gray-600",
         //focus
-        "focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500",
+        "focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-hidden focus-visible:ring-inset",
         className,
       )}
       {...props}
@@ -34,11 +34,11 @@ const AccordionTrigger = React.forwardRef<
       <RiArrowDownSLine
         className={cx(
           // base
-          "size-5 shrink-0 transition-transform duration-150 ease-[cubic-bezier(0.87,_0,_0.13,_1)] group-data-[state=open]:rotate-180",
+          "size-5 shrink-0 transition-transform duration-150 ease-[cubic-bezier(0.87,0,0.13,1)] group-data-[state=open]:rotate-180",
           // text color
           "text-gray-400 dark:text-gray-600",
           // disabled
-          "group-data-[disabled]:text-gray-300 group-data-[disabled]:dark:text-gray-700",
+          "group-data-disabled:text-gray-300 dark:group-data-disabled:text-gray-700",
         )}
         aria-hidden="true"
         focusable="false"

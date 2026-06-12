@@ -75,7 +75,7 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
             href={lm[2]}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-primary-40 underline hover:text-primary-30 dark:text-primary-65 dark:hover:text-primary-80"
+            className="text-primary-40 hover:text-primary-30 dark:text-primary-65 dark:hover:text-primary-80 underline"
           >
             {lm[1]}
           </a>,
@@ -193,7 +193,7 @@ function renderBlocks(md: string): React.ReactNode[] {
       blocks.push(
         <blockquote
           key={key++}
-          className="mt-3 border-l-2 border-primary-80 pl-3 text-sm italic text-gray-600 dark:border-primary-40 dark:text-gray-400"
+          className="border-primary-80 dark:border-primary-40 mt-3 border-l-2 pl-3 text-sm text-gray-600 italic dark:text-gray-400"
         >
           {renderInline(quote.join(" "), `bq${key}`)}
         </blockquote>,
@@ -316,7 +316,7 @@ export function GuideMarkdown({
 }) {
   if (!content.trim()) {
     return (
-      <p className="text-sm italic text-gray-400 dark:text-gray-600">(empty)</p>
+      <p className="text-sm text-gray-400 italic dark:text-gray-600">(empty)</p>
     )
   }
   return <div className={className}>{renderBlocks(content)}</div>

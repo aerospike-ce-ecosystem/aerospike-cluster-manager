@@ -9,10 +9,10 @@ export function ClustersEmptyState({
 }) {
   return (
     <Card className="flex flex-col items-center gap-2 py-10 text-center">
-      <h3 className="text-base font-semibold text-on-surface">
+      <h3 className="text-on-surface text-base font-semibold">
         No clusters yet
       </h3>
-      <p className="max-w-md text-sm text-on-surface-muted">
+      <p className="text-on-surface-muted max-w-md text-sm">
         Add a connection profile to manage an existing cluster, or create a new
         one via ACKO.
       </p>
