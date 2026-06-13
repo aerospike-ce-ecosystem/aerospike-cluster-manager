@@ -497,6 +497,46 @@ class TestConnectionHealth:
         assert body["connected"] is True
         assert body["tendHealthy"] is True
 
+    async def test_one_namespace_info_failure_keeps_other_namespace_stats(self, client: AsyncClient, sample_connection):
+        """One namespace's info_all() failure must not zero the whole summary.
+
+        Regression: the per-namespace fan-out used asyncio.gather WITHOUT
+        return_exceptions=True, so a single namespace's info_all() failure
+        re-raised, the broad except swallowed it, and memory/disk reported 0
+        for the ENTIRE cluster even though the other namespace was healthy.
+        Mirrors the partial-failure convention from #431 (metrics) / #430
+        (clusters). Healthy namespace 'test' must still contribute its stats.
+        """
+        from aerospike_cluster_manager_api import db
+
+        await db.create_connection(sample_connection)
+
+        mock_as_client = self._make_reachable_client()
+        mock_as_client.ping = AsyncMock(return_value=True)
+
+        async def info_all_side_effect(cmd: str):
+            # Healthy namespace contributes real size stats; the other raises.
+            if cmd == "namespace/test":
+                return [
+                    ("node1", None, "data_used_bytes=1000;data_total_bytes=4000;device_used_bytes=0"),
+                ]
+            raise AerospikeError("transient info failure on namespace/bar")
+
+        mock_as_client.info_all.side_effect = info_all_side_effect
+
+        with patch(
+            "aerospike_cluster_manager_api.routers.connections.client_manager.get_client",
+            return_value=mock_as_client,
+        ):
+            resp = await client.get(f"/api/connections/{sample_connection.id}/health")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["connected"] is True
+        # Before the fix these were 0 (the failing namespace aborted the loop).
+        assert body["memoryUsed"] == 1000
+        assert body["memoryTotal"] == 4000
+
     async def test_profile_deleted_mid_health_check_returns_disconnected(self, client: AsyncClient, sample_connection):
         """TOCTOU: profile vanishes between the dependency check and get_client().
 
