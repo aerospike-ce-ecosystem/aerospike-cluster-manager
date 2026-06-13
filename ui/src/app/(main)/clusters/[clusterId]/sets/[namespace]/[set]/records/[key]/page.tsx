@@ -13,6 +13,7 @@ import { logFetchError } from "@/lib/api/log"
 import { deleteRecordNote, upsertRecordNote } from "@/lib/api/notes"
 import { deleteRecord, getRecordDetail, putRecord } from "@/lib/api/records"
 import type { AerospikeRecord, BinValue, PkType } from "@/lib/types/record"
+import { safeDecodeURIComponent } from "@/lib/utils"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -243,20 +244,16 @@ function buildInitialDraft(record: AerospikeRecord): BinDraft[] {
   })
 }
 
-const safeDecode = (s: string): string | null => {
-  try {
-    return decodeURIComponent(s)
-  } catch {
-    return null
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 export default function RecordDetailPage({ params }: PageProps) {
   const router = useRouter()
-  const pk = safeDecode(params.key)
+  // App Router route params arrive percent-encoded; decode before using them
+  // for API calls, display, and hrefs (clusterSections re-encodes).
+  const pk = safeDecodeURIComponent(params.key)
+  const namespace = safeDecodeURIComponent(params.namespace) ?? params.namespace
+  const set = safeDecodeURIComponent(params.set) ?? params.set
 
   const [record, setRecord] = useState<AerospikeRecord | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -275,8 +272,8 @@ export default function RecordDetailPage({ params }: PageProps) {
       setIsLoading(true)
       setError(null)
       return getRecordDetail(params.clusterId, {
-        ns: params.namespace,
-        set: params.set,
+        ns: namespace,
+        set,
         pk,
         pk_type: "auto" as PkType,
       })
@@ -294,7 +291,7 @@ export default function RecordDetailPage({ params }: PageProps) {
           if (!signal?.cancelled) setIsLoading(false)
         })
     },
-    [params.clusterId, params.namespace, params.set, pk],
+    [params.clusterId, namespace, set, pk],
   )
 
   // Keep the latest cancellation signal in a ref so handleSave's
@@ -322,7 +319,7 @@ export default function RecordDetailPage({ params }: PageProps) {
     return () => {
       signal.cancelled = true
     }
-  }, [params.clusterId, params.namespace, params.set, pk, loadRecord])
+  }, [params.clusterId, namespace, set, pk, loadRecord])
 
   const handleDelete = async () => {
     if (!record || pk === null) return
@@ -330,14 +327,12 @@ export default function RecordDetailPage({ params }: PageProps) {
     setDeleting(true)
     try {
       await deleteRecord(params.clusterId, {
-        ns: params.namespace,
-        set: params.set,
+        ns: namespace,
+        set,
         pk,
         pk_type: "auto" as PkType,
       })
-      router.push(
-        clusterSections.set(params.clusterId, params.namespace, params.set),
-      )
+      router.push(clusterSections.set(params.clusterId, namespace, set))
     } catch (err) {
       logFetchError("record-delete", err)
       if (err instanceof ApiError) setError(err.detail || err.message)
@@ -450,7 +445,7 @@ export default function RecordDetailPage({ params }: PageProps) {
     setSaving(true)
     try {
       await putRecord(params.clusterId, {
-        key: { namespace: params.namespace, set: params.set, pk },
+        key: { namespace, set, pk },
         bins,
         ttl,
         pkType: "auto" as PkType,
@@ -491,15 +486,11 @@ export default function RecordDetailPage({ params }: PageProps) {
           </Link>
           <span aria-hidden="true">/</span>
           <Link
-            href={clusterSections.set(
-              params.clusterId,
-              params.namespace,
-              params.set,
-            )}
+            href={clusterSections.set(params.clusterId, namespace, set)}
             className="hover:text-gray-900 dark:hover:text-gray-50"
           >
             <span className="font-mono">
-              {params.namespace}.{params.set}
+              {namespace}.{set}
             </span>
           </Link>
         </nav>
@@ -524,19 +515,17 @@ export default function RecordDetailPage({ params }: PageProps) {
         </Link>
         <span aria-hidden="true">/</span>
         <Link
-          href={clusterSections.set(
-            params.clusterId,
-            params.namespace,
-            params.set,
-          )}
+          href={clusterSections.set(params.clusterId, namespace, set)}
           className="hover:text-gray-900 dark:hover:text-gray-50"
         >
           <span className="font-mono">
-            {params.namespace}.{params.set}
+            {namespace}.{set}
           </span>
         </Link>
         <span aria-hidden="true">/</span>
-        <span className="font-mono text-gray-900 dark:text-gray-50">{pk}</span>
+        <span className="font-mono break-all text-gray-900 dark:text-gray-50">
+          {pk}
+        </span>
       </nav>
 
       <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -657,21 +646,18 @@ export default function RecordDetailPage({ params }: PageProps) {
             note={record.note}
             disabled={isEditing || deleting || saving}
             onSave={async (next) => {
-              await upsertRecordNote(
-                params.clusterId,
-                params.namespace,
-                params.set,
-                pk,
-                { note: next, pkType: "auto" },
-              )
+              await upsertRecordNote(params.clusterId, namespace, set, pk, {
+                note: next,
+                pkType: "auto",
+              })
               // Reload to pick up updatedAt / updatedBy from the server.
               await loadRecordRef.current(loadSignalRef.current)
             }}
             onDelete={async () => {
               await deleteRecordNote(
                 params.clusterId,
-                params.namespace,
-                params.set,
+                namespace,
+                set,
                 pk,
                 "auto",
               )

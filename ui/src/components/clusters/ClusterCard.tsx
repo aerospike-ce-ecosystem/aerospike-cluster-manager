@@ -26,11 +26,13 @@ export function ClusterCard({
     Object.keys(row.labels).filter((k) => k !== ENV_LABEL_KEY).length > 0
 
   // To keep the whole card clickable while still allowing nested interactive
-  // elements (the Edit button and the AddressCopyCell copy button), we render
-  // the navigation as an absolutely-positioned anchor *behind* the interactive
-  // controls (`relative` card + `absolute inset-0` link with `z-0`). All
-  // interactive children opt in with `relative z-10`. This avoids the invalid
-  // `<a><button></a>` nesting that the previous implementation produced.
+  // elements, we render the navigation as an absolutely-positioned anchor
+  // (`relative` card + `absolute inset-0` link). The link paints above static
+  // content (positioned z-0 beats in-flow text in hit-testing), so clicks on
+  // the name/status/body navigate; only genuinely interactive children (Edit
+  // button, copy cell, note tooltip, labels) opt out with `relative z-10`.
+  // This avoids the invalid `<a><button></a>` nesting that the previous
+  // implementation produced.
   return (
     <Card
       className={cx(
@@ -49,7 +51,7 @@ export function ClusterCard({
           )}
         />
       )}
-      <div className="relative z-10 flex items-start gap-3">
+      <div className="flex items-start gap-3">
         <span
           aria-hidden="true"
           className="mt-1 h-6 w-1 shrink-0 rounded-sm"
@@ -87,7 +89,7 @@ export function ClusterCard({
               triggerAsChild
               className="max-w-md"
             >
-              <p className="mt-1 cursor-help truncate text-xs text-gray-500 dark:text-gray-500">
+              <p className="relative z-10 mt-1 cursor-help truncate text-xs text-gray-500 dark:text-gray-500">
                 {row.note}
               </p>
             </Tooltip>
@@ -110,14 +112,14 @@ export function ClusterCard({
         />
       </div>
 
-      <div className="relative z-10 mt-auto flex items-center justify-between gap-2 border-t border-gray-200 pt-3 dark:border-gray-800">
+      <div className="mt-auto flex items-center justify-between gap-2 border-t border-gray-200 pt-3 dark:border-gray-800">
         <span className="text-xs text-gray-500 dark:text-gray-500">
           {row.managedBy === "ACKO" ? "ACKO" : "Manual"}
         </span>
         {row.profile ? (
           <Button
             variant="ghost"
-            className="h-7 px-2 text-xs"
+            className="relative z-10 h-7 px-2 text-xs"
             onClick={(event) => {
               event.preventDefault()
               event.stopPropagation()

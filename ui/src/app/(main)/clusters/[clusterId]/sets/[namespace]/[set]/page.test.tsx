@@ -228,3 +228,33 @@ describe("RecordBrowserPage — PK match mode (#287)", () => {
     expect(screen.getByRole("button", { name: /^search$/i })).toBeDisabled()
   })
 })
+
+describe("RecordBrowserPage — route param decoding", () => {
+  it("decodes percent-encoded namespace/set params before querying and rendering", async () => {
+    mockedFilter.mockResolvedValueOnce(fixtureResponse(0))
+
+    // App Router delivers params exactly as they appear in the URL —
+    // percent-encoded. A set named "my set" arrives as "my%20set".
+    render(
+      <RecordBrowserPage
+        params={{
+          clusterId: "conn-test",
+          namespace: "ns%2Fprod",
+          set: "my%20set",
+        }}
+      />,
+    )
+
+    expect(
+      await screen.findByText(/no records in this set/i),
+    ).toBeInTheDocument()
+    expect(mockedFilter).toHaveBeenCalledWith(
+      "conn-test",
+      expect.objectContaining({ namespace: "ns/prod", set: "my set" }),
+    )
+    // The heading shows the raw names, not their encoded forms.
+    expect(
+      screen.getByRole("heading", { name: "ns/prod.my set" }),
+    ).toBeInTheDocument()
+  })
+})

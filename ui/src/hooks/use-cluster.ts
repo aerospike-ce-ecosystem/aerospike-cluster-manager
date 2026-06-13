@@ -60,6 +60,12 @@ export function useCluster(
       return
     }
     let cancelled = false
+    // Wipe the previous cluster's data so pages can't render it under the
+    // new cluster's URL while loading — or permanently, if the new fetch
+    // fails. refetch() intentionally keeps stale data on failure; switching
+    // clusters must not.
+    setData(null)
+    setError(null)
     setIsLoading(true)
     ;(async () => {
       try {

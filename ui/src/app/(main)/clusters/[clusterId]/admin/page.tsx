@@ -21,7 +21,7 @@ import { mapApiError } from "@/lib/api/error-mapping"
 import { logFetchError } from "@/lib/api/log"
 import type { AerospikeRole, AerospikeUser } from "@/lib/types/admin"
 import { RiShieldKeyholeLine } from "@remixicon/react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 type PageProps = { params: { clusterId: string } }
 
@@ -43,7 +43,13 @@ export default function AdminPage({ params }: PageProps) {
   const [createRoleOpen, setCreateRoleOpen] = useState(false)
   const [userFilter, setUserFilter] = useState("")
 
+  // Sequence ref discards out-of-order responses: switching clusters while a
+  // load is in flight would otherwise let the previous cluster's result
+  // clobber this one's state — including falsely latching securityDisabled.
+  const loadSeqRef = useRef(0)
+
   const load = useCallback(async () => {
+    const seq = ++loadSeqRef.current
     setUsersState((s) => ({ ...s, loading: true, error: null }))
     setRolesState((s) => ({ ...s, loading: true, error: null }))
     setSecurityDisabled(false)
@@ -58,6 +64,7 @@ export default function AdminPage({ params }: PageProps) {
       listUsers(params.clusterId),
       listRoles(params.clusterId),
     ])
+    if (seq !== loadSeqRef.current) return
 
     const isAclGate = (err: unknown) => {
       const k = mapApiError(err).kind
