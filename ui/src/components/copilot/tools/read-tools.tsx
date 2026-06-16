@@ -19,6 +19,7 @@ import { getCluster } from "@/lib/api/clusters"
 import { ApiError } from "@/lib/api/client"
 import { getConnectionHealth, listConnections } from "@/lib/api/connections"
 import { listIndexes } from "@/lib/api/indexes"
+import { getK8sCluster, listK8sClusters } from "@/lib/api/k8s"
 import { getClusterMetrics } from "@/lib/api/metrics"
 import { runQuery } from "@/lib/api/query"
 import { listRecords } from "@/lib/api/records"
@@ -237,6 +238,50 @@ export function CopilotReadTools() {
         "suggesting any cluster topology or configuration change.",
       parameters: z.object({}),
       handler: async () => CE_CONSTRAINTS,
+    },
+    [],
+  )
+
+  useFrontendTool(
+    {
+      name: "list_acko_clusters",
+      description:
+        "List ACKO-managed AerospikeCluster CRs on Kubernetes (control " +
+        "plane): namespace, name, size, image, phase. Call this before " +
+        "scale_acko_cluster or delete_acko_cluster to get the namespace/name.",
+      parameters: z.object({
+        namespace: z
+          .string()
+          .optional()
+          .describe("filter to one Kubernetes namespace; omit for all"),
+      }),
+      handler: ({ namespace }) =>
+        safeCall(async () => {
+          const res = await listK8sClusters(namespace ? { namespace } : {})
+          return res.items.map((c) => ({
+            namespace: c.namespace,
+            name: c.name,
+            size: c.size,
+            image: c.image,
+            phase: c.phase,
+          }))
+        }),
+    },
+    [],
+  )
+
+  useFrontendTool(
+    {
+      name: "get_acko_cluster",
+      description:
+        "Get one ACKO AerospikeCluster CR's detail (spec + status + pods) " +
+        "by Kubernetes namespace and name.",
+      parameters: z.object({
+        namespace: z.string().min(1),
+        name: z.string().min(1),
+      }),
+      handler: ({ namespace, name }) =>
+        safeCall(() => getK8sCluster(namespace, name)),
     },
     [],
   )

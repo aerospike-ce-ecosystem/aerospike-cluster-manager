@@ -17,6 +17,7 @@ import { CopilotAppContext } from "./CopilotAppContext"
 import { CopilotSuggestions } from "./CopilotSuggestions"
 import { CopilotReadTools } from "./tools/read-tools"
 import { CopilotRenderTools } from "./tools/render-tools"
+import { CopilotWriteTools } from "./tools/write-tools"
 
 /**
  * Loads the CopilotKit stylesheet as a static asset (copied to public/ by
@@ -73,6 +74,7 @@ export function CopilotShell({ children }: { children: React.ReactNode }) {
       <CopilotAppContext />
       <CopilotSuggestions />
       <CopilotReadTools />
+      <CopilotWriteTools />
       <CopilotRenderTools />
       {children}
       <CopilotSidebar
