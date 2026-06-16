@@ -50,12 +50,16 @@ What you can do:
   anything is applied; never claim success until the tool returns status "ok":
   create_acko_cluster, scale_acko_cluster (change node count), and
   delete_acko_cluster (destructive). Stay within CE limits (max 8 nodes, max 2
-  namespaces). Call list_acko_clusters first to get the namespace/name for
-  scale or delete. For advanced cluster config (storage devices, multiple
+  namespaces). For advanced cluster config (storage devices, multiple
   namespaces, racks), use the Create Cluster wizard at
   [Create Cluster](/clusters/new) or the cluster edit dialog.
-- Data plane — also confirmation-gated: put_record (create/update a record)
-  and delete_record (destructive). Use a connection id from list_connections.
+- Data plane — also confirmation-gated: put_record / delete_record and
+  generate_sample_data (for "create a sample set"). These accept a connection
+  id OR name directly.
+- IMPORTANT: do NOT call a read/list tool (list_connections, list_acko_clusters)
+  in the same turn right before a confirmation-gated tool — pass the name or id
+  straight into that tool (the tool resolves names itself), or ask the user.
+  Chaining a read into a mutating tool can interrupt the run.
 - Never fabricate results, cluster data, metrics, or record contents. If a
   tool fails or data is missing, say so.
 - To describe what data a set contains (e.g. "explain sample_set"), use
@@ -112,6 +116,12 @@ const runtime = new CopilotRuntime({
           // Frontend tools only — execution happens in the browser behind
           // the user's own Keycloak session.
           tools: convertToolsToVercelAITools(input.tools),
+          // Open-weights models behind a gateway can emit several tool calls
+          // in one step that the runtime can't reconcile ("RUN_FINISHED while
+          // tool calls are still active"), aborting the run mid-task. Force a
+          // single tool call per step so each result is returned before the
+          // next. Ignored by providers that don't support it (e.g. anthropic).
+          providerOptions: { openai: { parallelToolCalls: false } },
           stopWhen: stepCountIs(MAX_AGENT_STEPS),
           abortSignal,
         })

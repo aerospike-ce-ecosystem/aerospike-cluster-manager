@@ -21,12 +21,14 @@ import { z } from "zod"
 
 import { Badge } from "@/components/Badge"
 import { ApiError } from "@/lib/api/client"
+import { listConnections } from "@/lib/api/connections"
 import {
   createK8sCluster,
   deleteK8sCluster,
   scaleK8sCluster,
 } from "@/lib/api/k8s"
 import { deleteRecord, putRecord } from "@/lib/api/records"
+import { createSampleData } from "@/lib/api/sample-data"
 import { CE_CONSTRAINTS } from "@/lib/copilot/ce-constraints"
 import type { CreateK8sClusterRequest } from "@/lib/types/k8s"
 import type { RecordWriteRequest } from "@/lib/types/record"
@@ -56,6 +58,28 @@ function errResult(err: unknown): MutationResult {
     status: "error",
     error: err instanceof ApiError ? err.detail : String(err),
   }
+}
+
+/**
+ * Resolve a connection id from an id or a human name. Lets the data tools take
+ * a connection NAME directly so the model needn't chain list_connections
+ * before a mutation — chaining a read into a human-in-the-loop tool can abort
+ * the run in the CopilotKit runtime. Runs in the browser under the user's JWT.
+ */
+async function resolveConnId(raw: string): Promise<string> {
+  const v = raw.trim()
+  if (!v) throw new Error("connection (id or name) is required")
+  const conns = await listConnections()
+  const byId = conns.find((c) => c.id === v)
+  if (byId) return byId.id
+  const lc = v.toLowerCase()
+  const byName =
+    conns.find((c) => c.name.toLowerCase() === lc) ??
+    conns.find((c) => c.name.toLowerCase().includes(lc))
+  if (byName) return byName.id
+  throw new Error(
+    `no connection matches "${v}" — open the Connections page or check the name`,
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -395,14 +419,16 @@ export function CopilotWriteTools() {
     {
       name: "put_record",
       description:
-        "Create or update a single record (write). Use a connection id from " +
-        "list_connections. bins is a flat object of bin name → value. " +
-        "Requires approval before writing.",
+        "Create or update a single record (write). Pass the connection id or " +
+        "name directly (do NOT call list_connections first). bins is a flat " +
+        "object of bin name → value. Requires approval before writing.",
       parameters: z.object({
-        connId: z
+        connection: z
           .string()
           .min(1)
-          .describe("connection id from list_connections"),
+          .describe(
+            "connection id OR name (do not call list_connections first)",
+          ),
         namespace: z.string().min(1),
         set: z.string().optional(),
         primaryKey: z.string().min(1).describe("record primary key"),
@@ -412,7 +438,7 @@ export function CopilotWriteTools() {
         ttl: z.number().int().optional().describe("seconds; omit for default"),
       }),
       render: hitlRender((args) => {
-        const connId = String(args.connId ?? "").trim()
+        const connection = String(args.connection ?? "").trim()
         const namespace = String(args.namespace ?? "").trim()
         const set = args.set ? String(args.set).trim() : undefined
         const primaryKey = String(args.primaryKey ?? "").trim()
@@ -427,12 +453,13 @@ export function CopilotWriteTools() {
           title: "Write record?",
           approveLabel: "Approve & write",
           rows: [
-            { label: "connection", value: connId },
+            { label: "connection", value: connection },
             { label: "ns / set", value: `${namespace}${set ? `/${set}` : ""}` },
             { label: "pk", value: primaryKey },
             { label: "bins", value: JSON.stringify(bins) },
           ],
           run: async () => {
+            const connId = await resolveConnId(connection)
             await putRecord(connId, body)
             return {
               status: "ok",
@@ -451,19 +478,21 @@ export function CopilotWriteTools() {
       name: "delete_record",
       description:
         "Delete a single record by (namespace, set, primary key) — " +
-        "destructive. Use a connection id from list_connections. " +
-        "Requires approval.",
+        "destructive. Pass the connection id or name directly (do NOT call " +
+        "list_connections first). Requires approval.",
       parameters: z.object({
-        connId: z
+        connection: z
           .string()
           .min(1)
-          .describe("connection id from list_connections"),
+          .describe(
+            "connection id OR name (do not call list_connections first)",
+          ),
         namespace: z.string().min(1),
         set: z.string().min(1),
         primaryKey: z.string().min(1).describe("record primary key"),
       }),
       render: hitlRender((args) => {
-        const connId = String(args.connId ?? "").trim()
+        const connection = String(args.connection ?? "").trim()
         const namespace = String(args.namespace ?? "").trim()
         const set = String(args.set ?? "").trim()
         const primaryKey = String(args.primaryKey ?? "").trim()
@@ -472,15 +501,86 @@ export function CopilotWriteTools() {
           approveLabel: "Approve & delete",
           destructive: true,
           rows: [
-            { label: "connection", value: connId },
+            { label: "connection", value: connection },
             { label: "ns / set", value: `${namespace}/${set}` },
             { label: "pk", value: primaryKey },
           ],
           run: async () => {
+            const connId = await resolveConnId(connection)
             await deleteRecord(connId, { ns: namespace, set, pk: primaryKey })
             return {
               status: "ok",
               message: `Deleted record pk="${primaryKey}".`,
+            }
+          },
+        }
+      }),
+    },
+    [],
+  )
+
+  // ── Data plane: generate sample data set ─────────────────────────────────
+  useHumanInTheLoop(
+    {
+      name: "generate_sample_data",
+      description:
+        "Generate a deterministic sample data set (records, optionally with " +
+        "secondary indexes) in a namespace/set. Use this for requests like " +
+        "'create a sample set'. Pass the connection id or name directly (do " +
+        "NOT call list_connections first). Requires approval before writing.",
+      parameters: z.object({
+        connection: z
+          .string()
+          .min(1)
+          .describe(
+            "connection id OR name (do not call list_connections first)",
+          ),
+        namespace: z.string().min(1),
+        setName: z.string().optional().describe("set name (default 'sample')"),
+        recordCount: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("number of records (default 100)"),
+        createIndexes: z
+          .boolean()
+          .optional()
+          .describe("also create secondary indexes (default false)"),
+      }),
+      render: hitlRender((args) => {
+        const connection = String(args.connection ?? "").trim()
+        const namespace = String(args.namespace ?? "").trim()
+        const setName = String(args.setName ?? "sample").trim() || "sample"
+        const recordCount = Math.min(
+          10_000,
+          Math.max(1, Math.round((args.recordCount as number) ?? 100)),
+        )
+        const createIndexes = Boolean(args.createIndexes)
+        return {
+          title: "Generate sample data?",
+          approveLabel: "Approve & generate",
+          rows: [
+            { label: "connection", value: connection },
+            { label: "ns / set", value: `${namespace}/${setName}` },
+            { label: "records", value: recordCount },
+            { label: "indexes", value: createIndexes ? "yes" : "no" },
+          ],
+          run: async () => {
+            const connId = await resolveConnId(connection)
+            const res = await createSampleData(connId, {
+              namespace,
+              setName,
+              recordCount,
+              createIndexes,
+            })
+            return {
+              status: "ok",
+              message: `Created ${res.recordsCreated} record(s) in ${namespace}/${setName}${
+                res.indexesCreated.length
+                  ? ` + ${res.indexesCreated.length} index(es)`
+                  : ""
+              }.`,
             }
           },
         }
