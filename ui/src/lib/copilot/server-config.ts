@@ -11,6 +11,13 @@
  *                         model+key presence (default: enabled when usable)
  *   COPILOT_MODEL         "<provider>/<model>", e.g. "anthropic/claude-sonnet-4-5"
  *                         or "openai/gpt-4o"
+ *   COPILOT_BASE_URL      optional — overrides the provider endpoint so the
+ *                         OpenAI/Anthropic-compatible client targets a gateway
+ *                         instead of the public API — e.g. a self-hosted or
+ *                         enterprise OpenAI-compatible LLM gateway
+ *                         (COPILOT_MODEL=openai/<model>,
+ *                         COPILOT_BASE_URL=https://llm-gateway.example.com).
+ *                         Unset → the provider's default public endpoint.
  *   ANTHROPIC_API_KEY     required for anthropic/* models
  *   OPENAI_API_KEY        required for openai/* models
  *   COPILOT_REQUIRE_AUTH  "true" → /copilotkit requires a Bearer token
@@ -25,25 +32,63 @@ export interface CopilotServerConfig {
   provider: CopilotProvider | null
   /** Model id without the provider prefix, when usable. */
   modelId: string | null
+  /**
+   * Custom endpoint from COPILOT_BASE_URL (OpenAI/Anthropic-compatible
+   * gateway). null → the provider default endpoint.
+   */
+  baseUrl: string | null
   /** Human-readable reason when disabled (logged, never sent to clients). */
   reason: string | null
 }
 
 let warnedReason: string | null = null
 
+function warnOnce(reason: string): void {
+  if (reason !== warnedReason) {
+    warnedReason = reason
+    console.warn(`[copilot] ${reason}`)
+  }
+}
+
 function disabled(reason: string | null): CopilotServerConfig {
   // Warn once per distinct misconfiguration, only when the operator clearly
   // tried to turn the feature on.
-  if (reason && reason !== warnedReason) {
-    warnedReason = reason
-    console.warn(`[copilot] disabled: ${reason}`)
+  if (reason) warnOnce(`disabled: ${reason}`)
+  return {
+    enabled: false,
+    provider: null,
+    modelId: null,
+    baseUrl: null,
+    reason,
   }
-  return { enabled: false, provider: null, modelId: null, reason }
+}
+
+/**
+ * Optional gateway endpoint. Trailing slashes are trimmed (the AI SDK appends
+ * the route path). A non-empty value that is not http(s) is ignored with a
+ * one-time warning — a malformed base URL must never fail the container.
+ */
+function resolveBaseUrl(): string | null {
+  const raw = (process.env.COPILOT_BASE_URL ?? "").trim()
+  if (!raw) return null
+  if (!/^https?:\/\//i.test(raw)) {
+    warnOnce(
+      `COPILOT_BASE_URL=${JSON.stringify(raw)} is not an http(s) URL; ignoring`,
+    )
+    return null
+  }
+  return raw.replace(/\/+$/, "")
 }
 
 export function resolveCopilotServerConfig(): CopilotServerConfig {
   if (process.env.COPILOT_ENABLED === "false") {
-    return { enabled: false, provider: null, modelId: null, reason: null }
+    return {
+      enabled: false,
+      provider: null,
+      modelId: null,
+      baseUrl: null,
+      reason: null,
+    }
   }
 
   const model = process.env.COPILOT_MODEL ?? ""
@@ -77,7 +122,13 @@ export function resolveCopilotServerConfig(): CopilotServerConfig {
     )
   }
 
-  return { enabled: true, provider, modelId, reason: null }
+  return {
+    enabled: true,
+    provider,
+    modelId,
+    baseUrl: resolveBaseUrl(),
+    reason: null,
+  }
 }
 
 export function copilotRequiresAuth(): boolean {

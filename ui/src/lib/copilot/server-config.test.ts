@@ -5,6 +5,7 @@ import { resolveCopilotServerConfig } from "./server-config"
 const ENV_KEYS = [
   "COPILOT_ENABLED",
   "COPILOT_MODEL",
+  "COPILOT_BASE_URL",
   "ANTHROPIC_API_KEY",
   "OPENAI_API_KEY",
 ] as const
@@ -68,5 +69,47 @@ describe("resolveCopilotServerConfig", () => {
     const config = resolveCopilotServerConfig()
     expect(config.enabled).toBe(false)
     expect(config.reason).toContain("COPILOT_MODEL")
+  })
+
+  it("baseUrl is null when COPILOT_BASE_URL is unset", () => {
+    vi.stubEnv("COPILOT_MODEL", "openai/gpt-4o")
+    vi.stubEnv("OPENAI_API_KEY", "sk-test")
+    expect(resolveCopilotServerConfig().baseUrl).toBeNull()
+  })
+
+  it("resolves COPILOT_BASE_URL for an OpenAI-compatible gateway", () => {
+    vi.stubEnv("COPILOT_MODEL", "openai/gpt-oss-120b")
+    vi.stubEnv("OPENAI_API_KEY", "sk-test")
+    vi.stubEnv("COPILOT_BASE_URL", "https://llm-gateway.example.com")
+    const config = resolveCopilotServerConfig()
+    expect(config.enabled).toBe(true)
+    expect(config.provider).toBe("openai")
+    expect(config.baseUrl).toBe("https://llm-gateway.example.com")
+  })
+
+  it("trims trailing slashes from COPILOT_BASE_URL", () => {
+    vi.stubEnv("COPILOT_MODEL", "openai/gpt-oss-120b")
+    vi.stubEnv("OPENAI_API_KEY", "sk-test")
+    vi.stubEnv("COPILOT_BASE_URL", "https://llm-gateway.example.com/")
+    expect(resolveCopilotServerConfig().baseUrl).toBe(
+      "https://llm-gateway.example.com",
+    )
+  })
+
+  it("ignores a non-http COPILOT_BASE_URL but stays enabled", () => {
+    vi.stubEnv("COPILOT_MODEL", "openai/gpt-4o")
+    vi.stubEnv("OPENAI_API_KEY", "sk-test")
+    vi.stubEnv("COPILOT_BASE_URL", "llm-gateway.example.com")
+    const config = resolveCopilotServerConfig()
+    expect(config.enabled).toBe(true)
+    expect(config.baseUrl).toBeNull()
+  })
+
+  it("baseUrl is null when the copilot is disabled", () => {
+    vi.stubEnv("COPILOT_ENABLED", "false")
+    vi.stubEnv("COPILOT_MODEL", "openai/gpt-4o")
+    vi.stubEnv("OPENAI_API_KEY", "sk-test")
+    vi.stubEnv("COPILOT_BASE_URL", "https://llm-gateway.example.com")
+    expect(resolveCopilotServerConfig().baseUrl).toBeNull()
   })
 })
