@@ -22,7 +22,12 @@ log "[2/N] Installing cert-manager + ACKO operator (ui.enabled=${ACKO_UI_ENABLED
 bash "${REPO_ROOT}/scripts/local-dev/acko-install.sh"
 
 log "[3/N] Starting standalone Aerospike via compose.dev.yaml..."
-(cd "${REPO_ROOT}" && podman compose -f compose.dev.yaml up -d)
+# compose.dev.yaml requires POSTGRES_PASSWORD (mandatory `${POSTGRES_PASSWORD:?}`).
+# Supply a local-dev default so the orchestrator is self-contained — production
+# deployments still set their own value (compose.dev.yaml stays fail-closed when
+# run directly without this wrapper).
+(cd "${REPO_ROOT}" && POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-acko-local-dev}" \
+  podman compose -f compose.dev.yaml up -d)
 ok "Aerospike dev cluster up (localhost:14790/:14791/:14792)"
 
 cat <<EOF

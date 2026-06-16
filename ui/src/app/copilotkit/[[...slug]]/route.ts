@@ -19,8 +19,8 @@ import {
   CopilotRuntime,
   createCopilotRuntimeHandler,
 } from "@copilotkit/runtime/v2"
-import { anthropic } from "@ai-sdk/anthropic"
-import { openai } from "@ai-sdk/openai"
+import { anthropic, createAnthropic } from "@ai-sdk/anthropic"
+import { openai, createOpenAI } from "@ai-sdk/openai"
 import { stepCountIs, streamText } from "ai"
 
 import {
@@ -65,8 +65,22 @@ Safety rules:
 function resolveModel() {
   const config = resolveCopilotServerConfig()
   if (!config.enabled || !config.modelId) return null
-  if (config.provider === "anthropic") return anthropic(config.modelId)
-  if (config.provider === "openai") return openai(config.modelId)
+  // COPILOT_BASE_URL points the provider at an OpenAI/Anthropic-compatible
+  // gateway (e.g. a self-hosted OpenAI-compatible LLM gateway). The API
+  // key still loads from the provider env var (ANTHROPIC_API_KEY /
+  // OPENAI_API_KEY). Without it, the default provider targets the public API.
+  if (config.provider === "anthropic") {
+    return config.baseUrl
+      ? createAnthropic({ baseURL: config.baseUrl })(config.modelId)
+      : anthropic(config.modelId)
+  }
+  if (config.provider === "openai") {
+    // .chat() forces the Chat Completions API — the broadest surface for
+    // OpenAI-compatible gateways (which serve /chat/completions).
+    return config.baseUrl
+      ? createOpenAI({ baseURL: config.baseUrl }).chat(config.modelId)
+      : openai(config.modelId)
+  }
   return null
 }
 

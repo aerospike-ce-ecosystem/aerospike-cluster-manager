@@ -198,6 +198,10 @@ services:
       #    is provided; see ui/src/lib/copilot/server-config.ts) ──────────
       - COPILOT_ENABLED=${COPILOT_ENABLED:-true}
       - COPILOT_MODEL=${COPILOT_MODEL:-}
+      # Optional OpenAI/Anthropic-compatible gateway endpoint. Set this to use
+      # self-hosted/enterprise LLM gateway: COPILOT_MODEL=openai/<model>,
+      # COPILOT_BASE_URL=https://llm-gateway.example.com, OPENAI_API_KEY=<key>.
+      - COPILOT_BASE_URL=${COPILOT_BASE_URL:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - COPILOT_REQUIRE_AUTH=${COPILOT_REQUIRE_AUTH:-false}
@@ -223,8 +227,8 @@ services:
     volumes:
       - ./otel/otel-collector.yaml:/etc/otelcol-contrib/otel-collector.yaml:ro
     ports:
-      - "4317:4317"  # OTLP gRPC
-      - "4318:4318"  # OTLP HTTP
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
     restart: unless-stopped
 
 volumes:

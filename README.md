@@ -38,13 +38,13 @@ Browse, create, edit, duplicate and delete records with server-side limiting and
 
 ## Tech Stack
 
-| Layer | Stack |
-|---|---|
-| **UI**  | Next.js 14, React 18, TypeScript, Tailwind CSS 3.4, Tremor Raw, Zustand, recharts, Monaco Editor |
-| **API** | Python 3.13, FastAPI, Uvicorn, Pydantic |
-| **App metadata** | SQLite (default, file-based) / PostgreSQL (optional, set `ENABLE_POSTGRES=true`) — stores connection profiles & UI state |
-| **Managed target** | Aerospike Server Community Edition 8.x |
-| **Infra** | Podman Compose, uv (Python), npm (Node.js) |
+| Layer              | Stack                                                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| **UI**             | Next.js 14, React 18, TypeScript, Tailwind CSS 3.4, Tremor Raw, Zustand, recharts, Monaco Editor                         |
+| **API**            | Python 3.13, FastAPI, Uvicorn, Pydantic                                                                                  |
+| **App metadata**   | SQLite (default, file-based) / PostgreSQL (optional, set `ENABLE_POSTGRES=true`) — stores connection profiles & UI state |
+| **Managed target** | Aerospike Server Community Edition 8.x                                                                                   |
+| **Infra**          | Podman Compose, uv (Python), npm (Node.js)                                                                               |
 
 ## Quick Start
 
@@ -66,6 +66,7 @@ docker compose -f compose.yaml up --build
 ```
 
 Open **http://localhost:3100** and add a connection with:
+
 - **Host**: `aerospike-node-1` (container name on the shared network)
 - **Port**: `3000`
 
@@ -80,7 +81,7 @@ cp .env.example .env
 podman compose -f compose.yaml up --build
 ```
 
-- UI:  http://localhost:3100
+- UI: http://localhost:3100
 - API: http://localhost:8000
 - Aerospike: internal network only (use `podman exec -it aerospike-tools aql -h aerospike-node-1`)
 
@@ -89,6 +90,7 @@ podman compose -f compose.yaml up --build
 ### Local Development
 
 **API:**
+
 ```bash
 cd api
 uv sync                            # Install dependencies
@@ -96,6 +98,7 @@ uv run uvicorn aerospike_cluster_manager_api.main:app --reload
 ```
 
 **UI:**
+
 ```bash
 cd ui
 npm install                        # Install dependencies
@@ -270,84 +273,84 @@ All data management endpoints are prefixed with `/api` and require a `{conn_id}`
 
 ### Health API
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/health` | Basic health check (returns `{"status": "ok"}`) |
-| `GET` | `/api/health?detail=true` | Detailed health check with database component status |
+| Method | Endpoint                  | Description                                          |
+| ------ | ------------------------- | ---------------------------------------------------- |
+| `GET`  | `/api/health`             | Basic health check (returns `{"status": "ok"}`)      |
+| `GET`  | `/api/health?detail=true` | Detailed health check with database component status |
 
 ### Connections API (`/api/connections`)
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/connections` | List all saved connection profiles |
-| `POST` | `/api/connections` | Create a new connection profile |
-| `GET` | `/api/connections/{conn_id}` | Get a single connection profile by ID |
-| `PUT` | `/api/connections/{conn_id}` | Update an existing connection profile |
-| `DELETE` | `/api/connections/{conn_id}` | Delete a connection profile and close its client |
-| `GET` | `/api/connections/{conn_id}/health` | Check connection health (node count, namespaces, build, edition) |
-| `POST` | `/api/connections/test` | Test connectivity without saving the profile |
+| Method   | Endpoint                            | Description                                                      |
+| -------- | ----------------------------------- | ---------------------------------------------------------------- |
+| `GET`    | `/api/connections`                  | List all saved connection profiles                               |
+| `POST`   | `/api/connections`                  | Create a new connection profile                                  |
+| `GET`    | `/api/connections/{conn_id}`        | Get a single connection profile by ID                            |
+| `PUT`    | `/api/connections/{conn_id}`        | Update an existing connection profile                            |
+| `DELETE` | `/api/connections/{conn_id}`        | Delete a connection profile and close its client                 |
+| `GET`    | `/api/connections/{conn_id}/health` | Check connection health (node count, namespaces, build, edition) |
+| `POST`   | `/api/connections/test`             | Test connectivity without saving the profile                     |
 
 ### Clusters API (`/api/clusters`)
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/clusters/{conn_id}` | Get full cluster info (nodes, namespaces, sets, statistics) |
+| Method | Endpoint                             | Description                                                                      |
+| ------ | ------------------------------------ | -------------------------------------------------------------------------------- |
+| `GET`  | `/api/clusters/{conn_id}`            | Get full cluster info (nodes, namespaces, sets, statistics)                      |
 | `POST` | `/api/clusters/{conn_id}/namespaces` | Configure runtime-tunable namespace parameters (memory-size, replication-factor) |
 
 ### Records API (`/api/records`)
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/records/{conn_id}?ns=...&set=...&page=...&pageSize=...` | List records with pagination |
-| `GET` | `/api/records/{conn_id}/detail?ns=...&set=...&pk=...` | Get a single record by primary key |
-| `POST` | `/api/records/{conn_id}` | Create or update a record (with bins and optional TTL) |
-| `DELETE` | `/api/records/{conn_id}?ns=...&set=...&pk=...` | Delete a record by primary key |
-| `POST` | `/api/records/{conn_id}/filter` | Filtered scan with expression filters, predicates, bin selection, and pagination |
+| Method   | Endpoint                                                      | Description                                                                      |
+| -------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `GET`    | `/api/records/{conn_id}?ns=...&set=...&page=...&pageSize=...` | List records with pagination                                                     |
+| `GET`    | `/api/records/{conn_id}/detail?ns=...&set=...&pk=...`         | Get a single record by primary key                                               |
+| `POST`   | `/api/records/{conn_id}`                                      | Create or update a record (with bins and optional TTL)                           |
+| `DELETE` | `/api/records/{conn_id}?ns=...&set=...&pk=...`                | Delete a record by primary key                                                   |
+| `POST`   | `/api/records/{conn_id}/filter`                               | Filtered scan with expression filters, predicates, bin selection, and pagination |
 
 ### Query API (`/api/query`)
 
-| Method | Endpoint | Description |
-|---|---|---|
+| Method | Endpoint               | Description                                                                                             |
+| ------ | ---------------------- | ------------------------------------------------------------------------------------------------------- |
 | `POST` | `/api/query/{conn_id}` | Execute a query (primary key lookup, predicate filter, or full scan with bin selection and max records) |
 
 ### Indexes API (`/api/indexes`)
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/indexes/{conn_id}` | List all secondary indexes across all namespaces |
-| `POST` | `/api/indexes/{conn_id}` | Create a secondary index (numeric, string, or geo2dsphere) |
-| `DELETE` | `/api/indexes/{conn_id}?name=...&ns=...` | Delete a secondary index by name and namespace |
+| Method   | Endpoint                                 | Description                                                |
+| -------- | ---------------------------------------- | ---------------------------------------------------------- |
+| `GET`    | `/api/indexes/{conn_id}`                 | List all secondary indexes across all namespaces           |
+| `POST`   | `/api/indexes/{conn_id}`                 | Create a secondary index (numeric, string, or geo2dsphere) |
+| `DELETE` | `/api/indexes/{conn_id}?name=...&ns=...` | Delete a secondary index by name and namespace             |
 
 ### Admin API (`/api/admin`)
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/admin/{conn_id}/users` | List all users with roles, quotas, and connection counts |
-| `POST` | `/api/admin/{conn_id}/users` | Create a new user with username, password, and roles |
-| `PATCH` | `/api/admin/{conn_id}/users` | Change a user's password |
-| `DELETE` | `/api/admin/{conn_id}/users?username=...` | Delete a user by username |
-| `GET` | `/api/admin/{conn_id}/roles` | List all roles with privileges, allowlists, and quotas |
-| `POST` | `/api/admin/{conn_id}/roles` | Create a new role with privileges, allowlist, and quotas |
-| `DELETE` | `/api/admin/{conn_id}/roles?name=...` | Delete a role by name |
+| Method   | Endpoint                                  | Description                                              |
+| -------- | ----------------------------------------- | -------------------------------------------------------- |
+| `GET`    | `/api/admin/{conn_id}/users`              | List all users with roles, quotas, and connection counts |
+| `POST`   | `/api/admin/{conn_id}/users`              | Create a new user with username, password, and roles     |
+| `PATCH`  | `/api/admin/{conn_id}/users`              | Change a user's password                                 |
+| `DELETE` | `/api/admin/{conn_id}/users?username=...` | Delete a user by username                                |
+| `GET`    | `/api/admin/{conn_id}/roles`              | List all roles with privileges, allowlists, and quotas   |
+| `POST`   | `/api/admin/{conn_id}/roles`              | Create a new role with privileges, allowlist, and quotas |
+| `DELETE` | `/api/admin/{conn_id}/roles?name=...`     | Delete a role by name                                    |
 
 ### UDFs API (`/api/udfs`)
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/udfs/{conn_id}` | List all registered UDF modules |
-| `POST` | `/api/udfs/{conn_id}` | Upload and register a Lua UDF module |
-| `DELETE` | `/api/udfs/{conn_id}?filename=...` | Delete a UDF module by filename |
+| Method   | Endpoint                           | Description                          |
+| -------- | ---------------------------------- | ------------------------------------ |
+| `GET`    | `/api/udfs/{conn_id}`              | List all registered UDF modules      |
+| `POST`   | `/api/udfs/{conn_id}`              | Upload and register a Lua UDF module |
+| `DELETE` | `/api/udfs/{conn_id}?filename=...` | Delete a UDF module by filename      |
 
 ### Metrics API (`/api/metrics`)
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/metrics/{conn_id}` | Get cluster metrics (TPS, memory, device, connections, per-namespace stats) |
+| Method | Endpoint                 | Description                                                                 |
+| ------ | ------------------------ | --------------------------------------------------------------------------- |
+| `GET`  | `/api/metrics/{conn_id}` | Get cluster metrics (TPS, memory, device, connections, per-namespace stats) |
 
 ### Sample Data API (`/api/sample-data`)
 
-| Method | Endpoint | Description |
-|---|---|---|
+| Method | Endpoint                     | Description                                   |
+| ------ | ---------------------------- | --------------------------------------------- |
 | `POST` | `/api/sample-data/{conn_id}` | Generate sample records with optional indexes |
 
 > Interactive API documentation (Swagger UI) is available at `http://localhost:8000/docs` when the api is running.
@@ -374,18 +377,18 @@ Create, scale, update, and delete Aerospike clusters through a guided 9-step wiz
 
 Full support for all 10 operator-reported cluster phases with color-coded status badges:
 
-| Phase | Description |
-|---|---|
-| **InProgress** | Cluster is being reconciled |
-| **Completed** | Cluster is healthy and fully reconciled |
-| **Error** | Reconciliation encountered an error |
-| **ScalingUp** | Nodes are being added |
-| **ScalingDown** | Nodes are being removed |
-| **WaitingForMigration** | Waiting for data migration to complete |
-| **RollingRestart** | Rolling restart is in progress |
-| **ACLSync** | Access control list synchronization in progress |
-| **Paused** | Reconciliation is paused for maintenance |
-| **Deleting** | Cluster is being deleted |
+| Phase                   | Description                                     |
+| ----------------------- | ----------------------------------------------- |
+| **InProgress**          | Cluster is being reconciled                     |
+| **Completed**           | Cluster is healthy and fully reconciled         |
+| **Error**               | Reconciliation encountered an error             |
+| **ScalingUp**           | Nodes are being added                           |
+| **ScalingDown**         | Nodes are being removed                         |
+| **WaitingForMigration** | Waiting for data migration to complete          |
+| **RollingRestart**      | Rolling restart is in progress                  |
+| **ACLSync**             | Access control list synchronization in progress |
+| **Paused**              | Reconciliation is paused for maintenance        |
+| **Deleting**            | Cluster is being deleted                        |
 
 ### Status Conditions
 
@@ -558,15 +561,15 @@ This enables advanced storage topologies such as separating data and index volum
 
 The cluster edit dialog provides a dedicated configuration section for adding custom sidecar containers and init containers to Aerospike pods. Each container is configured with:
 
-| Field | Description |
-|-------|-------------|
-| **Name** | Container name (must be unique within the pod) |
-| **Image** | Container image (e.g., `busybox:latest`, `my-agent:v1.0`) |
-| **Command** | Override the container entrypoint (optional) |
-| **Args** | Arguments to pass to the command (optional) |
-| **Environment Variables** | Key-value pairs for container environment |
-| **Volume Mounts** | Mount paths for shared volumes |
-| **Resources** | CPU/memory requests and limits |
+| Field                     | Description                                               |
+| ------------------------- | --------------------------------------------------------- |
+| **Name**                  | Container name (must be unique within the pod)            |
+| **Image**                 | Container image (e.g., `busybox:latest`, `my-agent:v1.0`) |
+| **Command**               | Override the container entrypoint (optional)              |
+| **Args**                  | Arguments to pass to the command (optional)               |
+| **Environment Variables** | Key-value pairs for container environment                 |
+| **Volume Mounts**         | Mount paths for shared volumes                            |
+| **Resources**             | CPU/memory requests and limits                            |
 
 Common use cases include:
 
@@ -575,41 +578,40 @@ Common use cases include:
 - **Data Initialization** -- Init container that pre-loads data or configuration before Aerospike starts
 - **Certificate Rotation** -- Sidecar that watches and refreshes TLS certificates
 
-
 ### K8s API Endpoints
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/k8s/clusters` | List all AerospikeCluster resources |
-| `GET` | `/api/k8s/clusters/{namespace}/{name}` | Get cluster detail (spec, status, pods, conditions) |
-| `POST` | `/api/k8s/clusters` | Create a new AerospikeCluster |
-| `PATCH` | `/api/k8s/clusters/{namespace}/{name}` | Update cluster (size, image, resources, monitoring, paused, dynamic config, aerospike config) |
-| `DELETE` | `/api/k8s/clusters/{namespace}/{name}` | Delete a cluster |
-| `POST` | `/api/k8s/clusters/{namespace}/{name}/scale` | Scale cluster to a specific size |
-| `GET` | `/api/k8s/clusters/{namespace}/{name}/events` | Get Kubernetes events (supports `?category=` filter) |
-| `POST` | `/api/k8s/clusters/{namespace}/{name}/operations` | Trigger operations (WarmRestart, PodRestart) |
-| `GET` | `/api/k8s/clusters/{namespace}/{name}/health` | Get cluster health summary (pods, migration, conditions) |
-| `GET` | `/api/k8s/clusters/{namespace}/{name}/migration-status` | Get real-time migration status (overall + per-pod remaining records) |
-| `GET` | `/api/k8s/clusters/{namespace}/{name}/config-drift` | Detect configuration drift (spec vs applied spec, pod hash groups) |
-| `GET` | `/api/k8s/clusters/{namespace}/{name}/reconciliation-status` | Get reconciliation health (circuit breaker state, backoff timer) |
-| `GET` | `/api/k8s/clusters/{namespace}/{name}/pods/{pod}/logs` | Get container logs for a pod |
-| `GET` | `/api/k8s/clusters/{namespace}/{name}/yaml` | Export cluster CR as clean YAML |
-| `GET` | `/api/k8s/clusters/{namespace}/{name}/hpa` | Get HPA config and status for a cluster |
-| `POST` | `/api/k8s/clusters/{namespace}/{name}/hpa` | Create or update HPA (minReplicas, maxReplicas, CPU/memory targets) |
-| `DELETE` | `/api/k8s/clusters/{namespace}/{name}/hpa` | Delete HPA for a cluster |
-| `POST` | `/api/k8s/clusters/{namespace}/{name}/resync-template` | Trigger template resync via annotation |
-| `GET` | `/api/k8s/clusters/{namespace}/{name}/pvcs` | List PVCs associated with the cluster |
-| `POST` | `/api/k8s/clusters/{namespace}/{name}/force-reconcile` | Force re-reconciliation via annotation |
-| `POST` | `/api/k8s/clusters/import` | Import cluster from raw CR JSON |
-| `GET` | `/api/k8s/templates` | List all AerospikeClusterTemplate resources (cluster-scoped) |
-| `POST` | `/api/k8s/templates` | Create a new AerospikeClusterTemplate |
-| `GET` | `/api/k8s/templates/{name}` | Get template detail (spec, status, usedBy) |
-| `PATCH` | `/api/k8s/templates/{name}` | Update a template (scheduling, storage, monitoring, resources, etc.) |
-| `DELETE` | `/api/k8s/templates/{name}` | Delete a template (fails if referenced by clusters) |
-| `GET` | `/api/k8s/namespaces` | List available Kubernetes namespaces |
-| `GET` | `/api/k8s/storageclasses` | List available Kubernetes storage classes |
-| `GET` | `/api/k8s/secrets` | List K8s Secrets (for ACL picker) |
-| `GET` | `/api/k8s/nodes` | List K8s nodes with zone/region info (for rack config) |
+| Method   | Endpoint                                                     | Description                                                                                   |
+| -------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/k8s/clusters`                                          | List all AerospikeCluster resources                                                           |
+| `GET`    | `/api/k8s/clusters/{namespace}/{name}`                       | Get cluster detail (spec, status, pods, conditions)                                           |
+| `POST`   | `/api/k8s/clusters`                                          | Create a new AerospikeCluster                                                                 |
+| `PATCH`  | `/api/k8s/clusters/{namespace}/{name}`                       | Update cluster (size, image, resources, monitoring, paused, dynamic config, aerospike config) |
+| `DELETE` | `/api/k8s/clusters/{namespace}/{name}`                       | Delete a cluster                                                                              |
+| `POST`   | `/api/k8s/clusters/{namespace}/{name}/scale`                 | Scale cluster to a specific size                                                              |
+| `GET`    | `/api/k8s/clusters/{namespace}/{name}/events`                | Get Kubernetes events (supports `?category=` filter)                                          |
+| `POST`   | `/api/k8s/clusters/{namespace}/{name}/operations`            | Trigger operations (WarmRestart, PodRestart)                                                  |
+| `GET`    | `/api/k8s/clusters/{namespace}/{name}/health`                | Get cluster health summary (pods, migration, conditions)                                      |
+| `GET`    | `/api/k8s/clusters/{namespace}/{name}/migration-status`      | Get real-time migration status (overall + per-pod remaining records)                          |
+| `GET`    | `/api/k8s/clusters/{namespace}/{name}/config-drift`          | Detect configuration drift (spec vs applied spec, pod hash groups)                            |
+| `GET`    | `/api/k8s/clusters/{namespace}/{name}/reconciliation-status` | Get reconciliation health (circuit breaker state, backoff timer)                              |
+| `GET`    | `/api/k8s/clusters/{namespace}/{name}/pods/{pod}/logs`       | Get container logs for a pod                                                                  |
+| `GET`    | `/api/k8s/clusters/{namespace}/{name}/yaml`                  | Export cluster CR as clean YAML                                                               |
+| `GET`    | `/api/k8s/clusters/{namespace}/{name}/hpa`                   | Get HPA config and status for a cluster                                                       |
+| `POST`   | `/api/k8s/clusters/{namespace}/{name}/hpa`                   | Create or update HPA (minReplicas, maxReplicas, CPU/memory targets)                           |
+| `DELETE` | `/api/k8s/clusters/{namespace}/{name}/hpa`                   | Delete HPA for a cluster                                                                      |
+| `POST`   | `/api/k8s/clusters/{namespace}/{name}/resync-template`       | Trigger template resync via annotation                                                        |
+| `GET`    | `/api/k8s/clusters/{namespace}/{name}/pvcs`                  | List PVCs associated with the cluster                                                         |
+| `POST`   | `/api/k8s/clusters/{namespace}/{name}/force-reconcile`       | Force re-reconciliation via annotation                                                        |
+| `POST`   | `/api/k8s/clusters/import`                                   | Import cluster from raw CR JSON                                                               |
+| `GET`    | `/api/k8s/templates`                                         | List all AerospikeClusterTemplate resources (cluster-scoped)                                  |
+| `POST`   | `/api/k8s/templates`                                         | Create a new AerospikeClusterTemplate                                                         |
+| `GET`    | `/api/k8s/templates/{name}`                                  | Get template detail (spec, status, usedBy)                                                    |
+| `PATCH`  | `/api/k8s/templates/{name}`                                  | Update a template (scheduling, storage, monitoring, resources, etc.)                          |
+| `DELETE` | `/api/k8s/templates/{name}`                                  | Delete a template (fails if referenced by clusters)                                           |
+| `GET`    | `/api/k8s/namespaces`                                        | List available Kubernetes namespaces                                                          |
+| `GET`    | `/api/k8s/storageclasses`                                    | List available Kubernetes storage classes                                                     |
+| `GET`    | `/api/k8s/secrets`                                           | List K8s Secrets (for ACL picker)                                                             |
+| `GET`    | `/api/k8s/nodes`                                             | List K8s nodes with zone/region info (for rack config)                                        |
 
 All K8s endpoints are gated by the `K8S_MANAGEMENT_ENABLED` configuration flag. When disabled, a 404 is returned so the UI can hide K8s features gracefully.
 
@@ -617,30 +619,30 @@ All K8s endpoints are gated by the `K8S_MANAGEMENT_ENABLED` configuration flag. 
 
 The pod status response now includes additional fields for richer cluster monitoring:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `accessEndpoints` | `string[]` | Network endpoints for direct client access to the pod |
-| `readinessGateSatisfied` | `bool` | Whether the `acko.io/aerospike-ready` readiness gate is satisfied |
-| `unstableSince` | `string` | ISO timestamp of when the pod first became NotReady (reset when Ready) |
+| Field                    | Type       | Description                                                            |
+| ------------------------ | ---------- | ---------------------------------------------------------------------- |
+| `accessEndpoints`        | `string[]` | Network endpoints for direct client access to the pod                  |
+| `readinessGateSatisfied` | `bool`     | Whether the `acko.io/aerospike-ready` readiness gate is satisfied      |
+| `unstableSince`          | `string`   | ISO timestamp of when the pod first became NotReady (reset when Ready) |
 
 ### Extended API Fields
 
 The create/update cluster requests support additional pod-level fields:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `imagePullSecrets` | `string[]` | Private registry image pull secret names |
-| `securityContext` | `object` | Pod-level security context |
-| `topologySpreadConstraints` | `object[]` | Topology spread constraints for pod scheduling |
-| `sidecars` | `SidecarConfig[]` | Sidecar containers to add to the pod |
-| `initContainers` | `SidecarConfig[]` | Init containers to add to the pod |
+| Field                       | Type              | Description                                    |
+| --------------------------- | ----------------- | ---------------------------------------------- |
+| `imagePullSecrets`          | `string[]`        | Private registry image pull secret names       |
+| `securityContext`           | `object`          | Pod-level security context                     |
+| `topologySpreadConstraints` | `object[]`        | Topology spread constraints for pod scheduling |
+| `sidecars`                  | `SidecarConfig[]` | Sidecar containers to add to the pod           |
+| `initContainers`            | `SidecarConfig[]` | Init containers to add to the pod              |
 
 ### PrometheusRule Custom Rules
 
 The `PrometheusRule` monitoring configuration now supports user-defined Prometheus alerting rule groups via the `customRules` field. This allows operators to ship cluster-specific alerting rules alongside the standard metrics exporter.
 
-| Field | Type | Description |
-|-------|------|-------------|
+| Field         | Type     | Description                                                                                                      |
+| ------------- | -------- | ---------------------------------------------------------------------------------------------------------------- |
 | `customRules` | `dict[]` | Custom Prometheus rule groups (each entry is a standard Prometheus rule group object with `name`, `rules`, etc.) |
 
 ### Template Advanced Configuration
@@ -649,50 +651,50 @@ Templates (`AerospikeClusterTemplate`) now support additional configuration sect
 
 **Service Config** (`serviceConfig`)
 
-| Field | Type | Description |
-|-------|------|-------------|
+| Field            | Type     | Description                           |
+| ---------------- | -------- | ------------------------------------- |
 | `featureKeyFile` | `string` | Path to an Aerospike feature key file |
 
 **Network Config** (`networkConfig`)
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `heartbeatMode` | `"mesh" \| "multicast"` | Heartbeat protocol mode |
-| `heartbeatPort` | `int` (1024-65535) | Heartbeat communication port |
-| `heartbeatInterval` | `int` (>=50) | Heartbeat interval in milliseconds |
-| `heartbeatTimeout` | `int` (>=1) | Heartbeat timeout (number of intervals before a node is considered departed) |
+| Field               | Type                    | Description                                                                  |
+| ------------------- | ----------------------- | ---------------------------------------------------------------------------- |
+| `heartbeatMode`     | `"mesh" \| "multicast"` | Heartbeat protocol mode                                                      |
+| `heartbeatPort`     | `int` (1024-65535)      | Heartbeat communication port                                                 |
+| `heartbeatInterval` | `int` (>=50)            | Heartbeat interval in milliseconds                                           |
+| `heartbeatTimeout`  | `int` (>=1)             | Heartbeat timeout (number of intervals before a node is considered departed) |
 
 **Rack Config** (`rackConfig`)
 
-| Field | Type | Description |
-|-------|------|-------------|
+| Field             | Type        | Description                              |
+| ----------------- | ----------- | ---------------------------------------- |
 | `maxRacksPerNode` | `int` (>=1) | Maximum number of racks allowed per node |
 
 **Aerospike Config** (`aerospikeConfig`)
 
-| Field | Type | Description |
-|-------|------|-------------|
+| Field             | Type     | Description                                                                             |
+| ----------------- | -------- | --------------------------------------------------------------------------------------- |
 | `aerospikeConfig` | `object` | Aerospike server configuration overrides applied to clusters created from this template |
 
 **Storage Config** (additional fields)
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `localPVRequired` | `bool` | Whether a local PersistentVolume is required for storage |
-| `localStorageClasses` | `string[]` | List of StorageClass names that are backed by local PVs. Used to identify which storage classes require local PV scheduling constraints |
-| `deleteLocalStorageOnRestart` | `bool` | Whether to delete local PersistentVolumes when pods are restarted. Enables clean-slate restarts for local PV workflows where data does not need to survive pod restart |
+| Field                         | Type       | Description                                                                                                                                                            |
+| ----------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `localPVRequired`             | `bool`     | Whether a local PersistentVolume is required for storage                                                                                                               |
+| `localStorageClasses`         | `string[]` | List of StorageClass names that are backed by local PVs. Used to identify which storage classes require local PV scheduling constraints                                |
+| `deleteLocalStorageOnRestart` | `bool`     | Whether to delete local PersistentVolumes when pods are restarted. Enables clean-slate restarts for local PV workflows where data does not need to survive pod restart |
 
 ### Storage Advanced Settings
 
 Cluster creation and update requests now support additional storage-level fields on `StorageVolumeConfig`:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `cleanupThreads` | `int` (>=1) | Number of threads for storage cleanup operations |
-| `filesystemVolumePolicy` | `object` | Policy for filesystem volume initialization (e.g., default initMethod, wipeMethod) |
-| `blockVolumePolicy` | `object` | Policy for block volume initialization (e.g., default initMethod, wipeMethod) |
-| `localStorageClasses` | `string[]` | StorageClass names backed by local PVs, used for scheduling constraint awareness |
-| `deleteLocalStorageOnRestart` | `bool` | Delete local PersistentVolumes on pod restart for clean-slate local PV workflows |
+| Field                         | Type        | Description                                                                        |
+| ----------------------------- | ----------- | ---------------------------------------------------------------------------------- |
+| `cleanupThreads`              | `int` (>=1) | Number of threads for storage cleanup operations                                   |
+| `filesystemVolumePolicy`      | `object`    | Policy for filesystem volume initialization (e.g., default initMethod, wipeMethod) |
+| `blockVolumePolicy`           | `object`    | Policy for block volume initialization (e.g., default initMethod, wipeMethod)      |
+| `localStorageClasses`         | `string[]`  | StorageClass names backed by local PVs, used for scheduling constraint awareness   |
+| `deleteLocalStorageOnRestart` | `bool`      | Delete local PersistentVolumes on pod restart for clean-slate local PV workflows   |
 
 ## Project Structure
 
@@ -756,70 +758,71 @@ All environment variables with their defaults and descriptions. See `api/src/aer
 
 ### Aerospike Connection
 
-| Variable | Default | Description |
-|---|---|---|
+| Variable         | Default            | Description                                                          |
+| ---------------- | ------------------ | -------------------------------------------------------------------- |
 | `AEROSPIKE_HOST` | `aerospike-node-1` | Aerospike server host (used in compose files for default connection) |
-| `AEROSPIKE_PORT` | `3000` | Aerospike service port |
+| `AEROSPIKE_PORT` | `3000`             | Aerospike service port                                               |
 
 ### Database
 
-| Variable | Default | Description |
-|---|---|---|
-| `SQLITE_PATH` | `./data/connections.db` | SQLite database file path. SQLite is the default database backend -- no external database required |
-| `ENABLE_POSTGRES` | `false` | Set to `true` to use PostgreSQL instead of the default SQLite database |
-| `DATABASE_URL` | `postgresql://aerospike:aerospike@localhost:5432/aerospike_manager` | PostgreSQL connection string (only used when `ENABLE_POSTGRES=true`) |
-| `DB_POOL_MIN_SIZE` | `2` | Minimum number of connections in the database connection pool |
-| `DB_POOL_MAX_SIZE` | `10` | Maximum number of connections in the database connection pool |
-| `DB_COMMAND_TIMEOUT` | `30` | SQL command execution timeout in seconds |
+| Variable             | Default                                                             | Description                                                                                        |
+| -------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `SQLITE_PATH`        | `./data/connections.db`                                             | SQLite database file path. SQLite is the default database backend -- no external database required |
+| `ENABLE_POSTGRES`    | `false`                                                             | Set to `true` to use PostgreSQL instead of the default SQLite database                             |
+| `DATABASE_URL`       | `postgresql://aerospike:aerospike@localhost:5432/aerospike_manager` | PostgreSQL connection string (only used when `ENABLE_POSTGRES=true`)                               |
+| `DB_POOL_MIN_SIZE`   | `2`                                                                 | Minimum number of connections in the database connection pool                                      |
+| `DB_POOL_MAX_SIZE`   | `10`                                                                | Maximum number of connections in the database connection pool                                      |
+| `DB_COMMAND_TIMEOUT` | `30`                                                                | SQL command execution timeout in seconds                                                           |
 
 ### At-rest Encryption
 
-| Variable | Default | Description |
-|---|---|---|
-| `ACM_PASSWORD_KEK` | _(empty)_ | Fernet key used to encrypt stored Aerospike connection passwords. Required for persistent credentials |
-| `ACM_ALLOW_EPHEMERAL_KEK` | `false` | Dev-only escape hatch that generates a process-local key when `ACM_PASSWORD_KEK` is unset. Stored passwords become unreadable after restart |
+| Variable                  | Default   | Description                                                                                                                                 |
+| ------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ACM_PASSWORD_KEK`        | _(empty)_ | Fernet key used to encrypt stored Aerospike connection passwords. Required for persistent credentials                                       |
+| `ACM_ALLOW_EPHEMERAL_KEK` | `false`   | Dev-only escape hatch that generates a process-local key when `ACM_PASSWORD_KEK` is unset. Stored passwords become unreadable after restart |
 
 ### Kubernetes Management
 
-| Variable | Default | Description |
-|---|---|---|
-| `K8S_MANAGEMENT_ENABLED` | `false` | Enable K8s cluster management endpoints (requires in-cluster or kubeconfig access) |
-| `K8S_API_TIMEOUT` | `10` | Kubernetes API request timeout in seconds (applies to CRUD on CRDs, listing pods, nodes, etc.) |
-| `K8S_LOG_TIMEOUT` | `30` | Kubernetes pod log streaming timeout in seconds |
+| Variable                 | Default | Description                                                                                    |
+| ------------------------ | ------- | ---------------------------------------------------------------------------------------------- |
+| `K8S_MANAGEMENT_ENABLED` | `false` | Enable K8s cluster management endpoints (requires in-cluster or kubeconfig access)             |
+| `K8S_API_TIMEOUT`        | `10`    | Kubernetes API request timeout in seconds (applies to CRUD on CRDs, listing pods, nodes, etc.) |
+| `K8S_LOG_TIMEOUT`        | `30`    | Kubernetes pod log streaming timeout in seconds                                                |
 
 ### Network / Server
 
-| Variable | Default | Description |
-|---|---|---|
-| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:3100` | Comma-separated list of allowed CORS origins (must include the UI URL) |
-| `API_URL` | `http://localhost:8000` | API URL used by the UI proxy (`ui/proxy.js` in production, `next.config.mjs` rewrites in dev) |
-| `API_PORT` | `8000` | API port (compose files) |
-| `UI_PORT` | `3100` | UI port (compose files) |
-| `HOST` | `0.0.0.0` | API bind address |
-| `PORT` | `8000` | API bind port |
+| Variable       | Default                                       | Description                                                                                   |
+| -------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:3100` | Comma-separated list of allowed CORS origins (must include the UI URL)                        |
+| `API_URL`      | `http://localhost:8000`                       | API URL used by the UI proxy (`ui/proxy.js` in production, `next.config.mjs` rewrites in dev) |
+| `API_PORT`     | `8000`                                        | API port (compose files)                                                                      |
+| `UI_PORT`      | `3100`                                        | UI port (compose files)                                                                       |
+| `HOST`         | `0.0.0.0`                                     | API bind address                                                                              |
+| `PORT`         | `8000`                                        | API bind port                                                                                 |
 
 ### ACKO Agent — Embedded AI Copilot (UI)
 
-| Variable | Default | Description |
-|---|---|---|
-| `COPILOT_ENABLED` | `true` | Set to `false` to force-disable the copilot even when a model/key is configured. The copilot is effectively disabled regardless of this flag unless `COPILOT_MODEL` and the matching provider key are both set |
-| `COPILOT_MODEL` | _(empty)_ | LLM model in `<provider>/<model>` form (`anthropic/*` or `openai/*`), e.g. `anthropic/claude-sonnet-4-5` |
-| `ANTHROPIC_API_KEY` | _(empty)_ | Anthropic API key for `anthropic/*` models (web container only, never sent to the browser) |
-| `OPENAI_API_KEY` | _(empty)_ | OpenAI API key for `openai/*` models (web container only, never sent to the browser) |
-| `COPILOT_REQUIRE_AUTH` | `false` | Require a Bearer token on `/copilotkit` (gates LLM spend). Enable whenever the API runs with `OIDC_ENABLED=true` |
-| `COPILOT_OIDC_ISSUER_URL` | _(empty)_ | Keycloak realm root for JWT signature verification on `/copilotkit`; usually the same value as `OIDC_ISSUER_URL`. Without it, `COPILOT_REQUIRE_AUTH` only checks token presence |
-| `COPILOT_OIDC_AUDIENCE` | _(empty)_ | Expected `aud` claim for `/copilotkit` JWT verification; usually `acko-api` |
-| `COPILOTKIT_TELEMETRY_DISABLED` | `true` (compose) | CopilotKit's anonymous usage telemetry. Disabled by default for self-hosted deployments |
+| Variable                        | Default          | Description                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `COPILOT_ENABLED`               | `true`           | Set to `false` to force-disable the copilot even when a model/key is configured. The copilot is effectively disabled regardless of this flag unless `COPILOT_MODEL` and the matching provider key are both set                                                                                                                                            |
+| `COPILOT_MODEL`                 | _(empty)_        | LLM model in `<provider>/<model>` form (`anthropic/*` or `openai/*`), e.g. `anthropic/claude-sonnet-4-5`                                                                                                                                                                                                                                                  |
+| `COPILOT_BASE_URL`              | _(empty)_        | Optional OpenAI/Anthropic-compatible gateway endpoint. Unset → the provider's public API. Set it to route through a self-hosted or enterprise OpenAI-compatible LLM gateway: `COPILOT_MODEL=openai/<model>` + `COPILOT_BASE_URL=https://llm-gateway.example.com` + `OPENAI_API_KEY=<key>`. Pick a tool-calling-capable model. A non-http value is ignored |
+| `ANTHROPIC_API_KEY`             | _(empty)_        | Anthropic API key for `anthropic/*` models (web container only, never sent to the browser)                                                                                                                                                                                                                                                                |
+| `OPENAI_API_KEY`                | _(empty)_        | OpenAI API key for `openai/*` models (web container only, never sent to the browser)                                                                                                                                                                                                                                                                      |
+| `COPILOT_REQUIRE_AUTH`          | `false`          | Require a Bearer token on `/copilotkit` (gates LLM spend). Enable whenever the API runs with `OIDC_ENABLED=true`                                                                                                                                                                                                                                          |
+| `COPILOT_OIDC_ISSUER_URL`       | _(empty)_        | Keycloak realm root for JWT signature verification on `/copilotkit`; usually the same value as `OIDC_ISSUER_URL`. Without it, `COPILOT_REQUIRE_AUTH` only checks token presence                                                                                                                                                                           |
+| `COPILOT_OIDC_AUDIENCE`         | _(empty)_        | Expected `aud` claim for `/copilotkit` JWT verification; usually `acko-api`                                                                                                                                                                                                                                                                               |
+| `COPILOTKIT_TELEMETRY_DISABLED` | `true` (compose) | CopilotKit's anonymous usage telemetry. Disabled by default for self-hosted deployments                                                                                                                                                                                                                                                                   |
 
 ### Logging
 
-| Variable | Default | Description |
-|---|---|---|
-| `LOG_LEVEL` | `INFO` | API log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
-| `LOG_FORMAT` | `text` | Log output format: `text` for local dev, `json` for structured container logging (recommended when shipping to an OTel Collector) |
-| `LOG_FILE_PATH` | _(empty)_ | When set, mirror logs to a rotating file in addition to stdout. Designed for a pod-internal sidecar that tails the file and forwards records via OTLP to an external OTel Collector. See [docs/logging.md](docs/logging.md). |
-| `LOG_FILE_MAX_BYTES` | `52428800` | Per-file size cap (bytes) for `LOG_FILE_PATH` rotation. Default 50 MiB. |
-| `LOG_FILE_BACKUP_COUNT` | `3` | Number of rotated backups kept on disk. |
+| Variable                | Default    | Description                                                                                                                                                                                                                  |
+| ----------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LOG_LEVEL`             | `INFO`     | API log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`)                                                                                                                                                                          |
+| `LOG_FORMAT`            | `text`     | Log output format: `text` for local dev, `json` for structured container logging (recommended when shipping to an OTel Collector)                                                                                            |
+| `LOG_FILE_PATH`         | _(empty)_  | When set, mirror logs to a rotating file in addition to stdout. Designed for a pod-internal sidecar that tails the file and forwards records via OTLP to an external OTel Collector. See [docs/logging.md](docs/logging.md). |
+| `LOG_FILE_MAX_BYTES`    | `52428800` | Per-file size cap (bytes) for `LOG_FILE_PATH` rotation. Default 50 MiB.                                                                                                                                                      |
+| `LOG_FILE_BACKUP_COUNT` | `3`        | Number of rotated backups kept on disk.                                                                                                                                                                                      |
 
 ## Production Deployment
 
