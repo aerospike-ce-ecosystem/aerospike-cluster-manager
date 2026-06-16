@@ -139,13 +139,21 @@ function ConfirmCard({
       {note ? (
         <p className="text-on-surface-variant mt-2 text-xs">{note}</p>
       ) : null}
+      {/*
+        CopilotKit's reset (`[data-copilotkit] button { background-color:#0000;
+        border-radius:0 }`, specificity 0,1,1) overrides plain Tailwind
+        utilities (0,1,0) inside the chat, so the button background/rounding is
+        stripped. The `!` (important) variants win it back.
+      */}
       <div className="mt-3 flex gap-2">
         <button
           type="button"
           disabled={submitting}
           onClick={onApprove}
-          className={`rounded-md px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 ${
-            destructive ? "bg-red-600" : "bg-primary-40"
+          className={`!rounded-md !px-3 !py-1.5 !text-xs !font-semibold !text-white !shadow-sm disabled:!opacity-50 ${
+            destructive
+              ? "!bg-error-50 hover:!bg-error-45"
+              : "!bg-primary-50 hover:!bg-primary-45"
           }`}
         >
           {submitting ? "Working…" : approveLabel}
@@ -154,7 +162,7 @@ function ConfirmCard({
           type="button"
           disabled={submitting}
           onClick={() => respond({ status: "cancelled" })}
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-semibold disabled:opacity-50 dark:border-gray-700"
+          className="!text-on-surface !border-border !bg-surface hover:!bg-surface-container-low !rounded-md !border !px-3 !py-1.5 !text-xs !font-semibold disabled:!opacity-50"
         >
           Cancel
         </button>
