@@ -70,7 +70,7 @@ aerospike-cluster-manager/
 │   └── src/
 │       ├── app/           # Page routing (App Router)
 │       ├── components/    # UI components (Tremor Raw primitives + dialogs + navigation)
-│       ├── stores/        # Zustand stores (connection, cluster, k8s-cluster, ui)
+│       ├── stores/        # Zustand stores (auth, cluster, cluster-selector, data-revision, k8s-cluster, ui)
 │       ├── hooks/         # Custom hooks (use-connections, use-cluster, use-k8s-clusters, use-event-stream)
 │       └── lib/
 │           ├── api/       # Per-resource fetch clients (auto retry, timeout, type-safe)
