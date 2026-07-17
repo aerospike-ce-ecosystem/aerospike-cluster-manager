@@ -17,6 +17,11 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
   },
+  "overrides": {
+    "react-day-picker": {
+      "date-fns": "$date-fns"
+    }
+  },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.82",
     "@ai-sdk/openai": "^3.0.69",
@@ -42,7 +47,7 @@
     "@tanstack/react-table": "^8.21.3",
     "ai": "^6.0.201",
     "clsx": "^2.1.1",
-    "date-fns": "^3.6.0",
+    "date-fns": "^4.4.0",
     "hono": "^4.12.25",
     "jose": "^6.2.3",
     "keycloak-js": "^25.0.6",
