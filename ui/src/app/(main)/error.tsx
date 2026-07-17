@@ -13,7 +13,6 @@ export default function MainError({ error, reset }: ErrorProps) {
   useEffect(() => {
     // Surface the error in the browser console for diagnosis. Next.js logs
     // its own stack trace server-side already.
-    // eslint-disable-next-line no-console
     console.error("(main) route error:", error)
   }, [error])
 

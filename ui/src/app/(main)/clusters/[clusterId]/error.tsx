@@ -12,7 +12,6 @@ interface ErrorProps {
 
 export default function ClusterError({ error, reset }: ErrorProps) {
   useEffect(() => {
-    // eslint-disable-next-line no-console
     console.error("cluster route error:", error)
   }, [error])
 

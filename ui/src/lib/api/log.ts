@@ -19,7 +19,6 @@ import { ApiError } from "./client"
 export function logFetchError(scope: string, err: unknown): void {
   if (err instanceof ApiError) {
     if (process.env.NODE_ENV !== "production") {
-      // eslint-disable-next-line no-console
       console.error(`[${scope}] fetch failed`, {
         status: err.status,
         detail: err.detail,
@@ -27,7 +26,6 @@ export function logFetchError(scope: string, err: unknown): void {
       })
       return
     }
-    // eslint-disable-next-line no-console
     console.error(`[${scope}] fetch failed`, {
       status: err.status,
       scope,
@@ -35,6 +33,5 @@ export function logFetchError(scope: string, err: unknown): void {
     })
     return
   }
-  // eslint-disable-next-line no-console
   console.error(`[${scope}] fetch failed`, err)
 }
