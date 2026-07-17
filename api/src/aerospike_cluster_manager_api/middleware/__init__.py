@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from aerospike_cluster_manager_api.middleware.oidc_auth import (
-    SSE_QUERY_TOKEN_PATHS,
+    SSE_TICKET_PATHS,
     OIDCAuthMiddleware,
 )
 from aerospike_cluster_manager_api.middleware.trace_id import (
@@ -15,7 +15,7 @@ from aerospike_cluster_manager_api.middleware.trace_id import (
 
 __all__ = [
     "REQUEST_ID_HEADER",
-    "SSE_QUERY_TOKEN_PATHS",
+    "SSE_TICKET_PATHS",
     "OIDCAuthMiddleware",
     "RequestIDFilter",
     "TraceIDMiddleware",

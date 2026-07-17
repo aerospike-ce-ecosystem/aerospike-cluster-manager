@@ -22,10 +22,20 @@ from fastapi.responses import PlainTextResponse
 from httpx import ASGITransport, AsyncClient
 from jwt.algorithms import RSAAlgorithm
 
+from aerospike_cluster_manager_api.events.tickets import ticket_store
 from aerospike_cluster_manager_api.middleware.oidc_auth import OIDCAuthMiddleware
+from aerospike_cluster_manager_api.routers.events import router as events_router
 
 ISSUER = "https://kc.example.com/realms/acko"
 AUDIENCE = "acko-api"
+
+
+@pytest.fixture(autouse=True)
+def _clean_ticket_store():
+    """The SSE ticket store is a module singleton — isolate tests from each other."""
+    ticket_store.clear()
+    yield
+    ticket_store.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -138,6 +148,12 @@ def _build_app(
     async def stream() -> PlainTextResponse:
         return PlainTextResponse("event:hello\n\n")
 
+    # Mount the real events router so ticket-mint tests exercise the actual
+    # POST /api/v1/events/ticket endpoint. The fake /api/v1/events/stream
+    # above is registered first and therefore shadows the real streaming
+    # endpoint (which never terminates and would hang a plain GET).
+    app.include_router(events_router, prefix="/api/v1")
+
     app.add_middleware(
         OIDCAuthMiddleware,
         enabled=enabled,
@@ -234,8 +250,16 @@ async def test_excluded_path_skips_auth():
     assert mock.jwks_calls == 0
 
 
+# ---------------------------------------------------------------------------
+# SSE auth — single-use ticket flow (issue #345). The raw JWT must never be
+# accepted via the URL query string; streams authenticate with a short-lived
+# opaque ticket minted through the Authorization-header path.
+# ---------------------------------------------------------------------------
+
+
 @pytest.mark.asyncio
-async def test_sse_query_token_accepted():
+async def test_sse_raw_jwt_in_query_is_rejected():
+    """A perfectly valid JWT in ?access_token= must be rejected (issue #345)."""
     priv, jwk = _rsa_keypair()
     mock = _JWKSMock([jwk])
     app = _build_app(http_client=_client_for(mock))
@@ -243,7 +267,151 @@ async def test_sse_query_token_accepted():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         resp = await ac.get(f"/api/v1/events/stream?access_token={token}")
+    assert resp.status_code == 401
+    assert "no longer accepted" in resp.json()["detail"]
+    # The rejected token must not even be verified — no JWKS traffic.
+    assert mock.well_known_calls == 0
+    assert mock.jwks_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_sse_stream_authorization_header_still_works():
+    """Non-browser clients (curl, ackoctl) keep using the header on the stream."""
+    priv, jwk = _rsa_keypair()
+    mock = _JWKSMock([jwk])
+    app = _build_app(http_client=_client_for(mock))
+    token = _sign(priv, jwk["kid"])
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.get(
+            "/api/v1/events/stream",
+            headers={"Authorization": f"Bearer {token}"},
+        )
     assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_sse_ticket_mint_requires_auth():
+    """POST /events/ticket must be behind normal header auth — no token, no ticket."""
+    priv, jwk = _rsa_keypair()
+    mock = _JWKSMock([jwk])
+    app = _build_app(http_client=_client_for(mock))
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.post("/api/v1/events/ticket")
+        assert resp.status_code == 401
+
+        # Query-string credentials must not work on the mint path either.
+        token = _sign(priv, jwk["kid"])
+        resp = await ac.post(f"/api/v1/events/ticket?access_token={token}")
+        assert resp.status_code == 401
+    assert ticket_store.pending_count == 0
+
+
+@pytest.mark.asyncio
+async def test_sse_ticket_full_flow_mint_then_stream():
+    """Header-auth mint → ?ticket= connect succeeds, without a JWT in any URL."""
+    priv, jwk = _rsa_keypair()
+    mock = _JWKSMock([jwk])
+    app = _build_app(http_client=_client_for(mock))
+    token = _sign(priv, jwk["kid"])
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        minted = await ac.post(
+            "/api/v1/events/ticket",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert minted.status_code == 200
+        body = minted.json()
+        assert body["ticket"]
+        assert body["expires_in"] > 0
+        # Opaque ticket — must not be (or contain) the JWT.
+        assert token not in body["ticket"]
+
+        resp = await ac.get(f"/api/v1/events/stream?ticket={body['ticket']}")
+        assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_sse_ticket_is_single_use():
+    """A replayed ticket URL (e.g. from an access log) must be rejected."""
+    priv, jwk = _rsa_keypair()
+    mock = _JWKSMock([jwk])
+    app = _build_app(http_client=_client_for(mock))
+    token = _sign(priv, jwk["kid"])
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        minted = await ac.post(
+            "/api/v1/events/ticket",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        ticket = minted.json()["ticket"]
+        first = await ac.get(f"/api/v1/events/stream?ticket={ticket}")
+        assert first.status_code == 200
+        replay = await ac.get(f"/api/v1/events/stream?ticket={ticket}")
+        assert replay.status_code == 401
+        assert "ticket" in replay.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_sse_expired_ticket_is_rejected(monkeypatch):
+    """A ticket older than its TTL must be rejected even if never used."""
+    _priv, jwk = _rsa_keypair()
+    mock = _JWKSMock([jwk])
+    app = _build_app(http_client=_client_for(mock))
+    monkeypatch.setattr(ticket_store, "ttl_seconds", 0)
+    ticket, _expires_in = ticket_store.issue({"sub": "user-1"})
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.get(f"/api/v1/events/stream?ticket={ticket}")
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_sse_bogus_ticket_is_rejected():
+    _priv, jwk = _rsa_keypair()
+    mock = _JWKSMock([jwk])
+    app = _build_app(http_client=_client_for(mock))
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.get("/api/v1/events/stream?ticket=not-a-real-ticket")
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_sse_stream_without_any_credential_is_rejected():
+    _priv, jwk = _rsa_keypair()
+    mock = _JWKSMock([jwk])
+    app = _build_app(http_client=_client_for(mock))
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.get("/api/v1/events/stream")
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_sse_ticket_inherits_role_check():
+    """Tickets carry the minting token's claims; the stream re-applies RBAC."""
+    priv, jwk = _rsa_keypair()
+    mock = _JWKSMock([jwk])
+    app = _build_app(required_roles=["acko:dev"], http_client=_client_for(mock))
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        # Token WITH the role: mint + stream both pass.
+        token = _sign(priv, jwk["kid"], realm_roles=["acko:dev"])
+        minted = await ac.post(
+            "/api/v1/events/ticket",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert minted.status_code == 200
+        resp = await ac.get(f"/api/v1/events/stream?ticket={minted.json()['ticket']}")
+        assert resp.status_code == 200
+
+        # Ticket whose claims lack the role (defense-in-depth: can only
+        # happen if the role requirement changed between mint and redeem).
+        ticket, _ = ticket_store.issue({"realm_access": {"roles": ["other"]}})
+        resp = await ac.get(f"/api/v1/events/stream?ticket={ticket}")
+        assert resp.status_code == 403
 
 
 @pytest.mark.asyncio
@@ -541,6 +709,9 @@ def test_request_logging_masks_access_token_query():
     assert _mask_query_string("Access_Token=secret") == "Access_Token=***"
     # Other JWT-shaped query keys also get masked
     assert _mask_query_string("id_token=abc&token=xyz") == "id_token=***&token=***"
+    # Single-use SSE tickets are short-lived but still credentials — masked too
+    assert _mask_query_string("ticket=abc123") == "ticket=***"
+    assert _mask_query_string("cluster=dev&ticket=abc123&types=a,b") == "cluster=dev&ticket=***&types=a,b"
     # No-op when no token is present
     assert _mask_query_string("foo=bar") == "foo=bar"
     assert _mask_query_string("") == ""

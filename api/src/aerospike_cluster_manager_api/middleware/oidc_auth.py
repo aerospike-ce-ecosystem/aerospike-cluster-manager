@@ -48,12 +48,18 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp
 
+from aerospike_cluster_manager_api.events.tickets import ticket_store
+
 logger = logging.getLogger(__name__)
 
-# SSE EventSource cannot send custom headers (HTML5 spec), so we accept the
-# token via ``?access_token=`` on the documented stream endpoints. Both the
-# legacy /api/... and versioned /api/v1/... aliases are listed.
-SSE_QUERY_TOKEN_PATHS: frozenset[str] = frozenset(
+# SSE EventSource cannot send custom headers (HTML5 spec). Instead of
+# accepting the raw JWT via query string (removed — issue #345: it leaked
+# into ingress access logs, browser history, and Referer headers), these
+# stream endpoints accept a single-use, short-TTL opaque ticket minted by
+# ``POST /api[/v1]/events/ticket`` (which itself requires normal
+# Authorization-header auth). Both the legacy /api/... and versioned
+# /api/v1/... aliases are listed.
+SSE_TICKET_PATHS: frozenset[str] = frozenset(
     {
         "/api/events/stream",
         "/api/v1/events/stream",
@@ -195,7 +201,9 @@ class OIDCAuthMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS":
             return await call_next(request)
 
-        token = self._extract_token(request, path)
+        token = self._extract_token(request)
+        if token is None and path in SSE_TICKET_PATHS:
+            return await self._dispatch_sse_ticket(request, call_next)
         if token is None:
             return _unauthorized("Missing bearer token")
 
@@ -204,30 +212,75 @@ class OIDCAuthMiddleware(BaseHTTPMiddleware):
         except _AuthError as exc:
             return _unauthorized(exc.detail)
 
-        if self.required_roles:
-            roles = _extract_realm_roles(claims)
-            if not (self.required_roles & roles):
-                return _forbidden(
-                    f"Token lacks required role(s): {sorted(self.required_roles)}",
-                )
+        role_failure = self._role_failure(claims)
+        if role_failure is not None:
+            return role_failure
 
         request.state.user_claims = claims
         return await call_next(request)
+
+    async def _dispatch_sse_ticket(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        """Authenticate an SSE stream request via a single-use ticket.
+
+        Reached only when the request carries no Authorization header (a
+        valid header always takes precedence, so curl-style clients keep
+        working). The historical ``?access_token=<jwt>`` escape hatch is
+        rejected outright with a pointer at the replacement flow — issue
+        #345 removed it because the JWT persisted in ingress access logs.
+        """
+        if "access_token" in request.query_params:
+            return _unauthorized(
+                "The access_token query parameter is no longer accepted: "
+                "mint a single-use ticket via POST /api/v1/events/ticket "
+                "(Authorization header) and connect with ?ticket=<value>.",
+            )
+
+        ticket = request.query_params.get("ticket")
+        if not ticket:
+            return _unauthorized("Missing bearer token")
+
+        claims = ticket_store.redeem(ticket)
+        if claims is None:
+            return _unauthorized("Invalid, expired, or already-used SSE ticket")
+
+        role_failure = self._role_failure(claims)
+        if role_failure is not None:
+            return role_failure
+
+        request.state.user_claims = claims
+        return await call_next(request)
+
+    def _role_failure(self, claims: dict[str, Any]) -> Response | None:
+        """Return a 403 response when ``claims`` lack the required roles."""
+        if not self.required_roles:
+            return None
+        roles = _extract_realm_roles(claims)
+        if self.required_roles & roles:
+            return None
+        return _forbidden(
+            f"Token lacks required role(s): {sorted(self.required_roles)}",
+        )
 
     # ------------------------------------------------------------------
     # JWT verification
     # ------------------------------------------------------------------
     @staticmethod
-    def _extract_token(request: Request, path: str) -> str | None:
+    def _extract_token(request: Request) -> str | None:
+        """Extract the bearer JWT from the Authorization header.
+
+        Header-only by design: the ``?access_token=`` query fallback was
+        removed (issue #345) — SSE clients authenticate via single-use
+        tickets instead (see ``_dispatch_sse_ticket``).
+        """
         header = request.headers.get("authorization") or request.headers.get("Authorization")
         if header:
             parts = header.split(None, 1)
             if len(parts) == 2 and parts[0].lower() == "bearer" and parts[1].strip():
                 return parts[1].strip()
-        if path in SSE_QUERY_TOKEN_PATHS:
-            qs_token = request.query_params.get("access_token")
-            if qs_token:
-                return qs_token
         return None
 
     async def _verify(self, token: str) -> dict[str, Any]:

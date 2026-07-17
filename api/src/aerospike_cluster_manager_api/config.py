@@ -116,6 +116,16 @@ SSE_ENABLED: bool = os.getenv("SSE_ENABLED", "true").lower() in ("true", "1", "y
 SSE_HEARTBEAT_INTERVAL: int = _get_int("SSE_HEARTBEAT_INTERVAL", 15)  # seconds between heartbeat pings
 SSE_MAX_CONNECTIONS: int = _get_int("SSE_MAX_CONNECTIONS", 50)  # max concurrent SSE subscribers
 
+# Single-use SSE stream tickets (issue #345 — the JWT must never appear in a
+# URL). ``POST /api/v1/events/ticket`` mints an opaque ticket that the
+# EventSource presents as ``?ticket=...``; the middleware burns it on first
+# use. TTL only needs to cover the gap between mint and connect (one round
+# trip), so keep it short.
+SSE_TICKET_TTL_SECONDS: int = _get_int("SSE_TICKET_TTL_SECONDS", 30)
+# Upper bound on outstanding (minted, not yet redeemed/expired) tickets —
+# guards the in-memory table against a misbehaving authenticated client loop.
+SSE_TICKET_MAX_PENDING: int = _get_int("SSE_TICKET_MAX_PENDING", 1024)
+
 # CM_SSE_BROADCAST_PER_CONNECTION gates the per-connection broadcast loops in
 # ``events.collector`` (cluster.metrics, connection.health, k8s.cluster.*).
 # Default ``false`` because the broker has no per-subscriber owner filter --
