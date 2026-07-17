@@ -13,9 +13,8 @@ import { Button } from "@/components/Button"
 import { PageHead } from "@/components/PageHead"
 import { RiAddLine, RiAlertLine, RiArrowRightSLine } from "@remixicon/react"
 import Link from "next/link"
+import { useParams } from "next/navigation"
 import { useMemo, useState } from "react"
-
-type PageProps = { params: { clusterId: string } }
 
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 B"
@@ -47,7 +46,8 @@ function nsStatusLabel(ns: NamespaceInfo): string {
   return "Healthy"
 }
 
-export default function SetsPage({ params }: PageProps) {
+export default function SetsPage() {
+  const params = useParams<{ clusterId: string }>()
   const cluster = useCluster(params.clusterId)
   const [filter, setFilter] = useState("")
   const [sampleOpen, setSampleOpen] = useState(false)

@@ -16,12 +16,8 @@ import { deleteRecord, getRecordDetail, putRecord } from "@/lib/api/records"
 import type { AerospikeRecord, BinValue, PkType } from "@/lib/types/record"
 import { safeDecodeURIComponent } from "@/lib/utils"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-
-type PageProps = {
-  params: { clusterId: string; namespace: string; set: string; key: string }
-}
 
 // ---------------------------------------------------------------------------
 // Aerospike stores GeoJSON as a JSON string in a dedicated particle type, but the Python
@@ -248,7 +244,13 @@ function buildInitialDraft(record: AerospikeRecord): BinDraft[] {
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
-export default function RecordDetailPage({ params }: PageProps) {
+export default function RecordDetailPage() {
+  const params = useParams<{
+    clusterId: string
+    namespace: string
+    set: string
+    key: string
+  }>()
   const router = useRouter()
   // App Router route params arrive percent-encoded; decode before using them
   // for API calls, display, and hrefs (clusterSections re-encodes).

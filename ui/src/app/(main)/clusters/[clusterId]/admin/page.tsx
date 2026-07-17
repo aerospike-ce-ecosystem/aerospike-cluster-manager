@@ -21,13 +21,13 @@ import { mapApiError } from "@/lib/api/error-mapping"
 import { logFetchError } from "@/lib/api/log"
 import type { AerospikeRole, AerospikeUser } from "@/lib/types/admin"
 import { RiShieldKeyholeLine } from "@remixicon/react"
+import { useParams } from "next/navigation"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-
-type PageProps = { params: { clusterId: string } }
 
 type LoadState<T> = { data: T | null; loading: boolean; error: string | null }
 
-export default function AdminPage({ params }: PageProps) {
+export default function AdminPage() {
+  const params = useParams<{ clusterId: string }>()
   const [usersState, setUsersState] = useState<LoadState<AerospikeUser[]>>({
     data: null,
     loading: true,

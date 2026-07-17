@@ -10,6 +10,11 @@ import UdfsPage from "./page"
 vi.mock("@/lib/api/udfs", () => ({
   listUdfs: vi.fn(),
 }))
+// The page reads its clusterId via next/navigation's useParams(); vitest's
+// render() doesn't mount the App Router, so stub the hook.
+vi.mock("next/navigation", () => ({
+  useParams: () => ({ clusterId: "conn-test" }),
+}))
 
 const FIXTURE: UDFModule[] = [
   { filename: "scoring.lua", type: "LUA", hash: "abc123" },
@@ -22,13 +27,11 @@ beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => {})
 })
 
-const PARAMS = { clusterId: "conn-test" }
-
 describe("UdfsPage — error / empty / loading separation (#270 regression)", () => {
   it("renders the failure row and Retry banner when initial load fails", async () => {
     mocked.mockRejectedValueOnce(new Error("boom"))
 
-    render(<UdfsPage params={PARAMS} />)
+    render(<UdfsPage />)
 
     expect(
       await screen.findByText("Failed to load UDF modules."),
@@ -44,7 +47,7 @@ describe("UdfsPage — error / empty / loading separation (#270 regression)", ()
       .mockResolvedValueOnce(FIXTURE)
       .mockRejectedValueOnce(new Error("boom"))
 
-    render(<UdfsPage params={PARAMS} />)
+    render(<UdfsPage />)
 
     expect(await screen.findByText("scoring.lua")).toBeInTheDocument()
 
@@ -64,7 +67,7 @@ describe("UdfsPage — error / empty / loading separation (#270 regression)", ()
       .mockRejectedValueOnce(new Error("boom"))
       .mockResolvedValueOnce(FIXTURE)
 
-    render(<UdfsPage params={PARAMS} />)
+    render(<UdfsPage />)
 
     expect(
       await screen.findByText("Failed to load UDF modules."),

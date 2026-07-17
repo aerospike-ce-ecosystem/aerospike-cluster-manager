@@ -60,7 +60,6 @@ export function validatePkDraft(pk: string, mode: PkMatchMode): string | null {
   }
   if (mode === "regex") {
     try {
-      // eslint-disable-next-line no-new
       new RegExp(pk)
     } catch (e) {
       return e instanceof Error ? e.message : "Invalid regex pattern"
