@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from unittest.mock import patch
 
 import pytest
@@ -90,6 +91,60 @@ async def test_swagger_init_js_is_served_with_js_mime(client: AsyncClient):
     assert resp.status_code == 200
     assert resp.headers["Content-Type"].startswith("application/javascript")
     assert "SwaggerUIBundle({" in resp.text
+
+
+# ---------------------------------------------------------------------------
+# Swagger UI actually renders from the self-hosted assets (#250)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_swagger_docs_references_only_served_assets(client: AsyncClient):
+    """Every asset referenced by the /api/docs HTML must actually be served (#250).
+
+    A dangling reference (renamed static file, wrong mount path) produces the
+    exact all-assets-404-or-page-blank failure mode this suite exists to catch.
+    """
+    resp = await client.get("/api/docs")
+    assert resp.status_code == 200
+    refs = re.findall(r'(?:src|href)="([^"]+)"', resp.text)
+    assert refs, "/api/docs must reference its scripts and stylesheets"
+    for ref in refs:
+        asset = await client.get(ref)
+        assert asset.status_code == 200, f"{ref} is referenced by /api/docs but not served"
+
+
+@pytest.mark.anyio
+async def test_swagger_init_js_does_not_reference_standalone_preset(client: AsyncClient):
+    """The init script must not reference SwaggerUIStandalonePreset (#250).
+
+    swagger-ui-bundle.js has not exposed it as a SwaggerUIBundle property since
+    4.x (it lives in the separate swagger-ui-standalone-preset.js and defines a
+    window global), so the old ``SwaggerUIBundle.SwaggerUIStandalonePreset``
+    reference silently passed ``undefined`` as a preset. It is also unnecessary:
+    the preset only provides StandaloneLayout, and the page uses BaseLayout.
+    """
+    resp = await client.get("/api/docs/swagger-init.js")
+    assert resp.status_code == 200
+    assert "SwaggerUIStandalonePreset" not in resp.text
+
+
+@pytest.mark.anyio
+async def test_vendored_swagger_ui_supports_openapi_31(client: AsyncClient):
+    """The self-hosted swagger-ui must be 5.x because FastAPI emits OpenAPI 3.1 (#250).
+
+    swagger-ui 4.x (vendored by the stale swagger-ui-bundle package) rejects
+    3.1 documents with "Unable to render this definition", leaving /api/docs
+    useless in airgapped deployments where the CDN fallback is unreachable.
+    """
+    spec = (await client.get("/api/openapi.json")).json()
+    assert spec["openapi"].startswith("3.1"), "precondition: FastAPI emits OpenAPI 3.1"
+    bundle = await client.get("/api/docs/static/swagger-ui-bundle.js")
+    assert bundle.status_code == 200
+    # swagger-ui stamps its build info into the bundle as PACKAGE_VERSION:"x.y.z".
+    match = re.search(r'PACKAGE_VERSION:"(\d+)\.\d+\.\d+"', bundle.text)
+    assert match, "swagger-ui-bundle.js must carry a PACKAGE_VERSION build stamp"
+    assert int(match.group(1)) >= 5, f"swagger-ui {match.group(0)} cannot render OpenAPI 3.1"
 
 
 # ---------------------------------------------------------------------------

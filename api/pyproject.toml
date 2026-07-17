@@ -17,7 +17,6 @@ dependencies = [
     "pyyaml>=6.0",
     "slowapi>=0.1.9",
     "sse-starlette>=2.0.0",
-    "swagger-ui-bundle>=1.1.0",
     "uvicorn[standard]>=0.34.0",
     # OpenTelemetry — disabled at runtime via OTEL_SDK_DISABLED=true (default).
     # All exporter/sampler/resource configuration goes through OTel SDK
@@ -37,6 +36,7 @@ dependencies = [
     # for Fernet at-rest encryption of stored connection passwords.
     "pyjwt[crypto]>=2.9",
     "cryptography>=42",
+    "fastapi-offline>=1.7.7",
 ]
 
 [tool.uv]
