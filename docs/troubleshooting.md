@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-Common issues and their solutions when running the Aerospike Cluster Manager.
+Use this guide to diagnose common Aerospike Cluster Manager problems.
 
 ## Connection Issues
 
@@ -318,7 +318,7 @@ See the [Architecture Guide](./architecture.md) for a complete RBAC configuratio
 
 ### Migrating from SQLite to PostgreSQL
 
-When scaling from a single-instance deployment to a multi-replica setup, you may need to migrate data from SQLite to PostgreSQL.
+Move from SQLite to PostgreSQL when you scale a single-instance deployment to several replicas.
 
 **Steps:**
 
@@ -334,7 +334,7 @@ When scaling from a single-instance deployment to a multi-replica setup, you may
 
 3. **Start the backend with PostgreSQL** -- Set `ENABLE_POSTGRES=true` and `DATABASE_URL` to point to the new database. The backend will create the required tables on startup.
 
-4. **Re-create connection profiles** -- Connection profiles can be re-created via the UI or by importing a previously exported JSON backup. The SQLite and PostgreSQL schemas are identical, but SQL dialect differences (e.g., autoincrement syntax) make direct SQL import unreliable. Using the application-level import/export feature is the safest approach.
+4. **Re-create connection profiles** -- Use the UI or import a JSON backup. Although SQLite and PostgreSQL use the same application schema, SQL dialect differences such as autoincrement syntax make direct SQL import unreliable. Prefer the application's import and export feature.
 
 ### Migrating from PostgreSQL to SQLite
 
@@ -353,7 +353,7 @@ To simplify a deployment by removing the PostgreSQL dependency:
 
 **Possible causes and solutions:**
 
-1. **Actual split-brain** -- Network partitions can cause Aerospike nodes to form separate sub-clusters. Each sub-cluster thinks it is the full cluster, leading to data inconsistency. Check Aerospike server logs for heartbeat timeout messages and verify network connectivity between all pods:
+1. **Actual split-brain** -- A network partition can split Aerospike nodes into separate sub-clusters and cause inconsistent data. Check server logs for heartbeat timeouts and verify network connectivity between pods:
    ```bash
    kubectl exec -n <namespace> <pod-name> -- asinfo -v "cluster-stable:"
    ```
@@ -362,7 +362,7 @@ To simplify a deployment by removing the PostgreSQL dependency:
 
 3. **Node rejoining** -- If a node recently restarted or rejoined, the reported cluster size may temporarily lag behind the actual cluster state. The split-brain flag should clear on the next health poll once all nodes converge.
 
-**Note:** Split-brain detection is intentionally suppressed during transitional phases (`InProgress`, `ScalingUp`, `ScalingDown`, `RollingRestart`, etc.) and when not all expected pods are ready, to avoid false positives.
+**Note:** To avoid false positives, Cluster Manager suppresses split-brain detection during transitional phases (`InProgress`, `ScalingUp`, `ScalingDown`, `RollingRestart`, etc.) and while expected pods are not ready.
 
 ## Circuit Breaker Stuck
 
@@ -372,7 +372,7 @@ To simplify a deployment by removing the PostgreSQL dependency:
 
 **Possible causes and solutions:**
 
-1. **Repeated reconciliation failures** -- The operator trips the circuit breaker after reaching the failure threshold to prevent rapid retry loops. Check the "Last reconcile error" field in the health card for the root cause (e.g., invalid CR spec, missing secrets, storage provisioning errors).
+1. **Repeated reconciliation failures** -- The operator trips the circuit breaker at the failure threshold to stop rapid retries. Check "Last reconcile error" in the health card for the cause, such as an invalid CR spec, missing secret, or storage provisioning error.
 
 2. **Transient issue resolved** -- If the underlying issue has been fixed (e.g., a missing secret was created, a node came back online), click the **Reset Circuit Breaker** button on the reconciliation health card or call the API directly:
    ```bash
@@ -389,7 +389,7 @@ To simplify a deployment by removing the PostgreSQL dependency:
 
 **Possible causes and solutions:**
 
-1. **Expected behavior** -- Kubernetes StatefulSet PVCs are intentionally retained after scale-down to preserve data. If you scale back up, the PVCs will be reattached to the new pods automatically.
+1. **Expected behavior** -- Kubernetes keeps StatefulSet PVCs after scale-down to preserve data. If you scale up again, Kubernetes attaches the PVCs to the new pods.
 
 2. **Manual cleanup needed** -- If the scale-down is permanent and you want to reclaim storage, delete the orphaned PVCs manually:
    ```bash
@@ -402,7 +402,7 @@ To simplify a deployment by removing the PostgreSQL dependency:
 
 - **Check api logs** -- The API logs detailed error information. Set `LOG_LEVEL=DEBUG` for verbose output.
 - **Use the health endpoint** -- `GET /api/health?detail=true` returns component-level health status including database connectivity.
-- **Verify environment variables** -- Many issues stem from misconfigured environment variables. Double-check `K8S_MANAGEMENT_ENABLED`, `DATABASE_URL`, and `CORS_ORIGINS`. See the [Architecture Guide](./architecture.md#environment-configuration) for the full variable reference.
+- **Verify environment variables** -- Check `K8S_MANAGEMENT_ENABLED`, `DATABASE_URL`, and `CORS_ORIGINS`. See the [Architecture Guide](./architecture.md#environment-configuration) for the full variable reference.
 - **Inspect Kubernetes events** -- The events timeline in the UI (or `kubectl get events`) provides operator-level diagnostic information.
 - **Check operator logs** -- For K8s management issues, the operator logs often contain the root cause. Look at the operator pod logs in the operator's namespace.
 - **Tune timeouts** -- For slow environments, adjust `K8S_API_TIMEOUT`, `K8S_LOG_TIMEOUT`, and `DB_COMMAND_TIMEOUT` as needed.

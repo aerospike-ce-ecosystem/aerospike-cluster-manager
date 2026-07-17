@@ -11,27 +11,27 @@
   <a href="LICENSE"><img alt="Apache 2.0 license" src="https://img.shields.io/github/license/aerospike-ce-ecosystem/aerospike-cluster-manager?style=flat-square&amp;logo=apache&amp;logoColor=FFC72C&amp;labelColor=0B1F33&amp;color=647283"></a>
 </p>
 
-A web-based GUI management tool for Aerospike Community Edition.
+A web interface for managing Aerospike Community Edition.
 
-Provides cluster monitoring, record browsing, query execution, index management, user/role management, UDF management, and more.
+Use it to monitor clusters, browse records, run queries, and manage indexes, users, roles, and UDFs.
 
 ## Overview
 
 ### Cluster Management
 
-Manage multiple Aerospike cluster connections with color-coded profiles. Create, edit, test, import and export connections.
+Manage several Aerospike clusters with color-coded connection profiles. You can create, edit, test, import, and export each connection.
 
 ![Cluster Management](docs/images/01-clusters.png)
 
 ### Cluster Dashboard
 
-Real-time monitoring with live TPS charts, client connections, read/write success rates, and uptime tracking.
+Monitor live TPS, client connections, read and write success rates, and uptime.
 
 ![Cluster Dashboard](docs/images/02-overview-dashboard.png)
 
 ### Namespaces & Sets
 
-Browse namespaces with memory/device usage, replication factor, HWM thresholds, and navigate into sets.
+Review each namespace's memory and device usage, replication factor, and HWM thresholds. Open a namespace to browse its sets.
 
 ![Namespaces](docs/images/04-namespaces.png)
 
@@ -39,7 +39,7 @@ Browse namespaces with memory/device usage, replication factor, HWM thresholds, 
 
 ### Record Browser
 
-Browse, create, edit, duplicate and delete records with server-side limiting and reload.
+Browse, create, edit, duplicate, and delete records. Server-side limits keep large result sets manageable.
 
 ![Record Browser](docs/images/03-record-browser.png)
 
@@ -57,7 +57,7 @@ Browse, create, edit, duplicate and delete records with server-side limiting and
 
 ### Compose Stack (Quickest)
 
-Run Aerospike Cluster Manager with the checked-in Compose stack. It builds separate API and web containers from `Dockerfile.api` and `Dockerfile.web`. Connection profiles are stored in SQLite — no separate database required.
+The checked-in Compose stack runs Aerospike Cluster Manager with separate API and web containers. It builds them from `Dockerfile.api` and `Dockerfile.web`. SQLite stores connection profiles, so you do not need a separate database.
 
 **Step 1 — Start the stack**
 
@@ -77,9 +77,9 @@ Open **http://localhost:3100** and add a connection with:
 - **Host**: `aerospike-node-1` (container name on the shared network)
 - **Port**: `3000`
 
-Connection profiles are persisted in the Compose `app-data` volume.
+The Compose `app-data` volume keeps connection profiles across restarts.
 
-> **macOS / Windows — connecting to an external Aerospike** — if your Aerospike is running on the host (not in this network), use `host.containers.internal` (Podman) or `host.docker.internal` (Docker) as the host when adding the connection in the UI.
+> **macOS / Windows — connecting to an external Aerospike:** If Aerospike runs on the host instead of the Compose network, enter `host.containers.internal` for Podman or `host.docker.internal` for Docker when you add the connection.
 
 ### Podman Compose (Recommended)
 
@@ -116,19 +116,19 @@ npm run dev                        # http://localhost:3100
 
 ### Local K8s / ACKO Development
 
-To exercise the K8s / ACKO UI (`/k8s/clusters`, `/k8s/templates`) against a real operator without deploying anything to a shared cluster, use `make run-local`:
+Use `make run-local` to test the K8s / ACKO UI (`/k8s/clusters`, `/k8s/templates`) against a real operator without deploying to a shared cluster:
 
 ```bash
 make run-local          # kind (podman) + cert-manager + ACKO operator + Aerospike (compose.dev.yaml)
 ```
 
-The command is idempotent and prints the exact api/ui start commands to run in separate terminals. It sets up:
+You can run this command more than once. It prints the exact API and UI commands for separate terminals and sets up:
 
 - kind cluster named `kind` → kubectl context `kind-kind` (1 control-plane + 3 workers with `topology.kubernetes.io/zone=zone-a/b/c`)
 - cert-manager and the ACKO operator via Helm (CRDs: `aerospikeclusters.acko.io`, `aerospikeclustertemplates.acko.io`)
 - Standalone Aerospike nodes on `localhost:14790/:14791/:14792` (for the non-K8s connection UI)
 
-Start the api with `K8S_MANAGEMENT_ENABLED=true` and the ui as usual; the api's Kubernetes client picks up `~/.kube/config` automatically. Teardown with `make run-local-down`.
+Start the API with `K8S_MANAGEMENT_ENABLED=true`, then start the UI as usual. The API reads `~/.kube/config` automatically. Run `make run-local-down` when you are done.
 
 Related targets: `make kind-up/down/status`, `make acko-install/uninstall/verify`.
 
@@ -198,11 +198,11 @@ Related targets: `make kind-up/down/status`, `make acko-install/uninstall/verify
 
 ## Aerospike Data Management
 
-Beyond Kubernetes cluster lifecycle management, the Aerospike Cluster Manager provides a comprehensive set of tools for interacting with Aerospike data directly from the browser.
+Cluster Manager handles more than the Kubernetes cluster lifecycle. It also lets you work with Aerospike data directly in the browser.
 
 ### Connection Management
 
-Manage multiple Aerospike cluster connections with color-coded profiles. Each connection profile stores the host(s), port, optional cluster name, and credentials. Features include:
+Use color-coded profiles to manage several Aerospike connections. Each profile stores hosts, a port, an optional cluster name, and credentials. You can:
 
 - **Create / Edit / Delete** profiles for different clusters or environments
 - **Test Connection** — Validate connectivity without saving the profile
@@ -276,7 +276,7 @@ Generate deterministic sample data sets for testing and demonstration:
 
 ## Aerospike Data Management API Reference
 
-All data management endpoints are prefixed with `/api` and require a `{conn_id}` parameter identifying the connection profile to use.
+Every data management endpoint starts with `/api`. Pass `{conn_id}` to identify the connection profile for the request.
 
 ### Health API
 
@@ -360,11 +360,11 @@ All data management endpoints are prefixed with `/api` and require a `{conn_id}`
 | ------ | ---------------------------- | --------------------------------------------- |
 | `POST` | `/api/sample-data/{conn_id}` | Generate sample records with optional indexes |
 
-> Interactive API documentation (Swagger UI) is available at `http://localhost:8000/docs` when the api is running.
+> When the API is running, open `http://localhost:8000/docs` for interactive Swagger UI documentation.
 
 ## K8s Cluster Management
 
-When running inside a Kubernetes cluster (or with `K8S_MANAGEMENT_ENABLED=true`), the Aerospike Cluster Manager provides a full GUI for managing `AerospikeCluster` custom resources (`acko.io/v1alpha1`) deployed by the [Aerospike CE Kubernetes Operator](https://github.com/aerospike-ce-ecosystem/aerospike-ce-kubernetes-operator).
+When Cluster Manager runs inside Kubernetes, or when `K8S_MANAGEMENT_ENABLED=true`, it can manage `AerospikeCluster` custom resources (`acko.io/v1alpha1`) from the [Aerospike CE Kubernetes Operator](https://github.com/aerospike-ce-ecosystem/aerospike-ce-kubernetes-operator).
 
 ### Cluster Lifecycle
 
@@ -437,7 +437,7 @@ When a WarmRestart or PodRestart operation is active, the cluster detail page di
 - **Failed Pods** — Count of pods that encountered errors during the operation, enabling quick identification of issues.
 - **Operation Type** — Indicates whether the active operation is a WarmRestart or PodRestart.
 
-The progress display appears automatically when an operation is in progress and disappears once the operation completes. During active operations, the detail page polls at a higher frequency (every 5 seconds) to keep the status current.
+The progress display appears while an operation runs and disappears when it finishes. During an active operation, the detail page polls every five seconds.
 
 ### Pod Status Details
 
@@ -463,7 +463,7 @@ When a cluster references an AerospikeClusterTemplate, the detail page shows a T
 - **Snapshot Timestamp** — When the template snapshot was captured.
 - **Collapsible Spec Viewer** — Expand to inspect the full template spec that was applied.
 
-If a template is modified after a cluster was created from it, the badge changes to "Out of Sync" and a resync can be triggered via the `POST /api/k8s/clusters/{namespace}/{name}/resync-template` endpoint.
+If you change a template after creating a cluster from it, the badge changes to "Out of Sync." Use `POST /api/k8s/clusters/{namespace}/{name}/resync-template` to resync the cluster.
 
 ### Events Timeline
 
@@ -479,7 +479,7 @@ A circuit breaker health dashboard shows the operator's reconciliation state, in
 
 ### Auto-refresh
 
-The cluster list and detail pages automatically poll for updates when any cluster is in a transitional phase (InProgress, ScalingUp, ScalingDown, WaitingForMigration, RollingRestart, ACLSync, Deleting). The list page polls every 10 seconds; the detail page polls every 5 seconds.
+The cluster list and detail pages poll automatically while a cluster is in a transitional phase (InProgress, ScalingUp, ScalingDown, WaitingForMigration, RollingRestart, ACLSync, Deleting). The list polls every 10 seconds, and the detail page polls every five seconds.
 
 ### Auto-connect
 
@@ -620,7 +620,7 @@ Common use cases include:
 | `GET`    | `/api/k8s/secrets`                                           | List K8s Secrets (for ACL picker)                                                             |
 | `GET`    | `/api/k8s/nodes`                                             | List K8s nodes with zone/region info (for rack config)                                        |
 
-All K8s endpoints are gated by the `K8S_MANAGEMENT_ENABLED` configuration flag. When disabled, a 404 is returned so the UI can hide K8s features gracefully.
+`K8S_MANAGEMENT_ENABLED` controls every K8s endpoint. When it is disabled, the API returns 404 and the UI hides K8s features.
 
 ### Extended Pod Status Fields
 
@@ -761,7 +761,7 @@ pre-commit run --all-files
 
 ## Environment Variables
 
-All environment variables with their defaults and descriptions. See `api/src/aerospike_cluster_manager_api/config.py` for the api source of truth.
+The following tables list environment variables, defaults, and descriptions. See `api/src/aerospike_cluster_manager_api/config.py` for the API source of truth.
 
 ### Aerospike Connection
 
@@ -835,7 +835,7 @@ All environment variables with their defaults and descriptions. See `api/src/aer
 
 ### Split Container Deployment
 
-The project builds standalone API and web images from `Dockerfile.api` and `Dockerfile.web`. Both containers run as a non-root user (`appuser`) and expose one port each:
+The project builds standalone API and web images from `Dockerfile.api` and `Dockerfile.web`. Each container runs as the non-root `appuser` and exposes one port:
 
 - **Port 3100** — UI (Next.js standalone)
 - **Port 8000** — API (Uvicorn)
@@ -863,13 +863,13 @@ A built-in health check (`/api/health`) is configured with a 10-second interval 
 
 ### Production Environment
 
-For production, configure the environment variables listed in the [Environment Variables](#environment-variables) section above. Key settings to review: `CORS_ORIGINS` (must match your domain), `LOG_FORMAT` (set to `json` for structured logging), and `K8S_MANAGEMENT_ENABLED` (set to `true` when deploying inside Kubernetes).
+For production, review the [environment variables](#environment-variables). Set `CORS_ORIGINS` to your domain, use `LOG_FORMAT=json` for structured logs, and set `K8S_MANAGEMENT_ENABLED=true` when you deploy inside Kubernetes.
 
 Inside the container, `SQLITE_PATH` defaults to `/app/data/connections.db`. Mount a volume to `/app/data` to persist data across container restarts.
 
 ### Database Setup
 
-Connection profiles are persisted in **SQLite by default** — no external database required. The SQLite file is written to `SQLITE_PATH` (defaults to `/app/data/connections.db` inside the container).
+By default, **SQLite** stores connection profiles and needs no external database. The API writes the SQLite file to `SQLITE_PATH`, which defaults to `/app/data/connections.db` in the container.
 
 **SQLite (default):**
 

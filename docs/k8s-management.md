@@ -1,6 +1,6 @@
 # Kubernetes Cluster Management Guide
 
-This guide covers the Kubernetes cluster lifecycle management features of the Aerospike Cluster Manager, including the creation wizard, template management, operations, and monitoring.
+This guide explains how to create, monitor, and operate Kubernetes clusters with Aerospike Cluster Manager. It also covers templates and day-two operations.
 
 ## Prerequisites
 
@@ -10,7 +10,7 @@ This guide covers the Kubernetes cluster lifecycle management features of the Ae
 
 ## Cluster Creation Wizard
 
-The wizard guides you through creating an AerospikeCluster resource in up to 10 steps. You can start from scratch or use a template.
+The wizard creates an AerospikeCluster resource in up to 10 steps. Start with an empty configuration or an existing template.
 
 ### Step 0: Creation Mode
 
@@ -47,7 +47,7 @@ For persistent storage, each volume supports:
 | Wipe Method | Volume cleanup method |
 | Cascade Delete | Delete PVC when cluster is deleted |
 
-Multiple volumes can be configured independently with different storage classes and sizes.
+You can give each volume its own storage class and size.
 
 ### Step 3: Monitoring & Options
 
@@ -97,7 +97,7 @@ Configure multi-rack deployments for topology-aware data placement:
 
 ### Step 8: Sidecars & Init Containers
 
-Add custom sidecar containers (e.g., log shippers, backup agents) and init containers (e.g., data loaders, certificate generators) with full configuration: image, command, args, env, volume mounts, and resources.
+Add sidecars such as log shippers and backup agents, or init containers such as data loaders and certificate generators. Configure their image, command, arguments, environment, volume mounts, and resources.
 
 ### Step 9: Advanced Configuration
 
@@ -125,7 +125,7 @@ Add custom sidecar containers (e.g., log shippers, backup agents) and init conta
 
 ### Step 10: Review
 
-Summary of all configured settings. The wizard displays the full configuration including Seeds Finder Services, storage volumes, monitoring, and ACL before submission.
+Review every setting before you submit the resource. The summary includes Seeds Finder Services, storage volumes, monitoring, and ACL.
 
 ### Image Validation
 
@@ -134,11 +134,11 @@ The wizard and edit dialog enforce CE-specific image validation on the Aerospike
 - **Enterprise image rejection** -- Images containing `enterprise` in the name, or tags prefixed with `ee-` or `ent-`, are rejected with a clear error message. The CE operator only supports Community Edition images (e.g., `aerospike:ce-8.1.1.1`).
 - **Minimum version** -- Only Aerospike CE 8.x and above are supported. Images with tags indicating CE 7.x or earlier are rejected.
 
-These validations run client-side before submission and are also enforced server-side by the operator's webhook.
+The UI runs these checks before submission. The operator webhook enforces them again on the server.
 
 ## Cluster Operations
 
-From the cluster detail page (`/k8s/clusters/{namespace}/{name}`), the following operations are available:
+Open `/k8s/clusters/{namespace}/{name}` to run these operations:
 
 ### Scale
 
@@ -173,7 +173,7 @@ The edit dialog now performs early validation before sending updates to the oper
 
 #### Rack Config Edit in Edit Dialog
 
-After a cluster is created, rack topology can be fully edited through the Edit dialog. This enables operators to adjust data placement, add new availability zones, or remove racks without recreating the cluster.
+After cluster creation, use the Edit dialog to change rack topology. You can adjust data placement, add availability zones, or remove racks without recreating the cluster.
 
 **Adding and removing racks:**
 
@@ -217,7 +217,7 @@ The following settings apply to all racks and control batch operations during ra
 
 #### Node Blocklist Picker
 
-The Edit dialog includes an interactive node blocklist picker that replaces manual text input with a visual node selection interface.
+The Edit dialog provides a node blocklist picker, so you can select nodes instead of entering names manually.
 
 **How the picker works:**
 
@@ -231,7 +231,7 @@ The Edit dialog includes an interactive node blocklist picker that replaces manu
 
 **Fallback behavior:**
 
-If the node list cannot be fetched (e.g., due to RBAC restrictions or network issues), the picker falls back to a plain text input field where node names can be entered manually, one per line.
+If RBAC or network problems prevent the node list from loading, enter node names in the fallback text field, one per line.
 
 **Visual indicators:**
 
@@ -240,7 +240,7 @@ If the node list cannot be fetched (e.g., due to RBAC restrictions or network is
 
 #### Rack Revision
 
-Each rack has an optional **Revision** field (a free-form string, e.g., `rev-1`, `restart-20260322`). Changing the revision value for a rack signals the operator to perform a rolling restart of the pods in that rack, even when no other configuration has changed. This is useful when you need to force a restart of a specific rack -- for example, after an external dependency update or to pick up a new node image -- without affecting the rest of the cluster.
+Each rack has an optional **Revision** field for a free-form value such as `rev-1` or `restart-20260322`. Changing it tells the operator to restart that rack's pods, even when no other configuration changed. Use this field to restart one rack after an external dependency or node image update without affecting the rest of the cluster.
 
 To trigger a rack-specific rolling restart:
 
@@ -277,7 +277,7 @@ The Edit dialog includes a **Container Security Context** section that configure
 
 ### HPA (Horizontal Pod Autoscaler)
 
-The HPA dialog provides full lifecycle management for Kubernetes HorizontalPodAutoscaler resources targeting the AerospikeCluster:
+Use the HPA dialog to create, inspect, update, and delete a Kubernetes HorizontalPodAutoscaler for the AerospikeCluster:
 
 **Creating an HPA:**
 
@@ -318,7 +318,7 @@ The dialog shows the current HPA state including current/desired replicas and sc
 
 **Operation in-progress guard:**
 
-The **Warm Restart** and **Pod Restart** buttons in the cluster detail page toolbar are automatically disabled when another operation is already in progress. This prevents accidental double-operations that could disrupt the cluster. The buttons re-enable once the active operation completes or is cleared.
+The toolbar disables **Warm Restart** and **Pod Restart** while another operation is active. This prevents overlapping operations. The buttons return when the active operation finishes or is cleared.
 
 **Pod-level operation selection:**
 
@@ -343,7 +343,7 @@ When an operation is active, the cluster detail page displays real-time progress
 - The operation type indicator (WarmRestart or PodRestart).
 - The target pod list when specific pods were selected.
 
-The progress display appears automatically during active operations and the detail page polls every 5 seconds.
+The progress display appears during an active operation, and the detail page polls every five seconds.
 
 **API endpoint:**
 
