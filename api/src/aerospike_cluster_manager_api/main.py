@@ -3,7 +3,9 @@ import re
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
+import fastapi_offline
 from fastapi import APIRouter, FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
@@ -14,7 +16,6 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
-from swagger_ui_bundle import swagger_ui_path  # type: ignore[import-untyped]
 
 from aerospike_cluster_manager_api import config, db
 from aerospike_cluster_manager_api.client_manager import client_manager
@@ -123,11 +124,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Serve swagger-ui-dist files vendored by the swagger-ui-bundle package so
-# /api/docs has no public-internet egress requirement.
+# Serve swagger-ui-dist files vendored by the fastapi-offline package so
+# /api/docs has no public-internet egress requirement. fastapi-offline ships
+# swagger-ui 5.x, which parses the OpenAPI 3.1 documents FastAPI emits; the
+# previously used swagger-ui-bundle package is stale at swagger-ui 4.15.5,
+# which rejects 3.1 specs outright and left /api/docs blank (#250).
+_SWAGGER_UI_STATIC_DIR = Path(fastapi_offline.__file__).parent / "static"
 app.mount(
     "/api/docs/static",
-    StaticFiles(directory=str(swagger_ui_path)),
+    StaticFiles(directory=str(_SWAGGER_UI_STATIC_DIR)),
     name="swagger-ui-static",
 )
 
@@ -144,7 +149,7 @@ _SWAGGER_UI_HTML = """\
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link type="text/css" rel="stylesheet" href="/api/docs/static/swagger-ui.css">
-<link rel="shortcut icon" href="/api/docs/static/favicon-32x32.png">
+<link rel="shortcut icon" href="/api/docs/static/favicon.png">
 <title>Aerospike Cluster Manager API - Swagger UI</title>
 </head>
 <body>
@@ -155,6 +160,13 @@ _SWAGGER_UI_HTML = """\
 </html>
 """
 
+# NOTE: no SwaggerUIStandalonePreset here (#250). swagger-ui-dist 4.x/5.x
+# bundles do not expose it as a SwaggerUIBundle property (it lives in the
+# separate swagger-ui-standalone-preset.js, which defines a window global
+# instead), so referencing SwaggerUIBundle.SwaggerUIStandalonePreset passes
+# `undefined` as a preset. The preset only supplies StandaloneLayout + the top
+# bar, which `layout: 'BaseLayout'` never uses, so the correct fix is to omit
+# it rather than load an extra unused asset.
 _SWAGGER_INIT_JS = """\
 window.ui = SwaggerUIBundle({
     url: '/api/openapi.json',
@@ -165,7 +177,6 @@ window.ui = SwaggerUIBundle({
     showCommonExtensions: true,
     presets: [
         SwaggerUIBundle.presets.apis,
-        SwaggerUIBundle.SwaggerUIStandalonePreset,
     ],
 });
 """
@@ -177,13 +188,14 @@ async def custom_swagger_ui() -> HTMLResponse:
 
     With CSP_ENABLED=true (default): self-hosted assets + external
     swagger-init.js so the page renders under strict `script-src 'self'`
-    (#238). The vendored swagger-ui is 4.15.5 and does not parse OpenAPI 3.1.
+    (#238). The assets are swagger-ui 5.x vendored by fastapi-offline, so
+    the OpenAPI 3.1 documents FastAPI emits render fully offline (#250).
 
     With CSP_ENABLED=false: FastAPI's default helper which loads swagger-ui
-    5.x from cdn.jsdelivr.net — full OpenAPI 3.1 support and no init.js
-    indirection (#241). Browsers fetch the assets directly, so this works
-    whenever the operator's workstation has internet egress, regardless of
-    whether the cluster's pods do.
+    5.x from cdn.jsdelivr.net with no init.js indirection (#241). Browsers
+    fetch the assets directly, so this works whenever the operator's
+    workstation has internet egress, regardless of whether the cluster's
+    pods do.
     """
     if not config.CSP_ENABLED:
         return get_swagger_ui_html(
