@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../ui/public/acm-logo.svg" alt="ACKO" width="280">
+</p>
+
 # Documentation
 
 Guides for the Aerospike Cluster Manager.
