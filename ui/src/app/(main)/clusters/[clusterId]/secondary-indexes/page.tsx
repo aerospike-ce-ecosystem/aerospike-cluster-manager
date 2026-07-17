@@ -20,10 +20,9 @@ import { mapApiError } from "@/lib/api/error-mapping"
 import { listIndexes } from "@/lib/api/indexes"
 import { logFetchError } from "@/lib/api/log"
 import type { SecondaryIndex, SecondaryIndexState } from "@/lib/types/index"
+import { useParams } from "next/navigation"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Fragment } from "react"
-
-type PageProps = { params: { clusterId: string } }
 
 const stateBadge: Record<
   SecondaryIndexState,
@@ -34,7 +33,8 @@ const stateBadge: Record<
   error: { variant: "error" },
 }
 
-export default function SecondaryIndexesPage({ params }: PageProps) {
+export default function SecondaryIndexesPage() {
+  const params = useParams<{ clusterId: string }>()
   const [indexes, setIndexes] = useState<SecondaryIndex[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

@@ -42,12 +42,8 @@ import type { AerospikeRecord } from "@/lib/types/record"
 import { cx, safeDecodeURIComponent } from "@/lib/utils"
 import { RiRefreshLine, RiTimerLine } from "@remixicon/react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-
-type PageProps = {
-  params: { clusterId: string; namespace: string; set: string }
-}
 
 // TTL sentinel for namespaces without default-ttl (uint32 max).
 const TTL_NO_EXPIRY = 4_294_967_295
@@ -160,7 +156,12 @@ function indexTypeToBinDataType(idx: SecondaryIndex): BinDataType {
   return "string"
 }
 
-export default function RecordBrowserPage({ params }: PageProps) {
+export default function RecordBrowserPage() {
+  const params = useParams<{
+    clusterId: string
+    namespace: string
+    set: string
+  }>()
   // App Router route params arrive percent-encoded; decode once and use the
   // raw names for API calls, display, and hrefs (clusterSections re-encodes).
   const namespace = safeDecodeURIComponent(params.namespace) ?? params.namespace

@@ -10,6 +10,11 @@ import SecondaryIndexesPage from "./page"
 vi.mock("@/lib/api/indexes", () => ({
   listIndexes: vi.fn(),
 }))
+// The page reads its clusterId via next/navigation's useParams(); vitest's
+// render() doesn't mount the App Router, so stub the hook.
+vi.mock("next/navigation", () => ({
+  useParams: () => ({ clusterId: "conn-test" }),
+}))
 
 const FIXTURE: SecondaryIndex[] = [
   {
@@ -29,13 +34,11 @@ beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => {})
 })
 
-const PARAMS = { clusterId: "conn-test" }
-
 describe("SecondaryIndexesPage — error / empty / loading separation (#270 regression)", () => {
   it("renders the failure row and Retry banner when initial load fails", async () => {
     mocked.mockRejectedValueOnce(new Error("boom"))
 
-    render(<SecondaryIndexesPage params={PARAMS} />)
+    render(<SecondaryIndexesPage />)
 
     expect(
       await screen.findByText("Failed to load secondary indexes."),
@@ -51,7 +54,7 @@ describe("SecondaryIndexesPage — error / empty / loading separation (#270 regr
       .mockResolvedValueOnce(FIXTURE)
       .mockRejectedValueOnce(new Error("boom"))
 
-    render(<SecondaryIndexesPage params={PARAMS} />)
+    render(<SecondaryIndexesPage />)
 
     expect(await screen.findByText("idx_bin_int")).toBeInTheDocument()
 
@@ -71,7 +74,7 @@ describe("SecondaryIndexesPage — error / empty / loading separation (#270 regr
       .mockRejectedValueOnce(new Error("boom"))
       .mockResolvedValueOnce(FIXTURE)
 
-    render(<SecondaryIndexesPage params={PARAMS} />)
+    render(<SecondaryIndexesPage />)
 
     expect(
       await screen.findByText("Failed to load secondary indexes."),
@@ -86,7 +89,7 @@ describe("SecondaryIndexesPage — error / empty / loading separation (#270 regr
   it("third empty-state branch is reachable when a filter matches nothing on a non-empty list", async () => {
     mocked.mockResolvedValueOnce(FIXTURE)
 
-    render(<SecondaryIndexesPage params={PARAMS} />)
+    render(<SecondaryIndexesPage />)
 
     await screen.findByText("idx_bin_int")
     const filter = screen.getByPlaceholderText(/filter indexes/i)

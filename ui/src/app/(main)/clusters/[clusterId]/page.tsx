@@ -9,9 +9,8 @@ import type { K8sClusterSummary } from "@/lib/types/k8s"
 import { Button } from "@/components/Button"
 import { PageHead } from "@/components/PageHead"
 import { RiAlertLine } from "@remixicon/react"
+import { useParams } from "next/navigation"
 import { useMemo } from "react"
-
-type PageProps = { params: { clusterId: string } }
 
 function nodeStatus(node: ClusterNode): {
   label: string
@@ -27,7 +26,8 @@ function nodeStatus(node: ClusterNode): {
   return { label: "Up", variant: "success", dot: "bg-emerald-500" }
 }
 
-export default function ClusterOverview({ params }: PageProps) {
+export default function ClusterOverview() {
+  const params = useParams<{ clusterId: string }>()
   const cluster = useCluster(params.clusterId)
   const k8s = useK8sClusters()
 

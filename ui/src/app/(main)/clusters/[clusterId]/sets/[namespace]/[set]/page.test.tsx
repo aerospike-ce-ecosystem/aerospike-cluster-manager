@@ -8,6 +8,10 @@ import type { FilteredQueryResponse } from "@/lib/types/query"
 
 import RecordBrowserPage from "./page"
 
+// The page reads clusterId/namespace/set via next/navigation's useParams();
+// keep it configurable so the percent-encoding test can vary the values.
+const { mockUseParams } = vi.hoisted(() => ({ mockUseParams: vi.fn() }))
+
 vi.mock("@/lib/api/records", () => ({
   filterRecords: vi.fn(),
 }))
@@ -20,6 +24,7 @@ vi.mock("@/lib/api/indexes", () => ({
 // ``listSetNotes`` on mount and ``upsertSetNote`` / ``deleteSetNote`` from
 // the NoteSection — stub those so the network never fires under test.
 vi.mock("next/navigation", () => ({
+  useParams: mockUseParams,
   useRouter: () => ({
     push: vi.fn(),
     replace: vi.fn(),
@@ -34,8 +39,6 @@ vi.mock("@/lib/api/notes", () => ({
   upsertSetNote: vi.fn(),
   deleteSetNote: vi.fn(),
 }))
-
-const PARAMS = { clusterId: "conn-test", namespace: "test", set: "sample_set" }
 
 const mockedFilter = vi.mocked(filterRecords)
 const mockedIndexes = vi.mocked(listIndexes)
@@ -62,6 +65,11 @@ beforeEach(() => {
   mockedFilter.mockReset()
   mockedIndexes.mockReset()
   mockedIndexes.mockResolvedValue([])
+  mockUseParams.mockReturnValue({
+    clusterId: "conn-test",
+    namespace: "test",
+    set: "sample_set",
+  })
   vi.spyOn(console, "error").mockImplementation(() => {})
 })
 
@@ -69,7 +77,7 @@ describe("RecordBrowserPage — error / empty / loading separation (#270 regress
   it("renders the failure row and Retry banner when initial load fails", async () => {
     mockedFilter.mockRejectedValueOnce(new Error("boom"))
 
-    render(<RecordBrowserPage params={PARAMS} />)
+    render(<RecordBrowserPage />)
 
     expect(
       await screen.findByText("Failed to load records."),
@@ -86,7 +94,7 @@ describe("RecordBrowserPage — error / empty / loading separation (#270 regress
       .mockResolvedValueOnce(fixtureResponse(2))
       .mockRejectedValueOnce(new Error("boom"))
 
-    render(<RecordBrowserPage params={PARAMS} />)
+    render(<RecordBrowserPage />)
 
     expect(await screen.findByText("pk-0")).toBeInTheDocument()
     // StatusBar shows the successful execution time after the first load.
@@ -116,7 +124,7 @@ describe("RecordBrowserPage — error / empty / loading separation (#270 regress
       .mockRejectedValueOnce(new Error("boom"))
       .mockResolvedValueOnce(fixtureResponse(1))
 
-    render(<RecordBrowserPage params={PARAMS} />)
+    render(<RecordBrowserPage />)
 
     expect(
       await screen.findByText("Failed to load records."),
@@ -132,7 +140,7 @@ describe("RecordBrowserPage — error / empty / loading separation (#270 regress
 describe("RecordBrowserPage — PK match mode (#287)", () => {
   it("defaults to exact mode and sends pkMatchMode=exact in the request", async () => {
     mockedFilter.mockResolvedValueOnce(fixtureResponse(1))
-    render(<RecordBrowserPage params={PARAMS} />)
+    render(<RecordBrowserPage />)
     await screen.findByText("pk-0")
 
     expect(mockedFilter).toHaveBeenLastCalledWith(
@@ -146,7 +154,7 @@ describe("RecordBrowserPage — PK match mode (#287)", () => {
 
   it("switching to prefix mode updates placeholder and reveals the caveat banner", async () => {
     mockedFilter.mockResolvedValue(fixtureResponse(0))
-    render(<RecordBrowserPage params={PARAMS} />)
+    render(<RecordBrowserPage />)
 
     // Wait for initial load to settle.
     await screen.findByText(/no records in this set/i)
@@ -170,7 +178,7 @@ describe("RecordBrowserPage — PK match mode (#287)", () => {
       .mockResolvedValueOnce(fixtureResponse(0)) // initial load
       .mockResolvedValueOnce(fixtureResponse(2)) // after Search
 
-    render(<RecordBrowserPage params={PARAMS} />)
+    render(<RecordBrowserPage />)
     await screen.findByText(/no records in this set/i)
 
     await userEvent.click(screen.getByLabelText(/pk match mode/i))
@@ -197,7 +205,7 @@ describe("RecordBrowserPage — PK match mode (#287)", () => {
 
   it("disables the Search button and surfaces an inline error for an invalid regex", async () => {
     mockedFilter.mockResolvedValueOnce(fixtureResponse(0))
-    render(<RecordBrowserPage params={PARAMS} />)
+    render(<RecordBrowserPage />)
     await screen.findByText(/no records in this set/i)
 
     await userEvent.click(screen.getByLabelText(/pk match mode/i))
@@ -218,7 +226,7 @@ describe("RecordBrowserPage — PK match mode (#287)", () => {
 
   it("disables Search when prefix/regex mode is selected with an empty input", async () => {
     mockedFilter.mockResolvedValueOnce(fixtureResponse(0))
-    render(<RecordBrowserPage params={PARAMS} />)
+    render(<RecordBrowserPage />)
     await screen.findByText(/no records in this set/i)
 
     await userEvent.click(screen.getByLabelText(/pk match mode/i))
@@ -235,15 +243,12 @@ describe("RecordBrowserPage — route param decoding", () => {
 
     // App Router delivers params exactly as they appear in the URL —
     // percent-encoded. A set named "my set" arrives as "my%20set".
-    render(
-      <RecordBrowserPage
-        params={{
-          clusterId: "conn-test",
-          namespace: "ns%2Fprod",
-          set: "my%20set",
-        }}
-      />,
-    )
+    mockUseParams.mockReturnValue({
+      clusterId: "conn-test",
+      namespace: "ns%2Fprod",
+      set: "my%20set",
+    })
+    render(<RecordBrowserPage />)
 
     expect(
       await screen.findByText(/no records in this set/i),

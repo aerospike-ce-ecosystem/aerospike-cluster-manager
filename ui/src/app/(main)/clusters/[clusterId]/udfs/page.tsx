@@ -20,11 +20,11 @@ import { mapApiError } from "@/lib/api/error-mapping"
 import { listUdfs } from "@/lib/api/udfs"
 import { logFetchError } from "@/lib/api/log"
 import type { UDFModule } from "@/lib/types/udf"
+import { useParams } from "next/navigation"
 import { useCallback, useEffect, useMemo, useState } from "react"
 
-type PageProps = { params: { clusterId: string } }
-
-export default function UdfsPage({ params }: PageProps) {
+export default function UdfsPage() {
+  const params = useParams<{ clusterId: string }>()
   const [udfs, setUdfs] = useState<UDFModule[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

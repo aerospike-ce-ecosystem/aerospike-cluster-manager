@@ -3,10 +3,11 @@ import Link from "next/link"
 
 type LayoutProps = {
   children: React.ReactNode
-  params: { clusterId: string }
+  params: Promise<{ clusterId: string }>
 }
 
-export default function ClusterLayout({ children, params }: LayoutProps) {
+export default async function ClusterLayout({ children, params }: LayoutProps) {
+  const { clusterId } = await params
   return (
     <div className="flex flex-col gap-6">
       <nav
@@ -21,10 +22,10 @@ export default function ClusterLayout({ children, params }: LayoutProps) {
         </Link>
         <span aria-hidden="true">/</span>
         <span className="font-mono text-gray-900 dark:text-gray-50">
-          {params.clusterId}
+          {clusterId}
         </span>
       </nav>
-      <ClusterTabs clusterId={params.clusterId} />
+      <ClusterTabs clusterId={clusterId} />
       {children}
     </div>
   )
