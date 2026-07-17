@@ -8,19 +8,28 @@
  * list_connections / list_acko_clusters — chaining a read into a
  * confirmation-gated tool can abort the run in the CopilotKit runtime, and
  * forces the model to guess connection names ("localhost") when it can't list.
+ *
+ * Connections come from ``useConnections`` — the single source of truth every
+ * other consumer (sidebar, clusters page, dropdowns) already subscribes to —
+ * so the agent context refreshes automatically whenever a mutation bumps
+ * ``connectionsRev``. The previously used ``connection-store`` duplicated this
+ * cache and was never populated, so the agent always saw an empty list.
  */
 
 import { useAgentContext } from "@copilotkit/react-core/v2"
-import { usePathname } from "next/navigation"
+import { useParams, usePathname } from "next/navigation"
 import * as React from "react"
 
-import { useConnectionStore } from "@/stores/connection-store"
+import { useConnections } from "@/hooks/use-connections"
 import { useK8sClusterStore } from "@/stores/k8s-cluster-store"
 
 export function CopilotAppContext() {
   const pathname = usePathname()
-  const currentConnId = useConnectionStore((state) => state.currentConnId)
-  const connections = useConnectionStore((state) => state.connections)
+  // /clusters/[clusterId]/… routes carry the selected connection profile id.
+  const params = useParams<{ clusterId?: string }>()
+  const currentConnId = params?.clusterId ?? null
+  const { data } = useConnections()
+  const connections = React.useMemo(() => data ?? [], [data])
   const clusters = useK8sClusterStore((state) => state.clusters)
   const fetchClusters = useK8sClusterStore((state) => state.fetchClusters)
   const current = connections.find((conn) => conn.id === currentConnId)

@@ -313,27 +313,36 @@ async def migrate_passwords_to_encrypted() -> int:
     can log it. The query is deliberately uncorrelated with column-add
     migrations — the fact that the connection might still be opening up
     schema-wise is irrelevant; we only touch ``password``.
+
+    All rewrites run inside a single ``BEGIN IMMEDIATE`` transaction so a
+    mid-loop ``encrypt_password`` failure rolls back every partial UPDATE —
+    all-or-nothing, mirroring the transactional Postgres counterpart.
     """
     conn = _get_conn()
     rewritten = 0
     async with _get_write_lock():
-        async with conn.execute("SELECT id, password FROM connections") as cursor:
-            rows = await cursor.fetchall()
-        for row in rows:
-            password = row["password"]
-            if password is None or password == "":
-                continue
-            if is_encrypted(password):
-                continue
-            encrypted = encrypt_password(password)
-            await conn.execute(
-                "UPDATE connections SET password = ? WHERE id = ?",
-                (encrypted, row["id"]),
-            )
-            rewritten += 1
-        if rewritten:
+        await conn.execute("BEGIN IMMEDIATE")
+        try:
+            async with conn.execute("SELECT id, password FROM connections") as cursor:
+                rows = await cursor.fetchall()
+            for row in rows:
+                password = row["password"]
+                if password is None or password == "":
+                    continue
+                if is_encrypted(password):
+                    continue
+                encrypted = encrypt_password(password)
+                await conn.execute(
+                    "UPDATE connections SET password = ? WHERE id = ?",
+                    (encrypted, row["id"]),
+                )
+                rewritten += 1
             await conn.commit()
-            logger.info("Encrypted %d legacy plaintext password row(s) in SQLite.", rewritten)
+        except Exception:
+            await conn.rollback()
+            raise
+    if rewritten:
+        logger.info("Encrypted %d legacy plaintext password row(s) in SQLite.", rewritten)
     return rewritten
 
 

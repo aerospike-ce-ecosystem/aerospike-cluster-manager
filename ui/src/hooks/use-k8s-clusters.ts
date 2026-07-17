@@ -5,7 +5,7 @@
 
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { listK8sClusters, type ListK8sClustersParams } from "@/lib/api/k8s"
 import { logFetchError } from "@/lib/api/log"
@@ -28,7 +28,7 @@ export function useK8sClusters(
   // Stabilise the params object across renders — callers can pass an inline
   // literal without causing infinite re-fetches.
   const paramsRef = useRef<ListK8sClustersParams | undefined>(params)
-  const paramsKey = JSON.stringify(params ?? {})
+  const paramsKey = useMemo(() => JSON.stringify(params ?? {}), [params])
   paramsRef.current = params
 
   // Hook-level mounted guard so the exposed refetch can drop late

@@ -5,6 +5,7 @@ import React from "react"
 import { Button } from "@/components/Button"
 import { Card } from "@/components/Card"
 import { Label } from "@/components/Label"
+import { ConfirmDialog } from "@/components/dialogs/ConfirmDialog"
 import { ApiError } from "@/lib/api/client"
 
 const MAX_NOTE_LENGTH = 8192
@@ -49,6 +50,7 @@ export function NoteSection({
   const [isEditing, setIsEditing] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = React.useState(false)
 
   // Re-sync draft when the persisted note changes underneath us (e.g. a
   // sibling tab updates it). Skipping while editing prevents the user's
@@ -93,7 +95,6 @@ export function NoteSection({
   }
 
   const handleDelete = async () => {
-    if (!window.confirm("Delete this note?")) return
     setSaving(true)
     setError(null)
     try {
@@ -130,7 +131,7 @@ export function NoteSection({
             <Button
               type="button"
               variant="ghost"
-              onClick={handleDelete}
+              onClick={() => setConfirmDeleteOpen(true)}
               isLoading={saving}
               loadingText="Deleting…"
               disabled={disabled}
@@ -204,6 +205,14 @@ export function NoteSection({
           {footnote}
         </p>
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        title="Delete note"
+        description="Delete this note? This can't be undone."
+        onConfirm={() => void handleDelete()}
+      />
     </Card>
   )
 }

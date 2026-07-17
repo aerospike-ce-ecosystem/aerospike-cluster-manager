@@ -3,6 +3,7 @@
 import { Badge } from "@/components/Badge"
 import { Button } from "@/components/Button"
 import { Card } from "@/components/Card"
+import { ConfirmDialog } from "@/components/dialogs/ConfirmDialog"
 import { Input } from "@/components/Input"
 import { Label } from "@/components/Label"
 import { NoteSection } from "@/components/notes/NoteSection"
@@ -259,6 +260,7 @@ export default function RecordDetailPage({ params }: PageProps) {
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
 
   const [isEditing, setIsEditing] = useState(false)
   const [drafts, setDrafts] = useState<BinDraft[]>([])
@@ -323,7 +325,6 @@ export default function RecordDetailPage({ params }: PageProps) {
 
   const handleDelete = async () => {
     if (!record || pk === null) return
-    if (!window.confirm(`Delete record '${pk}'?`)) return
     setDeleting(true)
     try {
       await deleteRecord(params.clusterId, {
@@ -568,7 +569,7 @@ export default function RecordDetailPage({ params }: PageProps) {
               </Button>
               <Button
                 variant="destructive"
-                onClick={handleDelete}
+                onClick={() => setConfirmDeleteOpen(true)}
                 isLoading={deleting}
                 loadingText="Deleting…"
                 disabled={!record || deleting}
@@ -805,6 +806,14 @@ export default function RecordDetailPage({ params }: PageProps) {
           </Card>
         </>
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        title="Delete record"
+        description={`Delete record '${pk}'? This can't be undone.`}
+        onConfirm={() => void handleDelete()}
+      />
     </main>
   )
 }

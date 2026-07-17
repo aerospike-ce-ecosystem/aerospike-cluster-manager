@@ -711,6 +711,7 @@ function ConditionEditor({
         <textarea
           value={val}
           onChange={(e) => setVal(e.target.value)}
+          aria-label={`GeoJSON value for ${condition.bin} filter`}
           placeholder='{"type":"AeroCircle","coordinates":[[lng,lat],radius]}'
           className="dark:focus:ring-primary-40/30 focus:border-primary-45 focus:ring-primary-90 dark:focus:border-primary-40 min-h-[80px] w-full rounded-md border border-gray-300 bg-white p-2 font-mono text-xs outline-hidden transition focus:ring-2 dark:border-gray-800 dark:bg-gray-950"
         />
