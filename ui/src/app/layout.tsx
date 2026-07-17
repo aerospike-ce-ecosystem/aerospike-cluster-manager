@@ -30,6 +30,14 @@ export const metadata: Metadata = {
     },
   ],
   creator: "Aerospike CE Ecosystem",
+  icons: {
+    icon: [
+      { url: "/acm-icon.svg", type: "image/svg+xml" },
+      { url: "/acm-icon.png", type: "image/png", sizes: "1024x1024" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: [{ url: "/acm-icon.png", type: "image/png", sizes: "1024x1024" }],
+  },
   openGraph: {
     type: "website",
     locale: "en_US",
@@ -37,6 +45,20 @@ export const metadata: Metadata = {
     title: siteConfig.name,
     description: siteConfig.description,
     siteName: siteConfig.name,
+    images: [
+      {
+        url: "/acm-social-preview.png",
+        width: 1280,
+        height: 640,
+        alt: "ACKO Aerospike Cluster Manager",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: siteConfig.name,
+    description: siteConfig.description,
+    images: ["/acm-social-preview.png"],
   },
 }
 

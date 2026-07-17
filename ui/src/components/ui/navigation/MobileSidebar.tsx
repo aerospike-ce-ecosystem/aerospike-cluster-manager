@@ -60,11 +60,11 @@ export default function MobileSidebar() {
           <DrawerTitle>
             <span className="flex items-center gap-3">
               <Image
-                src="/acm-logo.svg"
+                src="/acm-icon.svg"
                 alt="Aerospike Cluster Manager"
                 width={28}
                 height={28}
-                className="rounded-md"
+                className="rounded-md ring-1 ring-[#0B1F33]/10"
               />
               Aerospike Cluster Manager
             </span>

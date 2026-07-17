@@ -1,8 +1,15 @@
+<p align="center">
+  <img src="ui/public/acm-logo.svg" alt="ACKO" width="320">
+</p>
+
 # Aerospike Cluster Manager
 
-[![CI](https://github.com/aerospike-ce-ecosystem/aerospike-cluster-manager/actions/workflows/ci.yaml/badge.svg)](https://github.com/aerospike-ce-ecosystem/aerospike-cluster-manager/actions/workflows/ci.yaml)
-[![CD](https://github.com/aerospike-ce-ecosystem/aerospike-cluster-manager/actions/workflows/cd.yaml/badge.svg)](https://github.com/aerospike-ce-ecosystem/aerospike-cluster-manager/actions/workflows/cd.yaml)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+<p align="center">
+  <a href="https://github.com/aerospike-ce-ecosystem/aerospike-cluster-manager"><img alt="GitHub repository" src="https://img.shields.io/badge/GitHub-Cluster%20Manager-0B1F33?style=flat-square&amp;logo=github&amp;logoColor=FFC72C"></a>
+  <a href="https://github.com/aerospike-ce-ecosystem/aerospike-cluster-manager/actions/workflows/ci.yaml"><img alt="CI status" src="https://img.shields.io/github/actions/workflow/status/aerospike-ce-ecosystem/aerospike-cluster-manager/ci.yaml?branch=main&amp;style=flat-square&amp;logo=githubactions&amp;logoColor=FFC72C&amp;label=CI&amp;labelColor=0B1F33"></a>
+  <a href="https://github.com/aerospike-ce-ecosystem/aerospike-cluster-manager/actions/workflows/cd.yaml"><img alt="CD status" src="https://img.shields.io/github/actions/workflow/status/aerospike-ce-ecosystem/aerospike-cluster-manager/cd.yaml?branch=main&amp;style=flat-square&amp;logo=githubactions&amp;logoColor=FFC72C&amp;label=CD&amp;labelColor=0B1F33"></a>
+  <a href="LICENSE"><img alt="Apache 2.0 license" src="https://img.shields.io/github/license/aerospike-ce-ecosystem/aerospike-cluster-manager?style=flat-square&amp;logo=apache&amp;logoColor=FFC72C&amp;labelColor=0B1F33&amp;color=647283"></a>
+</p>
 
 A web-based GUI management tool for Aerospike Community Edition.
 

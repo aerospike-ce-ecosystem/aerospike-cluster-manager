@@ -297,24 +297,24 @@ function BrandCard({ active }: { active?: boolean }) {
       className={cx(
         "flex items-center gap-3 rounded-md px-2 py-1.5 transition",
         active
-          ? "dark:bg-primary-10/40 bg-primary-95"
+          ? "bg-[#FFF4CC] dark:bg-[#FFC72C]/15"
           : "hover:bg-gray-50 dark:hover:bg-gray-900",
         focusRing,
       )}
     >
       <Image
-        src="/acm-logo.svg"
+        src="/acm-icon.svg"
         alt="Aerospike Cluster Manager"
         width={36}
         height={36}
-        className="size-9 shrink-0 rounded-lg"
+        className="size-9 shrink-0 rounded-lg ring-1 ring-[#0B1F33]/10"
       />
       <div className="min-w-0 leading-tight">
         <p
           className={cx(
             "truncate text-sm font-semibold",
             active
-              ? "text-primary-40 dark:text-primary-80"
+              ? "text-[#0B1F33] dark:text-[#FFC72C]"
               : "text-gray-900 dark:text-gray-50",
           )}
         >
