@@ -278,3 +278,67 @@ async def test_init_db_succeeds_in_ephemeral_mode_without_explicit_kek(tmp_path,
             assert got.password == "ephemeral-pw"
         finally:
             await db.close_db()
+
+
+@pytest.mark.asyncio
+async def test_partial_encrypt_failure_rolls_back_all_rewrites(tmp_path):
+    """If ``encrypt_password`` raises mid-loop, no partial UPDATE may
+    survive: the whole migration runs inside one ``BEGIN IMMEDIATE``
+    transaction and must roll back atomically (issue #346)."""
+    import aiosqlite
+
+    from aerospike_cluster_manager_api.db import _sqlite
+
+    db_path = str(tmp_path / "rollback.db")
+    with (
+        patch("aerospike_cluster_manager_api.config.ENABLE_POSTGRES", False),
+        patch("aerospike_cluster_manager_api.config.SQLITE_PATH", db_path),
+    ):
+        await db.init_db()
+        try:
+            # Hand-write two legacy plaintext rows, bypassing the
+            # encrypt-on-write path.
+            now = datetime.now(UTC).isoformat()
+            conn = _sqlite._get_conn()
+            for conn_id in ("conn-a", "conn-b"):
+                await conn.execute(
+                    """INSERT INTO connections (id, name, hosts, port, color,
+                                                password, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (conn_id, conn_id, '["localhost"]', 3000, "#0097D3", f"plain-{conn_id}", now, now),
+                )
+            await conn.commit()
+
+            calls = 0
+            real_encrypt = secrets_crypto.encrypt_password
+
+            def _encrypt_then_fail(plaintext: str) -> str:
+                nonlocal calls
+                calls += 1
+                if calls >= 2:
+                    raise RuntimeError("KEK exploded mid-migration")
+                return real_encrypt(plaintext)
+
+            with (
+                patch.object(_sqlite, "encrypt_password", side_effect=_encrypt_then_fail),
+                pytest.raises(RuntimeError, match="mid-migration"),
+            ):
+                await _sqlite.migrate_passwords_to_encrypted()
+            assert calls == 2, "expected the second row's encrypt to fail"
+
+            # The first row's UPDATE ran before the failure — it must have
+            # been rolled back along with everything else.
+            async with (
+                aiosqlite.connect(db_path) as raw,
+                raw.execute("SELECT id, password FROM connections ORDER BY id") as cursor,
+            ):
+                rows = await cursor.fetchall()
+            assert [tuple(row) for row in rows] == [
+                ("conn-a", "plain-conn-a"),
+                ("conn-b", "plain-conn-b"),
+            ]
+
+            # The transaction is closed: a retry with a healthy KEK succeeds.
+            assert await _sqlite.migrate_passwords_to_encrypted() == 2
+        finally:
+            await db.close_db()
