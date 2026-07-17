@@ -6,15 +6,22 @@
  * Each message's `data` field is a JSON string that we parse before
  * delivering to the consumer.
  *
- * Auth: `EventSource` cannot set headers, so the access token is appended as
- * `?access_token=<jwt>` and the active cluster id as `&cluster=<id>`. The
- * backend (Stream B) reads these and applies the same JWT verification as the
- * Authorization header path.
+ * Auth (issue #345, ADR-0040 follow-up): native `EventSource` cannot set an
+ * Authorization header, and putting the JWT in the URL leaks it into ingress
+ * access logs, browser history, and Referer headers. Instead, when an access
+ * token is present we first mint a short-lived, single-use opaque ticket via
+ * an authenticated `POST /api/events/ticket` (Authorization header), then
+ * connect with `?ticket=<opaque>`. The backend burns the ticket on first
+ * use, so a URL that leaks into an access log is already worthless — and the
+ * long-lived JWT never appears in any URL.
  */
 
 import { refreshToken } from "@/lib/auth/keycloak"
 import { useAuthStore } from "@/stores/auth-store"
-import { useClusterSelectorStore } from "@/stores/cluster-selector-store"
+import {
+  getActiveCluster,
+  type ClusterEntry,
+} from "@/stores/cluster-selector-store"
 
 import type { SSEEvent, SSEHandler } from "../types/events"
 import { API_PREFIX } from "./client"
@@ -41,66 +48,54 @@ export interface EventSubscription {
 const RECONNECT_INITIAL_MS = 1_000
 const RECONNECT_MAX_MS = 30_000
 
-function buildStreamUrl(types?: string[]): string {
+/** Resolve the active cluster's API origin ("" = same-origin / proxy mode). */
+function resolveBaseHost(active: ClusterEntry | null): string {
+  return active?.apiUrl?.replace(/\/+$/, "") ?? ""
+}
+
+/**
+ * Exchange the in-memory access token for a single-use SSE stream ticket.
+ * Returns `null` when the backend rejects the mint (expired token, SSE
+ * disabled, ...) — callers decide whether to refresh and retry or back off.
+ * Uses raw `fetch` (not apiFetch) so a failing background stream never
+ * triggers apiFetch's login redirect side effect.
+ */
+async function mintStreamTicket(
+  baseHost: string,
+  token: string,
+): Promise<string | null> {
+  const res = await fetch(`${baseHost}${API_PREFIX}/events/ticket`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  })
+  if (!res.ok) return null
+  try {
+    const body = (await res.json()) as { ticket?: unknown }
+    return typeof body.ticket === "string" && body.ticket.length > 0
+      ? body.ticket
+      : null
+  } catch {
+    return null
+  }
+}
+
+function buildStreamUrl(
+  active: ClusterEntry | null,
+  types?: string[],
+  ticket?: string | null,
+): string {
   const params = new URLSearchParams()
   if (types && types.length > 0) params.set("types", types.join(","))
-
-  // Multi-cluster + OIDC mode: append cluster id and JWT so SSE works across
-  // origins without an Authorization header (EventSource limitation).
-  //
-  // SECURITY: the access token appears in the request URL. This means the
-  // token can leak via (a) upstream ingress access logs, (b) browser dev
-  // tools, (c) Referer headers if the SSE response page links elsewhere.
-  // Mitigations: short token TTL, mandatory access-log masking on every
-  // ingress that sits in front of the API (documented in
-  // aerospike-ce-kubernetes-operator/docs/multi-cluster-keycloak.md), and
-  // logging middleware on the API masks `access_token`/`id_token` query
-  // params before persisting them. See ADR-0040 follow-up: the long-term
-  // fix is per-stream signed nonces or transport upgrades that allow
-  // header-based auth on subscriptions.
-  const selector = useClusterSelectorStore.getState()
-  const active =
-    selector.registry?.clusters.find(
-      (c) => c.id === selector.currentClusterId,
-    ) ??
-    selector.registry?.clusters.find(
-      (c) => c.id === selector.registry?.defaultClusterId,
-    ) ??
-    null
+  // Multi-cluster mode: pin the stream to the active cluster.
   if (active) params.set("cluster", active.id)
-  const token = useAuthStore.getState().accessToken
-  const baseHost = active?.apiUrl?.replace(/\/+$/, "") ?? ""
-  if (token) {
-    // TODO(ADR-0040 follow-up): replace with per-stream signed nonce or
-    // cookie-based auth so the token does not appear in the URL. EventSource
-    // does not support custom headers in stock browsers, so this remains the
-    // workaround until the broker grows a dedicated handshake endpoint.
-    //
-    // Until that lands, refuse to open the stream against a plain-http
-    // origin: the JWT would travel as cleartext in the URL and end up in
-    // every reverse-proxy access log on the path. Operators must serve the
-    // API over https before SSE+OIDC can be used.
-    if (active?.apiUrl && /^http:\/\//i.test(active.apiUrl)) {
-      throw new Error(
-        "[events.ts] refusing to open SSE stream over plain http://: " +
-          "the access_token query param would leak via access logs. " +
-          "Configure the cluster apiUrl to use https://. " +
-          "Tracking: ADR-0040 follow-up.",
-      )
-    }
-    if (process.env.NODE_ENV !== "production") {
-      // eslint-disable-next-line no-console
-      console.warn(
-        "[events.ts] access_token is being sent in the SSE URL query " +
-          "string. Ensure the ingress masks `access_token` from access logs. " +
-          "Tracking: ADR-0040 follow-up.",
-      )
-    }
-    params.set("access_token", token)
-  }
+  // Single-use handshake ticket — never the JWT itself (issue #345).
+  if (ticket) params.set("ticket", ticket)
 
   const qs = params.toString()
-  return `${baseHost}${API_PREFIX}/events/stream${qs ? `?${qs}` : ""}`
+  return `${resolveBaseHost(active)}${API_PREFIX}/events/stream${qs ? `?${qs}` : ""}`
 }
 
 /**
@@ -111,9 +106,10 @@ function buildStreamUrl(types?: string[]): string {
  * Auth-aware reconnect: when the EventSource transitions to ``CLOSED`` (the
  * only state we can observe — ``EventSource`` does not surface HTTP status
  * codes), we treat it as a likely 401/expired-token and try to refresh the
- * access token before re-opening the stream. We back off exponentially
- * (1s → 30s) on repeated failures so a permanently-broken auth doesn't melt
- * the API into a reconnect storm.
+ * access token before re-opening the stream. Every (re)open mints a fresh
+ * single-use ticket — tickets are burned server-side on first connect. We
+ * back off exponentially (1s → 30s) on repeated failures so a permanently-
+ * broken auth doesn't melt the API into a reconnect storm.
  */
 export function subscribeEvents<T = unknown>(
   options: SubscribeEventsOptions<T> = {},
@@ -165,7 +161,35 @@ export function subscribeEvents<T = unknown>(
       source = null
     }
 
-    const url = buildStreamUrl(types)
+    const active = getActiveCluster()
+
+    // OIDC mode: exchange the access token for a single-use stream ticket.
+    // The JWT itself must never be placed in the URL (issue #345).
+    let ticket: string | null = null
+    const token = useAuthStore.getState().accessToken
+    if (token) {
+      try {
+        ticket = await mintStreamTicket(resolveBaseHost(active), token)
+        if (!ticket && !closed) {
+          // Mint rejected — most likely an expired token. Refresh once and
+          // retry before falling back to the backoff loop.
+          const newToken = await refreshToken()
+          if (newToken && !closed) {
+            ticket = await mintStreamTicket(resolveBaseHost(active), newToken)
+          }
+        }
+      } catch {
+        ticket = null
+      }
+      if (closed) return
+      if (!ticket) {
+        onError?.(new Event("error"))
+        scheduleReconnect()
+        return
+      }
+    }
+
+    const url = buildStreamUrl(active, types, ticket)
     const next = new EventSource(url)
     source = next
 
@@ -181,13 +205,16 @@ export function subscribeEvents<T = unknown>(
       onError?.(ev)
       // EventSource auto-reconnects on transient errors but stays in CLOSED
       // when the server hard-rejected the request (e.g. 401). In that case,
-      // attempt a token refresh and re-open ourselves, otherwise leave the
-      // browser's reconnect to do its job.
+      // attempt a token refresh and re-open ourselves (which mints a fresh
+      // ticket), otherwise leave the browser's reconnect to do its job.
+      // NOTE: the browser's own auto-reconnect replays the same URL — with a
+      // burned single-use ticket that replay is rejected and lands here as a
+      // CLOSED stream, funnelling all reconnects through openConnection().
       if (next.readyState === EventSource.CLOSED) {
         next.close()
         if (closed) return
         // Attempt a one-shot token refresh; on success we immediately reopen
-        // with the new token, otherwise we fall back to backoff so we don't
+        // with a fresh ticket, otherwise we fall back to backoff so we don't
         // hammer the API while auth is permanently broken.
         void refreshToken()
           .then((newToken) => {

@@ -241,11 +241,14 @@ app.add_middleware(
 # Request logging middleware
 # ---------------------------------------------------------------------------
 
-# Matches ``access_token=...`` (and a few common JWT-like query keys) in a
-# URL query string. We log the path + (optionally) query, and SSE clients
-# pass JWTs as ``?access_token=`` because EventSource cannot send Authorization
-# headers — masking before logging keeps tokens out of access logs.
-_SENSITIVE_QS_RE = re.compile(r"(access_token|id_token|token)=[^&\s]+", re.IGNORECASE)
+# Matches credential-bearing query keys in a URL query string before the
+# request line is logged. ``?access_token=`` is no longer *accepted* by the
+# API (issue #345 replaced it with single-use SSE tickets), but old or
+# misconfigured clients may still send it — keep masking so a rejected
+# request doesn't persist the JWT either. ``ticket`` values are single-use
+# and short-lived, but masking them too keeps even a burned credential out
+# of the logs.
+_SENSITIVE_QS_RE = re.compile(r"(access_token|id_token|ticket|token)=[^&\s]+", re.IGNORECASE)
 
 
 def _mask_query_string(qs: str) -> str:

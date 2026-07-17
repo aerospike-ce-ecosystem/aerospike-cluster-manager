@@ -3,6 +3,11 @@
 Clients connect to ``GET /api/v1/events/stream`` and receive a continuous
 stream of server-sent events.  An optional ``types`` query parameter
 filters which event types are delivered.
+
+When OIDC is enabled, browser clients first mint a single-use ticket via
+``POST /api/v1/events/ticket`` (Authorization header) and connect with
+``?ticket=<opaque>`` — the JWT itself is never placed in the URL (issue
+#345). See :mod:`aerospike_cluster_manager_api.events.tickets`.
 """
 
 from __future__ import annotations
@@ -15,15 +20,24 @@ from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from aerospike_cluster_manager_api import config
 from aerospike_cluster_manager_api.events.broker import broker
+from aerospike_cluster_manager_api.events.tickets import TicketCapacityError, ticket_store
 from aerospike_cluster_manager_api.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/events", tags=["events"])
+
+
+class SSETicketResponse(BaseModel):
+    """Single-use handshake ticket for the SSE stream (issue #345)."""
+
+    ticket: str
+    expires_in: int
 
 
 async def _event_generator(
@@ -54,6 +68,34 @@ async def _event_generator(
                 yield {"comment": f"ping {int(time.time() * 1000)}"}
     finally:
         await broker.unsubscribe(subscriber_id)
+
+
+@router.post(
+    "/ticket",
+    summary="Mint a single-use SSE stream ticket",
+    description="Exchange a normal Authorization-header credential for a "
+    "short-lived, single-use opaque ticket. Native EventSource cannot send "
+    "headers, so the stream is opened with `?ticket=<value>` instead of ever "
+    "placing the JWT in the URL. The ticket is burned on first use.",
+    response_model=SSETicketResponse,
+)
+async def mint_stream_ticket(request: Request) -> SSETicketResponse | JSONResponse:
+    """Mint a single-use ticket for ``GET /events/stream``.
+
+    Authentication is enforced by ``OIDCAuthMiddleware`` (Authorization
+    header only — this path never accepts query-string credentials). The
+    verified claims are carried over to the ticket so the stream request
+    inherits the same identity and role checks.
+    """
+    if not config.SSE_ENABLED:
+        return JSONResponse(status_code=404, content={"detail": "SSE streaming is disabled"})
+
+    claims = getattr(request.state, "user_claims", None) or {}
+    try:
+        ticket, expires_in = ticket_store.issue(claims)
+    except TicketCapacityError:
+        return JSONResponse(status_code=429, content={"detail": "Too many pending SSE tickets"})
+    return SSETicketResponse(ticket=ticket, expires_in=expires_in)
 
 
 @router.get(
