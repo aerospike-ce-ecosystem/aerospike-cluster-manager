@@ -1,13 +1,11 @@
 # Observability (OpenTelemetry)
 
-The API server emits OpenTelemetry **traces, metrics, and logs** when
-``OTEL_SDK_DISABLED=false`` is set. Defaults are off — there is zero
-runtime cost when the variable is at its default and OTel API calls fall
-back to NoOp providers.
+Set ``OTEL_SDK_DISABLED=false`` to make the API emit OpenTelemetry **traces,
+metrics, and logs**. OpenTelemetry is off by default, so API calls use NoOp
+providers and add no runtime cost.
 
-All exporter / sampler / resource configuration uses the **OTel SDK
-standard environment variables**. The API does not introduce wrapper
-variables for any of them.
+Configure exporters, samplers, and resources with the **standard OTel SDK
+environment variables**. The API does not add wrapper variables.
 
 ## Quick start: send everything to a local collector
 
@@ -19,7 +17,7 @@ full stack with OTel turned on:
 OTEL_SDK_DISABLED=false podman compose --profile observability up
 ```
 
-Then tail the collector to watch every signal arrive:
+Then follow the Collector logs to confirm that signals arrive:
 
 ```bash
 podman logs -f otel-collector
@@ -41,7 +39,7 @@ OTEL_SERVICE_NAME=aerospike-cluster-manager-api \
 uvicorn aerospike_cluster_manager_api.main:app --host 0.0.0.0 --port 8000
 ```
 
-Open the collector logs and you will see:
+The Collector logs show:
 
 - HTTP server spans for every API request (``/api/v1/clusters/...`` etc.)
 - ``aerospike.<op>`` spans for every Aerospike operation — emitted by
@@ -76,8 +74,8 @@ The exporter selection in the API picks the right module per
 
 ## aerospike-py native instrumentation
 
-ACM's Aerospike client, ``aerospike-py``, runs an async Rust core. That core
-carries its own observability surface, and ACM opts into both halves of it.
+The ``aerospike-py`` client uses an asynchronous Rust core with its own
+observability surface. ACM enables both parts of that surface.
 
 ### Traces — ``aerospike.<op>`` spans
 
@@ -116,9 +114,9 @@ like any other ACM log line. ``shutdown_observability()`` additionally surfaces
 | ``AEROSPIKE_PY_LOG_LEVEL`` | Verbosity of the aerospike-py Rust-core log bridge. Accepts standard level names (``DEBUG``, ``INFO``, ``WARNING``, ``ERROR``) plus ``TRACE`` and ``OFF``. Kept separate from ``LOG_LEVEL`` because the core is very chatty at ``DEBUG``/``TRACE``. | value of ``LOG_LEVEL`` |
 | ``AEROSPIKE_PY_TRACING`` | Start aerospike-py's native OTLP span exporter. Only takes effect when OTel is enabled; set falsy to suppress the high-volume per-operation spans. | ``true`` |
 
-All aerospike-py observability calls are best-effort: a failure in
-``init_tracing``, ``set_log_level``, or ``shutdown_tracing`` is caught and
-logged as a warning — it never blocks ACM startup or shutdown.
+All aerospike-py observability calls are best effort. ACM catches failures in
+``init_tracing``, ``set_log_level``, or ``shutdown_tracing`` and logs a
+warning. These failures never block startup or shutdown.
 
 ## Custom metrics emitted
 
@@ -181,8 +179,7 @@ http.server
     └── (no aerospike-py spans — k8s-only flow)
 ```
 
-This shape is what makes the trace useful for diagnosing both
-**aerospike-py behaviour** (how many retries did one op produce, what was
-the cluster-tend latency at the moment of failure) and **cluster-manager
-internal flow** (where in our handler chain time was spent, whether a 500
-came from k8s API or from our own validation).
+This trace shape helps diagnose both **aerospike-py behavior** and
+**Cluster Manager's internal flow**. You can see retry counts and cluster-tend
+latency, find slow handlers, and tell whether a 500 came from the K8s API or
+from Cluster Manager validation.

@@ -1,10 +1,10 @@
 # Aerospike Data Management Guide
 
-This guide covers the data-oriented features of the Aerospike Cluster Manager for interacting with Aerospike clusters directly.
+This guide explains how to work directly with Aerospike data in Cluster Manager.
 
 ## Connection Management
 
-The home page (`/`) displays all saved connection profiles. Each connection is represented by a color-coded card with a live health indicator.
+The home page (`/`) lists saved connection profiles. Each color-coded card includes a live health indicator.
 
 ### Connection Profiles
 
@@ -40,13 +40,13 @@ The cluster overview page (`/cluster/{connId}`) shows:
 
 ## Record Browser
 
-The record browser (`/browser/{connId}`) provides a spreadsheet-like data grid for browsing Aerospike records.
+The record browser (`/browser/{connId}`) displays Aerospike records in a spreadsheet-like grid.
 
 ### Navigation
 
 1. Select a namespace from the namespace list.
 2. Select a set within the namespace.
-3. Records are displayed in a paginated data grid with configurable page size (up to 500).
+3. Browse the records in a paginated grid. You can set the page size up to 500.
 
 ### CRUD Operations
 
@@ -66,11 +66,11 @@ Scan records with expression-based filters:
 
 ### Batch Read
 
-Retrieve multiple records by primary key in a single request. Enter a list of primary keys and the batch read returns all matching records.
+Enter several primary keys to retrieve matching records in one batch request.
 
 ## Query Builder
 
-The Query Builder is not a separate route -- it is accessed via the **query toolbar** on the Record Browser page (`/browser/{connId}`). It supports three query strategies:
+Open the Query Builder from the **query toolbar** on the Record Browser page (`/browser/{connId}`). It is not a separate route. Choose one of three query strategies:
 
 1. **Primary Key Lookup** -- Direct record retrieval by namespace, set, and primary key. Integer keys are auto-detected.
 2. **Predicate Query** -- Filter records using secondary index predicates (equality match, range query) on indexed bins.
@@ -83,7 +83,7 @@ All strategies support:
 
 ## Secondary Index Management
 
-The indexes page (`/indexes/{connId}`) manages secondary indexes on Aerospike bins.
+Use the indexes page (`/indexes/{connId}`) to manage secondary indexes on Aerospike bins.
 
 - **Create Index** -- Define indexes on numeric, string, or geo2dsphere bin types for any namespace/set/bin combination.
 - **Delete Index** -- Remove indexes by name from a given namespace.
@@ -91,7 +91,7 @@ The indexes page (`/indexes/{connId}`) manages secondary indexes on Aerospike bi
 
 ## User & Role Management (ACL)
 
-The admin page (`/admin/{connId}`) manages Aerospike access control lists. Requires security to be enabled in `aerospike.conf`.
+Use the admin page (`/admin/{connId}`) to manage Aerospike access control lists. Enable security in `aerospike.conf` first.
 
 ### Users
 
@@ -106,7 +106,7 @@ The admin page (`/admin/{connId}`) manages Aerospike access control lists. Requi
 - Create roles with granular privileges (per-namespace, per-set permissions) and CIDR-based allowlists.
 - Delete unused roles.
 
-A CE limitation banner is shown when security features are not available.
+When security is unavailable, the page shows a CE limitation banner.
 
 ## UDF Management
 
@@ -129,7 +129,7 @@ The cluster dashboard provides real-time metrics with historical time-series dat
 
 ## Sample Data Generator
 
-Generate deterministic sample data for testing and demonstration:
+Create deterministic sample data for tests and demonstrations:
 
 - **Record Generation** -- Create a configurable number of sample records in any namespace/set.
 - **Secondary Indexes** -- Optionally create indexes on sample data bins.

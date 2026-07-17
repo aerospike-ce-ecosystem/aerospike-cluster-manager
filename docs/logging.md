@@ -1,15 +1,13 @@
 # Logging
 
-The API server uses Python's standard ``logging`` module. The default
-configuration emits a single stdout handler with either text or JSON
-output (selected by ``LOG_FORMAT``).
+The API uses Python's standard ``logging`` module. By default, one stdout
+handler writes text or JSON, as selected by ``LOG_FORMAT``.
 
-External log routing — PII redaction, sampling, field enrichment,
-vendor-specific exporters (Datadog, Loki, Elasticsearch, Sentry, ...) —
-is delegated to an **OpenTelemetry Collector** that receives this
-process's logs. Any transform pipeline lives in the Collector
-configuration, so operators swap backends from helm values alone
-without touching the application image.
+An **OpenTelemetry Collector** handles external routing, PII redaction,
+sampling, field enrichment, and vendor exporters such as Datadog, Loki,
+Elasticsearch, and Sentry. Keep transformation pipelines in the Collector
+configuration. Operators can then change backends through Helm values without
+rebuilding the application image.
 
 ## Architecture
 
@@ -28,15 +26,14 @@ without touching the application image.
                                          Tempo / Sentry                    your-vendor-bridge
 ```
 
-The OTel Collector itself is **not** deployed by the ACKO helm chart —
-the assumption is that the cluster already has one (a DaemonSet for
-node-level, a Deployment for namespace-level, or one per-namespace
-when isolation matters). The chart only opt-in deploys the **sidecar
-that forwards to it**.
+The ACKO Helm chart does **not** deploy the OTel Collector. It assumes the
+cluster already has a node-level DaemonSet, a namespace-level Deployment, or
+one Collector per namespace when isolation matters. The chart can optionally
+deploy the **sidecar that forwards logs to the Collector**.
 
 ## Modes
 
-Two modes:
+Choose one of two modes:
 
 1. **Default — stdout only**
    A single ``StreamHandler(sys.stdout)`` with the existing
@@ -84,9 +81,9 @@ The chart pre-bakes a fluent-bit config that:
 - forwards records to ``otlp.endpoint`` via the ``opentelemetry`` output
 - propagates ``otlp.headers`` as OTLP HTTP/gRPC metadata
 
-Operators who need a different shipper (vector, promtail, vendor agent)
-can override ``sidecar.image`` and ``sidecar.config.content`` — the
-schema is documented in the ACKO chart's ``values.yaml``.
+To use another shipper, such as vector, promtail, or a vendor agent, override
+``sidecar.image`` and ``sidecar.config.content``. The ACKO chart's
+``values.yaml`` documents the schema.
 
 ## OpenTelemetry trace correlation
 

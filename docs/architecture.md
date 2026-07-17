@@ -1,10 +1,10 @@
 # Architecture Guide
 
-This document describes how the Aerospike Cluster Manager integrates with the Aerospike CE Kubernetes Operator and the broader Kubernetes ecosystem.
+This guide explains how Aerospike Cluster Manager works with the Aerospike CE Kubernetes Operator and Kubernetes.
 
 ## System Overview
 
-The Aerospike Cluster Manager is a web-based GUI that provides two primary capabilities:
+Aerospike Cluster Manager has two main responsibilities:
 
 1. **Aerospike Data Management** -- Direct interaction with Aerospike clusters (record browsing, queries, index management, ACL, UDFs, metrics).
 2. **Kubernetes Cluster Lifecycle Management** -- Full GUI for managing `AerospikeCluster` and `AerospikeClusterTemplate` custom resources deployed by the Aerospike CE Kubernetes Operator.
@@ -82,23 +82,23 @@ The Aerospike Cluster Manager is a web-based GUI that provides two primary capab
 
 ### Aerospike CE Kubernetes Operator
 
-The operator is a separate project ([aerospike-ce-kubernetes-operator](https://github.com/aerospike-ce-ecosystem/aerospike-ce-kubernetes-operator)) that runs as a controller-manager in the Kubernetes cluster. It:
+The operator is a separate project: [aerospike-ce-kubernetes-operator](https://github.com/aerospike-ce-ecosystem/aerospike-ce-kubernetes-operator). It runs as a controller-manager in the Kubernetes cluster and:
 
 - Watches `AerospikeCluster` custom resources (CRD group: `acko.io`, version: `v1alpha1`).
 - Reconciles the desired state into Kubernetes primitives (StatefulSets, Services, ConfigMaps, NetworkPolicies, etc.).
 - Reports cluster phase, conditions, pod status, and operation progress back into the CR status.
 - Supports `AerospikeClusterTemplate` as cluster-scoped resources for reusable configuration presets.
 
-The Cluster Manager UI reads these status fields and displays them as dashboards, progress bars, and health indicators.
+Cluster Manager reads these status fields and presents them as dashboards, progress bars, and health indicators.
 
 ## Communication Flow
 
 ### K8s Cluster Creation (example)
 
-1. User fills out the multi-step wizard in the UI.
-2. UI sends `POST /api/k8s/clusters` with the `CreateK8sClusterRequest` payload.
-3. API's `k8s_clusters.py` router validates the request and calls `build_cr()` to construct the AerospikeCluster CR manifest.
-4. API calls `k8s_client.create_cluster(namespace, cr)` which submits the CR to the Kubernetes API via `CustomObjectsApi.create_namespaced_custom_object()`.
+1. The user completes the multi-step wizard in the UI.
+2. The UI sends `POST /api/k8s/clusters` with the `CreateK8sClusterRequest` payload.
+3. The `k8s_clusters.py` router validates the request and calls `build_cr()` to build the AerospikeCluster CR manifest.
+4. The API calls `k8s_client.create_cluster(namespace, cr)`. This method submits the CR through `CustomObjectsApi.create_namespaced_custom_object()`.
 5. The operator detects the new CR and begins reconciliation (creating StatefulSet, Services, etc.).
 6. The UI polls `GET /api/k8s/clusters/{namespace}/{name}` to track the cluster phase as it transitions through `InProgress` -> `Completed`.
 7. If auto-connect was enabled, the API also creates a connection profile pointing to the cluster's headless service DNS name (`<name>.<namespace>.svc.cluster.local`).
@@ -116,7 +116,7 @@ The Cluster Manager interacts with two CRD types:
 
 ### Standalone (Podman Compose)
 
-For local development or non-Kubernetes environments, the Cluster Manager runs as a container alongside Aerospike nodes and PostgreSQL. K8s management is disabled by default (`K8S_MANAGEMENT_ENABLED=false`). Only data management features are available.
+For local development or non-Kubernetes environments, run Cluster Manager in containers beside Aerospike nodes and PostgreSQL. K8s management is off by default (`K8S_MANAGEMENT_ENABLED=false`), so only data management features are available.
 
 ```bash
 podman compose -f compose.yaml up --build
@@ -124,7 +124,7 @@ podman compose -f compose.yaml up --build
 
 ### Inside Kubernetes (with operator)
 
-When deployed inside a Kubernetes cluster alongside the Aerospike CE Operator, set `K8S_MANAGEMENT_ENABLED=true`. The API automatically loads in-cluster Kubernetes config and uses the pod's service account for API access.
+Set `K8S_MANAGEMENT_ENABLED=true` when you deploy Cluster Manager beside the Aerospike CE Operator. The API loads the in-cluster Kubernetes configuration and uses the pod's service account.
 
 **Required RBAC permissions** for the service account:
 
@@ -145,7 +145,7 @@ The operator's Helm chart can deploy the Cluster Manager as a sidecar or standal
 
 ### Deployment via Operator Helm Chart
 
-The recommended production deployment for Kubernetes uses the operator's Helm chart with the UI component enabled:
+For production on Kubernetes, use the operator's Helm chart with the UI enabled:
 
 ```yaml
 # values.yaml
@@ -169,7 +169,7 @@ ui:
     K8S_LOG_TIMEOUT: "30"
 ```
 
-This deploys the Cluster Manager as a Deployment with:
+This configuration deploys Cluster Manager with:
 - A ServiceAccount with the required RBAC permissions
 - An Ingress or Service for external access
 - Environment variables preconfigured for in-cluster operation
@@ -177,11 +177,11 @@ This deploys the Cluster Manager as a Deployment with:
 
 ## Database Backend
 
-The Aerospike Cluster Manager supports two database backends for persisting connection profiles and application state.
+Cluster Manager can store connection profiles and application state in SQLite or PostgreSQL.
 
 ### SQLite (Default)
 
-SQLite is the default database backend. It requires no external service and works out of the box. The API creates the database file automatically on first startup.
+SQLite is the default. It needs no external service, and the API creates the database file on first startup.
 
 - **WAL mode** is enabled for better read concurrency. Multiple readers can access the database simultaneously while a single writer holds a lock, making it suitable for typical single-instance deployments.
 - **File path** is configurable via the `SQLITE_PATH` environment variable (default: `./data/connections.db`).
@@ -189,7 +189,7 @@ SQLite is the default database backend. It requires no external service and work
 
 ### PostgreSQL (Opt-in)
 
-PostgreSQL can be enabled by setting `ENABLE_POSTGRES=true` and providing a `DATABASE_URL` connection string. This is recommended for high-availability or multi-instance deployments.
+For high-availability or multi-instance deployments, set `ENABLE_POSTGRES=true` and provide `DATABASE_URL` to use PostgreSQL.
 
 ```bash
 ENABLE_POSTGRES=true
