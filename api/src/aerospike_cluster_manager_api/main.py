@@ -18,6 +18,7 @@ from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
 from aerospike_cluster_manager_api import config, db
+from aerospike_cluster_manager_api.aerospike_errors import RESULT_CODE_FAIL_FORBIDDEN, result_code_of
 from aerospike_cluster_manager_api.client_manager import client_manager
 from aerospike_cluster_manager_api.events.broker import broker
 from aerospike_cluster_manager_api.events.collector import collector
@@ -413,9 +414,13 @@ try:
 
     @app.exception_handler(ServerError)
     async def _server_error(_req: Request, exc: ServerError) -> JSONResponse:
-        msg = str(exc)
-        # TODO: Replace string check with proper error code when aerospike-py exposes result_code
-        if "failforbidden" in msg.lower():
+        # Map by the stable numeric Aerospike result code rather than by
+        # matching substrings of the (release-dependent) message text.
+        # result_code_of prefers a structured ``exc.result_code`` attribute
+        # (aerospike-py ADR-0011) and falls back to the code embedded in the
+        # message ("AEROSPIKE_ERR (<code>)") for currently-released builds.
+        code = result_code_of(exc)
+        if code == RESULT_CODE_FAIL_FORBIDDEN:
             return JSONResponse(
                 status_code=403,
                 content={
@@ -423,7 +428,7 @@ try:
                     "If setting TTL, ensure the namespace has 'nsup-period' configured."
                 },
             )
-        logger.warning("Unrecognized ServerError: %s", msg)
+        logger.warning("Unrecognized ServerError (result_code=%s): %s", code, exc)
         return _internal_error_response()
 
     @app.exception_handler(AerospikeTimeoutError)
