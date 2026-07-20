@@ -23,7 +23,7 @@
     }
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.82",
+    "@ai-sdk/anthropic": "^3.0.98",
     "@ai-sdk/openai": "^3.0.69",
     "@copilotkit/react-core": "^1.60.1",
     "@copilotkit/runtime": "^1.59.5",
