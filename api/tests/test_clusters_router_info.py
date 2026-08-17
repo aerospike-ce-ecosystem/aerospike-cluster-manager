@@ -209,6 +209,82 @@ class TestExecuteInfoWhitelistRejection:
         mock_as_client.info_all.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_multi_command_frame_rejected_with_400(self, client: AsyncClient, sample_connection):
+        # asinfo is a multi-command wire format, so a frame whose LEADING
+        # verb is whitelisted can carry a further command behind a newline.
+        # Checking only the head accepted the frame and then transmitted it
+        # whole; the gate must reject the frame instead.
+        from aerospike_cluster_manager_api import db
+
+        await db.create_connection(sample_connection)
+        mock_as_client = _make_mock_client()
+
+        with patch(
+            "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+            return_value=mock_as_client,
+        ):
+            resp = await client.post(
+                f"/api/v1/clusters/{sample_connection.id}/info",
+                json={
+                    "commands": ["namespaces\nrecluster:"],
+                    "readOnly": True,
+                },
+            )
+
+        assert resp.status_code == 400, resp.text
+        detail = resp.json()["detail"]
+        assert "not a single asinfo command" in detail
+        # Wire was NOT touched — fail-fast before any info_all call.
+        mock_as_client.info_all.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_semicolon_chained_frame_rejected_with_400(self, client: AsyncClient, sample_connection):
+        from aerospike_cluster_manager_api import db
+
+        await db.create_connection(sample_connection)
+        mock_as_client = _make_mock_client()
+
+        with patch(
+            "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+            return_value=mock_as_client,
+        ):
+            resp = await client.post(
+                f"/api/v1/clusters/{sample_connection.id}/info",
+                json={
+                    "commands": ["namespaces;recluster:"],
+                    "readOnly": True,
+                },
+            )
+
+        assert resp.status_code == 400, resp.text
+        assert "not a single asinfo command" in resp.json()["detail"]
+        mock_as_client.info_all.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_fan_out_transmits_the_validated_string(self, client: AsyncClient, sample_connection):
+        # The fan-out branch is the default (no `node`) and used to forward
+        # body.commands rather than the validated string, so validation had
+        # no bearing on what reached the wire. Whitespace padding is the
+        # observable proxy: only the validated (stripped) form may be sent.
+        from aerospike_cluster_manager_api import db
+
+        await db.create_connection(sample_connection)
+        mock_as_client = _make_mock_client()
+
+        with patch(
+            "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+            return_value=mock_as_client,
+        ):
+            resp = await client.post(
+                f"/api/v1/clusters/{sample_connection.id}/info",
+                json={"commands": ["  namespaces  "], "readOnly": True},
+            )
+
+        assert resp.status_code == 200, resp.text
+        sent = [c.args[0] for c in mock_as_client.info_all.call_args_list]
+        assert sent == ["namespaces"]
+
+    @pytest.mark.asyncio
     async def test_readonly_false_allows_unwhitelisted_verb(self, client: AsyncClient, sample_connection):
         from aerospike_cluster_manager_api import db
 

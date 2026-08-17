@@ -8,6 +8,10 @@ Covers:
   whitelist plus a representative set of write / unknown verbs. The
   parametrized "all whitelisted verbs pass" test is the regression net
   that catches accidental whitelist trims.
+* :func:`assert_single_command` framing decisions — asinfo is a
+  multi-command wire format, so ``TestSingleCommandFrame`` pins both the
+  chained shapes that must be rejected and the legitimate single-command
+  shapes that must keep passing.
 """
 
 from __future__ import annotations
@@ -16,8 +20,11 @@ import pytest
 
 from aerospike_cluster_manager_api.info_verbs import (
     READ_ONLY_INFO_VERBS,
+    InfoCommandNotSingle,
+    InfoCommandRejected,
     InfoVerbNotAllowed,
     assert_read_only,
+    assert_single_command,
     extract_verb,
 )
 
@@ -113,17 +120,26 @@ class TestAssertReadOnly:
         assert_read_only("namespace:test")
 
     def test_trailing_semicolon_accepted(self) -> None:
-        # ``namespaces;`` is the canonical asinfo CLI form when piping
-        # multiple commands. The verb extractor strips the trailing ``;``
-        # so the LLM-friendly form passes the whitelist.
-        assert assert_read_only("namespaces;") == "namespaces"
-        assert assert_read_only("version;") == "version"
+        # ``namespaces;`` is the canonical asinfo CLI terminator for a single
+        # command, so one trailing ``;`` must stay acceptable even though a
+        # ``;`` elsewhere now means "second command".
+        assert assert_read_only("namespaces;").verb == "namespaces"
+        assert assert_read_only("version;").verb == "version"
 
     def test_assert_returns_parsed_verb(self) -> None:
         # Forward-compat for telemetry — callers can attach the parsed
         # verb to OTel span attributes / structured logs.
-        assert assert_read_only("roster:namespace=test") == "roster"
-        assert assert_read_only("sets/test/myset") == "sets"
+        assert assert_read_only("roster:namespace=test").verb == "roster"
+        assert assert_read_only("sets/test/myset").verb == "sets"
+
+    def test_assert_returns_the_string_callers_must_transmit(self) -> None:
+        # The returned command — not the caller's original — is what goes on
+        # the wire, so a caller following the signature cannot forget to
+        # transmit the validated value. Defence in depth, not a guarantee:
+        # ValidatedInfoCommand has no validating constructor, so an instance
+        # can still be hand-built around any string.
+        assert assert_read_only("  namespaces  ").command == "namespaces"
+        assert assert_read_only("roster:namespace=test").command == "roster:namespace=test"
 
     def test_slash_path_pass_when_verb_whitelisted(self) -> None:
         assert_read_only("sets/test/myset")
@@ -185,6 +201,140 @@ class TestAssertReadOnly:
         msg = str(exc.value)
         assert "frobnicate" in msg
         assert "READ_ONLY_INFO_VERBS" in msg
+
+
+class TestSingleCommandFrame:
+    """The read-only gate must reject frames holding more than one command.
+
+    asinfo is a multi-command wire format, so checking only the leading verb
+    decides the safety of the frame's *head*, not of the frame. A frame whose
+    head is an allowlisted read verb could carry a further command behind a
+    separator and be transmitted whole.
+    """
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "namespaces\nrecluster:",  # LF batch separator
+            "namespaces\r\nrecluster:",  # CRLF
+            "namespaces\rrecluster:",  # bare CR
+            "version\nversion",  # both halves allowlisted — still two commands
+            "namespaces\n\nversion",  # blank line between
+            "  namespaces\nrecluster:  ",  # surrounding whitespace does not hide it
+        ],
+    )
+    def test_newline_chained_frames_rejected(self, command: str) -> None:
+        with pytest.raises(InfoCommandNotSingle):
+            assert_read_only(command)
+        with pytest.raises(InfoCommandNotSingle):
+            assert_single_command(command)
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "version truncate-namespace:namespace=test",  # space IS a verb terminator
+            "namespaces\trecluster:",  # tab likewise
+            "version recluster:",
+            "version\t\trecluster:",
+            "namespaces version",  # both halves allowlisted — still two tokens
+        ],
+    )
+    def test_space_and_tab_chained_frames_rejected(self, command: str) -> None:
+        # Space and tab are in _VERB_TERMINATORS, so the verb check reads only
+        # the text AHEAD of them — exactly the newline situation, and it has to
+        # be rejected the same way rather than left to the verb lookup. No
+        # read-only verb or argument shape contains internal whitespace: every
+        # command constant is a space-free token, and the path-style builders
+        # interpolate a namespace name that cannot contain a space.
+        with pytest.raises(InfoCommandNotSingle):
+            assert_read_only(command)
+        with pytest.raises(InfoCommandNotSingle):
+            assert_single_command(command)
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "version\x0brecluster:",  # vertical tab
+            "version\x0crecluster:",  # form feed
+            "version\x85recluster:",  # NEL
+            "version\xa0recluster:",  # non-breaking space
+        ],
+    )
+    def test_exotic_whitespace_rejected_with_the_framing_error(self, command: str) -> None:
+        # These were already rejected before the framing check existed, but
+        # only incidentally: the mangled verb missed the allowlist, so the
+        # caller got "verb not on the whitelist" for what is a framing
+        # problem. The rule is str.isspace(), so they now fail as framing.
+        with pytest.raises(InfoCommandNotSingle):
+            assert_read_only(command)
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "namespaces;recluster:",  # ';' ahead of any ':' — a second command
+            "namespaces;version",  # both halves allowlisted — still two commands
+            "roster:namespace=test;recluster:",  # second colon-style command in the args
+            "roster:namespace=test;version",  # bare verb riding in the args
+            "roster:;version",  # empty first arg, then a bare verb
+            "namespaces;;",  # more than the one canonical terminator
+            "sets/test/myset;version",  # path-style head, chained tail
+        ],
+    )
+    def test_semicolon_chained_frames_rejected(self, command: str) -> None:
+        with pytest.raises(InfoCommandNotSingle):
+            assert_read_only(command)
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "namespaces",  # bare verb
+            "namespaces;",  # bare verb + canonical terminator
+            "version;",
+            "sets/test/myset",  # path-style
+            "sindex/test/idx_name",
+            "namespace:test",  # colon-style, single bare argument
+            "roster:namespace=test",  # colon-style, one key=value
+            "roster:namespace=test;",  # ... plus the canonical terminator
+            "latencies:back=10;duration=10",  # ';'-separated key=value args
+            "  version  ",  # surrounding whitespace trimmed, not rejected
+            "namespaces\n",  # trailing newline is a terminator, not a batch
+        ],
+    )
+    def test_legitimate_single_command_shapes_still_accepted(self, command: str) -> None:
+        # Regression net for the syntax the module docstring documents — the
+        # multi-command rejection must not narrow what asinfo really accepts.
+        assert_read_only(command)
+
+    def test_write_verb_still_reports_the_verb_not_the_shape(self) -> None:
+        # A single well-formed command carrying a write verb is a verb
+        # failure, not a framing failure — the two 400s say different things.
+        with pytest.raises(InfoVerbNotAllowed):
+            assert_read_only("truncate-namespace:namespace=test")
+
+    def test_empty_frame_is_a_verb_failure(self) -> None:
+        # Preserves the pre-existing contract: empty input surfaces as an
+        # empty verb rather than as a framing complaint.
+        with pytest.raises(InfoVerbNotAllowed) as exc:
+            assert_single_command("   ")
+        assert exc.value.verb == ""
+
+    def test_rejection_message_does_not_echo_the_command(self) -> None:
+        # The 400 is built from the input's shape, never its content, so an
+        # unvalidated string is not reflected back to the caller.
+        with pytest.raises(InfoCommandNotSingle) as exc:
+            assert_read_only("namespaces\nrecluster:")
+        assert "recluster" not in str(exc.value)
+
+    def test_both_failures_share_one_base(self) -> None:
+        # Callers that only need "was this accepted?" catch the base; the
+        # router discriminates on the subclasses for its 400 message.
+        for command in ("namespaces\nversion", "truncate-namespace:namespace=test"):
+            with pytest.raises(InfoCommandRejected):
+                assert_read_only(command)
+
+    def test_single_command_returns_the_stripped_frame(self) -> None:
+        assert assert_single_command("  namespaces;  ") == "namespaces;"
+        assert assert_single_command("latencies:back=10;duration=10") == "latencies:back=10;duration=10"
 
 
 # ---------------------------------------------------------------------------
