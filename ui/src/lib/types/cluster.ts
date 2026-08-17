@@ -53,6 +53,15 @@ export interface ClusterInfo {
   namespaces: NamespaceInfo[]
 }
 
+/**
+ * Partial `set-config` update for an existing namespace.
+ *
+ * The optional fields are a real partial update, not "use a default":
+ * an omitted parameter keeps the namespace's running value. The API
+ * rejects a body carrying only `name` (400) because `set-config` applies
+ * to a live namespace, and unknown fields (422) so a misspelled
+ * parameter cannot read as a success.
+ */
 export interface CreateNamespaceRequest {
   name: string
   memorySize?: number

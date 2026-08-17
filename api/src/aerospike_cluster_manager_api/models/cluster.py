@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ClusterNode(BaseModel):
@@ -55,9 +55,25 @@ class ClusterInfo(BaseModel):
 
 
 class CreateNamespaceRequest(BaseModel):
+    """Partial ``set-config`` update for an existing namespace.
+
+    Every tunable is ``None``-by-default and only the fields actually
+    supplied are sent to the cluster — see
+    ``clusters_service.configure_namespace``. Defaults here would be
+    *applied*, not ignored: a default ``memorySize`` would dynamically
+    shrink whatever the operator has running, so omission must mean
+    "leave alone" rather than "reset to our guess". Mirrors
+    :class:`models.connection.UpdateConnectionRequest`.
+
+    ``extra="forbid"`` for the same reason: a misspelled ``memory_size``
+    must 422 rather than silently reach the wire as a no-op field.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(min_length=1, pattern=r"^[a-zA-Z0-9_-]{1,63}$")
-    memorySize: int = Field(default=1_073_741_824, ge=1_000_000)  # min 1 MB
-    replicationFactor: int = Field(default=2, ge=1, le=8)
+    memorySize: int | None = Field(default=None, ge=1_000_000)  # min 1 MB
+    replicationFactor: int | None = Field(default=None, ge=1, le=8)
 
 
 class ExecuteInfoRequest(BaseModel):

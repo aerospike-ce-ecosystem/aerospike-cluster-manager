@@ -62,6 +62,17 @@ NS_SUM_KEYS = frozenset(
     }
 )
 
+# Namespace tunables reachable through POST /clusters/{conn_id}/namespaces,
+# mapped from CreateNamespaceRequest field name to its asinfo set-config
+# parameter name. Insertion order is the order parameters appear in the
+# emitted command. Adding an entry widens what that endpoint can change on a
+# live namespace — the model field must be Optional so that omitting it
+# leaves the running value untouched.
+NS_CONFIG_PARAMS: dict[str, str] = {
+    "memorySize": "memory-size",
+    "replicationFactor": "replication-factor",
+}
+
 # Cache TTLs (seconds)
 INFO_CACHE_TTL_STATIC = 60.0  # build, edition — rarely change at runtime
 INFO_CACHE_TTL_VOLATILE = 5.0  # statistics, namespace/*, sets/* — balances freshness vs load

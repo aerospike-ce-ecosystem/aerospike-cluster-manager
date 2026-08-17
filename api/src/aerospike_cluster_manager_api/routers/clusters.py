@@ -17,6 +17,7 @@ from aerospike_cluster_manager_api.models.common import MessageResponse
 from aerospike_cluster_manager_api.rate_limit import limiter
 from aerospike_cluster_manager_api.services import clusters_service
 from aerospike_cluster_manager_api.services.clusters_service import (
+    NamespaceConfigEmptyError,
     NamespaceConfigError,
     NamespaceNotFoundError,
     NodeNotFoundError,
@@ -43,7 +44,13 @@ async def get_cluster(client: AerospikeClient, conn_id: VerifiedConnId) -> Clust
     status_code=200,
     response_model=MessageResponse,
     summary="Configure namespace",
-    description="Update runtime-tunable parameters of an existing Aerospike namespace.",
+    description=(
+        "Update runtime-tunable parameters of an existing Aerospike namespace. "
+        "Partial update: only the parameters present in the body are applied, "
+        "an omitted parameter keeps its running value, and a body naming no "
+        "parameter at all is rejected with 400. Unknown fields are rejected "
+        "with 422 so a misspelled parameter cannot look like a success."
+    ),
 )
 @limiter.limit("10/minute")
 async def configure_namespace(
@@ -52,6 +59,8 @@ async def configure_namespace(
     """Update runtime-tunable parameters of an existing Aerospike namespace."""
     try:
         message = await clusters_service.configure_namespace(client, body)
+    except NamespaceConfigEmptyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except NamespaceNotFoundError as exc:
         raise HTTPException(
             status_code=400,
