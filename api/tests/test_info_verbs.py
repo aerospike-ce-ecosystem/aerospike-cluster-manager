@@ -134,8 +134,10 @@ class TestAssertReadOnly:
 
     def test_assert_returns_the_string_callers_must_transmit(self) -> None:
         # The returned command — not the caller's original — is what goes on
-        # the wire. Returning it is what makes the gate structural: a caller
-        # cannot validate one string and transmit another.
+        # the wire, so a caller following the signature cannot forget to
+        # transmit the validated value. Defence in depth, not a guarantee:
+        # ValidatedInfoCommand has no validating constructor, so an instance
+        # can still be hand-built around any string.
         assert assert_read_only("  namespaces  ").command == "namespaces"
         assert assert_read_only("roster:namespace=test").command == "roster:namespace=test"
 
@@ -226,6 +228,45 @@ class TestSingleCommandFrame:
             assert_read_only(command)
         with pytest.raises(InfoCommandNotSingle):
             assert_single_command(command)
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "version truncate-namespace:namespace=test",  # space IS a verb terminator
+            "namespaces\trecluster:",  # tab likewise
+            "version recluster:",
+            "version\t\trecluster:",
+            "namespaces version",  # both halves allowlisted — still two tokens
+        ],
+    )
+    def test_space_and_tab_chained_frames_rejected(self, command: str) -> None:
+        # Space and tab are in _VERB_TERMINATORS, so the verb check reads only
+        # the text AHEAD of them — exactly the newline situation, and it has to
+        # be rejected the same way rather than left to the verb lookup. No
+        # read-only verb or argument shape contains internal whitespace: every
+        # command constant is a space-free token, and the path-style builders
+        # interpolate a namespace name that cannot contain a space.
+        with pytest.raises(InfoCommandNotSingle):
+            assert_read_only(command)
+        with pytest.raises(InfoCommandNotSingle):
+            assert_single_command(command)
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "version\x0brecluster:",  # vertical tab
+            "version\x0crecluster:",  # form feed
+            "version\x85recluster:",  # NEL
+            "version\xa0recluster:",  # non-breaking space
+        ],
+    )
+    def test_exotic_whitespace_rejected_with_the_framing_error(self, command: str) -> None:
+        # These were already rejected before the framing check existed, but
+        # only incidentally: the mangled verb missed the allowlist, so the
+        # caller got "verb not on the whitelist" for what is a framing
+        # problem. The rule is str.isspace(), so they now fail as framing.
+        with pytest.raises(InfoCommandNotSingle):
+            assert_read_only(command)
 
     @pytest.mark.parametrize(
         "command",

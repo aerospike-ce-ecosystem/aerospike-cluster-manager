@@ -162,8 +162,12 @@ async def execute_info(
             results.append(InfoCommandResult(command=cmd, node=target_node, output=response))
 
         else:
-            # Fan-out across every node (readOnly applies only to the
-            # upfront verb check — per-node results are returned verbatim).
+            # Fan-out across every node. `cmd` comes from the validated list
+            # when readOnly is on, so this branch transmits only what the gate
+            # returned. It previously read body.commands directly, which left
+            # the allowlist advisory here — and this is the DEFAULT branch,
+            # taken whenever the caller names no node. Per-node responses are
+            # still returned verbatim.
             node_results = await clusters_service.execute_info(client, cmd)
             if not node_results:
                 # No node responded at all — emit a single attribution-less

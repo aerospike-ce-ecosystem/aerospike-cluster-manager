@@ -233,7 +233,7 @@ class TestExecuteInfoWhitelistRejection:
 
         assert resp.status_code == 400, resp.text
         detail = resp.json()["detail"]
-        assert "more than one asinfo command" in detail
+        assert "not a single asinfo command" in detail
         # Wire was NOT touched — fail-fast before any info_all call.
         mock_as_client.info_all.assert_not_called()
 
@@ -257,7 +257,7 @@ class TestExecuteInfoWhitelistRejection:
             )
 
         assert resp.status_code == 400, resp.text
-        assert "more than one asinfo command" in resp.json()["detail"]
+        assert "not a single asinfo command" in resp.json()["detail"]
         mock_as_client.info_all.assert_not_called()
 
     @pytest.mark.asyncio

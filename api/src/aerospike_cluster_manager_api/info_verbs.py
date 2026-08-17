@@ -105,40 +105,59 @@ class InfoVerbNotAllowed(InfoCommandRejected):
 
 
 class InfoCommandNotSingle(InfoCommandRejected):
-    """Raised when one command frame carries more than a single asinfo command.
+    """Raised when one command frame does not hold exactly one asinfo command.
 
     Inspecting only the leading verb is not enough to decide a frame's
     safety: the asinfo wire format is multi-command, so a frame whose head
-    is an allowlisted read verb can carry a further command behind a
-    separator. Rather than trying to decide whether each trailing command
-    is also read-only, the read-only gate accepts only single-command
-    frames — one command per ``commands[]`` entry.
+    is an allowlisted read verb can carry further text behind a separator
+    that the verb check never covers. Rather than trying to decide whether
+    each trailing command is also read-only, the read-only gate accepts only
+    single-command frames — one command per ``commands[]`` entry.
 
-    ``reason`` names the separator that made the frame multi-command; it is
+    ``reason`` names the separator that broke the single-command shape; it is
     derived from the input's *shape*, never from its content, so the HTTP
     400 does not echo an unvalidated string back to the caller.
     """
 
     def __init__(self, reason: str) -> None:
         super().__init__(
-            f"Command carries more than one asinfo command ({reason}); "
+            f"Command is not a single asinfo command ({reason}); "
             "the read-only endpoint accepts exactly one command per entry — "
             "submit each command as its own element of 'commands'."
         )
         self.reason = reason
 
 
-# asinfo wire format treats any of these as "verb stops here" *within a single
-# command*. This tuple is only about locating the verb — it is deliberately
-# not the safety boundary, because splitting on a separator and keeping the
-# head silently accepts whatever followed it. ``assert_single_command`` is the
-# boundary: it runs first and rejects any frame holding a second command, so
-# by the time the verb is extracted only intra-command separators remain.
+# asinfo wire format treats any of these as "verb stops here". This tuple is
+# only about locating the verb — it is deliberately NOT the safety boundary,
+# because splitting on a separator and keeping the head silently accepts
+# whatever followed it. ``assert_single_command`` is the boundary: it runs
+# first and rejects any frame whose shape puts text beyond the verb's reach.
+#
+# The whitespace entries overlap with the whitespace rule below, which makes
+# them unreachable on the validated path. They stay because ``extract_verb``
+# is public: called directly on ``"version <second command>"`` it must still
+# stop at the space rather than return a mangled verb.
 _VERB_TERMINATORS: tuple[str, ...] = (":", "/", ";", "\n", " ", "\t")
 
-# Characters the asinfo wire protocol uses to delimit a *batch* of commands.
-# Never legitimate inside one command, so their presence is decisive.
-_COMMAND_SEPARATORS: tuple[str, ...] = ("\n", "\r")
+# Whitespace INSIDE a command frame is never legitimate. Every read-only verb
+# is a single space-free token and every argument is `key=value` or a
+# `/`-separated path, so once surrounding padding is stripped any whitespace
+# left is a separator putting a second token beyond the verb check's reach:
+# `"\n"` is the batch separator, and space / tab are verb terminators — the
+# `_VERB_TERMINATORS` tuple above says so — which means the verb check reads
+# only the text ahead of them.
+#
+# The test is ``str.isspace()`` rather than a fixed set, so the exotic members
+# (VT, FF, NEL, NBSP) are rejected by the same rule and carry the same error
+# class as the common ones instead of incidentally failing the verb lookup.
+# These four are named for a legible message; anything else says "whitespace".
+_SEPARATOR_NAMES: dict[str, str] = {
+    "\n": "newline",
+    "\r": "carriage return",
+    " ": "space",
+    "\t": "tab",
+}
 
 
 def extract_verb(command: str) -> str:
@@ -195,7 +214,9 @@ def assert_single_command(command: str) -> str:
 
     Rejected as multi-command:
 
-    * any ``\\n`` / ``\\r`` — the batch separator
+    * any internal whitespace once padding is stripped — ``\\n`` (the batch
+      separator), ``\\r``, and space / tab (verb terminators, so the verb
+      check would read only the text ahead of them)
     * a ``;`` ahead of the ``:``, which cannot be an argument separator
       because the argument section has not started
     * a second ``:``, i.e. a further colon-style command riding in the
@@ -212,9 +233,11 @@ def assert_single_command(command: str) -> str:
     if not cmd:
         raise InfoVerbNotAllowed("")
 
-    for sep in _COMMAND_SEPARATORS:
-        if sep in cmd:
-            raise InfoCommandNotSingle("embedded newline — the asinfo batch separator")
+    # Surrounding padding is already gone, so any whitespace left is internal.
+    for ch in cmd:
+        if ch.isspace():
+            name = _SEPARATOR_NAMES.get(ch, "whitespace")
+            raise InfoCommandNotSingle(f"embedded {name} — an asinfo command separator")
 
     # One trailing ';' terminates a single command, so take it off before
     # reasoning about the separators that remain.
@@ -243,10 +266,13 @@ def assert_single_command(command: str) -> str:
 class ValidatedInfoCommand(NamedTuple):
     """An asinfo command that passed the read-only gate.
 
-    ``command`` is the only string a caller may put on the wire. Returning
-    it — rather than just the verb — is what keeps the gate structural: a
-    caller cannot accidentally validate one string and transmit another,
-    which is exactly how a rejected suffix used to reach the cluster.
+    ``command`` is the string callers must put on the wire. Returning it —
+    rather than just the verb — is defence in depth, not a guarantee: this
+    is a plain NamedTuple with no validating constructor, so an instance can
+    still be built by hand around any string. What it buys is that a caller
+    following the signature no longer has to *remember* to transmit the
+    validated value, which is exactly the mistake that let a rejected suffix
+    reach the cluster.
 
     ``verb`` is the parsed leading verb, kept for telemetry (OTel span
     attributes, structured log fields) so callers need not re-parse.
