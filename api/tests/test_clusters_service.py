@@ -11,6 +11,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from pydantic import ValidationError
 
 from aerospike_cluster_manager_api.models.cluster import (
     ClusterInfo,
@@ -21,6 +22,7 @@ from aerospike_cluster_manager_api.models.cluster import (
 )
 from aerospike_cluster_manager_api.services import clusters_service
 from aerospike_cluster_manager_api.services.clusters_service import (
+    NamespaceConfigEmptyError,
     NamespaceConfigError,
     NamespaceNotFoundError,
     NodeNotFoundError,
@@ -479,6 +481,90 @@ class TestConfigureNamespace:
         assert "id=test" in cmd
         assert "memory-size=4000000000" in cmd
         assert "replication-factor=3" in cmd
+
+
+class TestConfigureNamespacePartialUpdate:
+    """Omitted parameters must not reach the wire.
+
+    ``set-config`` lands on a *live* namespace, so any value this service
+    fills in for a field the caller didn't send is a real config change.
+    The regression these tests pin: a name-only body used to emit
+    ``memory-size=1073741824;replication-factor=2`` from model defaults,
+    dynamically shrinking the namespace's memory ceiling under its current
+    usage. Every pre-existing test passed both fields explicitly, which is
+    why the defaults went unnoticed.
+    """
+
+    @staticmethod
+    def _set_config_cmd(client: Mock) -> str:
+        # info_random_node is called twice: [0] the namespaces existence
+        # check, [1] the set-config call under test.
+        return str(client.info_random_node.await_args_list[1].args[0])
+
+    async def test_name_only_body_emits_no_tunables(self):
+        client = _make_mock_client()
+        client.info_random_node = AsyncMock(side_effect=["test", "ok"])
+        body = CreateNamespaceRequest(name="test")
+        with pytest.raises(NamespaceConfigEmptyError):
+            await clusters_service.configure_namespace(client, body)
+        # Rejected before any wire round-trip — not even the existence check.
+        assert client.info_random_node.await_count == 0
+
+    async def test_memory_size_only_omits_replication_factor(self):
+        client = _make_mock_client()
+        client.info_random_node = AsyncMock(side_effect=["test", "ok"])
+        body = CreateNamespaceRequest(name="test", memorySize=8_000_000_000)
+        await clusters_service.configure_namespace(client, body)
+        cmd = self._set_config_cmd(client)
+        assert cmd == "set-config:context=namespace;id=test;memory-size=8000000000"
+        assert "replication-factor" not in cmd
+
+    async def test_replication_factor_only_omits_memory_size(self):
+        client = _make_mock_client()
+        client.info_random_node = AsyncMock(side_effect=["test", "ok"])
+        body = CreateNamespaceRequest(name="test", replicationFactor=3)
+        await clusters_service.configure_namespace(client, body)
+        cmd = self._set_config_cmd(client)
+        assert cmd == "set-config:context=namespace;id=test;replication-factor=3"
+        assert "memory-size" not in cmd
+
+    async def test_explicit_null_is_treated_as_omitted(self):
+        # `{"memorySize": null}` is "set" to Pydantic but means "leave alone"
+        # to the caller, so it must not be interpolated as the literal None.
+        client = _make_mock_client()
+        client.info_random_node = AsyncMock(side_effect=["test", "ok"])
+        body = CreateNamespaceRequest.model_validate({"name": "test", "memorySize": None, "replicationFactor": 2})
+        await clusters_service.configure_namespace(client, body)
+        cmd = self._set_config_cmd(client)
+        assert cmd == "set-config:context=namespace;id=test;replication-factor=2"
+
+    async def test_empty_body_error_names_the_settable_fields(self):
+        client = _make_mock_client()
+        client.info_random_node = AsyncMock(side_effect=["test", "ok"])
+        with pytest.raises(NamespaceConfigEmptyError) as exc:
+            await clusters_service.configure_namespace(client, CreateNamespaceRequest(name="test"))
+        msg = str(exc.value)
+        assert "memorySize" in msg
+        assert "replicationFactor" in msg
+
+    def test_tunables_default_to_none(self):
+        # Guards the actual defect: a non-None default here is applied to a
+        # running namespace, so re-introducing one must fail loudly.
+        body = CreateNamespaceRequest(name="test")
+        assert body.memorySize is None
+        assert body.replicationFactor is None
+
+    def test_unknown_field_is_rejected(self):
+        # A misspelled parameter must 422 rather than silently drop out of
+        # the body and leave the caller believing it was applied.
+        with pytest.raises(ValidationError):
+            CreateNamespaceRequest.model_validate({"name": "test", "memory_size": 8_000_000_000})
+
+    def test_supplied_tunables_still_range_checked(self):
+        with pytest.raises(ValidationError):
+            CreateNamespaceRequest.model_validate({"name": "test", "memorySize": 1})
+        with pytest.raises(ValidationError):
+            CreateNamespaceRequest.model_validate({"name": "test", "replicationFactor": 9})
 
 
 # ---------------------------------------------------------------------------

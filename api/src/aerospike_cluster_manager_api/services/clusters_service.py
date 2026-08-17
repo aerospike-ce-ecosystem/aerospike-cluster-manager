@@ -33,6 +33,7 @@ from aerospike_cluster_manager_api.constants import (
     INFO_NAMESPACES,
     INFO_SERVICE,
     INFO_STATISTICS,
+    NS_CONFIG_PARAMS,
     NS_SUM_KEYS,
     info_namespace,
     info_sets,
@@ -86,6 +87,21 @@ class NamespaceConfigError(ValueError):
         super().__init__(f"Failed to configure namespace '{namespace}': {response}")
         self.namespace = namespace
         self.response = response
+
+
+class NamespaceConfigEmptyError(ValueError):
+    """Raised when a namespace config request supplies no tunable field.
+
+    ``set-config`` with only ``context``/``id`` and no parameter is not a
+    meaningful call, and silently succeeding would tell the caller their
+    (misspelled, dropped, or forgotten) parameter was applied. The
+    message names the settable fields so the caller can fix the body
+    without consulting the schema.
+    """
+
+    def __init__(self, settable: tuple[str, ...]) -> None:
+        super().__init__("No namespace parameter to apply; supply at least one of: " + ", ".join(settable))
+        self.settable = settable
 
 
 # ---------------------------------------------------------------------------
@@ -424,7 +440,16 @@ async def configure_namespace(client: aerospike_py.AsyncClient, body: CreateName
     be defined in ``aerospike.conf`` and the server restarted.  This call
     only updates parameters on a namespace that already exists.
 
+    The emitted command carries **only the fields the caller actually
+    supplied**. ``set-config`` is applied to a live namespace, so a field
+    we fill in ourselves is a real config change: interpolating a default
+    ``memory-size`` shrinks the namespace's memory ceiling below its
+    current usage, crossing the stop-writes / eviction thresholds. Omission
+    therefore means "leave this parameter alone", and a request that names
+    no parameter at all is rejected rather than sent as a no-op.
+
     Raises:
+        NamespaceConfigEmptyError: no tunable field was supplied.
         NamespaceNotFoundError: ``body.name`` is not a known namespace.
         NamespaceConfigError: the cluster rejected the ``set-config`` call.
 
@@ -432,15 +457,21 @@ async def configure_namespace(client: aerospike_py.AsyncClient, body: CreateName
         A success message suitable for direct inclusion in an HTTP
         response.
     """
+    # exclude_unset keeps omitted fields out; the None filter also drops an
+    # explicit `"memorySize": null`, which is "unset" in intent but "set"
+    # to Pydantic.
+    supplied = body.model_dump(exclude_unset=True, by_alias=False)
+    params = [
+        f"{param}={supplied[field]}" for field, param in NS_CONFIG_PARAMS.items() if supplied.get(field) is not None
+    ]
+    if not params:
+        raise NamespaceConfigEmptyError(tuple(NS_CONFIG_PARAMS))
+
     existing = await list_namespaces(client)
     if body.name not in existing:
         raise NamespaceNotFoundError(body.name)
 
-    cmd = (
-        f"set-config:context=namespace;id={body.name}"
-        f";memory-size={body.memorySize}"
-        f";replication-factor={body.replicationFactor}"
-    )
+    cmd = ";".join([f"set-config:context=namespace;id={body.name}", *params])
     resp = await client.info_random_node(cmd)
 
     if resp.strip().lower() != "ok":
