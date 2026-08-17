@@ -6,9 +6,18 @@ The Aerospike asinfo protocol multiplexes both reads (``namespaces``,
 endpoint therefore cannot decide a command's safety from its shape alone
 — it needs to inspect the *verb* (the leading token of the command).
 
+The verb alone is not sufficient, though: asinfo is a *multi-command* wire
+format, so a frame whose leading verb is read-only can carry a second
+command behind a separator. :func:`assert_read_only` therefore gates on two
+things — the frame holds exactly one command
+(:func:`assert_single_command`), and that command's verb is whitelisted —
+and returns the validated string so callers transmit that rather than the
+caller's original.
+
 This module is the single source of truth for that decision. The service
-layer raises :class:`InfoVerbNotAllowed`, which the router maps to an
-HTTP 400 with a "pick a different verb" hint.
+layer raises :class:`InfoCommandRejected` subclasses, which the router maps
+to an HTTP 400 with a "pick a different verb" / "one command per entry"
+hint.
 
 To add a verb:
 
@@ -24,6 +33,8 @@ To add a verb:
 """
 
 from __future__ import annotations
+
+from typing import NamedTuple
 
 READ_ONLY_INFO_VERBS: frozenset[str] = frozenset(
     {
@@ -67,7 +78,16 @@ READ_ONLY_INFO_VERBS: frozenset[str] = frozenset(
 _HINT_VERBS: tuple[str, ...] = ("namespaces", "version", "nodes", "statistics", "latencies")
 
 
-class InfoVerbNotAllowed(ValueError):
+class InfoCommandRejected(ValueError):
+    """Base for every read-only info validation failure.
+
+    Callers that only need "was this command accepted?" catch this; the
+    REST router discriminates on the subclasses to produce a specific
+    HTTP 400 message per failure mode.
+    """
+
+
+class InfoVerbNotAllowed(InfoCommandRejected):
     """Raised when an asinfo command's leading verb is not on the read-only allowlist.
 
     The REST router maps this to HTTP 400 with a "pick a different verb"
@@ -84,11 +104,41 @@ class InfoVerbNotAllowed(ValueError):
         self.verb = verb
 
 
-# asinfo wire format treats any of these as "verb stops here". Embedding any
-# of them in a single command frame is unusual but legitimate (`namespaces;`
-# is canonical when piping multiple commands), so we normalise the head
-# rather than rejecting the whole command outright.
+class InfoCommandNotSingle(InfoCommandRejected):
+    """Raised when one command frame carries more than a single asinfo command.
+
+    Inspecting only the leading verb is not enough to decide a frame's
+    safety: the asinfo wire format is multi-command, so a frame whose head
+    is an allowlisted read verb can carry a further command behind a
+    separator. Rather than trying to decide whether each trailing command
+    is also read-only, the read-only gate accepts only single-command
+    frames — one command per ``commands[]`` entry.
+
+    ``reason`` names the separator that made the frame multi-command; it is
+    derived from the input's *shape*, never from its content, so the HTTP
+    400 does not echo an unvalidated string back to the caller.
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(
+            f"Command carries more than one asinfo command ({reason}); "
+            "the read-only endpoint accepts exactly one command per entry — "
+            "submit each command as its own element of 'commands'."
+        )
+        self.reason = reason
+
+
+# asinfo wire format treats any of these as "verb stops here" *within a single
+# command*. This tuple is only about locating the verb — it is deliberately
+# not the safety boundary, because splitting on a separator and keeping the
+# head silently accepts whatever followed it. ``assert_single_command`` is the
+# boundary: it runs first and rejects any frame holding a second command, so
+# by the time the verb is extracted only intra-command separators remain.
 _VERB_TERMINATORS: tuple[str, ...] = (":", "/", ";", "\n", " ", "\t")
+
+# Characters the asinfo wire protocol uses to delimit a *batch* of commands.
+# Never legitimate inside one command, so their presence is decisive.
+_COMMAND_SEPARATORS: tuple[str, ...] = ("\n", "\r")
 
 
 def extract_verb(command: str) -> str:
@@ -108,6 +158,11 @@ def extract_verb(command: str) -> str:
     raises :class:`InfoVerbNotAllowed` with an empty verb so the caller
     surfaces a sensible error.
 
+    This function answers "where does the verb end", not "is this command
+    safe" — keeping the head of a frame that held two commands is the bug
+    :func:`assert_single_command` exists to prevent. Call
+    :func:`assert_read_only` for the safety decision.
+
     Note: case-sensitive — asinfo itself is case-sensitive
     (``Namespaces`` is not the same verb as ``namespaces``).
     """
@@ -120,15 +175,104 @@ def extract_verb(command: str) -> str:
     return head
 
 
-def assert_read_only(command: str) -> str:
-    """Validate ``command`` against the read-only whitelist.
+def assert_single_command(command: str) -> str:
+    """Return ``command`` stripped, having confirmed it holds ONE asinfo command.
 
-    Returns the parsed verb on success — callers can use it for telemetry
-    (OTel span attributes, structured log fields). Raises
-    :class:`InfoVerbNotAllowed` if the verb is not whitelisted; raises
+    The asinfo wire format is a multi-command format: a newline delimits a
+    batch, and a ``;`` delimits commands outside the ``:``-argument section.
+    A frame whose leading verb is read-only can therefore carry a second,
+    unrelated command — so the read-only gate needs this frame-level check
+    in addition to the verb check.
+
+    The legitimate single-command shapes all survive:
+
+    * bare verb — ``"namespaces"``, and ``"namespaces;"`` (one trailing
+      ``;`` is the canonical terminator)
+    * path-style — ``"sets/test/myset"``
+    * colon-style — ``"roster:namespace=test"``, and multiple
+      ``;``-separated ``key=value`` arguments as in
+      ``"latencies:back=10;duration=10"``
+
+    Rejected as multi-command:
+
+    * any ``\\n`` / ``\\r`` — the batch separator
+    * a ``;`` ahead of the ``:``, which cannot be an argument separator
+      because the argument section has not started
+    * a second ``:``, i.e. a further colon-style command riding in the
+      argument section
+    * a ``;``-separated argument segment that is not ``key=value``, i.e. a
+      bare verb riding in the argument section
+
+    Raises:
+        InfoCommandNotSingle: the frame holds more than one command.
+        InfoVerbNotAllowed: the frame is empty or whitespace-only (empty
+            verb), matching :func:`extract_verb`.
+    """
+    cmd = command.strip()
+    if not cmd:
+        raise InfoVerbNotAllowed("")
+
+    for sep in _COMMAND_SEPARATORS:
+        if sep in cmd:
+            raise InfoCommandNotSingle("embedded newline — the asinfo batch separator")
+
+    # One trailing ';' terminates a single command, so take it off before
+    # reasoning about the separators that remain.
+    body = cmd[:-1] if cmd.endswith(";") else cmd
+    head, colon, args = body.partition(":")
+
+    # No argument section has started yet, so a ';' here separates commands.
+    # With no ':' at all (bare or path-style), head is the whole command and
+    # this same check covers it.
+    if ";" in head:
+        raise InfoCommandNotSingle("';' before the ':' argument separator")
+    if not colon:
+        return cmd
+
+    if ":" in args:
+        raise InfoCommandNotSingle("second ':' verb separator inside the argument section")
+    segments = args.split(";")
+    # A lone segment is either `key=value` or the single bare argument form
+    # (`namespace:test`). Two or more means the ';' is acting as an argument
+    # separator, which only holds if every segment really is an argument.
+    if len(segments) > 1 and not all("=" in s for s in segments):
+        raise InfoCommandNotSingle("';'-separated segment that is not a key=value argument")
+    return cmd
+
+
+class ValidatedInfoCommand(NamedTuple):
+    """An asinfo command that passed the read-only gate.
+
+    ``command`` is the only string a caller may put on the wire. Returning
+    it — rather than just the verb — is what keeps the gate structural: a
+    caller cannot accidentally validate one string and transmit another,
+    which is exactly how a rejected suffix used to reach the cluster.
+
+    ``verb`` is the parsed leading verb, kept for telemetry (OTel span
+    attributes, structured log fields) so callers need not re-parse.
+    """
+
+    command: str
+    verb: str
+
+
+def assert_read_only(command: str) -> ValidatedInfoCommand:
+    """Validate ``command`` as a single, whitelisted read-only asinfo command.
+
+    Two independent checks, both of which must pass:
+
+    1. :func:`assert_single_command` — the frame holds exactly one command,
+       so the verb decides the safety of the whole frame rather than just
+       of its head.
+    2. the leading verb is on :data:`READ_ONLY_INFO_VERBS`.
+
+    Returns a :class:`ValidatedInfoCommand`; transmit ``.command``, never
+    the caller's original string. Raises :class:`InfoCommandNotSingle` or
+    :class:`InfoVerbNotAllowed` (both :class:`InfoCommandRejected`)
     immediately, so no wire round-trip happens for a rejected command.
     """
-    verb = extract_verb(command)
+    validated = assert_single_command(command)
+    verb = extract_verb(validated)
     if verb not in READ_ONLY_INFO_VERBS:
         raise InfoVerbNotAllowed(verb)
-    return verb
+    return ValidatedInfoCommand(command=validated, verb=verb)

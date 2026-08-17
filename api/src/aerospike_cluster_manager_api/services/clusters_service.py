@@ -231,12 +231,16 @@ async def execute_info_read_only(
 ) -> tuple[str, str]:
     """Run a whitelisted read-only asinfo command.
 
-    Validates the verb against :data:`info_verbs.READ_ONLY_INFO_VERBS`
-    *before* hitting the wire — a bad verb raises
-    :class:`info_verbs.InfoVerbNotAllowed` (mapped to HTTP 400 at the REST
-    boundary). The whitelist is the single source of truth for what the
-    read-only info endpoint can call; the unrestricted variants
+    Validates ``command`` against :func:`info_verbs.assert_read_only`
+    *before* hitting the wire — a rejected command raises an
+    :class:`info_verbs.InfoCommandRejected` subclass (mapped to HTTP 400 at
+    the REST boundary). The whitelist is the single source of truth for what
+    the read-only info endpoint can call; the unrestricted variants
     (``execute_info``, ``execute_info_on_node``) accept any verb.
+
+    What goes on the wire is the *validated* string, not ``command``.
+    Forwarding the original is what let a frame holding a whitelisted verb
+    plus a trailing second command through: only the head was inspected.
 
     Returns a ``(node_name, response)`` tuple. With ``node_name=None`` we
     fan out via ``info_all`` and pick the first node that returned a
@@ -245,8 +249,8 @@ async def execute_info_read_only(
     explicit ``node_name`` we filter the same fan-out to the named node
     and raise :class:`NodeNotFoundError` if it didn't respond.
     """
-    assert_read_only(command)
-    results = await client.info_all(command)
+    validated = assert_read_only(command)
+    results = await client.info_all(validated.command)
 
     if node_name is None:
         for name, err, resp in results:

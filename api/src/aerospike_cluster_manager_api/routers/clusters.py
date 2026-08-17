@@ -5,7 +5,11 @@ import logging
 from fastapi import APIRouter, HTTPException, Request
 
 from aerospike_cluster_manager_api.dependencies import AerospikeClient, VerifiedConnId
-from aerospike_cluster_manager_api.info_verbs import InfoVerbNotAllowed, assert_read_only
+from aerospike_cluster_manager_api.info_verbs import (
+    InfoCommandNotSingle,
+    InfoVerbNotAllowed,
+    assert_read_only,
+)
 from aerospike_cluster_manager_api.models.cluster import (
     ClusterInfo,
     CreateNamespaceRequest,
@@ -87,9 +91,11 @@ async def configure_namespace(
         "Mirrors the MCP execute_info / execute_info_on_node / "
         "execute_info_read_only contracts so ackoctl can drive raw asinfo "
         "diagnostics over the REST surface. "
-        "When readOnly=true (default), each command's leading verb is "
-        "validated against the read-only whitelist BEFORE any wire "
-        "round-trip — a single bad verb fails the entire call with 400."
+        "When readOnly=true (default), each command is validated BEFORE any "
+        "wire round-trip: it must hold exactly one asinfo command (the wire "
+        "format is multi-command) and its leading verb must be on the "
+        "read-only whitelist. A single rejected command fails the entire "
+        "call with 400, and only the validated string is transmitted."
     ),
 )
 async def execute_info(
@@ -98,23 +104,30 @@ async def execute_info(
     conn_id: VerifiedConnId,
 ) -> ExecuteInfoResponse:
     """Run asinfo commands per the ExecuteInfoRequest semantics."""
-    # When readOnly is on, fail-fast on the FIRST non-whitelisted verb so
-    # a bad verb never reaches the wire. Pydantic already enforces
-    # commands non-empty.
+    # When readOnly is on, fail-fast on the FIRST rejected command so it
+    # never reaches the wire. Pydantic already enforces commands non-empty.
+    #
+    # Keep the VALIDATED strings and run those: forwarding body.commands
+    # after validating it is the bug that let a frame carrying an
+    # allowlisted verb plus a trailing second command through, since only
+    # the leading verb was ever inspected.
+    validated: list[str] = []
     if body.readOnly:
         for cmd in body.commands:
             try:
-                assert_read_only(cmd)
+                validated.append(assert_read_only(cmd).command)
             except InfoVerbNotAllowed as exc:
                 raise HTTPException(
                     status_code=400,
                     detail=(f"command '{exc.verb}' not in read-only whitelist; pass readOnly=false to allow"),
                 ) from exc
+            except InfoCommandNotSingle as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     results: list[InfoCommandResult] = []
     target_node = body.node or None
 
-    for cmd in body.commands:
+    for cmd in validated if body.readOnly else body.commands:
         if target_node is not None and body.readOnly:
             # Single-node read-only: whitelist already enforced above;
             # service still re-validates as a defense-in-depth.
