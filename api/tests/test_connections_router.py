@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from aerospike_py.exception import AerospikeError
+from aerospike_py.exception import AerospikeError, AerospikeTimeoutError, ClusterError
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
@@ -754,3 +754,190 @@ class TestCrossOwnerWorkspaceAccess:
             assert update.status_code == 404
         finally:
             _clear_caller_override()
+
+
+class TestConnectionTargetGateOnWrites:
+    """#470: the SSRF gate covers create and update, not only test-connection.
+
+    Before this, a caller could create a profile pointing at ``127.0.0.1`` or
+    ``169.254.169.254`` — ``create_connection`` never called the gate — and
+    then drive the health route against it. Create-then-health was a complete
+    bypass of the test-connection gate.
+    """
+
+    @pytest.mark.parametrize(
+        "host",
+        ["127.0.0.1", "169.254.169.254", "[::1]", "::1", "127.0.0.1:3000"],
+    )
+    async def test_create_with_blocked_host_rejected(self, client: AsyncClient, host: str):
+        response = await client.post("/api/connections", json={**CREATE_PAYLOAD, "hosts": [host]})
+        assert response.status_code == 400, response.text
+        assert "not allowed" in response.json()["detail"]
+
+    async def test_create_rejects_when_any_host_is_blocked(self, client: AsyncClient):
+        """A legal host must not launder a blocked one riding beside it."""
+        response = await client.post(
+            "/api/connections",
+            json={**CREATE_PAYLOAD, "hosts": ["10.0.0.1", "169.254.169.254"]},
+        )
+        assert response.status_code == 400, response.text
+
+    async def test_create_with_allowed_host_still_works(self, client: AsyncClient):
+        response = await client.post("/api/connections", json=CREATE_PAYLOAD)
+        assert response.status_code == 201, response.text
+
+    async def test_update_to_blocked_host_rejected(self, client: AsyncClient):
+        """Create legal, then repoint at loopback — the other half of the bypass."""
+        created = await client.post("/api/connections", json=CREATE_PAYLOAD)
+        conn_id = created.json()["id"]
+
+        response = await client.put(f"/api/connections/{conn_id}", json={"hosts": ["127.0.0.1"]})
+        assert response.status_code == 400, response.text
+        assert "not allowed" in response.json()["detail"]
+
+        # And the stored profile is untouched.
+        after = await client.get(f"/api/connections/{conn_id}")
+        assert after.json()["hosts"] == CREATE_PAYLOAD["hosts"]
+
+    async def test_update_leaving_hosts_alone_still_works(self, client: AsyncClient):
+        created = await client.post("/api/connections", json=CREATE_PAYLOAD)
+        conn_id = created.json()["id"]
+
+        response = await client.put(f"/api/connections/{conn_id}", json={"name": "renamed"})
+        assert response.status_code == 200, response.text
+        assert response.json()["name"] == "renamed"
+
+    async def test_env_override_allows_loopback_create(self, client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+        """The dev escape hatch works under the new name."""
+        monkeypatch.setenv("ACM_ALLOW_PRIVATE_TARGETS", "true")
+        response = await client.post("/api/connections", json={**CREATE_PAYLOAD, "hosts": ["127.0.0.1"]})
+        assert response.status_code == 201, response.text
+
+    async def test_legacy_env_override_still_honoured(self, client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+        """...and under the original one, so existing deployments keep working."""
+        monkeypatch.setenv("ACM_CONNECTION_TEST_ALLOW_PRIVATE", "true")
+        response = await client.post("/api/connections", json={**CREATE_PAYLOAD, "hosts": ["127.0.0.1"]})
+        assert response.status_code == 201, response.text
+
+
+class TestHealthResponseIsNotAScanner:
+    """#470: the health route stopped being a reachability oracle.
+
+    It is reachable unauthenticated in the default configuration and carries
+    no rate limit, so distinguishing timeout / refused / cluster-error — and
+    echoing the driver's exception string — turned any stored profile into a
+    port scanner with high-fidelity feedback.
+    """
+
+    @pytest.mark.parametrize(
+        "exc",
+        [
+            AerospikeTimeoutError("timed out talking to 10.1.2.3:3000"),
+            ConnectionRefusedError("[Errno 61] Connection refused to 10.1.2.3:3000"),
+            ClusterError("node BB9020011AC4202 at 10.1.2.3:3000 failed handshake"),
+            OSError("[Errno 65] No route to host 10.1.2.3"),
+        ],
+    )
+    async def test_connection_failures_are_indistinguishable(
+        self, client: AsyncClient, sample_connection, exc: Exception
+    ):
+        from aerospike_cluster_manager_api import db
+
+        await db.create_connection(sample_connection)
+
+        with patch(
+            "aerospike_cluster_manager_api.routers.connections.client_manager.get_client",
+            side_effect=exc,
+        ):
+            resp = await client.get(f"/api/connections/{sample_connection.id}/health")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["connected"] is False
+        # One bucket for every network-level outcome.
+        assert body["errorType"] == "unreachable"
+        # And no exception text: the message above names a host, a port, and a
+        # node id, none of which may reach the caller.
+        assert body["error"] == "Unable to reach the Aerospike cluster"
+        assert "10.1.2.3" not in resp.text
+        assert "BB9020011AC4202" not in resp.text
+        assert "Errno" not in resp.text
+
+    async def test_auth_error_stays_distinct(self, client: AsyncClient, sample_connection):
+        """An auth rejection already implies a real Aerospike answered."""
+        from aerospike_cluster_manager_api import db
+
+        await db.create_connection(sample_connection)
+
+        with patch(
+            "aerospike_cluster_manager_api.routers.connections.client_manager.get_client",
+            side_effect=AerospikeError("security violation: invalid credentials for user admin"),
+        ):
+            resp = await client.get(f"/api/connections/{sample_connection.id}/health")
+
+        assert resp.json()["errorType"] == "auth_error"
+        assert "admin" not in resp.text
+
+    async def test_blocked_stored_profile_reports_blocked_target(self, client: AsyncClient, sample_connection):
+        """Profiles written before the create gate existed are still caught.
+
+        ``client_manager.get_client`` is the last-resort gate — it sees the
+        stored hosts on every request, so a legacy loopback profile surfaces
+        here rather than being dialled.
+        """
+        from aerospike_cluster_manager_api import db
+
+        blocked = sample_connection.model_copy(update={"hosts": ["127.0.0.1"]})
+        await db.create_connection(blocked)
+
+        resp = await client.get(f"/api/connections/{blocked.id}/health")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["connected"] is False
+        assert body["errorType"] == "blocked_target"
+
+
+class TestClientManagerTargetGate:
+    """The last-resort gate itself (#470).
+
+    ``connections_service`` imports ``client_manager``, so the gate lives in
+    the leaf module ``target_policy`` and both can enforce it.
+    """
+
+    async def test_get_client_refuses_stored_blocked_host(self, init_test_db, sample_connection):
+        from aerospike_cluster_manager_api import db
+        from aerospike_cluster_manager_api.client_manager import client_manager
+        from aerospike_cluster_manager_api.target_policy import BlockedConnectionTargetError
+
+        blocked = sample_connection.model_copy(update={"hosts": ["169.254.169.254"]})
+        await db.create_connection(blocked)
+
+        with (
+            patch("aerospike_cluster_manager_api.client_manager.aerospike_py.AsyncClient") as mock_cls,
+            pytest.raises(BlockedConnectionTargetError),
+        ):
+            await client_manager.get_client(blocked.id)
+
+        # No client was even constructed — the gate fires before the dial.
+        mock_cls.assert_not_called()
+
+    async def test_get_client_allows_normal_host(self, init_test_db, sample_connection):
+        from aerospike_cluster_manager_api import db
+        from aerospike_cluster_manager_api.client_manager import client_manager
+
+        await db.create_connection(sample_connection)  # hosts=["localhost"]
+
+        mock_client = AsyncMock()
+        mock_client.connect = AsyncMock()
+        mock_client.is_connected = lambda: True
+        mock_client.close = AsyncMock()
+
+        with patch(
+            "aerospike_cluster_manager_api.client_manager.aerospike_py.AsyncClient",
+            return_value=mock_client,
+        ):
+            got = await client_manager.get_client(sample_connection.id)
+
+        assert got is mock_client
+        await client_manager.close_client(sample_connection.id)
