@@ -112,7 +112,7 @@ export interface paths {
         put?: never;
         /**
          * Execute asinfo commands
-         * @description Run one or more asinfo commands against a cluster. Mirrors the MCP execute_info / execute_info_on_node / execute_info_read_only contracts so ackoctl can drive raw asinfo diagnostics over the REST surface. When readOnly=true (default), each command is validated BEFORE any wire round-trip: it must hold exactly one asinfo command (the wire format is multi-command) and its leading verb must be on the read-only whitelist. A single rejected command fails the entire call with 400, and only the validated string is transmitted.
+         * @description Run one or more asinfo commands against a cluster. Mirrors the MCP execute_info / execute_info_on_node / execute_info_read_only contracts so ackoctl can drive raw asinfo diagnostics over the REST surface. Every command is validated BEFORE any wire round-trip: it must hold exactly one asinfo command (the wire format is multi-command) and its leading verb must be on a whitelist. A single rejected command fails the entire call with 400, and only the validated string is transmitted. When readOnly=true (default) the whitelist is the read-only verb set. readOnly=false selects the write passthrough, which additionally requires ACM_ALLOW_INFO_WRITE=true on the API (403 otherwise), accepts only info_verbs.WRITE_INFO_VERBS plus the read-only verbs — never destructive verbs such as truncate-namespace — and is charged against a dedicated 5/minute per-client budget (429 when exhausted).
          */
         post: operations["execute_info_api_v1_clusters__conn_id__info_post"];
         delete?: never;
@@ -1066,7 +1066,7 @@ export interface paths {
         put?: never;
         /**
          * Filtered record scan
-         * @description Scan records with optional expression filters and pagination.
+         * @description Scan records with optional expression filters. Returns the FIRST window only — pageSize bounds it, and there is no way to request the next one. `page` is accepted only as 1; any other value is rejected with 400 rather than silently returning page 1 (issue #468). Check `hasMore` to know whether the window is complete, and narrow the result with filters or raise pageSize (max 500) to see more.
          */
         post: operations["get_filtered_records_api_v1_records__conn_id__filter_post"];
         delete?: never;
@@ -1882,6 +1882,13 @@ export interface components {
          *         verb must be on :data:`info_verbs.READ_ONLY_INFO_VERBS`.
          *         Whitelist violations short-circuit with HTTP 400 *before* any
          *         wire round-trip.
+         *
+         *         When ``False`` the caller selects the write passthrough. That path
+         *         is **not** "no whitelist" — it was, and that was #467. It now
+         *         requires ``config.ACM_ALLOW_INFO_WRITE`` (403 otherwise), accepts
+         *         only :data:`info_verbs.ALLOWED_INFO_VERBS` (400 otherwise), and is
+         *         charged against a dedicated 5/minute budget (429 otherwise). This
+         *         field selects *which* allowlist applies; it never disables one.
          */
         ExecuteInfoRequest: {
             /** Commands */
@@ -1933,7 +1940,32 @@ export interface components {
          * @enum {string}
          */
         FilterOperator: "eq" | "ne" | "gt" | "ge" | "lt" | "le" | "between" | "contains" | "not_contains" | "regex" | "exists" | "not_exists" | "is_true" | "is_false" | "geo_within" | "geo_contains" | "pk_prefix" | "pk_regex";
-        /** FilteredQueryRequest */
+        /**
+         * FilteredQueryRequest
+         * @description Request body for ``POST /records/{conn_id}/filter``.
+         *
+         *     **This endpoint returns the first window only.** ``pageSize`` bounds the
+         *     window; there is no way to ask for the next one, and ``page`` is accepted
+         *     only as ``1`` (#468).
+         *
+         *     Why there is no cursor yet — this is a client-library limitation, not an
+         *     oversight in this endpoint:
+         *
+         *     * The pinned ``aerospike-py`` (0.6.4, see #476) exposes no pagination
+         *       surface at all. ``AsyncQuery`` has ``where``/``select``/``results``/
+         *       ``foreach``, and ``QueryPolicy`` carries ``max_records`` with no offset
+         *       and no partition filter.
+         *     * Newer ``aerospike-py`` adds ``partition_filter_by_range(begin, count)``,
+         *       which is *not* sufficient on its own. A partition range cannot resume
+         *       mid-partition, and with 4096 partitions a set large enough to need
+         *       pagination holds far more than ``pageSize`` records per partition — so a
+         *       cursor keyed on partition id would never advance past the first one.
+         *       Resumable ``PartitionStatus`` is what would close this, and
+         *       ``aerospike-py`` deliberately clones the filter to prevent resumption.
+         *
+         *     Until that exists, callers narrow the result set (filters, a primary-key
+         *     pattern) or raise ``pageSize`` (max 500) rather than paging.
+         */
         FilteredQueryRequest: {
             filters?: components["schemas"]["FilterGroup"] | null;
             /** Maxrecords */
@@ -1942,6 +1974,7 @@ export interface components {
             namespace: string;
             /**
              * Page
+             * @description Reserved. Only 1 is accepted; any other value is rejected with 400. The record browser has no offset or partition cursor yet, so this endpoint returns the first window only. Narrow the result with filters or a primary-key pattern, or raise pageSize (max 500).
              * @default 1
              */
             page?: number;
@@ -1989,7 +2022,7 @@ export interface components {
             /** Scannedrecords */
             scannedRecords: number;
             /** Total */
-            total: number;
+            total?: number | null;
             /**
              * Totalestimated
              * @default false
@@ -3051,7 +3084,7 @@ export interface components {
             /** Records */
             records: components["schemas"]["AerospikeRecord"][];
             /** Total */
-            total: number;
+            total: number | null;
             /**
              * Totalestimated
              * @default false
