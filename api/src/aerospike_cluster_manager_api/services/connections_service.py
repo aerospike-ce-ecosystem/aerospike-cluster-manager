@@ -13,9 +13,7 @@ exceptions defined here, which the router translates to HTTP status codes.
 from __future__ import annotations
 
 import contextlib
-import ipaddress
 import logging
-import os
 import uuid
 from datetime import UTC, datetime
 from typing import Any, NamedTuple
@@ -36,6 +34,15 @@ from aerospike_cluster_manager_api.models.workspace import (
     DEFAULT_WORKSPACE_ID,
     SYSTEM_OWNER_ID,
 )
+
+# The SSRF gate moved to ``target_policy`` (#470) so ``client_manager`` can
+# enforce it as a last resort too — ``connections_service`` imports
+# ``client_manager``, so a shared leaf module is the only import direction
+# that works.
+from aerospike_cluster_manager_api.target_policy import (
+    assert_targets_allowed,
+    is_blocked_target,
+)
 from aerospike_cluster_manager_api.utils import parse_host_port
 
 logger = logging.getLogger(__name__)
@@ -52,22 +59,6 @@ class ConnectionNotFoundError(LookupError):
     def __init__(self, conn_id: str) -> None:
         super().__init__(f"Connection '{conn_id}' not found")
         self.conn_id = conn_id
-
-
-class BlockedConnectionTargetError(ValueError):
-    """Raised when a test_connection target points at a denied address.
-
-    Default-deny SSRF gate: loopback, link-local (especially the EC2 IMDS
-    169.254.169.254), and IPv6 ``::1`` are rejected before any network
-    syscall so the API cannot be repurposed as an internal port scanner
-    or a metadata-service exfil channel. Operators can override the
-    default-deny via ``ACM_CONNECTION_TEST_ALLOW_PRIVATE=true`` for dev
-    deployments where the API and Aerospike share a host.
-    """
-
-    def __init__(self, host: str) -> None:
-        super().__init__(f"Connection target '{host}' is not allowed")
-        self.host = host
 
 
 class WorkspaceNotFoundError(LookupError):
@@ -100,56 +91,6 @@ class TestConnectionResult(NamedTuple):
 # ---------------------------------------------------------------------------
 # Service entry points
 # ---------------------------------------------------------------------------
-
-
-_ALLOW_PRIVATE_TARGETS_ENV = "ACM_CONNECTION_TEST_ALLOW_PRIVATE"
-
-
-def _allow_private_targets() -> bool:
-    """Return True when operators have opted into private-range targets.
-
-    Read live (not snapshotted) so test fixtures can flip the env var via
-    monkeypatch. The default is False -- production deployments default-
-    deny loopback / link-local to keep the test_connection API from
-    being repurposed as an internal port scanner or IMDS exfil channel.
-    """
-    return os.environ.get(_ALLOW_PRIVATE_TARGETS_ENV, "false").strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _is_blocked_target(host: str) -> bool:
-    """Return True iff ``host`` resolves to a denied IP literal.
-
-    Blocks loopback (``127.0.0.0/8``, ``::1``) and link-local IPv4
-    (``169.254.0.0/16`` -- includes the EC2 IMDS ``169.254.169.254``) so
-    the test-connection endpoint cannot be turned into an SSRF probe by
-    an authenticated caller. Hostnames that are not bare IP literals are
-    *not* blocked here -- the underlying Aerospike client resolves DNS
-    natively and re-checking after resolve would race with TOCTOU. The
-    contract is: literal-IP rejection is the cheap first line; deeper
-    network-policy enforcement (egress firewall) is expected to backstop
-    DNS-based bypasses.
-
-    The ``ACM_CONNECTION_TEST_ALLOW_PRIVATE`` env var disables the gate
-    for dev deployments where the API and Aerospike share a host (the
-    compose.dev.yaml workflow exercises this routinely).
-    """
-    if _allow_private_targets():
-        return False
-    candidate = host.strip()
-    if not candidate:
-        return False
-    # IPv6 literals may arrive bracketed (`[::1]`); strip before parsing.
-    if candidate.startswith("[") and candidate.endswith("]"):
-        candidate = candidate[1:-1]
-    try:
-        ip = ipaddress.ip_address(candidate)
-    except ValueError:
-        # Not a bare IP literal -- let it through; DNS-based abuse is
-        # explicitly out of scope per the docstring rationale.
-        return False
-    if ip.is_loopback:
-        return True
-    return bool(ip.is_link_local)
 
 
 async def _assert_workspace_visible(workspace_id: str, caller_owner_id: str | None) -> None:
@@ -244,8 +185,17 @@ async def create_connection(
     Falls back to :data:`DEFAULT_WORKSPACE_ID` when the request omits the
     workspace. Raises :class:`WorkspaceNotFoundError` if the resolved
     workspace does not exist OR (Phase 2) is invisible to
-    ``caller_owner_id``.
+    ``caller_owner_id``, and
+    :class:`target_policy.BlockedConnectionTargetError` if any host is a
+    denied IP literal.
+
+    The target gate matters here and not only in :func:`test_connection`:
+    a profile persisted with a loopback or link-local host is dialled by
+    every route that resolves a client for it, so create-then-health was a
+    complete bypass of the test-connection gate (#470).
     """
+    assert_targets_allowed(payload.hosts, payload.port)
+
     workspace_id = payload.workspaceId or DEFAULT_WORKSPACE_ID
     await _assert_workspace_visible(workspace_id, caller_owner_id)
 
@@ -277,11 +227,25 @@ async def update_connection(
     """Apply a partial update to ``conn_id`` and return the new state.
 
     Raises :class:`ConnectionNotFoundError` if the connection does not
-    exist, or :class:`WorkspaceNotFoundError` if the request moves it to
-    a workspace that is missing or (Phase 2) invisible to
-    ``caller_owner_id``.
+    exist, :class:`WorkspaceNotFoundError` if the request moves it to a
+    workspace that is missing or (Phase 2) invisible to
+    ``caller_owner_id``, or
+    :class:`target_policy.BlockedConnectionTargetError` if the update
+    repoints the profile at a denied IP literal.
     """
     update_data = payload.model_dump(exclude_unset=True, by_alias=False)
+
+    # Gate a host rewrite for the same reason create is gated (#470) —
+    # otherwise create-with-a-legal-host then update-to-loopback walks
+    # straight around the check. Only ``hosts`` can introduce a new target;
+    # a lone ``port`` change cannot, because the gate inspects the host
+    # portion only. The port passed here is therefore just the fallback
+    # ``parse_host_port`` needs for entries with no ``:port`` suffix, and
+    # never changes the decision.
+    new_hosts = update_data.get("hosts")
+    if new_hosts:
+        assert_targets_allowed(new_hosts, update_data.get("port") or 3000)
+
     if "workspaceId" in update_data and update_data["workspaceId"] is not None:
         target_ws = update_data["workspaceId"]
         await _assert_workspace_visible(target_ws, caller_owner_id)
@@ -351,9 +315,14 @@ async def test_connection(req: TestConnectionRequest) -> TestConnectionResult:
     # cloud SQL proxies on the host loopback). The check is cheap (pure
     # ip parsing) and keyed on bare IP literals -- DNS hostnames are
     # outside the gate; egress firewalls are expected to backstop those.
+    #
+    # This path deliberately does NOT use ``assert_targets_allowed``: the
+    # contract here is "blocked looks exactly like unreachable" so a probing
+    # caller cannot tell them apart, which means returning the ordinary
+    # failure shape rather than raising.
     for host_str in req.hosts:
         host_only, _ = parse_host_port(host_str, req.port)
-        if _is_blocked_target(host_only):
+        if is_blocked_target(host_only):
             logger.warning(
                 "Test connection blocked: target=%s reason=loopback_or_link_local",
                 host_str,

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import ipaddress
 
+from limits import RateLimitItem, parse
 from slowapi import Limiter
 from starlette.requests import Request
 
@@ -116,3 +117,40 @@ def _get_client_ip(request: Request) -> str:
 DEFAULT_LIMITS = ["60/minute"]
 
 limiter = Limiter(key_func=_get_client_ip, default_limits=DEFAULT_LIMITS)  # type: ignore[arg-type]  # slowapi default_limits accepts list[str]; pyright strict-checks against alias
+
+
+# ---------------------------------------------------------------------------
+# Body-conditional budgets
+# ---------------------------------------------------------------------------
+# ``@limiter.limit`` decides before the handler runs and cannot see the parsed
+# body — slowapi's own ``exempt_when`` hook is called with no arguments (see
+# ``slowapi.wrappers.Limit.is_exempt``). That is fine for routes where every
+# request costs the same, but ``POST /clusters/{conn_id}/info`` is two routes
+# wearing one path: a read-only diagnostic that ``ackoctl info`` polls, and an
+# opt-in write passthrough. Decorating the route would put the strict write
+# budget on the reads as well.
+#
+# ``consume_budget`` therefore lets a handler charge a named budget once it
+# knows which path the request took. Same key function as the decorator, so
+# the bucket follows the same trusted-proxy rules.
+
+# Raw asinfo write passthrough (#467). Deliberately far below the 60/minute
+# global default: state-changing asinfo is an operator action, not traffic.
+INFO_WRITE_LIMIT: RateLimitItem = parse("5/minute")
+
+
+def consume_budget(request: Request, item: RateLimitItem, scope: str) -> bool:
+    """Charge one hit against ``item`` for this request's client, in ``scope``.
+
+    Returns ``True`` when the request is within budget and ``False`` when it
+    has been exhausted — the caller raises HTTP 429. ``scope`` namespaces the
+    bucket so two budgets sharing a client IP do not share a counter.
+
+    ``limiter.enabled`` is honoured for the same reason slowapi's own
+    ``_check_request_limit`` honours it: "rate limiting is off" has to mean
+    every budget, or a test suite that disables the limiter still trips over
+    the ones the decorator does not own.
+    """
+    if not limiter.enabled:
+        return True
+    return limiter.limiter.hit(item, scope, _get_client_ip(request))

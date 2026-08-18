@@ -20,8 +20,10 @@
  *                         Unset → the provider's default public endpoint.
  *   ANTHROPIC_API_KEY     required for anthropic/* models
  *   OPENAI_API_KEY        required for openai/* models
- *   COPILOT_REQUIRE_AUTH  "true" → /copilotkit requires a Bearer token
- *                         (see verify-jwt.ts for signature verification)
+ *   COPILOT_REQUIRE_AUTH  "false" → /copilotkit serves without a Bearer token.
+ *                         Anything else (including unset) requires one, and
+ *                         COPILOT_OIDC_ISSUER_URL must then be set — see
+ *                         verify-jwt.ts.
  */
 
 export type CopilotProvider = "anthropic" | "openai"
@@ -131,6 +133,19 @@ export function resolveCopilotServerConfig(): CopilotServerConfig {
   }
 }
 
+/**
+ * Whether `/copilotkit` demands a Bearer token.
+ *
+ * Secure by default: only the literal string `"false"` turns the check off.
+ * This used to be `=== "true"`, so an unset variable meant the endpoint was an
+ * unauthenticated relay to the operator's LLM provider — anyone who could
+ * reach the UI port could burn tokens with arbitrary prompts (#472).
+ *
+ * Setting it to `"false"` is a real deployment mode, not just a dev escape
+ * hatch: it is the correct choice when an ingress or service mesh in front of
+ * the web pod already authenticates every request. What it must never be is
+ * the *default*.
+ */
 export function copilotRequiresAuth(): boolean {
-  return process.env.COPILOT_REQUIRE_AUTH === "true"
+  return process.env.COPILOT_REQUIRE_AUTH !== "false"
 }

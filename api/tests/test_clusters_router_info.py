@@ -17,7 +17,9 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
+from aerospike_cluster_manager_api import config
 from aerospike_cluster_manager_api.main import app
+from aerospike_cluster_manager_api.rate_limit import limiter
 from aerospike_cluster_manager_api.services.info_cache import info_cache
 
 
@@ -86,6 +88,34 @@ async def _clear_cache():
     await info_cache.clear()
     yield
     await info_cache.clear()
+
+
+@pytest.fixture()
+def allow_info_write(monkeypatch):
+    """Opt the asinfo write passthrough on for one test (#467).
+
+    Off is the default and is itself asserted by
+    ``TestExecuteInfoWriteGate.test_write_path_is_403_when_flag_is_off`` —
+    every test that wants to reach the verb allowlist has to say so.
+    """
+    monkeypatch.setattr(config, "ACM_ALLOW_INFO_WRITE", True)
+
+
+@pytest.fixture()
+def enforce_rate_limits():
+    """Re-enable the limiter that the ``client`` fixture switches off.
+
+    The suite runs with ``app.state.limiter.enabled = False`` so unrelated
+    tests never bump the 60/minute global default. A test that is *about* a
+    limit has to turn it back on, and clear the storage first so it does not
+    inherit hits from whatever ran before it in the same wall-clock minute.
+    """
+    limiter.limiter.storage.reset()
+    previous = limiter.enabled
+    limiter.enabled = True
+    yield
+    limiter.enabled = previous
+    limiter.limiter.storage.reset()
 
 
 class TestExecuteInfoSingleNodeReadOnly:
@@ -285,7 +315,9 @@ class TestExecuteInfoWhitelistRejection:
         assert sent == ["namespaces"]
 
     @pytest.mark.asyncio
-    async def test_readonly_false_allows_unwhitelisted_verb(self, client: AsyncClient, sample_connection):
+    async def test_readonly_false_allows_allowlisted_write_verb(
+        self, client: AsyncClient, sample_connection, allow_info_write
+    ):
         from aerospike_cluster_manager_api import db
 
         await db.create_connection(sample_connection)
@@ -314,6 +346,183 @@ class TestExecuteInfoWhitelistRejection:
         assert len(rows) == 2
         assert all(r["output"] == "ok" for r in rows)
         assert all(r["error"] is None for r in rows)
+
+
+class TestExecuteInfoWriteGate:
+    """``readOnly=false`` is an opt-in, allowlisted, rate-limited path (#467).
+
+    It used to be the *absence* of a gate: any string the caller supplied was
+    forwarded to ``info_all``, unauthenticated in the default configuration,
+    with no rate limit. Each test below pins one of the three checks that now
+    stand between a caller and the wire.
+    """
+
+    @pytest.mark.asyncio
+    async def test_write_path_is_403_when_flag_is_off(self, client: AsyncClient, sample_connection):
+        """Default configuration refuses the write path outright."""
+        from aerospike_cluster_manager_api import db
+
+        await db.create_connection(sample_connection)
+        mock_as_client = _make_mock_client()
+
+        with patch(
+            "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+            return_value=mock_as_client,
+        ):
+            resp = await client.post(
+                f"/api/v1/clusters/{sample_connection.id}/info",
+                json={"commands": ["set-config:context=service;migrate-threads=2"], "readOnly": False},
+            )
+
+        assert resp.status_code == 403, resp.text
+        assert "ACM_ALLOW_INFO_WRITE" in resp.json()["detail"]
+        mock_as_client.info_all.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_read_path_unaffected_by_the_flag(self, client: AsyncClient, sample_connection):
+        """The 403 is scoped to writes — diagnostics keep working by default."""
+        from aerospike_cluster_manager_api import db
+
+        await db.create_connection(sample_connection)
+        mock_as_client = _make_mock_client()
+
+        with patch(
+            "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+            return_value=mock_as_client,
+        ):
+            resp = await client.post(
+                f"/api/v1/clusters/{sample_connection.id}/info",
+                json={"commands": ["namespaces"], "readOnly": True},
+            )
+
+        assert resp.status_code == 200, resp.text
+
+    @pytest.mark.asyncio
+    async def test_destructive_verb_rejected_with_400(self, client: AsyncClient, sample_connection, allow_info_write):
+        """The verb that motivated #467: namespace truncation is data loss."""
+        from aerospike_cluster_manager_api import db
+
+        await db.create_connection(sample_connection)
+        mock_as_client = _make_mock_client()
+
+        with patch(
+            "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+            return_value=mock_as_client,
+        ):
+            resp = await client.post(
+                f"/api/v1/clusters/{sample_connection.id}/info",
+                json={"commands": ["truncate-namespace:namespace=test"], "readOnly": False},
+            )
+
+        assert resp.status_code == 400, resp.text
+        assert "truncate-namespace" in resp.json()["detail"]
+        mock_as_client.info_all.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_unknown_write_verb_rejected_with_400(self, client: AsyncClient, sample_connection, allow_info_write):
+        from aerospike_cluster_manager_api import db
+
+        await db.create_connection(sample_connection)
+        mock_as_client = _make_mock_client()
+
+        with patch(
+            "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+            return_value=mock_as_client,
+        ):
+            resp = await client.post(
+                f"/api/v1/clusters/{sample_connection.id}/info",
+                json={"commands": ["some-verb-nobody-audited:x=1"], "readOnly": False},
+            )
+
+        assert resp.status_code == 400, resp.text
+        assert "write allowlist" in resp.json()["detail"]
+        mock_as_client.info_all.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_write_path_rejects_multi_command_frame(
+        self, client: AsyncClient, sample_connection, allow_info_write
+    ):
+        """A whitelisted head must not smuggle a destructive tail.
+
+        Without the single-command check, the verb gate would inspect
+        ``set-config`` and forward the whole frame — truncating the namespace.
+        """
+        from aerospike_cluster_manager_api import db
+
+        await db.create_connection(sample_connection)
+        mock_as_client = _make_mock_client()
+
+        with patch(
+            "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+            return_value=mock_as_client,
+        ):
+            resp = await client.post(
+                f"/api/v1/clusters/{sample_connection.id}/info",
+                json={
+                    "commands": ["set-config:context=service;migrate-threads=2\ntruncate-namespace:namespace=test"],
+                    "readOnly": False,
+                },
+            )
+
+        assert resp.status_code == 400, resp.text
+        assert "not a single asinfo command" in resp.json()["detail"]
+        mock_as_client.info_all.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_batch_is_atomic_one_bad_verb_blocks_all(
+        self, client: AsyncClient, sample_connection, allow_info_write
+    ):
+        from aerospike_cluster_manager_api import db
+
+        await db.create_connection(sample_connection)
+        mock_as_client = _make_mock_client()
+
+        with patch(
+            "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+            return_value=mock_as_client,
+        ):
+            resp = await client.post(
+                f"/api/v1/clusters/{sample_connection.id}/info",
+                json={
+                    "commands": ["recluster:", "truncate-namespace:namespace=test"],
+                    "readOnly": False,
+                },
+            )
+
+        assert resp.status_code == 400, resp.text
+        # The legal first command must not have run either.
+        mock_as_client.info_all.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_write_path_is_rate_limited(
+        self, client: AsyncClient, sample_connection, allow_info_write, enforce_rate_limits
+    ):
+        """5/minute, and it is charged even for rejected commands.
+
+        Charging before validation is deliberate: otherwise the allowlist
+        itself becomes a free oracle — a caller could enumerate which verbs a
+        deployment would accept at the 60/minute global rate.
+        """
+        from aerospike_cluster_manager_api import db
+
+        await db.create_connection(sample_connection)
+        mock_as_client = _make_mock_client()
+        mock_as_client.info_all.side_effect = lambda cmd: [_info_all_result("BB9020011AC4202", "ok")]
+
+        codes: list[int] = []
+        with patch(
+            "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+            return_value=mock_as_client,
+        ):
+            for _ in range(6):
+                resp = await client.post(
+                    f"/api/v1/clusters/{sample_connection.id}/info",
+                    json={"commands": ["recluster:"], "readOnly": False},
+                )
+                codes.append(resp.status_code)
+
+        assert codes[:5] == [200] * 5, codes
+        assert codes[5] == 429, codes
 
 
 class TestExecuteInfoFanOut:

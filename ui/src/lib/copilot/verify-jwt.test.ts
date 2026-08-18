@@ -36,6 +36,12 @@ afterEach(() => {
 })
 
 describe("assertCopilotAuth — bearer presence", () => {
+  beforeEach(() => {
+    // An issuer must be configured to reach the header checks at all — see
+    // the misconfiguration block below.
+    vi.stubEnv("COPILOT_OIDC_ISSUER_URL", ISSUER)
+  })
+
   it("rejects a missing Authorization header with 401", async () => {
     await expectStatus(assertCopilotAuth(requestWithAuth()), 401)
   })
@@ -47,12 +53,35 @@ describe("assertCopilotAuth — bearer presence", () => {
   it("rejects an empty bearer token with 401", async () => {
     await expectStatus(assertCopilotAuth(requestWithAuth("Bearer ")), 401)
   })
+})
 
-  it("accepts any bearer token in presence-only mode (no issuer)", async () => {
+describe("assertCopilotAuth — misconfiguration (#472)", () => {
+  // With no issuer configured, this used to warn and accept ANY non-empty
+  // Bearer value — a check that could never fail. It now refuses to serve.
+  it("refuses when the issuer is unset, even with a bearer token", async () => {
     vi.stubEnv("COPILOT_OIDC_ISSUER_URL", "")
-    await expect(
+    await expectStatus(
       assertCopilotAuth(requestWithAuth("Bearer anything")),
-    ).resolves.toBeUndefined()
+      503,
+    )
+  })
+
+  it("refuses when the issuer is unset and no token is supplied", async () => {
+    vi.stubEnv("COPILOT_OIDC_ISSUER_URL", "")
+    // 503, not 401: no token the caller could present would help, so telling
+    // them to retry with credentials would be a lie.
+    await expectStatus(assertCopilotAuth(requestWithAuth()), 503)
+  })
+
+  it("logs the misconfiguration once, as an error", async () => {
+    vi.stubEnv("COPILOT_OIDC_ISSUER_URL", "")
+    const error = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    await expectStatus(assertCopilotAuth(requestWithAuth("Bearer a")), 503)
+    await expectStatus(assertCopilotAuth(requestWithAuth("Bearer b")), 503)
+
+    expect(error).toHaveBeenCalledTimes(1)
+    expect(error.mock.calls[0]?.[0]).toContain("COPILOT_OIDC_ISSUER_URL")
   })
 })
 
