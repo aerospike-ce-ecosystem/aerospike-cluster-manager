@@ -622,6 +622,36 @@ Common use cases include:
 
 `K8S_MANAGEMENT_ENABLED` controls every K8s endpoint. When it is disabled, the API returns 404 and the UI hides K8s features.
 
+### Workspace Labelling and K8s Cluster Visibility
+
+Cluster Manager decides who may see, scale, and delete an `AerospikeCluster`
+CR from the `acm.aerospike.com/workspace` label on the CR:
+
+| CR label | Who can read / scale / delete it |
+| --- | --- |
+| `acm.aerospike.com/workspace: <workspace-id>` | Callers who can see that workspace (its owner, or anyone if it is system-owned like `ws-default`) |
+| _absent_ | The system caller only |
+
+Every cluster Cluster Manager creates or imports carries the label —
+`ws-default` when the request names no workspace, which is system-owned and
+therefore shared. So an **unlabelled** CR means "Cluster Manager did not
+create this": a cluster applied with `kubectl`, by an operator's own
+manifests, or by another team. Those are denied to tenants rather than shared
+with them, matching how `AerospikeClusterTemplate` CRs have always behaved.
+
+With `OIDC_ENABLED=false` (the default) every caller is the system caller, so
+this changes nothing. With OIDC on, a tenant who previously saw an unlabelled
+cluster will now get a 404. If that cluster genuinely belongs to their
+workspace, label it:
+
+```bash
+kubectl label aerospikecluster <name> -n <namespace> \
+  acm.aerospike.com/workspace=<workspace-id>
+```
+
+Use `ws-default` for "shared with everyone". `kubectl get aerospikecluster -A
+-L acm.aerospike.com/workspace` lists what is currently labelled.
+
 ### Extended Pod Status Fields
 
 The pod status response now includes additional fields for richer cluster monitoring:
