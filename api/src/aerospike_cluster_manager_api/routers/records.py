@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Path, Query, Request
 from starlette.responses import Response
 
 from aerospike_cluster_manager_api import db
+from aerospike_cluster_manager_api.constants import InvalidInfoArgument
 from aerospike_cluster_manager_api.converters import record_to_model
 from aerospike_cluster_manager_api.dependencies import AerospikeClient, VerifiedConnId
 from aerospike_cluster_manager_api.middleware.cancellation import run_cancellable
@@ -142,7 +143,7 @@ async def get_records(
     request: Request,
     client: AerospikeClient,
     conn_id: VerifiedConnId,
-    ns: str = Query(..., min_length=1),
+    ns: str = Query(..., min_length=1, max_length=31, pattern=r"^[a-zA-Z0-9_-]+$"),
     set: str = "",
     pageSize: int = Query(25, ge=1, le=500),
 ) -> RecordListResponse:
@@ -157,11 +158,17 @@ async def get_records(
     """
     # Cancelled if the operator closes the tab mid-scan (ADR-0021). A scan of
     # a large set is minutes of work whose result nobody is left to read.
-    result = await run_cancellable(
-        request,
-        records_service.list_records(client, ns, set, page_size=pageSize),
-        label=f"scan {ns}.{set or '<all sets>'}",
-    )
+    try:
+        result = await run_cancellable(
+            request,
+            records_service.list_records(client, ns, set, page_size=pageSize),
+            label=f"scan {ns}.{set or '<all sets>'}",
+        )
+    except InvalidInfoArgument as exc:
+        # Unreachable through this route while the `ns` pattern above holds.
+        # This is the backstop degrading to a 400 rather than a 500 if some
+        # future caller reaches the service with an unvalidated namespace.
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     models = [record_to_model(r) for r in result.records]
     await _attach_record_notes(conn_id, ns, set, result.records, models)
     return RecordListResponse(
@@ -183,7 +190,7 @@ async def get_records(
 async def get_record_detail(
     client: AerospikeClient,
     conn_id: VerifiedConnId,
-    ns: str = Query(..., min_length=1),
+    ns: str = Query(..., min_length=1, max_length=31, pattern=r"^[a-zA-Z0-9_-]+$"),
     set: str = Query(...),
     pk: str = Query(..., min_length=1),
     pk_type: Literal["auto", "string", "int", "bytes"] = Query("auto"),
@@ -262,7 +269,7 @@ async def delete_record(
     request: Request,
     client: AerospikeClient,
     conn_id: VerifiedConnId,
-    ns: str = Query(..., min_length=1),
+    ns: str = Query(..., min_length=1, max_length=31, pattern=r"^[a-zA-Z0-9_-]+$"),
     set: str = Query(..., min_length=1),
     pk: str = Query(..., min_length=1),
     pk_type: Literal["auto", "string", "int", "bytes"] = Query("auto"),

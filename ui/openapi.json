@@ -1864,6 +1864,7 @@
           "namespace": {
             "maxLength": 31,
             "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
             "title": "Namespace",
             "type": "string"
           },
@@ -4320,6 +4321,7 @@
           "namespace": {
             "maxLength": 31,
             "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
             "title": "Namespace",
             "type": "string"
           },
@@ -8472,7 +8474,9 @@
             "name": "ns",
             "required": true,
             "schema": {
+              "maxLength": 31,
               "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_-]+$",
               "title": "Ns",
               "type": "string"
             }
@@ -11243,7 +11247,9 @@
             "name": "ns",
             "required": true,
             "schema": {
+              "maxLength": 31,
               "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_-]+$",
               "title": "Ns",
               "type": "string"
             }
@@ -11323,7 +11329,9 @@
             "name": "ns",
             "required": true,
             "schema": {
+              "maxLength": 31,
               "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_-]+$",
               "title": "Ns",
               "type": "string"
             }
@@ -11449,7 +11457,9 @@
             "name": "ns",
             "required": true,
             "schema": {
+              "maxLength": 31,
               "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_-]+$",
               "title": "Ns",
               "type": "string"
             }

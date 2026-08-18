@@ -35,7 +35,7 @@ class QueryPredicate(BaseModel):
 
 
 class QueryRequest(BaseModel):
-    namespace: str = Field(min_length=1, max_length=31)
+    namespace: str = Field(min_length=1, max_length=31, pattern=r"^[a-zA-Z0-9_-]+$")
     set: str | None = Field(default=None, max_length=63)
     predicate: QueryPredicate | None = None
     selectBins: list[BinName] | None = Field(default=None, min_length=1)
@@ -175,7 +175,7 @@ class FilteredQueryRequest(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    namespace: str = Field(min_length=1, max_length=31)
+    namespace: str = Field(min_length=1, max_length=31, pattern=r"^[a-zA-Z0-9_-]+$")
     set: str | None = Field(default=None, max_length=63)
     filters: FilterGroup | None = None
     predicate: QueryPredicate | None = None
