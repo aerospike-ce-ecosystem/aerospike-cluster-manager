@@ -133,7 +133,7 @@ async def delete_index(
     request: Request,
     client: AerospikeClient,
     name: str = Query(..., min_length=1),
-    ns: str = Query(..., min_length=1),
+    ns: str = Query(..., min_length=1, max_length=31, pattern=r"^[a-zA-Z0-9_-]+$"),
 ) -> Response:
     """Remove a secondary index by name from the specified namespace.
 
