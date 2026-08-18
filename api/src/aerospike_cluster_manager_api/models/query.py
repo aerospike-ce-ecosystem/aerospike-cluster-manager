@@ -148,6 +148,31 @@ class FilterGroup(BaseModel):
 
 
 class FilteredQueryRequest(BaseModel):
+    """Request body for ``POST /records/{conn_id}/filter``.
+
+    **This endpoint returns the first window only.** ``pageSize`` bounds the
+    window; there is no way to ask for the next one, and ``page`` is accepted
+    only as ``1`` (#468).
+
+    Why there is no cursor yet — this is a client-library limitation, not an
+    oversight in this endpoint:
+
+    * The pinned ``aerospike-py`` (0.6.4, see #476) exposes no pagination
+      surface at all. ``AsyncQuery`` has ``where``/``select``/``results``/
+      ``foreach``, and ``QueryPolicy`` carries ``max_records`` with no offset
+      and no partition filter.
+    * Newer ``aerospike-py`` adds ``partition_filter_by_range(begin, count)``,
+      which is *not* sufficient on its own. A partition range cannot resume
+      mid-partition, and with 4096 partitions a set large enough to need
+      pagination holds far more than ``pageSize`` records per partition — so a
+      cursor keyed on partition id would never advance past the first one.
+      Resumable ``PartitionStatus`` is what would close this, and
+      ``aerospike-py`` deliberately clones the filter to prevent resumption.
+
+    Until that exists, callers narrow the result set (filters, a primary-key
+    pattern) or raise ``pageSize`` (max 500) rather than paging.
+    """
+
     model_config = ConfigDict(populate_by_name=True)
 
     namespace: str = Field(min_length=1, max_length=31)
@@ -156,7 +181,22 @@ class FilteredQueryRequest(BaseModel):
     predicate: QueryPredicate | None = None
     select_bins: list[BinName] | None = Field(default=None, min_length=1, alias="selectBins")
     max_records: int | None = Field(default=None, ge=1, le=1_000_000, alias="maxRecords")
-    page: int = Field(default=1, ge=1)
+    # Accepted only as ``1`` (#468). The field predates any mechanism to
+    # honour it: ``filter_records`` has always returned the first window and
+    # reported ``page=1`` regardless, so a client asking for page 7 received
+    # page 1 and could not tell. Rejecting instead of silently ignoring is the
+    # interim behaviour issue #468 prescribes — the router maps
+    # ``records_service.UnsupportedPageError`` to a 400 that explains it.
+    page: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "Reserved. Only 1 is accepted; any other value is rejected with 400. "
+            "The record browser has no offset or partition cursor yet, so this "
+            "endpoint returns the first window only. Narrow the result with "
+            "filters or a primary-key pattern, or raise pageSize (max 500)."
+        ),
+    )
     page_size: int = Field(default=25, ge=1, le=500, alias="pageSize")
     primary_key: str | None = Field(default=None, max_length=1024, alias="primaryKey")
     # Particle type for primary_key resolution. "auto" retries alternate type on NOT_FOUND.
@@ -195,6 +235,8 @@ class FilteredQueryResponse(BaseModel):
     # explicit "unknown", distinct from a genuine ``0`` (ADR-0026). Mirrored
     # in ``ui/src/lib/types/query.ts`` (project goal 2-7).
     total: int | None = Field(default=None, ge=0)
+    # Always 1 — see FilteredQueryRequest. Kept on the wire so the response
+    # shape stays stable for existing clients.
     page: int = Field(ge=1)
     page_size: int = Field(ge=1, alias="pageSize")
     has_more: bool = Field(alias="hasMore")

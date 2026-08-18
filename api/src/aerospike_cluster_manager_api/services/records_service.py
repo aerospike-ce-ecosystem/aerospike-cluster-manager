@@ -77,6 +77,7 @@ __all__ = [
     "PkType",
     "PrimaryKeyMissing",
     "SetRequiredForPkLookup",
+    "UnsupportedPageError",
     "create_record",
     "delete_bin",
     "delete_record",
@@ -100,6 +101,32 @@ class InvalidPkPattern(ValueError):
 
     def __init__(self, message: str) -> None:
         super().__init__(message)
+
+
+class UnsupportedPageError(ValueError):
+    """Raised when a caller asks for a page this endpoint cannot produce (#468).
+
+    ``FilteredQueryRequest.page`` was declared, validated, and documented —
+    and then never read. ``filter_records`` returned the first window and
+    reported ``page=1`` on every path, so a request for page 7 silently got
+    page 1. That is worse than an error: a generated client (ackoctl, the
+    Copilot agent) reading the OpenAPI schema sends ``page`` in good faith
+    and has no way to detect that it was discarded.
+
+    Failing loudly is the interim contract until a real cursor exists. See
+    the class docstring on :class:`models.query.FilteredQueryRequest` for why
+    one does not yet: the pinned aerospike-py exposes no offset, no partition
+    filter, and no resumable partition status, so there is nothing to build a
+    cursor out of.
+    """
+
+    def __init__(self, page: int) -> None:
+        super().__init__(
+            f"page={page} is not supported: this endpoint returns the first window only. "
+            "Narrow the result with filters or a primary-key pattern, or raise pageSize "
+            "(max 500). Pagination beyond the first page is tracked in issue #468."
+        )
+        self.page = page
 
 
 # ---------------------------------------------------------------------------
@@ -489,16 +516,26 @@ async def list_records(
 
 
 async def filter_records(client: aerospike_py.AsyncClient, body: FilteredQueryRequest) -> FilterRecordsResult:
-    """Scan with optional PK pattern + bin filters and return a page.
+    """Scan with optional PK pattern + bin filters and return the FIRST page.
 
     PK lookup short-circuits to ``client.get`` when ``pk_match_mode='exact'``
     so a pure-key fetch never triggers a scan. ``prefix`` and ``regex`` modes
     compile the PK pattern into an expression and run a server-side scan.
 
+    There is no page 2 (#468). Every return path reports ``page=1``, because
+    the scan is bounded by ``max_records`` alone — there is no offset and no
+    partition cursor to resume from. ``body.page`` used to be accepted and
+    then ignored, so a caller asking for page 7 got page 1 and had no way to
+    notice; it is now rejected with :class:`UnsupportedPageError`.
+
     Raises:
+        UnsupportedPageError: ``body.page`` is not 1.
         SetRequiredForPkLookup: PK pattern provided without a set scope.
         InvalidPkPattern: regex/prefix could not be compiled.
     """
+    if body.page != 1:
+        raise UnsupportedPageError(body.page)
+
     start_time = time.monotonic()
 
     pk_target = body.pk_pattern or body.primary_key
