@@ -204,9 +204,18 @@ services:
       - COPILOT_BASE_URL=${COPILOT_BASE_URL:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - COPILOT_REQUIRE_AUTH=${COPILOT_REQUIRE_AUTH:-false}
+      # Auth is REQUIRED by default (#472). /copilotkit is a relay to the
+      # operator's LLM provider key; leaving it open let anyone who could
+      # reach the UI port drive it with arbitrary prompts. With auth on,
+      # COPILOT_OIDC_ISSUER_URL must be set or the route answers 503 —
+      # set COPILOT_REQUIRE_AUTH=false only when a layer in front of the
+      # web pod already authenticates every request.
+      - COPILOT_REQUIRE_AUTH=${COPILOT_REQUIRE_AUTH:-true}
       - COPILOT_OIDC_ISSUER_URL=${COPILOT_OIDC_ISSUER_URL:-}
       - COPILOT_OIDC_AUDIENCE=${COPILOT_OIDC_AUDIENCE:-}
+      # Per-client and per-replica request budgets for /copilotkit.
+      - COPILOT_RATE_LIMIT_PER_MINUTE=${COPILOT_RATE_LIMIT_PER_MINUTE:-60}
+      - COPILOT_GLOBAL_RATE_LIMIT_PER_MINUTE=${COPILOT_GLOBAL_RATE_LIMIT_PER_MINUTE:-300}
       # CopilotKit anonymous telemetry — disabled by default for self-hosters.
       - COPILOTKIT_TELEMETRY_DISABLED=${COPILOTKIT_TELEMETRY_DISABLED:-true}
     depends_on:

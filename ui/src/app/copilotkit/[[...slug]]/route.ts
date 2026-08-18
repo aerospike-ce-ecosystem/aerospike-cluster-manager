@@ -24,6 +24,10 @@ import { openai, createOpenAI } from "@ai-sdk/openai"
 import { stepCountIs, streamText } from "ai"
 
 import {
+  checkCopilotRateLimit,
+  copilotRateLimitKey,
+} from "@/lib/copilot/rate-limit"
+import {
   copilotRequiresAuth,
   resolveCopilotServerConfig,
 } from "@/lib/copilot/server-config"
@@ -145,6 +149,17 @@ const handler = createCopilotRuntimeHandler({
       }
       if (copilotRequiresAuth()) {
         await assertCopilotAuth(request)
+      }
+      // After auth, so a rejected caller cannot spend another caller's budget
+      // by getting themselves counted (#472). slowapi covers the FastAPI app
+      // only — no Next.js route handler participates in it, so this endpoint
+      // had no limit at all despite costing an LLM call per request.
+      const retryAfter = checkCopilotRateLimit(copilotRateLimitKey(request))
+      if (retryAfter !== null) {
+        throw Response.json(
+          { error: "rate limit exceeded" },
+          { status: 429, headers: { "Retry-After": String(retryAfter) } },
+        )
       }
     },
     onBeforeHandler: ({ route }) => {
