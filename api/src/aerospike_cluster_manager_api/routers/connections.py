@@ -12,6 +12,7 @@ from aerospike_cluster_manager_api.constants import INFO_BUILD, INFO_EDITION, IN
 from aerospike_cluster_manager_api.dependencies import CallerOwnerId, _get_verified_connection
 from aerospike_cluster_manager_api.info_parser import aggregate_node_kv, parse_list, safe_int
 from aerospike_cluster_manager_api.models.connection import (
+    ConnectionErrorType,
     ConnectionProfileResponse,
     ConnectionStatus,
     CreateConnectionRequest,
@@ -25,10 +26,28 @@ from aerospike_cluster_manager_api.services.connections_service import (
     ConnectionNotFoundError,
     WorkspaceNotFoundError,
 )
+from aerospike_cluster_manager_api.target_policy import (
+    ALLOW_PRIVATE_TARGETS_ENV,
+    BlockedConnectionTargetError,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/connections", tags=["connections"])
+
+
+def _blocked_target_detail(exc: BlockedConnectionTargetError) -> str:
+    """HTTP detail for a target the SSRF denylist rejected.
+
+    Echoes the host because the caller is the one who just supplied it —
+    there is nothing to disclose — and names the escape hatch so a dev
+    deployment running Aerospike on the loopback knows what to set.
+    """
+    return (
+        f"Connection target '{exc.host}' is not allowed: loopback and link-local addresses "
+        f"are denied to prevent the API being used as an SSRF probe. "
+        f"Set {ALLOW_PRIVATE_TARGETS_ENV}=true on the API for local development."
+    )
 
 
 @router.get(
@@ -69,10 +88,14 @@ async def create_connection(
     """Create a new Aerospike connection profile.
 
     Phase 2: the supplied ``workspaceId`` (or the default fallback) must be
-    visible to the caller; otherwise 404.
+    visible to the caller; otherwise 404. A host on the SSRF denylist
+    (loopback / link-local, see :mod:`target_policy`) is a 400 — the caller
+    supplied the address, so naming it back is not a disclosure.
     """
     try:
         return await connections_service.create_connection(body, caller_owner_id)
+    except BlockedConnectionTargetError as exc:
+        raise HTTPException(status_code=400, detail=_blocked_target_detail(exc)) from exc
     except WorkspaceNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -126,6 +149,8 @@ async def update_connection(
     """
     try:
         return await connections_service.update_connection(conn_id, body, caller_owner_id)
+    except BlockedConnectionTargetError as exc:
+        raise HTTPException(status_code=400, detail=_blocked_target_detail(exc)) from exc
     except ConnectionNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except WorkspaceNotFoundError as exc:
@@ -143,6 +168,18 @@ async def get_connection_health(conn_id: str = Depends(_get_verified_connection)
 
     Always returns HTTP 200. Uses ``connected: false`` to signal unreachable clusters
     so that the frontend health indicator never mistakes a transient 503 for a permanent failure.
+
+    The failure shape is deliberately coarse (#470). This route is reachable
+    unauthenticated in the default configuration and carries no rate limit,
+    so a response that distinguished a closed port from a filtered one from a
+    live non-Aerospike listener — and echoed the driver's exception text —
+    turned any stored profile into a port-scan oracle. Every connection-level
+    failure now reports ``errorType: "unreachable"`` with a fixed message; the
+    specific exception goes to the operator log only.
+
+    ``not_found`` (the profile vanished mid-check) and ``auth_error`` survive
+    as distinct values: neither is a reachability signal, and both are
+    directly actionable for the operator.
     """
     try:
         client = await client_manager.get_client(conn_id)
@@ -250,32 +287,61 @@ async def get_connection_health(conn_id: str = Depends(_get_verified_connection)
             diskTotal=disk_total,
             tendHealthy=tend_healthy,
         )
-    except ValueError as exc:
+    except BlockedConnectionTargetError:
+        # A stored profile that predates the create/update gate, or one written
+        # by a path that bypassed them. Must come before the ValueError branch
+        # below — BlockedConnectionTargetError subclasses ValueError.
+        logger.warning("Health check for connection '%s' targets a denied address", conn_id, exc_info=True)
+        return _disconnected_health("blocked_target")
+    except ValueError:
         # Profile vanished between the route dependency check and the client
         # fetch (TOCTOU) — get_client() raises a plain ValueError. Surface as
         # the disconnected shape, not an opaque 500.
         logger.warning("Connection '%s' disappeared during health check", conn_id, exc_info=True)
-        return _disconnected_health(str(exc), "not_found")
-    except AerospikeTimeoutError as exc:
-        logger.warning("Health check timed out for connection '%s'", conn_id, exc_info=True)
-        return _disconnected_health(str(exc), "timeout")
-    except ConnectionRefusedError as exc:
-        logger.warning("Connection refused for '%s'", conn_id, exc_info=True)
-        return _disconnected_health(str(exc), "connection_refused")
-    except ClusterError as exc:
-        logger.warning("Cluster error for connection '%s'", conn_id, exc_info=True)
-        return _disconnected_health(str(exc), "cluster_error")
+        return _disconnected_health("not_found")
+    except (AerospikeTimeoutError, ConnectionRefusedError, ClusterError):
+        # One bucket on purpose: a timeout, a refusal, and a cluster-protocol
+        # error are exactly the three answers that let a caller tell a filtered
+        # port from a closed one from a live non-Aerospike listener.
+        logger.warning("Health check failed for connection '%s'", conn_id, exc_info=True)
+        return _disconnected_health("unreachable")
     except (AerospikeError, OSError) as exc:
         logger.warning("Health check failed for connection '%s'", conn_id, exc_info=True)
-        error_type = "auth_error" if isinstance(exc, AerospikeError) and "security" in str(exc).lower() else "unknown"
-        return _disconnected_health(str(exc), error_type)
+        # An auth rejection already implies a real Aerospike answered, so
+        # keeping it distinct discloses nothing further and tells the operator
+        # to go fix the credentials rather than the network.
+        is_auth = isinstance(exc, AerospikeError) and "security" in str(exc).lower()
+        return _disconnected_health("auth_error" if is_auth else "unreachable")
 
 
-def _disconnected_health(error: str, error_type: str) -> Response:
-    """Build a JSON Response for the ``connected=false`` health-check shape."""
+# Fixed operator-facing text per errorType. The driver's own exception string
+# is never returned: it carries host, port, and node identity, which is the
+# other half of what made the health route a scanner (#470). It is logged.
+_HEALTH_ERROR_MESSAGES: dict[ConnectionErrorType, str] = {
+    "not_found": "Connection profile no longer exists",
+    "unreachable": "Unable to reach the Aerospike cluster",
+    "auth_error": "Aerospike rejected the stored credentials",
+    "blocked_target": (
+        "Connection target is not allowed: loopback and link-local addresses are denied. "
+        f"Set {ALLOW_PRIVATE_TARGETS_ENV}=true on the API for local development."
+    ),
+}
+
+
+def _disconnected_health(error_type: ConnectionErrorType) -> Response:
+    """Build a JSON Response for the ``connected=false`` health-check shape.
+
+    Takes only the ``error_type``; the message is looked up from
+    :data:`_HEALTH_ERROR_MESSAGES` so no call site can accidentally pass an
+    exception string through to the wire.
+    """
     return Response(
         content=ConnectionStatus(
-            connected=False, nodeCount=0, namespaceCount=0, error=error, errorType=error_type
+            connected=False,
+            nodeCount=0,
+            namespaceCount=0,
+            error=_HEALTH_ERROR_MESSAGES[error_type],
+            errorType=error_type,
         ).model_dump_json(),
         media_type="application/json",
         headers={"Retry-After": "30"},
