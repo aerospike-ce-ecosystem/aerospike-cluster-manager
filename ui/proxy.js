@@ -19,6 +19,65 @@ const https = require("https")
 const path = require("path")
 const { spawn } = require("child_process")
 
+/**
+ * Normalise a socket address into the form the API's TRUSTED_PROXIES matching
+ * expects.
+ *
+ * Node reports a dual-stack IPv4 peer as an IPv4-mapped IPv6 literal
+ * ("::ffff:10.0.0.5"). Python's ipaddress parses that as an IPv6Address, so it
+ * would NOT match a TRUSTED_PROXIES entry of "10.0.0.0/8" — the trust check
+ * would silently fail and every user would fall back into one bucket, which is
+ * the bug this whole change is about. Strip the prefix so both ends agree on
+ * what the address is.
+ */
+function normalizeAddress(address) {
+  if (typeof address !== "string" || address === "") return null
+  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(address)
+  return mapped ? mapped[1] : address
+}
+
+/**
+ * Build the header set to forward upstream.
+ *
+ * Two jobs, and the second is the security-relevant one:
+ *
+ *  1. Tell the upstream who the client is. Without X-Forwarded-For the API
+ *     sees the web pod as the peer for every request, so with TRUSTED_PROXIES
+ *     empty (the default) the whole team shares one 60/min rate-limit bucket
+ *     (#473). One active operator could throttle everyone.
+ *
+ *  2. **Overwrite** any inbound X-Forwarded-For / X-Real-IP rather than
+ *     appending to it. This proxy is the edge: it is the first thing that
+ *     sees the connection, so an inbound forwarding header is a claim the
+ *     client made about itself, not a hop record. Passing it through — which
+ *     is what the code did — made the documented remedy a trap: adding the
+ *     web pod to TRUSTED_PROXIES would have made the bucket key
+ *     caller-controlled, so a caller could evade the limit entirely by
+ *     rotating the header.
+ *
+ * If a real reverse proxy sits in front of this one, terminate the forwarding
+ * chain there and have it talk to the API directly; this process cannot tell
+ * a legitimate upstream hop from a forged one.
+ */
+function buildForwardedHeaders(req, { dropHost = false } = {}) {
+  const headers = { ...req.headers }
+  if (dropHost) delete headers.host
+
+  for (const name of Object.keys(headers)) {
+    const lower = name.toLowerCase()
+    if (lower === "x-forwarded-for" || lower === "x-real-ip") {
+      delete headers[name]
+    }
+  }
+
+  const peer = normalizeAddress(req.socket && req.socket.remoteAddress)
+  if (peer) {
+    headers["x-forwarded-for"] = peer
+    headers["x-real-ip"] = peer
+  }
+  return headers
+}
+
 const port = parseInt(process.env.PORT || "3100", 10)
 const hostname = process.env.HOSTNAME || "0.0.0.0"
 const apiUrl = process.env.API_URL || "http://localhost:8000"
@@ -39,29 +98,32 @@ const apiIsHttps = parsedApi.protocol === "https:"
 const apiPort = parsedApi.port || (apiIsHttps ? 443 : 80)
 const apiLib = apiIsHttps ? https : http
 
-const nextServerScript = path.join(__dirname, "server.js")
-const nextProcess = spawn(process.execPath, [nextServerScript], {
-  cwd: __dirname,
-  env: { ...process.env, PORT: String(internalPort), HOSTNAME: internalHost },
-  stdio: "inherit",
-})
+function spawnNextServer() {
+  const nextServerScript = path.join(__dirname, "server.js")
+  const nextProcess = spawn(process.execPath, [nextServerScript], {
+    cwd: __dirname,
+    env: { ...process.env, PORT: String(internalPort), HOSTNAME: internalHost },
+    stdio: "inherit",
+  })
 
-nextProcess.on("exit", (code, signal) => {
-  console.error(
-    `Next.js standalone server exited (code=${code}, signal=${signal})`,
-  )
-  process.exit(code == null ? 1 : code)
-})
+  nextProcess.on("exit", (code, signal) => {
+    console.error(
+      `Next.js standalone server exited (code=${code}, signal=${signal})`,
+    )
+    process.exit(code == null ? 1 : code)
+  })
 
-const forwardSignal = (sig) => {
-  if (!nextProcess.killed) nextProcess.kill(sig)
+  const forwardSignal = (sig) => {
+    if (!nextProcess.killed) nextProcess.kill(sig)
+  }
+  process.on("SIGTERM", () => forwardSignal("SIGTERM"))
+  process.on("SIGINT", () => forwardSignal("SIGINT"))
+
+  return nextProcess
 }
-process.on("SIGTERM", () => forwardSignal("SIGTERM"))
-process.on("SIGINT", () => forwardSignal("SIGINT"))
 
 function proxyToApi(req, res) {
-  const headers = { ...req.headers }
-  delete headers.host
+  const headers = buildForwardedHeaders(req, { dropHost: true })
 
   const proxyReq = apiLib.request(
     {
@@ -94,7 +156,11 @@ function proxyToApi(req, res) {
 }
 
 function proxyToNext(req, res) {
-  const headers = { ...req.headers }
+  // Normalised here too, not only on the /api/* path. Next.js route handlers
+  // read X-Forwarded-For directly — /copilotkit rate-limits on it — and they
+  // are behind this same proxy, so an un-normalised header would leave that
+  // limit keyed on a value the caller chose.
+  const headers = buildForwardedHeaders(req)
 
   const proxyReq = http.request(
     {
@@ -126,20 +192,35 @@ function proxyToNext(req, res) {
   req.pipe(proxyReq)
 }
 
-const server = http.createServer((req, res) => {
-  if (req.url && req.url.startsWith("/api/")) {
-    return proxyToApi(req, res)
-  }
-  return proxyToNext(req, res)
-})
+function start() {
+  spawnNextServer()
 
-server.keepAliveTimeout = 65_000
-server.headersTimeout = 66_000
+  const server = http.createServer((req, res) => {
+    if (req.url && req.url.startsWith("/api/")) {
+      return proxyToApi(req, res)
+    }
+    return proxyToNext(req, res)
+  })
 
-server.listen(port, hostname, () => {
-  console.log(`> Proxy listening on http://${hostname}:${port}`)
-  console.log(`> /api/* -> ${apiUrl}`)
-  console.log(
-    `> rest    -> http://${internalHost}:${internalPort} (Next.js standalone)`,
-  )
-})
+  server.keepAliveTimeout = 65_000
+  server.headersTimeout = 66_000
+
+  server.listen(port, hostname, () => {
+    console.log(`> Proxy listening on http://${hostname}:${port}`)
+    console.log(`> /api/* -> ${apiUrl}`)
+    console.log(
+      `> rest    -> http://${internalHost}:${internalPort} (Next.js standalone)`,
+    )
+  })
+  return server
+}
+
+// Side effects only when run as the container entrypoint (`node proxy.js`).
+// Guarding them is what lets `buildForwardedHeaders` be unit-tested: without
+// it, requiring this file would spawn ./server.js — which does not exist
+// outside the standalone bundle — and bind a port.
+if (require.main === module) {
+  start()
+}
+
+module.exports = { buildForwardedHeaders, normalizeAddress, start }

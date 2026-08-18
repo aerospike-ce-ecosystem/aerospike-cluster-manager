@@ -311,3 +311,47 @@ def test_mutation_route_carries_explicit_rate_limit(module: str, func_name: str)
 
     key = f"{module}.{func_name}"
     assert key in limiter._route_limits, f"mutation route {key} is missing an explicit @limiter.limit(...) decorator"
+
+
+class TestPerUserBucketsBehindTheWebProxy:
+    """The API half of #473.
+
+    ``ui/proxy.js`` now stamps the real socket address into
+    ``X-Forwarded-For``. These tests pin what the API does with it: distinct
+    users behind a trusted web container get distinct buckets, and a value
+    arriving from an untrusted peer is still ignored.
+    """
+
+    def test_two_users_behind_a_trusted_proxy_get_independent_buckets(self):
+        # This is the fairness the limiter was supposed to provide and did not:
+        # with proxy.js not setting the header, both of these resolved to the
+        # web container's own address and shared one 60/min bucket.
+        with patch("aerospike_cluster_manager_api.config.TRUSTED_PROXIES", ["10.89.0.2"]):
+            alice = _FakeRequest("10.89.0.2", forwarded_for="203.0.113.10")
+            bob = _FakeRequest("10.89.0.2", forwarded_for="203.0.113.11")
+            assert _get_client_ip(alice) == "203.0.113.10"
+            assert _get_client_ip(bob) == "203.0.113.11"
+            assert _get_client_ip(alice) != _get_client_ip(bob)
+
+    def test_spoofed_value_from_an_untrusted_peer_is_ignored(self):
+        # Nothing about trusting the web container makes a *direct* caller
+        # trustworthy. Someone reaching the API port without going through the
+        # proxy still gets bucketed by their real peer address.
+        with patch("aerospike_cluster_manager_api.config.TRUSTED_PROXIES", ["10.89.0.2"]):
+            direct = _FakeRequest("198.51.100.7", forwarded_for="203.0.113.10")
+            assert _get_client_ip(direct) == "198.51.100.7"
+
+    def test_cidr_form_covers_a_dynamic_container_address(self):
+        # Container addresses are assigned per run, so the README recommends a
+        # CIDR rather than a literal.
+        with patch("aerospike_cluster_manager_api.config.TRUSTED_PROXIES", ["10.89.0.0/16"]):
+            req = _FakeRequest("10.89.4.31", forwarded_for="203.0.113.10")
+            assert _get_client_ip(req) == "203.0.113.10"
+
+    def test_untrusted_by_default_keeps_one_bucket(self):
+        # The documented default. Safe against spoofing, but everyone shares a
+        # bucket — which is exactly why TRUSTED_PROXIES has to be configured.
+        with patch("aerospike_cluster_manager_api.config.TRUSTED_PROXIES", []):
+            alice = _FakeRequest("10.89.0.2", forwarded_for="203.0.113.10")
+            bob = _FakeRequest("10.89.0.2", forwarded_for="203.0.113.11")
+            assert _get_client_ip(alice) == _get_client_ip(bob) == "10.89.0.2"
