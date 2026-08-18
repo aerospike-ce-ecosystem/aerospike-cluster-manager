@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from aerospike_cluster_manager_api.target_policy import (
+    ALLOW_LOOPBACK_TARGETS_ENV,
     BlockedConnectionTargetError,
     allow_private_targets,
     assert_targets_allowed,
@@ -49,6 +50,45 @@ class TestIsBlockedTarget:
     def test_allowed_targets(self, host: str) -> None:
         assert is_blocked_target(host) is False
 
+    @pytest.mark.parametrize(
+        "host",
+        [
+            "127.1",  # inet_aton short form
+            "127.0.1",
+            "2130706433",  # decimal
+            "0x7f000001",  # hex
+            "0177.0.0.1",  # octal
+            "2852039166",  # decimal IMDS -- the sharpest of the set
+            "0.0.0.0",  # unspecified; most stacks route it to localhost
+            "::",
+            "::ffff:127.0.0.1",  # IPv4-mapped IPv6
+            "::ffff:169.254.169.254",
+        ],
+    )
+    def test_alternative_spellings_of_denied_addresses(self, host: str) -> None:
+        # `ipaddress.ip_address` accepts only the canonical forms, and treating a
+        # parse failure as "not a literal, let it through" made every one of
+        # these a working bypass of the gate -- `2852039166` reaches the cloud
+        # metadata service. `getaddrinfo`, which the client actually dials
+        # through, accepts them all.
+        assert is_blocked_target(host) is True
+
+    @pytest.mark.parametrize(
+        "host",
+        [
+            "example.com",
+            "aerospike-node-1",
+            "1.2.3.4.5",  # too many octets: not an address at all
+            "127.0.0.1x",  # trailing garbage
+            "10.0.0.1",  # private, but never in scope -- see the module docstring
+        ],
+    )
+    def test_the_inet_aton_fallback_does_not_over_block(self, host: str) -> None:
+        # The fallback must widen the gate for numeric addresses only. A
+        # hostname that `inet_aton` refuses has to stay allowed, or the gate
+        # starts rejecting legitimate clusters.
+        assert is_blocked_target(host) is False
+
     def test_hostname_is_not_pre_resolved(self) -> None:
         # Documented scope limit: a hostname that resolves to loopback is NOT
         # blocked here. Re-checking after a resolve races with the client's own
@@ -80,6 +120,15 @@ class TestAllowPrivateTargetsOverride:
         monkeypatch.delenv("ACM_CONNECTION_TEST_ALLOW_PRIVATE", raising=False)
         assert allow_private_targets() is False
 
+    def test_documented_name_opens_the_gate(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # `.env.example` documents ACM_ALLOW_LOOPBACK_TARGETS as the name to
+        # set, and for a while nothing read it -- an operator who set it got
+        # silence. Pinned so the documented knob and the honoured knob cannot
+        # drift apart again.
+        monkeypatch.setenv(ALLOW_LOOPBACK_TARGETS_ENV, "true")
+        assert allow_private_targets() is True
+        assert is_blocked_target("2130706433") is False
+
     def test_legacy_name_still_opens_the_gate(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # The original name predates the gate covering more than
         # test-connection. Deployments already setting it must keep working.
@@ -107,6 +156,13 @@ class TestAssertTargetsAllowed:
         ],
     )
     def test_port_suffixes_do_not_defeat_the_gate(self, entry: str) -> None:
+        with pytest.raises(BlockedConnectionTargetError):
+            assert_targets_allowed([entry], 3000)
+
+    @pytest.mark.parametrize("entry", ["2852039166", "2130706433:3000", "0x7f000001"])
+    def test_alternative_forms_are_rejected_at_the_list_gate(self, entry: str) -> None:
+        # The three call sites (create, update, every client build) all go
+        # through here, so this is the assertion that actually protects them.
         with pytest.raises(BlockedConnectionTargetError):
             assert_targets_allowed([entry], 3000)
 
