@@ -1,4 +1,4 @@
-"""Unit tests for the read-only asinfo verb whitelist domain module.
+"""Unit tests for the asinfo verb whitelist domain module.
 
 Covers:
 
@@ -8,6 +8,10 @@ Covers:
   whitelist plus a representative set of write / unknown verbs. The
   parametrized "all whitelisted verbs pass" test is the regression net
   that catches accidental whitelist trims.
+* :func:`assert_write_allowed` — the ``readOnly=false`` gate added by #467,
+  which replaced "no allowlist at all" on the write path.
+  ``TestAssertWriteAllowed`` pins both whitelists as literal sets so a verb
+  moving between them is a visible decision.
 * :func:`assert_single_command` framing decisions — asinfo is a
   multi-command wire format, so ``TestSingleCommandFrame`` pins both the
   chained shapes that must be rejected and the legitimate single-command
@@ -19,12 +23,16 @@ from __future__ import annotations
 import pytest
 
 from aerospike_cluster_manager_api.info_verbs import (
+    ALLOWED_INFO_VERBS,
     READ_ONLY_INFO_VERBS,
+    WRITE_INFO_VERBS,
     InfoCommandNotSingle,
     InfoCommandRejected,
     InfoVerbNotAllowed,
+    InfoWriteVerbNotAllowed,
     assert_read_only,
     assert_single_command,
+    assert_write_allowed,
     extract_verb,
 )
 
@@ -434,3 +442,118 @@ class TestDumpVerbCatalog:
         # the categories the audit currently produces so the set of
         # legal categories stays explicit in code.
         assert category in {"log_only", "not_in_ce_8_1"}
+
+
+class TestAssertWriteAllowed:
+    """The ``readOnly=false`` gate (#467).
+
+    That path used to have no allowlist at all: whatever the caller sent
+    reached ``client.info_all`` verbatim. These tests pin the two checks it
+    now runs — same framing check as the read path, wider verb set.
+    """
+
+    def test_write_whitelist_membership_is_pinned(self) -> None:
+        """Same deliberate-decision pin as the read list, for the write list.
+
+        The write list guards state-changing commands, so a silent addition
+        matters more here than on the read side: the difference between this
+        set and the next one is the difference between reconfiguring a
+        cluster and truncating it.
+        """
+        expected = frozenset(
+            {
+                "set-config",
+                "recluster",
+                "log-set",
+                "jobs",
+            }
+        )
+        assert expected == WRITE_INFO_VERBS
+        assert len(WRITE_INFO_VERBS) == 4
+        # The two lists must stay disjoint — a verb on both would mean one of
+        # the two classifications is wrong.
+        assert not (WRITE_INFO_VERBS & READ_ONLY_INFO_VERBS)
+        assert ALLOWED_INFO_VERBS == READ_ONLY_INFO_VERBS | WRITE_INFO_VERBS
+
+    @pytest.mark.parametrize(
+        "verb",
+        [
+            "truncate-namespace",
+            "truncate",
+            "sindex-delete",
+            "set-drop",
+            "roster-set",
+            "quiesce",
+            "quiesce-undo",
+            "dun",
+            "undun",
+        ],
+    )
+    def test_destructive_verbs_stay_off_the_write_whitelist(self, verb: str) -> None:
+        """Each of these is excluded for a reason recorded in info_verbs.py.
+
+        Pinned as a test so re-adding one is a visible decision rather than a
+        one-line diff in a frozenset.
+        """
+        assert verb not in WRITE_INFO_VERBS
+        assert verb not in ALLOWED_INFO_VERBS
+
+    @pytest.mark.parametrize("verb", sorted(WRITE_INFO_VERBS))
+    def test_every_write_verb_passes(self, verb: str) -> None:
+        validated = assert_write_allowed(f"{verb}:")
+        assert validated.verb == verb
+        assert validated.command == f"{verb}:"
+
+    @pytest.mark.parametrize("verb", sorted(READ_ONLY_INFO_VERBS))
+    def test_read_verbs_also_pass(self, verb: str) -> None:
+        # Opting into the write path must not *lose* the read verbs — a
+        # caller sending `namespaces` with readOnly=false is doing nothing
+        # dangerous and rejecting it would be a surprise with no upside.
+        assert assert_write_allowed(verb).verb == verb
+
+    def test_set_config_with_multiple_args_passes(self) -> None:
+        # The exact shape clusters_service.configure_namespace builds.
+        cmd = "set-config:context=namespace;id=test;memory-size=2000000"
+        assert assert_write_allowed(cmd).command == cmd
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "truncate-namespace:namespace=test",
+            "truncate:namespace=test;set=foo",
+            "sindex-delete:namespace=test;indexname=idx",
+            "roster-set:namespace=test;nodes=BB9",
+            "quiesce:",
+            "some-verb-nobody-audited",
+        ],
+    )
+    def test_unlisted_verb_rejected(self, command: str) -> None:
+        with pytest.raises(InfoWriteVerbNotAllowed):
+            assert_write_allowed(command)
+
+    def test_rejection_is_an_info_command_rejected(self) -> None:
+        # Callers that only care "was it accepted?" catch the base class.
+        with pytest.raises(InfoCommandRejected):
+            assert_write_allowed("truncate-namespace:namespace=test")
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "set-config:context=service;migrate-threads=2\ntruncate-namespace:namespace=test",
+            "recluster;truncate-namespace:namespace=test",
+            "set-config:context=service;a=1:truncate-namespace:namespace=test",
+        ],
+    )
+    def test_multi_command_frame_rejected(self, command: str) -> None:
+        # The head of each of these is an allowlisted write verb, so without
+        # the framing check the destructive tail would ride along to the wire.
+        with pytest.raises(InfoCommandNotSingle):
+            assert_write_allowed(command)
+
+    def test_error_message_names_the_verb_and_the_alternatives(self) -> None:
+        with pytest.raises(InfoWriteVerbNotAllowed) as exc_info:
+            assert_write_allowed("truncate-namespace:namespace=test")
+        message = str(exc_info.value)
+        assert "truncate-namespace" in message
+        assert "set-config" in message
+        assert exc_info.value.verb == "truncate-namespace"

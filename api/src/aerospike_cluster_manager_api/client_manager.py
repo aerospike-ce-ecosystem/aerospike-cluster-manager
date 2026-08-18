@@ -36,6 +36,7 @@ from opentelemetry import trace
 from aerospike_cluster_manager_api import config, db
 from aerospike_cluster_manager_api.observability import make_instruments
 from aerospike_cluster_manager_api.services.info_cache import info_cache
+from aerospike_cluster_manager_api.target_policy import assert_targets_allowed
 from aerospike_cluster_manager_api.utils import parse_host_port
 
 _tracer = trace.get_tracer("aerospike_cluster_manager_api.client_manager")
@@ -109,6 +110,13 @@ class ClientManager:
             profile = await db.get_connection(conn_id)
             if profile is None:
                 raise ValueError(f"Connection profile '{conn_id}' not found")
+
+            # Last-resort SSRF gate (#470). Every route that touches a
+            # cluster funnels through here, so checking the STORED hosts
+            # covers profiles written before the create/update gates existed
+            # and any future write path that forgets to call them. Raises
+            # BlockedConnectionTargetError, which the router maps to 403.
+            assert_targets_allowed(profile.hosts, profile.port)
 
             hosts = [parse_host_port(h, profile.port) for h in profile.hosts]
             as_config: dict[str, Any] = {"hosts": hosts, "tend_interval": config.AS_TEND_INTERVAL}

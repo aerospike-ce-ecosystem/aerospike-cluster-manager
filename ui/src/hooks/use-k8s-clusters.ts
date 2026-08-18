@@ -9,7 +9,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { listK8sClusters, type ListK8sClustersParams } from "@/lib/api/k8s"
 import { logFetchError } from "@/lib/api/log"
+import { createSharedFetch } from "@/lib/shared-fetch"
 import type { K8sClusterListResponse } from "@/lib/types/k8s"
+
+// Same mount-storm as useConnections (#474): 4 call sites, one navigation,
+// four identical requests. Keyed on the serialised params so two consumers
+// asking for different namespaces still get their own call.
+const sharedK8sClusters = createSharedFetch<K8sClusterListResponse>()
+
+/** Test seam: drop any in-flight coalesced request. */
+export function resetK8sClustersFetchCoalescing(): void {
+  sharedK8sClusters.reset()
+}
 
 export interface UseK8sClustersResult {
   data: K8sClusterListResponse | null
@@ -45,6 +56,7 @@ export function useK8sClusters(
     setIsLoading(true)
     setError(null)
     try {
+      // Not coalesced — see the note in useConnections.refetch.
       const result = await listK8sClusters(paramsRef.current)
       if (!isMountedRef.current) return
       setData(result)
@@ -66,7 +78,9 @@ export function useK8sClusters(
     const effectParams = JSON.parse(paramsKey) as ListK8sClustersParams
     ;(async () => {
       try {
-        const result = await listK8sClusters(effectParams)
+        const result = await sharedK8sClusters.run(paramsKey, () =>
+          listK8sClusters(effectParams),
+        )
         if (!cancelled && isMountedRef.current) {
           setData(result)
           setError(null)

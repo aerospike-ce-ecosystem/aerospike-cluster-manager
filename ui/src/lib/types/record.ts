@@ -35,7 +35,13 @@ export interface AerospikeRecord {
 
 export interface RecordListResponse {
   records: AerospikeRecord[]
-  total: number
+  /**
+   * Object count for the set, or `null` when it could not be determined
+   * (ADR-0026). `null` is an explicit "unknown" — it must NOT be rendered as
+   * "no records", and it must not disable pagination. Show the loaded count
+   * instead ("~N+ records").
+   */
+  total: number | null
   page: number
   pageSize: number
   hasMore: boolean

@@ -10,7 +10,41 @@ import { Button } from "@/components/Button"
 import { PageHead } from "@/components/PageHead"
 import { RiAlertLine } from "@remixicon/react"
 import { useParams } from "next/navigation"
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
+
+/**
+ * "Updated Ns ago" for the overview header (#474).
+ *
+ * The page used to refresh only when someone clicked Refresh, with nothing to
+ * say the numbers had stopped moving. The values themselves cannot show it —
+ * a frozen TPS reading looks exactly like a genuinely idle cluster — so the
+ * age of the last successful read is what makes staleness visible.
+ */
+function LastUpdated({ at }: { at: number | null }) {
+  const [, setNow] = useState(0)
+
+  // Re-render on a timer so the label counts up between polls rather than
+  // freezing at "0s ago" — which would be its own version of this bug.
+  useEffect(() => {
+    const timer = setInterval(() => setNow((n) => n + 1), 1_000)
+    return () => clearInterval(timer)
+  }, [])
+
+  if (at === null) return null
+  const seconds = Math.max(0, Math.round((Date.now() - at) / 1000))
+  const label =
+    seconds < 60
+      ? `${seconds}s ago`
+      : `${Math.floor(seconds / 60)}m ${seconds % 60}s ago`
+  return (
+    <span
+      className="text-xs text-gray-500 tabular-nums dark:text-gray-400"
+      title="Cluster info refreshes automatically every 5 seconds"
+    >
+      Updated {label}
+    </span>
+  )
+}
 
 function nodeStatus(node: ClusterNode): {
   label: string
@@ -55,6 +89,7 @@ export default function ClusterOverview() {
           <Badge variant="default">{cluster.data.nodes[0].edition}</Badge>
         )}
         {cluster.data && <Badge variant="success">Connected</Badge>}
+        <LastUpdated at={cluster.lastUpdatedAt} />
         <Button
           variant="secondary"
           onClick={() => cluster.refetch()}

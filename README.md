@@ -622,6 +622,36 @@ Common use cases include:
 
 `K8S_MANAGEMENT_ENABLED` controls every K8s endpoint. When it is disabled, the API returns 404 and the UI hides K8s features.
 
+### Workspace Labelling and K8s Cluster Visibility
+
+Cluster Manager decides who may see, scale, and delete an `AerospikeCluster`
+CR from the `acm.aerospike.com/workspace` label on the CR:
+
+| CR label | Who can read / scale / delete it |
+| --- | --- |
+| `acm.aerospike.com/workspace: <workspace-id>` | Callers who can see that workspace (its owner, or anyone if it is system-owned like `ws-default`) |
+| _absent_ | The system caller only |
+
+Every cluster Cluster Manager creates or imports carries the label —
+`ws-default` when the request names no workspace, which is system-owned and
+therefore shared. So an **unlabelled** CR means "Cluster Manager did not
+create this": a cluster applied with `kubectl`, by an operator's own
+manifests, or by another team. Those are denied to tenants rather than shared
+with them, matching how `AerospikeClusterTemplate` CRs have always behaved.
+
+With `OIDC_ENABLED=false` (the default) every caller is the system caller, so
+this changes nothing. With OIDC on, a tenant who previously saw an unlabelled
+cluster will now get a 404. If that cluster genuinely belongs to their
+workspace, label it:
+
+```bash
+kubectl label aerospikecluster <name> -n <namespace> \
+  acm.aerospike.com/workspace=<workspace-id>
+```
+
+Use `ws-default` for "shared with everyone". `kubectl get aerospikecluster -A
+-L acm.aerospike.com/workspace` lists what is currently labelled.
+
 ### Extended Pod Status Fields
 
 The pod status response now includes additional fields for richer cluster monitoring:
@@ -788,6 +818,31 @@ The following tables list environment variables, defaults, and descriptions. See
 | `ACM_PASSWORD_KEK`        | _(empty)_ | Fernet key used to encrypt stored Aerospike connection passwords. Required for persistent credentials                                       |
 | `ACM_ALLOW_EPHEMERAL_KEK` | `false`   | Dev-only escape hatch that generates a process-local key when `ACM_PASSWORD_KEK` is unset. Stored passwords become unreadable after restart |
 
+### asinfo Write Passthrough
+
+| Variable               | Default | Description                                                                                                                                     |
+| ---------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ACM_ALLOW_INFO_WRITE` | `false` | Allow `POST /clusters/{conn_id}/info` with `readOnly=false`. Off by default; the route answers 403 until it is set. See the note below |
+
+`POST /clusters/{conn_id}/info` backs `ackoctl info`. With `readOnly=true`
+(the default) it runs read-only asinfo diagnostics and needs no opt-in.
+
+`readOnly=false` selects the write passthrough, which is off by default and
+has three independent gates even once enabled:
+
+1. `ACM_ALLOW_INFO_WRITE=true` must be set, or the route answers **403**.
+2. The command's verb must be on `info_verbs.WRITE_INFO_VERBS`
+   (`set-config`, `recluster`, `log-set`, `jobs`) or on the read-only list,
+   and the frame must hold exactly one command — otherwise **400**.
+   Destructive verbs such as `truncate-namespace` are never accepted here;
+   use the dedicated typed routes, which are authenticated and rate-limited.
+3. Each write request is charged against a **5/minute per-client** budget,
+   separate from the 60/minute global default that reads use — **429** when
+   exhausted.
+
+Enabling the flag is not a substitute for authentication. Turn on
+`OIDC_ENABLED` before exposing a write-capable API beyond localhost.
+
 ### Kubernetes Management
 
 | Variable                 | Default | Description                                                                                    |
@@ -806,6 +861,32 @@ The following tables list environment variables, defaults, and descriptions. See
 | `UI_PORT`      | `3100`                                        | UI port (compose files)                                                                       |
 | `HOST`         | `0.0.0.0`                                     | API bind address                                                                              |
 | `PORT`         | `8000`                                        | API bind port                                                                                 |
+| `TRUSTED_PROXIES` | _(empty)_                                  | Comma-separated IPs or CIDRs whose `X-Forwarded-For` the API believes. **Set this to the web container's address** — see below |
+
+#### Per-user rate limiting requires `TRUSTED_PROXIES`
+
+The API rate-limits per client IP. In the split-container deployment every
+request reaches it through `ui/proxy.js`, so without configuration the API sees
+the **web container** as the peer for every request and the whole team shares
+one 60/min bucket — one active operator can throttle everybody.
+
+`proxy.js` sets `X-Forwarded-For` to the real socket address of the incoming
+connection, overwriting whatever the client sent. The API only believes that
+header when the immediate peer is on `TRUSTED_PROXIES`, so:
+
+```bash
+# The web container's address on the shared network, or the CIDR it sits in.
+TRUSTED_PROXIES=10.89.0.0/16
+```
+
+Leaving it empty is safe but collapses everyone into one bucket. Setting it is
+safe **because `proxy.js` overwrites the header** — before that fix, adding the
+web container here would have let any caller choose their own bucket key by
+sending their own `X-Forwarded-For` (#473).
+
+If you put another reverse proxy in front of the web container, that proxy —
+not this one — is the edge, and it should talk to the API directly. `proxy.js`
+cannot tell a legitimate upstream hop from a forged header.
 
 ### ACKO Agent — Embedded AI Copilot (UI)
 
@@ -816,9 +897,11 @@ The following tables list environment variables, defaults, and descriptions. See
 | `COPILOT_BASE_URL`              | _(empty)_        | Optional OpenAI/Anthropic-compatible gateway endpoint. Unset → the provider's public API. Set it to route through a self-hosted or enterprise OpenAI-compatible LLM gateway: `COPILOT_MODEL=openai/<model>` + `COPILOT_BASE_URL=https://llm-gateway.example.com` + `OPENAI_API_KEY=<key>`. Pick a tool-calling-capable model. A non-http value is ignored |
 | `ANTHROPIC_API_KEY`             | _(empty)_        | Anthropic API key for `anthropic/*` models (web container only, never sent to the browser)                                                                                                                                                                                                                                                                |
 | `OPENAI_API_KEY`                | _(empty)_        | OpenAI API key for `openai/*` models (web container only, never sent to the browser)                                                                                                                                                                                                                                                                      |
-| `COPILOT_REQUIRE_AUTH`          | `false`          | Require a Bearer token on `/copilotkit` (gates LLM spend). Enable whenever the API runs with `OIDC_ENABLED=true`                                                                                                                                                                                                                                          |
-| `COPILOT_OIDC_ISSUER_URL`       | _(empty)_        | Keycloak realm root for JWT signature verification on `/copilotkit`; usually the same value as `OIDC_ISSUER_URL`. Without it, `COPILOT_REQUIRE_AUTH` only checks token presence                                                                                                                                                                           |
+| `COPILOT_REQUIRE_AUTH`          | `true`           | Require a Bearer token on `/copilotkit` (gates LLM spend). Only the literal `false` turns it off — do that only when a layer in front of the web pod already authenticates every request                                                                                                                                                                  |
+| `COPILOT_OIDC_ISSUER_URL`       | _(empty)_        | Keycloak realm root for JWT signature verification on `/copilotkit`; usually the same value as `OIDC_ISSUER_URL`. **Required** while `COPILOT_REQUIRE_AUTH` is on — without it the route answers 503, because tokens cannot be verified                                                                                                                    |
 | `COPILOT_OIDC_AUDIENCE`         | _(empty)_        | Expected `aud` claim for `/copilotkit` JWT verification; usually `acko-api`                                                                                                                                                                                                                                                                               |
+| `COPILOT_RATE_LIMIT_PER_MINUTE` | `60`             | Per-client request budget for `/copilotkit`, keyed on `X-Forwarded-For`. Fairness between users                                                                                                                                                                                                                                                          |
+| `COPILOT_GLOBAL_RATE_LIMIT_PER_MINUTE` | `300`     | Request budget for `/copilotkit` across all clients on one replica. This is the spend ceiling — it holds even when the forwarded address cannot be trusted                                                                                                                                                                                                |
 | `COPILOTKIT_TELEMETRY_DISABLED` | `true` (compose) | CopilotKit's anonymous usage telemetry. Disabled by default for self-hosted deployments                                                                                                                                                                                                                                                                   |
 
 ### Logging

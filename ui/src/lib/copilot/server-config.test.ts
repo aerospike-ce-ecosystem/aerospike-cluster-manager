@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { resolveCopilotServerConfig } from "./server-config"
+import {
+  copilotRequiresAuth,
+  resolveCopilotServerConfig,
+} from "./server-config"
 
 const ENV_KEYS = [
   "COPILOT_ENABLED",
@@ -111,5 +114,39 @@ describe("resolveCopilotServerConfig", () => {
     vi.stubEnv("OPENAI_API_KEY", "sk-test")
     vi.stubEnv("COPILOT_BASE_URL", "https://llm-gateway.example.com")
     expect(resolveCopilotServerConfig().baseUrl).toBeNull()
+  })
+})
+
+describe("copilotRequiresAuth (#472)", () => {
+  it("requires auth when COPILOT_REQUIRE_AUTH is unset", () => {
+    // The whole point of #472: the default configuration must not leave
+    // /copilotkit as an open relay to the operator's LLM provider key.
+    vi.stubEnv("COPILOT_REQUIRE_AUTH", undefined)
+    expect(copilotRequiresAuth()).toBe(true)
+  })
+
+  it("requires auth when COPILOT_REQUIRE_AUTH is empty", () => {
+    vi.stubEnv("COPILOT_REQUIRE_AUTH", "")
+    expect(copilotRequiresAuth()).toBe(true)
+  })
+
+  it("requires auth when COPILOT_REQUIRE_AUTH is explicitly true", () => {
+    vi.stubEnv("COPILOT_REQUIRE_AUTH", "true")
+    expect(copilotRequiresAuth()).toBe(true)
+  })
+
+  it.each(["0", "no", "off", "FALSE", "False", "disabled", "nonsense"])(
+    "requires auth for %j — only the literal 'false' opts out",
+    (value) => {
+      // Fail closed on anything ambiguous. A typo in a values.yaml must not
+      // silently open the endpoint.
+      vi.stubEnv("COPILOT_REQUIRE_AUTH", value)
+      expect(copilotRequiresAuth()).toBe(true)
+    },
+  )
+
+  it("skips auth only for the exact string 'false'", () => {
+    vi.stubEnv("COPILOT_REQUIRE_AUTH", "false")
+    expect(copilotRequiresAuth()).toBe(false)
   })
 })

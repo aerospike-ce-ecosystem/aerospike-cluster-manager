@@ -721,3 +721,80 @@ class TestConnectionRaceOn404:
 
         assert resp.status_code == 404, resp.text
         assert "conn-test" in resp.json()["detail"]
+
+
+class TestPageParameterRejectedAtTheHttpBoundary:
+    """#468: ``page`` reaches the wire as a 400, not as a silent page 1.
+
+    The harm the issue names is specifically at this boundary: ``page`` is in
+    the OpenAPI schema, so a generated client (ackoctl, the Copilot agent)
+    sends it and used to receive page 1 with a ``"page": 1`` in the body —
+    indistinguishable from success.
+    """
+
+    async def test_page_two_is_400_with_an_explanatory_detail(self, client: AsyncClient):
+        mock_client = _build_query_mock()
+
+        with (
+            patch(
+                "aerospike_cluster_manager_api.dependencies.db.get_connection",
+                AsyncMock(return_value={"id": "conn-test"}),
+            ),
+            patch(
+                "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+                AsyncMock(return_value=mock_client),
+            ),
+        ):
+            resp = await client.post(
+                "/api/records/conn-test/filter",
+                json={"namespace": "test", "set": "demo", "page": 2},
+            )
+
+        assert resp.status_code == 400, resp.text
+        detail = resp.json()["detail"]
+        assert "page=2" in detail
+        # The message has to leave the caller somewhere to go.
+        assert "pageSize" in detail
+        # And no scan was run for a request that could not be honoured.
+        mock_client.query.assert_not_called()
+
+    async def test_page_one_still_succeeds(self, client: AsyncClient):
+        mock_client = _build_query_mock()
+
+        with (
+            patch(
+                "aerospike_cluster_manager_api.dependencies.db.get_connection",
+                AsyncMock(return_value={"id": "conn-test"}),
+            ),
+            patch(
+                "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+                AsyncMock(return_value=mock_client),
+            ),
+        ):
+            resp = await client.post(
+                "/api/records/conn-test/filter",
+                json={"namespace": "test", "set": "demo", "page": 1},
+            )
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["page"] == 1
+
+    async def test_omitting_page_still_succeeds(self, client: AsyncClient):
+        mock_client = _build_query_mock()
+
+        with (
+            patch(
+                "aerospike_cluster_manager_api.dependencies.db.get_connection",
+                AsyncMock(return_value={"id": "conn-test"}),
+            ),
+            patch(
+                "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+                AsyncMock(return_value=mock_client),
+            ),
+        ):
+            resp = await client.post(
+                "/api/records/conn-test/filter",
+                json={"namespace": "test", "set": "demo"},
+            )
+
+        assert resp.status_code == 200, resp.text

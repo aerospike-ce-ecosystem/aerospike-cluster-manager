@@ -3,12 +3,20 @@
  * See: api/src/aerospike_cluster_manager_api/models/connection.py
  */
 
+/**
+ * Why a health check reported `connected: false`.
+ *
+ * Deliberately coarse (#470). The health route is reachable unauthenticated in
+ * the default configuration, so the older set — `timeout`,
+ * `connection_refused`, `cluster_error`, `unknown` — let a caller distinguish a
+ * closed port from a filtered one from a live non-Aerospike listener, i.e. it
+ * was a port scanner. Those four collapse into `unreachable`.
+ */
 export type ConnectionErrorType =
-  | "timeout"
-  | "connection_refused"
-  | "cluster_error"
+  | "not_found"
+  | "unreachable"
   | "auth_error"
-  | "unknown"
+  | "blocked_target"
 
 export interface ConnectionStatus {
   connected: boolean

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from aerospike_cluster_manager_api.models.workspace import DEFAULT_WORKSPACE_ID
@@ -27,6 +29,24 @@ def _normalize_labels(v: object) -> dict[str, str]:
     return labels
 
 
+ConnectionErrorType = Literal["not_found", "unreachable", "auth_error", "blocked_target"]
+"""Why a health check reported ``connected=false``.
+
+Deliberately coarse (#470). The route is reachable unauthenticated in the
+default configuration, so the older set — ``timeout``, ``connection_refused``,
+``cluster_error``, ``unknown`` — let a caller distinguish a closed port from a
+filtered one from a live non-Aerospike listener, i.e. it was a port scanner.
+Those four collapse into ``unreachable``.
+
+``not_found`` (profile deleted mid-check) and ``auth_error`` (a real Aerospike
+answered and rejected the credentials) survive: neither reveals reachability
+the caller did not already have, and both change what the operator should do.
+
+Mirrored in ``ui/src/lib/types/connection.ts`` — keep both sides in sync
+(project goal 2-7).
+"""
+
+
 class ConnectionStatus(BaseModel):
     connected: bool
     nodeCount: int
@@ -38,8 +58,11 @@ class ConnectionStatus(BaseModel):
     diskUsed: int = 0
     diskTotal: int = 0
     tendHealthy: bool | None = None
+    # Fixed operator-facing text, never the driver's exception string — that
+    # carries host, port, and node identity (#470). See
+    # ``routers/connections._HEALTH_ERROR_MESSAGES``.
     error: str | None = None
-    errorType: str | None = None  # timeout | connection_refused | cluster_error | auth_error | unknown | not_found
+    errorType: ConnectionErrorType | None = None
 
 
 class ConnectionProfile(BaseModel):

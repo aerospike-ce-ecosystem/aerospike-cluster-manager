@@ -7,12 +7,17 @@
  * exactly as if the user clicked the UI. This module only prevents an
  * unauthenticated caller from burning LLM tokens through /copilotkit.
  *
- * Modes (COPILOT_REQUIRE_AUTH=true):
- *   - COPILOT_OIDC_ISSUER_URL set → full signature verification against the
- *     issuer's JWKS (discovered via OIDC metadata, cached per process), plus
- *     issuer and optional audience (COPILOT_OIDC_AUDIENCE) checks.
- *   - issuer unset → Bearer-presence check only, with a one-time warning
- *     (useful for deployments that terminate auth in front of the web pod).
+ * When auth is required (the default — see `copilotRequiresAuth`),
+ * COPILOT_OIDC_ISSUER_URL must be set. The token is then verified against the
+ * issuer's JWKS (discovered via OIDC metadata, cached per process), with
+ * issuer and optional audience (COPILOT_OIDC_AUDIENCE) checks.
+ *
+ * With the issuer unset this used to warn and degrade to checking that *some*
+ * Bearer token was present — which any non-empty string satisfies, so the gate
+ * was decorative (#472). It now refuses to serve instead. A deployment that
+ * genuinely terminates auth upstream should say so explicitly with
+ * COPILOT_REQUIRE_AUTH=false rather than leave a check installed that does
+ * nothing.
  */
 
 import { createRemoteJWKSet, jwtVerify } from "jose"
@@ -21,7 +26,7 @@ type JWKSResolver = ReturnType<typeof createRemoteJWKSet>
 
 let jwks: JWKSResolver | null = null
 let jwksIssuer: string | null = null
-let warnedPresenceOnly = false
+let warnedMisconfigured = false
 
 async function getJwks(issuer: string): Promise<JWKSResolver> {
   if (jwks && jwksIssuer === issuer) return jwks
@@ -41,10 +46,11 @@ async function getJwks(issuer: string): Promise<JWKSResolver> {
   return jwks
 }
 
-/** Test seam: drop the cached JWKS resolver. */
+/** Test seam: drop the cached JWKS resolver and the one-time warning latch. */
 export function resetJwksCache(): void {
   jwks = null
   jwksIssuer = null
+  warnedMisconfigured = false
 }
 
 /**
@@ -53,22 +59,27 @@ export function resetJwksCache(): void {
  * hooks contract short-circuits with a thrown Response.
  */
 export async function assertCopilotAuth(request: Request): Promise<void> {
+  const issuer = process.env.COPILOT_OIDC_ISSUER_URL
+  if (!issuer) {
+    // Misconfiguration, not a client failure: no token the caller could
+    // present would help, so 401 ("try again with credentials") would be a
+    // lie. 503 matches what the route already returns for "this deployment
+    // cannot serve copilot", which is exactly the situation.
+    if (!warnedMisconfigured) {
+      warnedMisconfigured = true
+      console.error(
+        "[copilot] refusing to serve /copilotkit: auth is required but " +
+          "COPILOT_OIDC_ISSUER_URL is unset, so tokens cannot be verified. " +
+          "Set the issuer, or set COPILOT_REQUIRE_AUTH=false if an upstream " +
+          "layer already authenticates every request.",
+      )
+    }
+    throw new Response("Copilot auth is misconfigured", { status: 503 })
+  }
+
   const header = request.headers.get("authorization") ?? ""
   if (!header.startsWith("Bearer ") || header.length <= 7) {
     throw new Response("Unauthorized", { status: 401 })
-  }
-
-  const issuer = process.env.COPILOT_OIDC_ISSUER_URL
-  if (!issuer) {
-    if (!warnedPresenceOnly) {
-      warnedPresenceOnly = true
-      console.warn(
-        "[copilot] COPILOT_REQUIRE_AUTH=true without COPILOT_OIDC_ISSUER_URL — " +
-          "only Bearer presence is checked at /copilotkit; set the issuer to " +
-          "enable JWT signature verification",
-      )
-    }
-    return
   }
 
   const token = header.slice("Bearer ".length)

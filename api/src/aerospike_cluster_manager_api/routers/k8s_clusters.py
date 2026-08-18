@@ -122,14 +122,25 @@ async def _assert_caller_owns_k8s_cluster(
     name: str,
     caller_owner_id: str,
 ) -> dict[str, Any]:
-    """Default-deny ACL gate for K8s cluster mutations.
+    """Default-deny ACL gate for K8s cluster reads and mutations.
 
     Resolves the cluster CR, reads its ``acm.aerospike.com/workspace``
-    label, and verifies the caller can see that workspace. Clusters with
-    no workspace label are treated as system-shared (visible to every
-    authenticated caller) so legacy CRs created before workspace
-    labelling stay reachable. Returns the CR dict for callers that need
-    it, so we don't pay the ``get_cluster`` round trip twice.
+    label, and verifies the caller can see that workspace. Returns the CR
+    dict for callers that need it, so we don't pay the ``get_cluster``
+    round trip twice.
+
+    Clusters with **no** workspace label are visible ONLY to the system
+    caller. This used to return the CR unconditionally, which fails
+    *open* — and unlabelled CRs are the normal case, not an edge case:
+    anything applied with ``kubectl``, by an operator's own manifests, or
+    by another team carries no ACM label. This gate guards the get,
+    scale, and delete paths, so failing open here let an authenticated
+    tenant delete another tenant's production cluster (#471).
+
+    :func:`_assert_template_visible` in this module has always had the
+    system-only rule; its own docstring calls the permissive version "the
+    pre-fix gap". This is the same rule, applied to the more destructive
+    object.
 
     Raises ``HTTPException(404)`` for a missing cluster (matching
     ``K8sApiError`` mapping) or for a cluster the caller cannot see
@@ -143,7 +154,14 @@ async def _assert_caller_owns_k8s_cluster(
         raise _map_k8s_error(e) from e
     workspace_id = _cr_workspace_id(cr)
     if workspace_id is None:
-        return cr
+        # Unlabelled: only the system caller may read or mutate. ACM no
+        # longer creates unlabelled cluster CRs (``create_k8s_cluster``
+        # stamps DEFAULT_WORKSPACE_ID when the request names no
+        # workspace), so the remaining unlabelled rows are ones ACM did
+        # not create — exactly the ones a tenant must not reach.
+        if caller_owner_id == SYSTEM_OWNER_ID:
+            return cr
+        raise HTTPException(status_code=404, detail=f"Cluster '{namespace}/{name}' not found")
     if not await _is_workspace_visible(workspace_id, caller_owner_id):
         raise HTTPException(status_code=404, detail=f"Cluster '{namespace}/{name}' not found")
     return cr
@@ -231,10 +249,18 @@ async def list_k8s_clusters(
     )
 
     # Filter CRs by workspace visibility. CRs with no workspace label are
-    # treated as system-shared (legacy compatibility). Visibility checks run
-    # in parallel via ``asyncio.gather`` so a 100-cluster page does not
-    # serialize 100 ``db.get_workspace`` round trips — the prior loop turned
-    # a fan-out lookup into an O(N) blocking chain.
+    # surfaced ONLY to the system caller, matching
+    # ``_assert_caller_owns_k8s_cluster`` and ``list_k8s_templates``. The
+    # previous rule treated unlabelled CRs as system-shared, which leaked the
+    # name, namespace, size, and status of every cluster another team applied
+    # with kubectl (#471) — and disagreed with the per-CR gate, so a listed
+    # cluster would 404 on click.
+    #
+    # Visibility checks run in parallel via ``asyncio.gather`` so a
+    # 100-cluster page does not serialize 100 ``db.get_workspace`` round
+    # trips — the prior loop turned a fan-out lookup into an O(N) blocking
+    # chain.
+    unlabelled_visible = caller_owner_id == SYSTEM_OWNER_ID
     workspace_ids: set[str] = set()
     for item in items:
         ws_id = _cr_workspace_id(item)
@@ -245,7 +271,14 @@ async def list_k8s_clusters(
         *(_is_workspace_visible(ws_id, caller_owner_id) for ws_id in ws_id_list),
     )
     visible_workspaces: dict[str, bool] = dict(zip(ws_id_list, visibility_results, strict=True))
-    items = [item for item in items if (ws := _cr_workspace_id(item)) is None or visible_workspaces.get(ws, False)]
+
+    def _visible(item: dict[str, Any]) -> bool:
+        ws = _cr_workspace_id(item)
+        if ws is None:
+            return unlabelled_visible
+        return visible_workspaces.get(ws, False)
+
+    items = [item for item in items if _visible(item)]
 
     # Build the connection-id correlation table from connections visible to the
     # caller only. Without this filter, a tenant would receive another tenant's
@@ -658,13 +691,16 @@ async def create_k8s_cluster(
         )
 
     cr = build_cr(body)
-    # Stamp the workspace label so subsequent ACL checks (list/get/mutate)
-    # can recognise the CR's tenant. Skipped when no workspace is named —
-    # the cluster lands in the system-shared bucket and stays visible to
-    # everyone, matching the legacy pre-#307 contract.
-    if body.workspace_id is not None:
-        labels = cr.setdefault("metadata", {}).setdefault("labels", {})
-        labels[_WORKSPACE_LABEL] = body.workspace_id
+    # ALWAYS stamp the workspace label so subsequent ACL checks
+    # (list/get/mutate) can recognise the CR's tenant. Falling back to
+    # DEFAULT_WORKSPACE_ID — which is system-owned and therefore shared —
+    # keeps "created without naming a workspace" as visible as it was, while
+    # removing the ambiguity that made the fix in #471 impossible: an
+    # unlabelled CR now unambiguously means "ACM did not create this", so the
+    # gate can safely deny it. Mirrors ``import_k8s_cluster`` above, which has
+    # stamped the default this way since #307.
+    labels = cr.setdefault("metadata", {}).setdefault("labels", {})
+    labels[_WORKSPACE_LABEL] = body.workspace_id or DEFAULT_WORKSPACE_ID
     result = await k8s_client.create_cluster(body.namespace, cr)
 
     connection_id: str | None = None

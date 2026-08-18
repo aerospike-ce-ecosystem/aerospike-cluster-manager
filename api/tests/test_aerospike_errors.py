@@ -89,6 +89,20 @@ def server_error_handler():
     return handler
 
 
+class _ServerErrorWithoutResultCode(ServerError):
+    """A ServerError that genuinely lacks ``result_code``.
+
+    aerospike-py >= 0.14 always provides the attribute (ADR-0027), so this
+    stands in for anything else that reaches the ServerError handler without
+    one — and keeps the message-parsing fallback in ``result_code_of`` covered.
+    """
+
+    def __getattribute__(self, name: str):
+        if name == "result_code":
+            raise AttributeError(name)
+        return super().__getattribute__(name)
+
+
 class TestServerErrorHandler:
     async def test_forbidden_via_result_code_attribute(self, server_error_handler):
         # Structured attribute path (forward-compatible with aerospike-py ADR-0011).
@@ -100,12 +114,47 @@ class TestServerErrorHandler:
         assert b"nsup-period" in response.body
 
     async def test_forbidden_via_message_fallback(self, server_error_handler):
-        # No structured attribute — detection relies solely on the embedded code.
-        exc = ServerError("AEROSPIKE_ERR (22): Server error: FailForbidden, In Doubt: false")
+        """The fallback branch, exercised on an exception with no attribute.
+
+        This used to construct a bare ``ServerError`` and assert
+        ``not hasattr(exc, "result_code")``. That precondition stopped holding
+        at aerospike-py 0.14: ADR-0027 gives *every* exception in the hierarchy
+        a structured ``result_code``, defaulting to the ``-1`` sentinel for
+        errors that never received a server response — so a hand-built
+        exception now reports -1 rather than nothing, and the fallback never
+        ran. The branch still exists for non-aerospike-py exceptions reaching
+        this path, so it is exercised through one of those instead.
+        """
+        exc = _ServerErrorWithoutResultCode("AEROSPIKE_ERR (22): Server error: FailForbidden, In Doubt: false")
         assert not hasattr(exc, "result_code")
         response = await server_error_handler(_make_request(), exc)
         assert response.status_code == 403
         assert b"nsup-period" in response.body
+
+    async def test_real_forbidden_error_maps_to_403(self, server_error_handler):
+        """What aerospike-py >= 0.14 actually raises for a forbidden operation.
+
+        Per its ADR-0027 docstring, a *server* error carries the real wire code
+        (22 = forbidden); only client-side errors that never reached the server
+        get the -1 sentinel. Constructing it that way is the closest this suite
+        gets to the production path without a live cluster.
+        """
+        exc = ServerError("AEROSPIKE_ERR (22): Server error: FailForbidden, In Doubt: false")
+        exc.result_code = RESULT_CODE_FAIL_FORBIDDEN
+        response = await server_error_handler(_make_request(), exc)
+        assert response.status_code == 403
+
+    async def test_client_side_sentinel_is_not_mistaken_for_a_server_code(self, server_error_handler):
+        """``result_code == -1`` means "no server response", not "code -1".
+
+        It must not resolve to 403, and the structured attribute must win over
+        whatever the message happens to say — trusting the message here would
+        re-introduce exactly the substring coupling this module removed.
+        """
+        exc = ServerError("AEROSPIKE_ERR (22): Server error: FailForbidden, In Doubt: false")
+        exc.result_code = -1
+        response = await server_error_handler(_make_request(), exc)
+        assert response.status_code == 500
 
     async def test_other_server_error_maps_to_500(self, server_error_handler):
         # A non-forbidden server error must still fall through to the generic 500.
