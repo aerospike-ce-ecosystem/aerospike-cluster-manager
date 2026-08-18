@@ -28,7 +28,7 @@ dependencies = [
     "opentelemetry-sdk>=1.30.0",
     "opentelemetry-exporter-otlp>=1.30.0",
     "opentelemetry-instrumentation-fastapi>=0.51b0",
-    "opentelemetry-instrumentation-asyncpg>=0.51b0",
+    "opentelemetry-instrumentation-asyncpg>=0.65b0",
     "opentelemetry-instrumentation-logging>=0.51b0",
     "httpx>=0.28.1",
     # PyJWT[crypto] replaces python-jose (unmaintained, CVE-2024-33663/4).
