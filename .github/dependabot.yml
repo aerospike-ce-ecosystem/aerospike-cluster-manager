@@ -4,7 +4,16 @@ version: 2
 # (e.g. recharts 2->3, typescript 5->6, eslint 8->10, @vitejs/plugin-react 4->6).
 # Bump majors deliberately by hand, in a dedicated PR, with the migration done.
 updates:
-  - package-ecosystem: "pip"
+  # "uv", not "pip" (#476). This project resolves its Python dependencies
+  # through api/uv.lock, and the pip ecosystem does not read that file — it
+  # looks for requirements.txt / setup.py / pip-style pyproject metadata. The
+  # result was that Dependabot never once updated the API lockfile: it sat at
+  # aerospike-py 0.6.4 while 0.14.x shipped, and `uv sync --frozen` in
+  # Dockerfile.api means the published image installed exactly that.
+  #
+  # The uv ecosystem understands pyproject.toml and uv.lock natively (GA since
+  # 2025-03; see the GitHub changelog entry linked in the PR for #476).
+  - package-ecosystem: "uv"
     directory: "/api"
     schedule:
       interval: "weekly"
