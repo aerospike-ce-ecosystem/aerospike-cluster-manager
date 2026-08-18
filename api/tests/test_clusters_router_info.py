@@ -669,3 +669,121 @@ class TestExecuteInfoValidation:
 
         assert resp.status_code == 200, resp.text
         assert len(resp.json()["results"]) == 2  # fan-out across 2 nodes
+
+
+class TestWriteGateRunsBeforeTheConnection:
+    """The 403 must precede the client build, not follow it.
+
+    #480 claimed the write gate "runs before the connection is touched". It did
+    not: the check lived in the handler body, while ``client: AerospikeClient``
+    is a FastAPI dependency, and FastAPI resolves the whole dependency tree
+    before the body runs. So a disabled deployment still dialled the cluster and
+    still discriminated 404 / 503 / 403 — an inventory-and-reachability oracle,
+    unauthenticated under the OIDC_ENABLED=false default. ``consume_budget`` sat
+    in the body too, so probes were governed by the 60/minute global rather than
+    the 5/minute write budget.
+    """
+
+    @pytest.mark.asyncio
+    async def test_403_is_raised_without_building_a_client(self, client: AsyncClient, sample_connection):
+        from aerospike_cluster_manager_api import db
+
+        await db.create_connection(sample_connection)
+        mock_get_client = AsyncMock(return_value=_make_mock_client())
+
+        with patch(
+            "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+            mock_get_client,
+        ):
+            resp = await client.post(
+                f"/api/v1/clusters/{sample_connection.id}/info",
+                json={"commands": ["set-config:context=service;migrate-threads=2"], "readOnly": False},
+            )
+
+        assert resp.status_code == 403, resp.text
+        mock_get_client.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_403_precedes_an_unreachable_cluster_503(self, client: AsyncClient, sample_connection):
+        """A dead cluster and a live one must be indistinguishable when writes are off."""
+        from aerospike_cluster_manager_api import db
+
+        await db.create_connection(sample_connection)
+
+        with patch(
+            "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+            AsyncMock(side_effect=ConnectionRefusedError("cluster is down")),
+        ):
+            resp = await client.post(
+                f"/api/v1/clusters/{sample_connection.id}/info",
+                json={"commands": ["set-config:context=service;migrate-threads=2"], "readOnly": False},
+            )
+
+        assert resp.status_code == 403, resp.text
+
+    @pytest.mark.asyncio
+    async def test_403_precedes_a_missing_connection_404(self, client: AsyncClient):
+        """Nor may it discriminate which connection ids exist.
+
+        The 403 discloses only the server's own config flag, which is not
+        per-tenant information; a 404 here would confirm the id is unknown and
+        turn the route into a connection-inventory oracle.
+        """
+        resp = await client.post(
+            "/api/v1/clusters/conn-does-not-exist/info",
+            json={"commands": ["set-config:context=service;migrate-threads=2"], "readOnly": False},
+        )
+        assert resp.status_code == 403, resp.text
+
+    @pytest.mark.asyncio
+    async def test_read_path_still_reaches_the_cluster(self, client: AsyncClient, sample_connection):
+        """The gate must not short-circuit the diagnostics path it does not govern."""
+        from aerospike_cluster_manager_api import db
+
+        await db.create_connection(sample_connection)
+        mock_as_client = _make_mock_client()
+
+        with patch(
+            "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+            AsyncMock(return_value=mock_as_client),
+        ):
+            resp = await client.post(
+                f"/api/v1/clusters/{sample_connection.id}/info",
+                json={"commands": ["namespaces"], "readOnly": True},
+            )
+
+        assert resp.status_code == 200, resp.text
+        mock_as_client.info_all.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_429_also_precedes_the_connection(
+        self, client: AsyncClient, sample_connection, allow_info_write, enforce_rate_limits
+    ):
+        """Exhausted budget must not cost a cluster dial either."""
+        from aerospike_cluster_manager_api import db
+
+        await db.create_connection(sample_connection)
+        mock_as_client = _make_mock_client()
+        mock_as_client.info_all.side_effect = lambda cmd: [_info_all_result("BB9020011AC4202", "ok")]
+        mock_get_client = AsyncMock(return_value=mock_as_client)
+
+        with patch(
+            "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+            mock_get_client,
+        ):
+            for _ in range(5):
+                ok = await client.post(
+                    f"/api/v1/clusters/{sample_connection.id}/info",
+                    json={"commands": ["recluster:"], "readOnly": False},
+                )
+                assert ok.status_code == 200, ok.text
+            dialled_before = mock_get_client.await_count
+
+            limited = await client.post(
+                f"/api/v1/clusters/{sample_connection.id}/info",
+                json={"commands": ["recluster:"], "readOnly": False},
+            )
+
+        assert limited.status_code == 429, limited.text
+        # The rejected 6th request must not have dialled the cluster.
+        assert mock_get_client.await_count == dialled_before

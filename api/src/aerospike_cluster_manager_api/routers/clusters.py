@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from aerospike_cluster_manager_api import config, rate_limit
 from aerospike_cluster_manager_api.dependencies import AerospikeClient, VerifiedConnId
@@ -94,6 +94,58 @@ async def configure_namespace(
     return MessageResponse(message=message)
 
 
+async def _assert_info_write_allowed(request: Request, body: ExecuteInfoRequest) -> None:
+    """Gate the ``readOnly=false`` path BEFORE anything dials the cluster.
+
+    This has to be a dependency, not a check in the handler body. FastAPI
+    resolves the whole dependency tree before the endpoint function runs, and
+    ``client: AerospikeClient`` is a dependency — so the original in-body check
+    (#480) fired only *after* ``client_manager.get_client`` had already built a
+    real connection. A deployment with the write path disabled therefore still
+    dialled the cluster on every probe, and still answered 404 / 503 / 403
+    depending on whether the connection id existed and whether its cluster was
+    reachable. That is an inventory-and-reachability oracle, and it is
+    unauthenticated under the ``OIDC_ENABLED=false`` default. The budget check
+    was in the body too, so probes were metered by the 60/minute global rather
+    than the 5/minute write budget they were supposed to consume.
+
+    Declared via the route's ``dependencies=[...]`` list rather than as a
+    handler parameter: FastAPI inserts those at position 0 of the dependency
+    tree (``routing.APIRoute.__init__``), so this runs ahead of ``client`` and
+    ``conn_id`` regardless of parameter order. ``tests/…::TestWriteGateRunsBefore
+    TheConnection`` pins that empirically rather than trusting the reading —
+    an unverified ordering claim is what produced the original gap.
+
+    Declaring ``body`` here does not re-read the request: FastAPI parses the
+    body once per request and hands the same parsed value to every dependant.
+
+    ``readOnly=true`` is untouched — the diagnostics path ackoctl polls must
+    keep reaching the cluster.
+    """
+    if body.readOnly:
+        return
+
+    if not config.ACM_ALLOW_INFO_WRITE:
+        # 403 before the ACL, so this also cannot be used to probe which
+        # connection ids exist. It discloses only the server's own config
+        # flag, which is not per-tenant information.
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "asinfo write passthrough is disabled; set ACM_ALLOW_INFO_WRITE=true "
+                "on the API to enable readOnly=false, or use readOnly=true for diagnostics."
+            ),
+        )
+
+    # Charged before validation, so a caller cannot enumerate the allowlist for
+    # free by sending commands that 400.
+    if not rate_limit.consume_budget(request, rate_limit.INFO_WRITE_LIMIT, "clusters:info:write"):
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded: 5 per 1 minute (asinfo write passthrough)",
+        )
+
+
 @router.post(
     "/{conn_id}/info",
     response_model=ExecuteInfoResponse,
@@ -114,6 +166,7 @@ async def configure_namespace(
         "destructive verbs such as truncate-namespace — and is charged against "
         "a dedicated 5/minute per-client budget (429 when exhausted)."
     ),
+    dependencies=[Depends(_assert_info_write_allowed)],
 )
 async def execute_info(
     request: Request,
@@ -121,30 +174,12 @@ async def execute_info(
     client: AerospikeClient,
     conn_id: VerifiedConnId,
 ) -> ExecuteInfoResponse:
-    """Run asinfo commands per the ExecuteInfoRequest semantics."""
-    # The write path is opt-in and off by default (#467). Refuse before
-    # touching the connection so a deployment that never enabled it cannot be
-    # probed for which verbs it would have accepted.
-    if not body.readOnly and not config.ACM_ALLOW_INFO_WRITE:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                "asinfo write passthrough is disabled; set ACM_ALLOW_INFO_WRITE=true "
-                "on the API to enable readOnly=false, or use readOnly=true for diagnostics."
-            ),
-        )
+    """Run asinfo commands per the ExecuteInfoRequest semantics.
 
-    # Charge the write budget before validation, so a caller cannot probe the
-    # allowlist for free by sending commands that 400. Reads keep the 60/minute
-    # global default — this route is the diagnostic path ackoctl polls, and a
-    # route-level decorator could not tell the two apart (see
-    # rate_limit.consume_budget).
-    if not body.readOnly and not rate_limit.consume_budget(request, rate_limit.INFO_WRITE_LIMIT, "clusters:info:write"):
-        raise HTTPException(
-            status_code=429,
-            detail="Rate limit exceeded: 5 per 1 minute (asinfo write passthrough)",
-        )
-
+    The opt-in flag and the write rate limit are enforced by
+    :func:`_assert_info_write_allowed`, which runs before the ``client``
+    dependency builds a connection.
+    """
     # Fail-fast on the FIRST rejected command so it never reaches the wire.
     # Pydantic already enforces commands non-empty.
     #
