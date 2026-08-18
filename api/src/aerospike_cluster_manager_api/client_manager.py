@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 from contextvars import ContextVar
 from typing import Any
 
@@ -40,6 +41,38 @@ from aerospike_cluster_manager_api.target_policy import assert_targets_allowed
 from aerospike_cluster_manager_api.utils import parse_host_port
 
 _tracer = trace.get_tracer("aerospike_cluster_manager_api.client_manager")
+logger = logging.getLogger(__name__)
+
+
+@contextlib.asynccontextmanager
+async def _logged_close(conn_id: str, reason: str):
+    """Swallow a close failure, but leave a record of it (ADR-0021).
+
+    Every ``client.close()`` in this module is best-effort: the caller is
+    already discarding the client, and a failure to close cleanly must not
+    break the operation that triggered it. But swallowing it *silently* — which
+    is what bare ``contextlib.suppress`` did at all five sites — means a
+    connection pool can leak with nothing in the log to explain it. ADR-0021
+    names exactly that as why the original incident was hard to diagnose.
+
+    Note the ADR describes the sites as ``suppress(Exception)``. That part is
+    stale: they had already been narrowed to ``(AerospikeError, OSError)``
+    before this change, so unexpected exception types were no longer being
+    hidden. What was still missing is the record, which is what this adds.
+
+    WARNING, not DEBUG: a native handle that will not close is the leading
+    indicator of the exhaustion this exists to make diagnosable, and it should
+    be visible at the default log level.
+    """
+    try:
+        yield
+    except (AerospikeError, OSError):
+        logger.warning(
+            "Failed to close Aerospike client for connection '%s' (%s); the native handle may leak",
+            conn_id,
+            reason,
+            exc_info=True,
+        )
 
 
 # Per-call session id used to key the cache. Callers that want
@@ -144,13 +177,13 @@ class ClientManager:
                 try:
                     await client.connect()
                 except BaseException:
-                    with contextlib.suppress(AerospikeError, OSError):
+                    async with _logged_close(conn_id, "cleanup after a failed connect"):
                         await client.close()
                     raise
 
             old = self._clients.get(key)
             if old is not None:
-                with contextlib.suppress(AerospikeError, OSError):
+                async with _logged_close(conn_id, "replacing a stale cached client"):
                     await old.close()
                 # The stale client was counted +1 when it was first built.
                 # Closing it without the matching -1 makes the gauge over-
@@ -191,17 +224,17 @@ class ClientManager:
             # cluster info doesn't depend on which session asked.
             await info_cache.invalidate_connection(conn_id)
             if client is not None:
-                with (
-                    _tracer.start_as_current_span(
-                        "asm.aerospike.client.close",
-                        attributes={
-                            "asm.connection.id": conn_id,
-                            "asm.session.id": key[0] if key[0] is not None else "rest",
-                        },
-                    ),
-                    contextlib.suppress(AerospikeError, OSError),
+                # The span is a sync context manager and ``_logged_close`` is
+                # an async one, so they cannot share a single ``with``.
+                with _tracer.start_as_current_span(
+                    "asm.aerospike.client.close",
+                    attributes={
+                        "asm.connection.id": conn_id,
+                        "asm.session.id": key[0] if key[0] is not None else "rest",
+                    },
                 ):
-                    await client.close()
+                    async with _logged_close(conn_id, "close_client"):
+                        await client.close()
                 self._instruments["active_aerospike_connections"].add(-1, attributes=self._metric_attrs(conn_id))
 
     async def close_session(self, session_id: str) -> None:
@@ -224,17 +257,15 @@ class ClientManager:
         for key, client in zip(keys, clients, strict=True):
             conn_id = key[1]
             await info_cache.invalidate_connection(conn_id)
-            with (
-                _tracer.start_as_current_span(
-                    "asm.aerospike.client.close",
-                    attributes={
-                        "asm.connection.id": conn_id,
-                        "asm.session.id": session_id,
-                    },
-                ),
-                contextlib.suppress(AerospikeError, OSError),
+            with _tracer.start_as_current_span(
+                "asm.aerospike.client.close",
+                attributes={
+                    "asm.connection.id": conn_id,
+                    "asm.session.id": session_id,
+                },
             ):
-                await client.close()
+                async with _logged_close(conn_id, f"close_session({session_id})"):
+                    await client.close()
             self._instruments["active_aerospike_connections"].add(
                 -1,
                 attributes={"asm.connection.id": conn_id, "asm.session.id": session_id},
@@ -243,12 +274,12 @@ class ClientManager:
     async def close_all(self) -> None:
         await info_cache.clear()
         async with self._global_lock:
-            clients = list(self._clients.values())
+            clients = list(self._clients.items())
             count = len(clients)
             self._clients.clear()
             self._conn_locks.clear()
-        for client in clients:
-            with contextlib.suppress(AerospikeError, OSError):
+        for cache_key, client in clients:
+            async with _logged_close(cache_key[1], "close_all (shutdown)"):
                 await client.close()
         if count:
             self._instruments["active_aerospike_connections"].add(-count)

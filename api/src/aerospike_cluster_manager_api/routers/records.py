@@ -11,6 +11,7 @@ from starlette.responses import Response
 from aerospike_cluster_manager_api import db
 from aerospike_cluster_manager_api.converters import record_to_model
 from aerospike_cluster_manager_api.dependencies import AerospikeClient, VerifiedConnId
+from aerospike_cluster_manager_api.middleware.cancellation import run_cancellable
 from aerospike_cluster_manager_api.models.note import StoredPkType
 from aerospike_cluster_manager_api.models.query import FilteredQueryRequest, FilteredQueryResponse
 from aerospike_cluster_manager_api.models.record import (
@@ -138,6 +139,7 @@ async def _get_record_note_text(
     description="Retrieve records from a namespace and set with a server-side limit.",
 )
 async def get_records(
+    request: Request,
     client: AerospikeClient,
     conn_id: VerifiedConnId,
     ns: str = Query(..., min_length=1),
@@ -153,7 +155,13 @@ async def get_records(
     surfaces as HTTP 422 (``RustPanicError``). Per-record skipping is not
     available without an aerospike-core fork.
     """
-    result = await records_service.list_records(client, ns, set, page_size=pageSize)
+    # Cancelled if the operator closes the tab mid-scan (ADR-0021). A scan of
+    # a large set is minutes of work whose result nobody is left to read.
+    result = await run_cancellable(
+        request,
+        records_service.list_records(client, ns, set, page_size=pageSize),
+        label=f"scan {ns}.{set or '<all sets>'}",
+    )
     models = [record_to_model(r) for r in result.records]
     await _attach_record_notes(conn_id, ns, set, result.records, models)
     return RecordListResponse(
@@ -363,7 +371,11 @@ async def get_filtered_records(
 ) -> FilteredQueryResponse:
     """Scan records with optional expression filters. Returns the FIRST page."""
     try:
-        result = await records_service.filter_records(client, body)
+        result = await run_cancellable(
+            request,
+            records_service.filter_records(client, body),
+            label=f"filtered scan {body.namespace}.{body.set or '<all sets>'}",
+        )
     except UnsupportedPageError as exc:
         # ``page`` used to be accepted and then discarded, so a client asking
         # for page 7 received page 1 and could not tell (#468). Must be
