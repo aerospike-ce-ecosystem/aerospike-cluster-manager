@@ -181,6 +181,18 @@ ACM_PASSWORD_KEK_ENV: str = "ACM_PASSWORD_KEK"
 ACM_ALLOW_EPHEMERAL_KEK_ENV: str = "ACM_ALLOW_EPHEMERAL_KEK"
 
 # ---------------------------------------------------------------------------
+# Raw asinfo write passthrough (POST /clusters/{conn_id}/info, readOnly=false)
+# ---------------------------------------------------------------------------
+# Off by default (#467). The read-only path needs no opt-in; the write path
+# transmits state-changing asinfo commands, so an operator has to say yes
+# once — the same shape as ACM_ALLOW_EPHEMERAL_KEK above. Even when this is
+# on, the verb must still be on ``info_verbs.WRITE_INFO_VERBS`` and the
+# request is charged against a dedicated 5/minute budget
+# (``rate_limit.INFO_WRITE_LIMIT``); this flag opens the door, it does not
+# hand over the cluster.
+ACM_ALLOW_INFO_WRITE: bool = _get_bool("ACM_ALLOW_INFO_WRITE", False)
+
+# ---------------------------------------------------------------------------
 # OIDC / Keycloak native JWT verification (Phase 0 contracts C-4, C-6, C-7)
 # ---------------------------------------------------------------------------
 # When OIDC_ENABLED=false the middleware is a no-op (still installed but

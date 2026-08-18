@@ -4,11 +4,14 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Request
 
+from aerospike_cluster_manager_api import config, rate_limit
 from aerospike_cluster_manager_api.dependencies import AerospikeClient, VerifiedConnId
 from aerospike_cluster_manager_api.info_verbs import (
     InfoCommandNotSingle,
     InfoVerbNotAllowed,
+    InfoWriteVerbNotAllowed,
     assert_read_only,
+    assert_write_allowed,
 )
 from aerospike_cluster_manager_api.models.cluster import (
     ClusterInfo,
@@ -100,43 +103,74 @@ async def configure_namespace(
         "Mirrors the MCP execute_info / execute_info_on_node / "
         "execute_info_read_only contracts so ackoctl can drive raw asinfo "
         "diagnostics over the REST surface. "
-        "When readOnly=true (default), each command is validated BEFORE any "
-        "wire round-trip: it must hold exactly one asinfo command (the wire "
-        "format is multi-command) and its leading verb must be on the "
-        "read-only whitelist. A single rejected command fails the entire "
-        "call with 400, and only the validated string is transmitted."
+        "Every command is validated BEFORE any wire round-trip: it must hold "
+        "exactly one asinfo command (the wire format is multi-command) and its "
+        "leading verb must be on a whitelist. A single rejected command fails "
+        "the entire call with 400, and only the validated string is transmitted. "
+        "When readOnly=true (default) the whitelist is the read-only verb set. "
+        "readOnly=false selects the write passthrough, which additionally "
+        "requires ACM_ALLOW_INFO_WRITE=true on the API (403 otherwise), accepts "
+        "only info_verbs.WRITE_INFO_VERBS plus the read-only verbs — never "
+        "destructive verbs such as truncate-namespace — and is charged against "
+        "a dedicated 5/minute per-client budget (429 when exhausted)."
     ),
 )
 async def execute_info(
+    request: Request,
     body: ExecuteInfoRequest,
     client: AerospikeClient,
     conn_id: VerifiedConnId,
 ) -> ExecuteInfoResponse:
     """Run asinfo commands per the ExecuteInfoRequest semantics."""
-    # When readOnly is on, fail-fast on the FIRST rejected command so it
-    # never reaches the wire. Pydantic already enforces commands non-empty.
+    # The write path is opt-in and off by default (#467). Refuse before
+    # touching the connection so a deployment that never enabled it cannot be
+    # probed for which verbs it would have accepted.
+    if not body.readOnly and not config.ACM_ALLOW_INFO_WRITE:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "asinfo write passthrough is disabled; set ACM_ALLOW_INFO_WRITE=true "
+                "on the API to enable readOnly=false, or use readOnly=true for diagnostics."
+            ),
+        )
+
+    # Charge the write budget before validation, so a caller cannot probe the
+    # allowlist for free by sending commands that 400. Reads keep the 60/minute
+    # global default — this route is the diagnostic path ackoctl polls, and a
+    # route-level decorator could not tell the two apart (see
+    # rate_limit.consume_budget).
+    if not body.readOnly and not rate_limit.consume_budget(request, rate_limit.INFO_WRITE_LIMIT, "clusters:info:write"):
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded: 5 per 1 minute (asinfo write passthrough)",
+        )
+
+    # Fail-fast on the FIRST rejected command so it never reaches the wire.
+    # Pydantic already enforces commands non-empty.
     #
     # Keep the VALIDATED strings and run those: forwarding body.commands
     # after validating it is the bug that let a frame carrying an
     # allowlisted verb plus a trailing second command through, since only
     # the leading verb was ever inspected.
     validated: list[str] = []
-    if body.readOnly:
-        for cmd in body.commands:
-            try:
-                validated.append(assert_read_only(cmd).command)
-            except InfoVerbNotAllowed as exc:
-                raise HTTPException(
-                    status_code=400,
-                    detail=(f"command '{exc.verb}' not in read-only whitelist; pass readOnly=false to allow"),
-                ) from exc
-            except InfoCommandNotSingle as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
+    for cmd in body.commands:
+        try:
+            gate = assert_read_only if body.readOnly else assert_write_allowed
+            validated.append(gate(cmd).command)
+        except InfoVerbNotAllowed as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=(f"command '{exc.verb}' not in read-only whitelist; pass readOnly=false to allow"),
+            ) from exc
+        except InfoWriteVerbNotAllowed as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except InfoCommandNotSingle as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     results: list[InfoCommandResult] = []
     target_node = body.node or None
 
-    for cmd in validated if body.readOnly else body.commands:
+    for cmd in validated:
         if target_node is not None and body.readOnly:
             # Single-node read-only: whitelist already enforced above;
             # service still re-validates as a defense-in-depth.
@@ -155,7 +189,10 @@ async def execute_info(
             results.append(InfoCommandResult(command=cmd, node=node, output=response))
 
         elif target_node is not None and not body.readOnly:
-            # Single-node, no whitelist gate.
+            # Single-node write passthrough. `cmd` came out of
+            # assert_write_allowed above, so the verb is on the write
+            # allowlist and the frame holds exactly one command; the service
+            # primitive itself stays unrestricted by design.
             try:
                 response = await clusters_service.execute_info_on_node(client, cmd, target_node)
             except NodeNotFoundError as exc:
@@ -172,7 +209,7 @@ async def execute_info(
 
         else:
             # Fan-out across every node. `cmd` comes from the validated list
-            # when readOnly is on, so this branch transmits only what the gate
+            # on BOTH paths now, so this branch transmits only what a gate
             # returned. It previously read body.commands directly, which left
             # the allowlist advisory here — and this is the DEFAULT branch,
             # taken whenever the caller names no node. Per-node responses are
