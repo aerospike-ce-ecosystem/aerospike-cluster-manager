@@ -90,10 +90,12 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # Both flags, not just SSE_ENABLED (#474). Every publish body in
     # ``events.collector`` returns on its first statement when
     # CM_SSE_BROADCAST_PER_CONNECTION is off — which is the default, because
-    # the broker has no per-subscriber owner filter. Starting anyway gave
-    # three tasks waking on 2s / 30s / 5s timers forever to do nothing. Skip
-    # them and log why, so an operator who expected live events finds the
-    # reason instead of silence.
+    # ``cluster.metrics`` and ``connection.health`` carry no owner attribution
+    # and so cannot be filtered per subscriber. (#511 added that filter for
+    # ``k8s.cluster.*`` only; see the flag's definition in ``config`` for the
+    # full split.) Starting anyway gave three tasks waking on 2s / 30s / 5s
+    # timers forever to do nothing. Skip them and log why, so an operator who
+    # expected live events finds the reason instead of silence.
     broker.max_connections = config.SSE_MAX_CONNECTIONS
     collector_started = config.SSE_ENABLED and config.CM_SSE_BROADCAST_PER_CONNECTION
     if collector_started:
@@ -104,7 +106,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             "its publish bodies are gated on that flag, so the loops could only idle. "
             "The SSE endpoint still accepts subscribers (heartbeats only). "
             "The UI polls /clusters/{id} for live metrics; set "
-            "CM_SSE_BROADCAST_PER_CONNECTION=true on a single-tenant deployment to push instead."
+            "CM_SSE_BROADCAST_PER_CONNECTION=true on a SINGLE-TENANT deployment to push instead "
+            "— cluster.metrics and connection.health are broadcast to every subscriber unfiltered."
         )
 
     yield

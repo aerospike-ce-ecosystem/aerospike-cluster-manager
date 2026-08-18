@@ -127,11 +127,38 @@ SSE_TICKET_TTL_SECONDS: int = _get_int("SSE_TICKET_TTL_SECONDS", 30)
 SSE_TICKET_MAX_PENDING: int = _get_int("SSE_TICKET_MAX_PENDING", 1024)
 
 # CM_SSE_BROADCAST_PER_CONNECTION gates the per-connection broadcast loops in
-# ``events.collector`` (cluster.metrics, connection.health, k8s.cluster.*).
-# Default ``false`` because the broker has no per-subscriber owner filter --
-# emitting tenant-A connection metrics to tenant-B subscribers leaks data.
-# Operators of single-tenant deployments can opt back in by setting this to
-# true. Tracked as follow-up to ADR-0040 (per-subscriber filtering).
+# ``events.collector`` (cluster.metrics, connection.health, k8s.cluster.*), and
+# ``main.lifespan`` gates the collector's start on it too, so it is one switch
+# for all three loops.
+#
+# SINGLE-TENANT ONLY. Still true after #511, which added a workspace ACL to the
+# SSE stream — that fix covers ONE of the three event families:
+#
+#   ACL'd since #511 | k8s.cluster.detail / .events / .health
+#                    |   The collector stamps each with the CR's ``workspaceId``
+#                    |   and ``routers.events._is_event_visible`` drops the ones
+#                    |   the subscriber cannot see.
+#   NOT ACL'd        | cluster.metrics, connection.health
+#                    |   Published with no ``workspaceId`` at all, so there is
+#                    |   nothing to filter on. Every subscriber receives every
+#                    |   connection's metrics and health.
+#
+# That asymmetry is why ``_is_event_visible`` short-circuits on the
+# ``k8s.cluster.`` prefix rather than filtering everything on ``workspaceId``:
+# filtering the other two on a field they do not carry would drop them
+# entirely, not secure them.
+#
+# The practical consequence, and the reason this note exists: a multi-tenant
+# operator who wants live K8s cluster events has no way to get them without
+# also re-enabling un-ACL'd ``cluster.metrics`` and ``connection.health``. The
+# switch is binary. "The SSE workspace ACL landed" is exactly the kind of news
+# that invites the conclusion that the whole channel is now tenant-safe; only
+# the K8s half is.
+#
+# Default ``false`` for that reason -- emitting tenant-A connection metrics to
+# tenant-B subscribers leaks data. Splitting the flag per event family, or
+# giving the broker a per-subscriber owner filter, is the ADR-0040 follow-up
+# that would make this safe to enable on a multi-tenant deployment. See #496.
 CM_SSE_BROADCAST_PER_CONNECTION: bool = os.getenv("CM_SSE_BROADCAST_PER_CONNECTION", "false").lower() in (
     "true",
     "1",
