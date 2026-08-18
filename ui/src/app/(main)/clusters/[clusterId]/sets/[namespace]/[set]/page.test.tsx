@@ -317,3 +317,43 @@ describe("RecordBrowserPage — unknown record count (ADR-0026 / #168)", () => {
     ).toBeInTheDocument()
   })
 })
+
+describe("RecordBrowserPage — truncated result indicator (#468)", () => {
+  it("says the view is truncated when the server reports hasMore", async () => {
+    // The server has always computed hasMore and the UI has always thrown it
+    // away, so a first-of-many page looked exactly like a complete one. There
+    // is still no next page to offer, so the honest signal is "truncated".
+    mockedFilter.mockResolvedValueOnce({
+      ...fixtureResponse(50),
+      hasMore: true,
+    })
+
+    render(<RecordBrowserPage />)
+
+    expect(await screen.findByText("truncated")).toBeInTheDocument()
+  })
+
+  it("does not say truncated when the window is complete", async () => {
+    mockedFilter.mockResolvedValueOnce({
+      ...fixtureResponse(3),
+      hasMore: false,
+    })
+
+    render(<RecordBrowserPage />)
+
+    // Wait for a rendered row before asserting the absence — otherwise the
+    // assertion passes trivially against the pre-fetch state.
+    expect(await screen.findByText("pk-0")).toBeInTheDocument()
+    expect(screen.queryByText("truncated")).not.toBeInTheDocument()
+  })
+
+  it("never sends a page parameter — the API rejects anything but 1", async () => {
+    mockedFilter.mockResolvedValueOnce(fixtureResponse(3))
+
+    render(<RecordBrowserPage />)
+    await screen.findByText("pk-0")
+
+    const [, body] = mockedFilter.mock.calls[0] ?? []
+    expect(body).not.toHaveProperty("page")
+  })
+})

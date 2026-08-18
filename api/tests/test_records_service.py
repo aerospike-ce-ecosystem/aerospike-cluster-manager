@@ -867,3 +867,56 @@ class TestServiceModuleHasNoFastAPI:
             value = getattr(mod, attr)
             module_name = getattr(value, "__module__", "") or ""
             assert not module_name.startswith("fastapi"), f"{attr} originates in {module_name}"
+
+
+class TestPageParameterIsRejectedNotIgnored:
+    """``page`` was validated and then never read (#468).
+
+    ``filter_records`` returns the first window and reports ``page=1`` on
+    every path, so a request for page 7 got page 1 with no signal. A generated
+    client reading the OpenAPI schema sends ``page`` in good faith — silently
+    discarding it is worse than an error, so it is now an error.
+    """
+
+    async def test_page_two_raises(self):
+        from aerospike_cluster_manager_api.models.query import FilteredQueryRequest
+
+        client, _query = _build_query_mock([_make_record()])
+
+        with pytest.raises(records_service.UnsupportedPageError) as exc_info:
+            await records_service.filter_records(client, FilteredQueryRequest(namespace="test", set="demo", page=2))
+        assert exc_info.value.page == 2
+        # Rejected before any wire round-trip — a rejected request must not
+        # cost a scan.
+        client.query.assert_not_called()
+
+    async def test_page_one_is_accepted(self):
+        from aerospike_cluster_manager_api.models.query import FilteredQueryRequest
+
+        client, _query = _build_query_mock([_make_record()])
+
+        result = await records_service.filter_records(
+            client, FilteredQueryRequest(namespace="test", set="demo", page=1)
+        )
+        assert result.page == 1
+
+    async def test_page_defaults_to_one(self):
+        """Omitting ``page`` must keep working — this is the common case."""
+        from aerospike_cluster_manager_api.models.query import FilteredQueryRequest
+
+        client, _query = _build_query_mock([_make_record()])
+
+        result = await records_service.filter_records(client, FilteredQueryRequest(namespace="test", set="demo"))
+        assert result.page == 1
+
+    async def test_error_names_the_page_and_the_alternatives(self):
+        message = str(records_service.UnsupportedPageError(7))
+        assert "page=7" in message
+        assert "pageSize" in message
+        assert "#468" in message
+
+    async def test_error_is_a_value_error(self):
+        # The router catches it explicitly, but a service-layer caller that
+        # only handles ValueError must degrade sanely rather than crash.
+        with pytest.raises(ValueError):
+            raise records_service.UnsupportedPageError(3)

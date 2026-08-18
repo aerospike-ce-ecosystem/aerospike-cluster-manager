@@ -79,6 +79,16 @@ interface QueryMeta {
   /** `null` = the count is unknown (ADR-0026), not zero. */
   total: number | null
   totalEstimated: boolean
+  /**
+   * The server had more records than this window holds.
+   *
+   * The API has always computed this and the UI has always discarded it
+   * (#468), so a truncated view looked identical to a complete one. There is
+   * no next page to offer yet — see `FilteredQueryRequest` — so the honest
+   * thing is to say the view is truncated and point at the controls that do
+   * work: filters, and the Limit selector.
+   */
+  hasMore: boolean
   executionTimeMs: number
 }
 
@@ -87,6 +97,7 @@ const EMPTY_META: QueryMeta = {
   // than zero — same distinction the API now makes.
   total: null,
   totalEstimated: false,
+  hasMore: false,
   executionTimeMs: 0,
 }
 
@@ -251,6 +262,7 @@ export default function RecordBrowserPage() {
         setMeta({
           total: resp.total,
           totalEstimated: resp.totalEstimated,
+          hasMore: resp.hasMore,
           executionTimeMs: resp.executionTimeMs,
         })
       } catch (err) {
@@ -632,6 +644,15 @@ function StatusBar({
         </span>
         <span className="ml-1 opacity-60">rows</span>
       </span>
+
+      {meta.hasMore && (
+        <span
+          className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+          title="The scan stopped at the row limit. Narrow the result with a filter or raise Limit to see more."
+        >
+          truncated
+        </span>
+      )}
 
       <span
         className="h-3.5 w-px bg-gray-200 dark:bg-gray-800"

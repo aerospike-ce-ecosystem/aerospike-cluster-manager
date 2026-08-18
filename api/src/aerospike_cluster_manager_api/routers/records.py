@@ -26,6 +26,7 @@ from aerospike_cluster_manager_api.services.records_service import (
     InvalidPkPattern,
     PrimaryKeyMissing,
     SetRequiredForPkLookup,
+    UnsupportedPageError,
 )
 
 logger = logging.getLogger(__name__)
@@ -343,7 +344,15 @@ async def delete_record_bin(
     "/{conn_id}/filter",
     response_model=FilteredQueryResponse,
     summary="Filtered record scan",
-    description="Scan records with optional expression filters and pagination.",
+    description=(
+        "Scan records with optional expression filters. "
+        "Returns the FIRST window only — pageSize bounds it, and there is no "
+        "way to request the next one. `page` is accepted only as 1; any other "
+        "value is rejected with 400 rather than silently returning page 1 "
+        "(issue #468). Check `hasMore` to know whether the window is complete, "
+        "and narrow the result with filters or raise pageSize (max 500) to see "
+        "more."
+    ),
 )
 @limiter.limit("30/minute")
 async def get_filtered_records(
@@ -352,9 +361,15 @@ async def get_filtered_records(
     client: AerospikeClient,
     conn_id: VerifiedConnId,
 ) -> FilteredQueryResponse:
-    """Scan records with optional expression filters and pagination."""
+    """Scan records with optional expression filters. Returns the FIRST page."""
     try:
         result = await records_service.filter_records(client, body)
+    except UnsupportedPageError as exc:
+        # ``page`` used to be accepted and then discarded, so a client asking
+        # for page 7 received page 1 and could not tell (#468). Must be
+        # ordered before the generic ``ValueError`` branch below, which would
+        # otherwise swallow the specific message.
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except SetRequiredForPkLookup as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except InvalidPkPattern as exc:
