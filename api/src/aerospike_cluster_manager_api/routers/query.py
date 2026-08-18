@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Request
 
 from aerospike_cluster_manager_api.converters import record_to_model
 from aerospike_cluster_manager_api.dependencies import AerospikeClient
+from aerospike_cluster_manager_api.middleware.cancellation import run_cancellable
 from aerospike_cluster_manager_api.models.query import QueryRequest, QueryResponse
 from aerospike_cluster_manager_api.predicate import PredicateError
 from aerospike_cluster_manager_api.rate_limit import limiter
@@ -27,7 +28,14 @@ router = APIRouter(prefix="/query", tags=["query"])
 async def execute_query(request: Request, body: QueryRequest, client: AerospikeClient) -> QueryResponse:
     """Execute a query against Aerospike using primary key lookup, predicate filter, or full scan."""
     try:
-        result = await query_service.execute_query(client, body)
+        # Cancelled on client disconnect (ADR-0021) — a full scan is the most
+        # expensive thing this API does, and the least useful to finish once
+        # nobody is waiting for it.
+        result = await run_cancellable(
+            request,
+            query_service.execute_query(client, body),
+            label=f"query {body.namespace}.{body.set or '<all sets>'}",
+        )
     except SetRequiredForPkLookup as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except PredicateError as exc:
