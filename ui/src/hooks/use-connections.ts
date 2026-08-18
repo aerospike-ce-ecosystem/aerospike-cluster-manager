@@ -14,8 +14,20 @@ import { useCallback, useEffect, useRef, useState } from "react"
 
 import { listConnections } from "@/lib/api/connections"
 import { logFetchError } from "@/lib/api/log"
+import { createSharedFetch } from "@/lib/shared-fetch"
 import type { ConnectionProfileResponse } from "@/lib/types/connection"
 import { useDataRevisionStore } from "@/stores/data-revision-store"
+
+// This hook has 5 call sites that all mount in the same tick, so a single
+// navigation used to fire 5 identical requests (#474). Coalescing them means
+// the first one starts the request and the rest join it. Keyed on the data
+// revision so a post-mutation bump still forces a fresh read.
+const sharedConnections = createSharedFetch<ConnectionProfileResponse[]>()
+
+/** Test seam: drop any in-flight coalesced request. */
+export function resetConnectionsFetchCoalescing(): void {
+  sharedConnections.reset()
+}
 
 export interface UseConnectionsResult {
   data: ConnectionProfileResponse[] | null
@@ -48,6 +60,9 @@ export function useConnections(): UseConnectionsResult {
     setIsLoading(true)
     setError(null)
     try {
+      // Deliberately NOT coalesced: an explicit refetch is a user asking for
+      // fresh data, and joining an in-flight request would hand them a
+      // response that started before they clicked.
       const result = await listConnections()
       if (!isMountedRef.current) return
       setData(result)
@@ -64,7 +79,10 @@ export function useConnections(): UseConnectionsResult {
     let cancelled = false
     ;(async () => {
       try {
-        const result = await listConnections()
+        const result = await sharedConnections.run(
+          `rev:${rev}`,
+          listConnections,
+        )
         if (!cancelled && isMountedRef.current) {
           setData(result)
           setError(null)

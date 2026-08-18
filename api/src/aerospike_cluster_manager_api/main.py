@@ -85,14 +85,31 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     logger.info("Starting Aerospike Cluster Manager API")
     await db.init_db()
 
-    # Configure broker max connections from config and start event collector
+    # Configure broker max connections from config and start event collector.
+    #
+    # Both flags, not just SSE_ENABLED (#474). Every publish body in
+    # ``events.collector`` returns on its first statement when
+    # CM_SSE_BROADCAST_PER_CONNECTION is off — which is the default, because
+    # the broker has no per-subscriber owner filter. Starting anyway gave
+    # three tasks waking on 2s / 30s / 5s timers forever to do nothing. Skip
+    # them and log why, so an operator who expected live events finds the
+    # reason instead of silence.
     broker.max_connections = config.SSE_MAX_CONNECTIONS
-    if config.SSE_ENABLED:
+    collector_started = config.SSE_ENABLED and config.CM_SSE_BROADCAST_PER_CONNECTION
+    if collector_started:
         await collector.start()
+    elif config.SSE_ENABLED:
+        logger.info(
+            "SSE_ENABLED=true but CM_SSE_BROADCAST_PER_CONNECTION=false — event collector NOT started; "
+            "its publish bodies are gated on that flag, so the loops could only idle. "
+            "The SSE endpoint still accepts subscribers (heartbeats only). "
+            "The UI polls /clusters/{id} for live metrics; set "
+            "CM_SSE_BROADCAST_PER_CONNECTION=true on a single-tenant deployment to push instead."
+        )
 
     yield
 
-    if config.SSE_ENABLED:
+    if collector_started:
         await collector.stop()
     await client_manager.close_all()
     # Close the OIDC middleware's lazily-created JWKS HTTP client, if it
