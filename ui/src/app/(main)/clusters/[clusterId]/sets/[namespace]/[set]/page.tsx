@@ -57,14 +57,35 @@ function formatRowCount(n: number): string {
   return String(n)
 }
 
+/**
+ * Render the total in the footer's "{returned} of {total} rows" summary.
+ *
+ * `total: null` means the server could not determine the set's object count
+ * (ADR-0026) — it is NOT zero. Rendering it as 0 put "0 rows" under a page of
+ * visible records. Per the ADR, fall back to a lower bound derived from what
+ * we actually loaded: "12 of 12+ rows" reads as "at least 12", which is the
+ * only honest claim available.
+ */
+function formatTotal(
+  total: number | null,
+  estimated: boolean,
+  loaded: number,
+): string {
+  if (total === null) return `${formatRowCount(loaded)}+`
+  return `${estimated ? "~" : ""}${formatRowCount(total)}`
+}
+
 interface QueryMeta {
-  total: number
+  /** `null` = the count is unknown (ADR-0026), not zero. */
+  total: number | null
   totalEstimated: boolean
   executionTimeMs: number
 }
 
 const EMPTY_META: QueryMeta = {
-  total: 0,
+  // Nothing has been fetched yet, so the count is genuinely unknown rather
+  // than zero — same distinction the API now makes.
+  total: null,
   totalEstimated: false,
   executionTimeMs: 0,
 }
@@ -607,8 +628,7 @@ function StatusBar({
         </span>
         <span className="mx-1 opacity-60">of</span>
         <span className="font-semibold text-gray-900 dark:text-gray-50">
-          {meta.totalEstimated ? "~" : ""}
-          {formatRowCount(meta.total)}
+          {formatTotal(meta.total, meta.totalEstimated, returned)}
         </span>
         <span className="ml-1 opacity-60">rows</span>
       </span>

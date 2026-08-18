@@ -117,7 +117,9 @@ class ListRecordsResult(NamedTuple):
     """
 
     records: list[Record]
-    total: int
+    # ``None`` means "unknown", not "zero" (ADR-0026). See
+    # :func:`_get_set_object_count`.
+    total: int | None
     page: int
     page_size: int
     has_more: bool
@@ -133,7 +135,8 @@ class FilterRecordsResult(NamedTuple):
     """
 
     records: list[Record]
-    total: int
+    # ``None`` means "unknown", not "zero" (ADR-0026).
+    total: int | None
     page: int
     page_size: int
     has_more: bool
@@ -148,23 +151,33 @@ class FilterRecordsResult(NamedTuple):
 # ---------------------------------------------------------------------------
 
 
-async def _get_set_object_count(client: aerospike_py.AsyncClient, ns: str, set_name: str) -> int:
-    """Approximate object count for a set via the namespace/sets info commands.
+async def _get_set_object_count(client: aerospike_py.AsyncClient, ns: str, set_name: str) -> int | None:
+    """Approximate object count for a set, or ``None`` when it is unknowable.
 
     Fetches the namespace replication-factor first to de-duplicate counts
     across nodes, matching the same approach used in ``clusters_service``.
 
+    Returns:
+        * ``int`` — the count, including a genuine ``0`` when the set is
+          absent from ``sets/<ns>``. Aerospike drops a set from that listing
+          once it holds no records, so absent really does mean empty.
+        * ``None`` — the count could not be determined. Per ADR-0026 this is
+          the *explicit* "unknown" state; it used to be ``0``, which a client
+          cannot tell from "this set is empty". The frontend showed "no
+          records" over a populated set and disabled pagination on it.
+
     Connectivity / timeout / backpressure errors (``ClusterError``,
     ``AerospikeTimeoutError``, ``BackpressureError``) are re-raised so the
-    global exception handlers in :mod:`main` can map them to 503/504. The
-    callers (:func:`list_records`, :func:`run_filtered_query`) deliberately
-    propagate those same classes — swallowing them here would make a
-    transient timeout report ``total=0`` on a non-empty set. Only narrow,
-    best-effort failures (other ``AerospikeError`` / ``OSError``) fall back
-    to 0.
+    global exception handlers in :mod:`main` can map them to 503/504 — a dead
+    cluster must not degrade to "unknown count, here is an empty page". Only
+    narrow, best-effort failures (other ``AerospikeError`` / ``OSError``,
+    e.g. an ACL-restricted user who cannot run the info command) resolve to
+    ``None``.
     """
     if not set_name:
-        return 0
+        # A namespace-wide listing has no single set to count. Not zero:
+        # "how many records are in the unnamed set" has no answer.
+        return None
     try:
         ns_all = await client.info_all(info_namespace(ns))
         ns_stats = aggregate_node_kv(ns_all)
@@ -176,10 +189,13 @@ async def _get_set_object_count(client: aerospike_py.AsyncClient, ns: str, set_n
             if s["name"] == set_name:
                 return s["objects"]
     except (ClusterError, AerospikeTimeoutError, BackpressureError):
-        # Infrastructure failure — must surface as 503/504, not a fake 0.
+        # Infrastructure failure — must surface as 503/504, not a fake count.
         raise
     except (AerospikeError, OSError):
         logger.debug("Failed to get set object count for %s.%s", ns, set_name, exc_info=True)
+        return None
+    # Reached only when the set is not in `sets/<ns>` at all, which Aerospike
+    # reports for a set holding no records. That is a real zero, not unknown.
     return 0
 
 
@@ -449,7 +465,18 @@ async def list_records(
     # set_total. set_total is an independent info-command estimate that can
     # lag the actual scan on an eventually-consistent set, which would
     # otherwise make has_more falsely False on a full page.
-    has_more = True if len(raw_results) >= limit else set_total > len(raw_results)
+    #
+    # With set_total unknown (ADR-0026) a short page is the only evidence
+    # available, and it says the scan is done — so has_more is False. The
+    # important part is that unknown does NOT take the `0 > len(...)` branch
+    # the old sentinel took, which reported "no more records" identically for
+    # "the set is empty" and "we could not ask".
+    if len(raw_results) >= limit:
+        has_more = True
+    elif set_total is None:
+        has_more = False
+    else:
+        has_more = set_total > len(raw_results)
 
     return ListRecordsResult(
         records=raw_results,
@@ -595,13 +622,19 @@ async def filter_records(client: aerospike_py.AsyncClient, body: FilteredQueryRe
     # returned count is capped — it does not reflect the true number of
     # records scanned by the Aerospike server. For unfiltered scans we use
     # the info command to get the real set size.
+    set_total: int | None
     if has_filters:
         set_total = returned + (1 if has_more else 0)  # lower bound
         scanned = returned  # lower bound; actual server-side scan may be higher
         total_estimated = True
     else:
         set_total = await _get_set_object_count(client, body.namespace, body.set or "")
-        scanned = set_total  # info-based: represents all objects in the set
+        # ``scanned`` stays an int: it counts what this call actually looked
+        # at, and with the info-command total unavailable the only defensible
+        # number is what came back. Reporting 0 scanned alongside N returned
+        # would be a contradiction; ``total_estimated`` already flags that
+        # neither figure is authoritative.
+        scanned = set_total if set_total is not None else returned
         total_estimated = True
 
     return FilterRecordsResult(

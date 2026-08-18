@@ -58,7 +58,14 @@ class AerospikeRecord(BaseModel):
 
 class RecordListResponse(BaseModel):
     records: list[AerospikeRecord]
-    total: int
+    # ``null`` means the set's object count could not be determined — an
+    # explicit "unknown", distinct from a genuine ``0`` (ADR-0026). Clients
+    # must not read ``null`` as "no records": show the loaded count instead
+    # ("~N+ records") and keep pagination controls live.
+    #
+    # Mirrored in ``ui/src/lib/types/record.ts`` — keep both sides in sync
+    # (project goal 2-7).
+    total: int | None
     page: int
     pageSize: int
     hasMore: bool

@@ -481,16 +481,43 @@ class TestGetSetObjectCount:
         with pytest.raises(BackpressureError):
             await records_service._get_set_object_count(client, "test", "demo")
 
-    async def test_generic_aerospike_error_is_best_effort_zero(self):
-        """Non-infrastructure AerospikeError stays best-effort → 0."""
+    async def test_generic_aerospike_error_reports_unknown_not_zero(self):
+        """Non-infrastructure AerospikeError → None ("unknown"), per ADR-0026.
+
+        This used to return 0, which a client cannot distinguish from "this
+        set is empty" — so the record browser rendered "no records" over a
+        populated set and disabled pagination on it. The realistic trigger is
+        an ACL-restricted user whose role cannot run the info command.
+        """
         client = AsyncMock()
         client.info_all = AsyncMock(side_effect=AerospikeError("sparse namespace"))
 
-        assert await records_service._get_set_object_count(client, "test", "demo") == 0
+        assert await records_service._get_set_object_count(client, "test", "demo") is None
 
-    async def test_os_error_is_best_effort_zero(self):
+    async def test_os_error_reports_unknown_not_zero(self):
         client = AsyncMock()
         client.info_all = AsyncMock(side_effect=OSError("socket hiccup"))
+
+        assert await records_service._get_set_object_count(client, "test", "demo") is None
+
+    async def test_empty_set_name_reports_unknown(self):
+        """A namespace-wide listing has no single set to count.
+
+        Not zero: "how many records are in the unnamed set" has no answer.
+        """
+        client = AsyncMock()
+        assert await records_service._get_set_object_count(client, "test", "") is None
+        client.info_all.assert_not_awaited()
+
+    async def test_set_absent_from_sets_listing_is_a_real_zero(self):
+        """Absent from ``sets/<ns>`` means the set holds no records.
+
+        Aerospike drops a set from that listing once it is empty, so this is
+        the one case where 0 is the honest answer rather than a sentinel —
+        pinned so a future "everything unknown" simplification is a decision.
+        """
+        client = AsyncMock()
+        client.info_all = AsyncMock(return_value=[])
 
         assert await records_service._get_set_object_count(client, "test", "demo") == 0
 
@@ -502,6 +529,66 @@ class TestGetSetObjectCount:
 
         with pytest.raises(AerospikeTimeoutError):
             await records_service.list_records(client, "test", "demo", page_size=25)
+
+
+class TestUnknownTotalReachesTheCaller:
+    """The ``None`` from ``_get_set_object_count`` must survive to the result.
+
+    Collapsing it back to 0 anywhere in between would restore the exact bug
+    ADR-0026 is about, just one layer further out.
+    """
+
+    async def test_list_records_reports_total_none(self):
+        client, _query = _build_query_mock([_make_record()])
+        # Narrow error → count unknown, but the scan itself succeeded.
+        client.info_all = AsyncMock(side_effect=AerospikeError("no info privilege"))
+
+        result = await records_service.list_records(client, "test", "demo", page_size=25)
+
+        assert result.total is None
+        assert len(result.records) == 1
+        # The records are still there — "unknown count" is not "empty page".
+
+    async def test_unknown_total_does_not_claim_more_records_exist(self):
+        """A short page with an unknown total means the scan finished.
+
+        The old code took the ``0 > len(records)`` branch, which reported
+        "no more records" for a *populated* set whose count merely failed to
+        resolve. Now the short page — real evidence — is what decides.
+        """
+        client, _query = _build_query_mock([_make_record()])
+        client.info_all = AsyncMock(side_effect=AerospikeError("no info privilege"))
+
+        result = await records_service.list_records(client, "test", "demo", page_size=25)
+
+        assert result.has_more is False
+
+    async def test_unknown_total_still_reports_more_on_a_full_page(self):
+        """A full page is evidence of more data regardless of the total."""
+        recs = [_make_record(key=("test", "demo", f"k{i}", b"\x00")) for i in range(5)]
+        client, _query = _build_query_mock(recs)
+        client.info_all = AsyncMock(side_effect=AerospikeError("no info privilege"))
+
+        result = await records_service.list_records(client, "test", "demo", page_size=5)
+
+        assert result.total is None
+        assert result.has_more is True
+
+    async def test_filter_records_reports_total_none_on_unfiltered_scan(self):
+        from aerospike_cluster_manager_api.models.query import FilteredQueryRequest
+
+        client, _query = _build_query_mock([_make_record()])
+        client.info_all = AsyncMock(side_effect=AerospikeError("no info privilege"))
+
+        result = await records_service.filter_records(
+            client, FilteredQueryRequest(namespace="test", set="demo", pageSize=25)
+        )
+
+        assert result.total is None
+        # ``scanned`` stays an int — it counts what this call looked at.
+        # Reporting 0 scanned next to 1 returned would be a contradiction.
+        assert result.scanned_records == 1
+        assert result.returned_records == 1
 
 
 # ---------------------------------------------------------------------------
