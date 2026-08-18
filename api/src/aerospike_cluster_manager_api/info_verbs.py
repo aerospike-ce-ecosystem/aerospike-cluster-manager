@@ -1,10 +1,10 @@
-"""Read-only asinfo verb whitelist for the REST API info endpoint.
+"""asinfo verb whitelists for the REST API info endpoint.
 
 The Aerospike asinfo protocol multiplexes both reads (``namespaces``,
 ``version``, ``roster:``, ...) and writes (``set-config:``, ``recluster:``,
-``truncate-namespace:``) over the same wire format. The read-only info
-endpoint therefore cannot decide a command's safety from its shape alone
-— it needs to inspect the *verb* (the leading token of the command).
+``truncate-namespace:``) over the same wire format. The info endpoint
+therefore cannot decide a command's safety from its shape alone — it needs
+to inspect the *verb* (the leading token of the command).
 
 The verb alone is not sufficient, though: asinfo is a *multi-command* wire
 format, so a frame whose leading verb is read-only can carry a second
@@ -14,12 +14,23 @@ things — the frame holds exactly one command
 and returns the validated string so callers transmit that rather than the
 caller's original.
 
-This module is the single source of truth for that decision. The service
+There are **two** whitelists, and every command passes exactly one of them:
+
+* :data:`READ_ONLY_INFO_VERBS` via :func:`assert_read_only` — the default
+  path (``readOnly=true``), verbs that change no state at all.
+* :data:`WRITE_INFO_VERBS` via :func:`assert_write_allowed` — the opt-in
+  path (``readOnly=false``), a deliberately small set of *operational*
+  mutations that cannot destroy data. This path used to have no allowlist
+  of any kind, so ``truncate-namespace:`` reached the wire unchallenged
+  (#467); it is now allowlisted like the read path, and the route also
+  requires ``ACM_ALLOW_INFO_WRITE=true`` before it will serve at all.
+
+This module is the single source of truth for both decisions. The service
 layer raises :class:`InfoCommandRejected` subclasses, which the router maps
 to an HTTP 400 with a "pick a different verb" / "one command per entry"
 hint.
 
-To add a verb:
+To add a read verb:
 
 1. Verify in the Aerospike CE 8.1 docs that the verb is purely read-only
    and triggers no persistent state change (no log dump, no metric
@@ -30,6 +41,11 @@ To add a verb:
    ``tests/test_info_verbs.py::test_whitelist_membership_is_pinned`` —
    that pin exists so silent ADDITIONS are caught at review time, not
    just silent removals.
+
+To add a write verb the bar is higher: it must be reversible and must not
+delete, truncate, or render unavailable any record. See the rationale block
+above :data:`WRITE_INFO_VERBS`, and update
+``tests/test_info_verbs.py::test_write_whitelist_membership_is_pinned``.
 """
 
 from __future__ import annotations
@@ -71,6 +87,56 @@ READ_ONLY_INFO_VERBS: frozenset[str] = frozenset(
 )
 
 
+# Write verbs the opt-in (``readOnly=false``) path may transmit.
+#
+# Membership rule — a verb belongs here only if BOTH hold:
+#
+#   * it is an *operational* mutation: runtime configuration, cluster
+#     re-formation, log verbosity, or job control; and
+#   * it cannot delete, truncate, or render unavailable a single record.
+#
+# Deliberately EXCLUDED, with the reason, so the omissions read as decisions
+# rather than oversights:
+#
+#   truncate-namespace, truncate  — immediate, irreversible data loss. This
+#     is the verb #467 was filed about; ACM's own set truncation goes through
+#     the typed ``records_service.truncate_set`` route, which is authenticated,
+#     rate-limited, and takes an explicit LUT cutoff.
+#   sindex-delete, set-drop       — destroy an index / set definition; ACM has
+#     typed routes for both.
+#   roster-set                    — a wrong roster in a strong-consistency
+#     namespace makes partitions unavailable. Not reversible from the same
+#     endpoint under time pressure.
+#   quiesce, quiesce-undo, dun, undun — change cluster membership and therefore
+#     availability. Operationally legitimate, but they belong behind a typed
+#     route with confirmation, not a raw passthrough.
+#
+# This set is intentionally small. Widening it is a security decision: it must
+# come with a docs update and a change to the pin test, exactly as the read
+# list requires.
+WRITE_INFO_VERBS: frozenset[str] = frozenset(
+    {
+        # Runtime configuration — the only write verb ACM itself issues
+        # (``clusters_service.configure_namespace``).
+        "set-config",
+        # Force cluster re-formation after a roster or topology change.
+        "recluster",
+        # Server-side log verbosity: `log-set:id=<id>;<context>=<level>`.
+        "log-set",
+        # Scan/query job control: `jobs:module=scan;cmd=kill-job;trx-id=<id>`.
+        # The operator escape hatch for a runaway scan — it stops work, it
+        # never destroys data.
+        "jobs",
+    }
+)
+
+
+# What the ``readOnly=false`` path accepts. A caller who opted into the write
+# path may still send read verbs — rejecting ``namespaces`` there would be a
+# surprise with no security value — so the write gate checks the union.
+ALLOWED_INFO_VERBS: frozenset[str] = READ_ONLY_INFO_VERBS | WRITE_INFO_VERBS
+
+
 # Curated hint verbs surfaced in error messages — the high-signal diagnostic
 # reads operators actually want. Hand-picked rather than ``sorted()[:5]``,
 # which would surface ``build-*`` triplicates that don't help the LLM pick a
@@ -100,6 +166,27 @@ class InfoVerbNotAllowed(InfoCommandRejected):
         super().__init__(
             f"Verb {verb!r} is not on the read-only asinfo whitelist; "
             f"pick from: {sample} (full list at info_verbs.READ_ONLY_INFO_VERBS)."
+        )
+        self.verb = verb
+
+
+class InfoWriteVerbNotAllowed(InfoCommandRejected):
+    """Raised when a ``readOnly=false`` command's verb is on neither allowlist.
+
+    Distinct from :class:`InfoVerbNotAllowed` because the remedy is
+    different: there is no "pass readOnly=false" escape hatch left to
+    suggest — the caller is already on the write path and the verb is
+    simply not one this endpoint will transmit.
+    """
+
+    def __init__(self, verb: str) -> None:
+        sample = ", ".join(sorted(WRITE_INFO_VERBS))
+        super().__init__(
+            f"Verb {verb!r} is not on the asinfo write allowlist; "
+            f"the write path accepts {sample} plus every read-only verb "
+            "(full lists at info_verbs.WRITE_INFO_VERBS / READ_ONLY_INFO_VERBS). "
+            "Destructive verbs such as 'truncate-namespace' are never accepted here — "
+            "use the dedicated typed route instead."
         )
         self.verb = verb
 
@@ -301,4 +388,33 @@ def assert_read_only(command: str) -> ValidatedInfoCommand:
     verb = extract_verb(validated)
     if verb not in READ_ONLY_INFO_VERBS:
         raise InfoVerbNotAllowed(verb)
+    return ValidatedInfoCommand(command=validated, verb=verb)
+
+
+def assert_write_allowed(command: str) -> ValidatedInfoCommand:
+    """Validate ``command`` for the opt-in ``readOnly=false`` path.
+
+    Same two-check shape as :func:`assert_read_only`, against the wider
+    :data:`ALLOWED_INFO_VERBS` union:
+
+    1. :func:`assert_single_command` — the frame holds exactly one command.
+       This matters *more* on the write path than on the read path: without
+       it ``set-config:context=service;foo=1\\ntruncate-namespace:namespace=test``
+       would pass a verb check on its head and then truncate a namespace.
+    2. the leading verb is on :data:`READ_ONLY_INFO_VERBS` or
+       :data:`WRITE_INFO_VERBS`.
+
+    Returns a :class:`ValidatedInfoCommand`; transmit ``.command``, never the
+    caller's original string. Raises :class:`InfoCommandNotSingle` or
+    :class:`InfoWriteVerbNotAllowed` (both :class:`InfoCommandRejected`)
+    before any wire round-trip.
+
+    This is only the *verb* gate. Whether the write path is reachable at all
+    is a separate decision made at the route, which requires the opt-in
+    ``ACM_ALLOW_INFO_WRITE`` flag and charges a dedicated rate-limit budget.
+    """
+    validated = assert_single_command(command)
+    verb = extract_verb(validated)
+    if verb not in ALLOWED_INFO_VERBS:
+        raise InfoWriteVerbNotAllowed(verb)
     return ValidatedInfoCommand(command=validated, verb=verb)

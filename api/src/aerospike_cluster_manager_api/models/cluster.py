@@ -89,6 +89,13 @@ class ExecuteInfoRequest(BaseModel):
         verb must be on :data:`info_verbs.READ_ONLY_INFO_VERBS`.
         Whitelist violations short-circuit with HTTP 400 *before* any
         wire round-trip.
+
+        When ``False`` the caller selects the write passthrough. That path
+        is **not** "no whitelist" — it was, and that was #467. It now
+        requires ``config.ACM_ALLOW_INFO_WRITE`` (403 otherwise), accepts
+        only :data:`info_verbs.ALLOWED_INFO_VERBS` (400 otherwise), and is
+        charged against a dedicated 5/minute budget (429 otherwise). This
+        field selects *which* allowlist applies; it never disables one.
     """
 
     commands: list[str] = Field(min_length=1)

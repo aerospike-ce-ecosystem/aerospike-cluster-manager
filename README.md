@@ -788,6 +788,31 @@ The following tables list environment variables, defaults, and descriptions. See
 | `ACM_PASSWORD_KEK`        | _(empty)_ | Fernet key used to encrypt stored Aerospike connection passwords. Required for persistent credentials                                       |
 | `ACM_ALLOW_EPHEMERAL_KEK` | `false`   | Dev-only escape hatch that generates a process-local key when `ACM_PASSWORD_KEK` is unset. Stored passwords become unreadable after restart |
 
+### asinfo Write Passthrough
+
+| Variable               | Default | Description                                                                                                                                     |
+| ---------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ACM_ALLOW_INFO_WRITE` | `false` | Allow `POST /clusters/{conn_id}/info` with `readOnly=false`. Off by default; the route answers 403 until it is set. See the note below |
+
+`POST /clusters/{conn_id}/info` backs `ackoctl info`. With `readOnly=true`
+(the default) it runs read-only asinfo diagnostics and needs no opt-in.
+
+`readOnly=false` selects the write passthrough, which is off by default and
+has three independent gates even once enabled:
+
+1. `ACM_ALLOW_INFO_WRITE=true` must be set, or the route answers **403**.
+2. The command's verb must be on `info_verbs.WRITE_INFO_VERBS`
+   (`set-config`, `recluster`, `log-set`, `jobs`) or on the read-only list,
+   and the frame must hold exactly one command — otherwise **400**.
+   Destructive verbs such as `truncate-namespace` are never accepted here;
+   use the dedicated typed routes, which are authenticated and rate-limited.
+3. Each write request is charged against a **5/minute per-client** budget,
+   separate from the 60/minute global default that reads use — **429** when
+   exhausted.
+
+Enabling the flag is not a substitute for authentication. Turn on
+`OIDC_ENABLED` before exposing a write-capable API beyond localhost.
+
 ### Kubernetes Management
 
 | Variable                 | Default | Description                                                                                    |
