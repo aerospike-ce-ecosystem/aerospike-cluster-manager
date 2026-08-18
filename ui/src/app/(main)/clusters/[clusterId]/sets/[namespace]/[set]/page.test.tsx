@@ -263,3 +263,57 @@ describe("RecordBrowserPage — route param decoding", () => {
     ).toBeInTheDocument()
   })
 })
+
+describe("RecordBrowserPage — unknown record count (ADR-0026 / #168)", () => {
+  it("does not report 0 rows when the server could not determine the total", async () => {
+    // The bug: the API returned total=0 for "the count is unavailable", so
+    // the footer read "12 of 0 rows" under a page of visible records — and a
+    // user reasonably concluded the set was empty. total is now null, and the
+    // footer falls back to a lower bound derived from what actually loaded.
+    mockedFilter.mockResolvedValueOnce({ ...fixtureResponse(12), total: null })
+
+    render(<RecordBrowserPage />)
+
+    const total = await screen.findByText("12+")
+    expect(total).toBeInTheDocument()
+
+    // Scoped to the footer summary, because "0" legitimately appears in the
+    // record rows (ttl/generation). The claim under test is specifically that
+    // the "{returned} of {total} rows" line does not read "12 of 0 rows".
+    // (The separators are their own elements, so textContent has no spaces.)
+    const summary = total.parentElement
+    expect(summary?.textContent).toBe("12of12+rows")
+  })
+
+  it("still shows an exact total when the server knows it", async () => {
+    mockedFilter.mockResolvedValueOnce({ ...fixtureResponse(12), total: 4321 })
+
+    render(<RecordBrowserPage />)
+
+    expect(await screen.findByText("4.3K")).toBeInTheDocument()
+  })
+
+  it("marks a known-but-estimated total with a tilde", async () => {
+    mockedFilter.mockResolvedValueOnce({
+      ...fixtureResponse(12),
+      total: 500,
+      totalEstimated: true,
+    })
+
+    render(<RecordBrowserPage />)
+
+    expect(await screen.findByText("~500")).toBeInTheDocument()
+  })
+
+  it("still renders the empty state for a genuine zero", async () => {
+    // A real 0 must keep behaving as "this set is empty" — the fix is about
+    // telling unknown apart from zero, not about erasing zero.
+    mockedFilter.mockResolvedValueOnce({ ...fixtureResponse(0), total: 0 })
+
+    render(<RecordBrowserPage />)
+
+    expect(
+      await screen.findByText(/no records in this set/i),
+    ).toBeInTheDocument()
+  })
+})

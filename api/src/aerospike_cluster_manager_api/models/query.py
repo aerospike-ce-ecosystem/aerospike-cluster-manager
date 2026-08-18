@@ -191,7 +191,10 @@ class FilteredQueryResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True, serialize_by_alias=True)
 
     records: list[AerospikeRecord]
-    total: int = Field(ge=0)
+    # ``null`` means the set's object count could not be determined — an
+    # explicit "unknown", distinct from a genuine ``0`` (ADR-0026). Mirrored
+    # in ``ui/src/lib/types/query.ts`` (project goal 2-7).
+    total: int | None = Field(default=None, ge=0)
     page: int = Field(ge=1)
     page_size: int = Field(ge=1, alias="pageSize")
     has_more: bool = Field(alias="hasMore")

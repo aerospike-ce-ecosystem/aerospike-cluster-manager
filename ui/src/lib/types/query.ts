@@ -106,7 +106,11 @@ export interface FilteredQueryRequest {
 
 export interface FilteredQueryResponse {
   records: AerospikeRecord[]
-  total: number
+  /**
+   * Object count for the set, or `null` when it could not be determined
+   * (ADR-0026). `null` means "unknown", never "zero".
+   */
+  total: number | null
   page: number
   pageSize: number
   hasMore: boolean
