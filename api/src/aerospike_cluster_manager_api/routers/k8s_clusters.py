@@ -69,6 +69,11 @@ from aerospike_cluster_manager_api.services.k8s_service import (
     extract_template_summary,
     has_update_fields,
 )
+from aerospike_cluster_manager_api.workspace_acl import (
+    WORKSPACE_LABEL,
+    cr_workspace_id,
+    is_workspace_visible,
+)
 
 logger = logging.getLogger(__name__)
 _tracer = trace.get_tracer("aerospike_cluster_manager_api.routers.k8s_clusters")
@@ -79,42 +84,14 @@ def _require_k8s() -> None:
         raise HTTPException(status_code=404, detail="Kubernetes management is not enabled")
 
 
-_WORKSPACE_LABEL = "acm.aerospike.com/workspace"
-
-
-def _cr_workspace_id(item: dict[str, Any]) -> str | None:
-    """Return the workspace id stamped on a CR's metadata labels, if any.
-
-    CRs without the workspace label are treated as system-shared — the
-    same rule the connection-profile ACL applies for ``SYSTEM_OWNER_ID``.
-    Returning ``None`` lets the caller decide whether to gate (mutations
-    require an owned workspace, reads with no label show to everyone).
-    """
-    labels = item.get("metadata", {}).get("labels") or {}
-    raw = labels.get(_WORKSPACE_LABEL)
-    return raw if isinstance(raw, str) and raw else None
-
-
-async def _is_workspace_visible(workspace_id: str, caller_owner_id: str) -> bool:
-    """Return True iff the caller can see ``workspace_id``.
-
-    Visibility = ``ownerId == caller`` OR ``ownerId == SYSTEM_OWNER_ID``.
-    Missing rows are invisible. Mirrors the rule used by
-    :func:`dependencies._get_verified_connection` for connection
-    profiles, so K8s and connection ACLs stay in lock-step.
-
-    When the workspace metaDB has not been initialised (unit-test paths
-    that exercise the K8s router in isolation), the check degrades to
-    permissive -- the same convention notes / records use to keep
-    legacy single-tenant fixtures green.
-    """
-    try:
-        ws = await db.get_workspace(workspace_id)
-    except db.DBNotInitialized:
-        return True
-    if ws is None:
-        return False
-    return ws.ownerId == caller_owner_id or ws.ownerId == SYSTEM_OWNER_ID
+# Re-exported under the module-private names this router has always used, so
+# the many call sites below stay unchanged. The definitions moved to
+# :mod:`workspace_acl` because this router was not the only consumer of the
+# rule: ``events/collector`` published the same CRs over SSE with no check at
+# all (#496). A second copy of an ACL predicate is how that happens again.
+_WORKSPACE_LABEL = WORKSPACE_LABEL
+_cr_workspace_id = cr_workspace_id
+_is_workspace_visible = is_workspace_visible
 
 
 async def _assert_caller_owns_k8s_cluster(

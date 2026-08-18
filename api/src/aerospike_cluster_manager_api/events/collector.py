@@ -19,6 +19,7 @@ from aerospike_cluster_manager_api import config, db
 from aerospike_cluster_manager_api.client_manager import client_manager
 from aerospike_cluster_manager_api.events.broker import broker
 from aerospike_cluster_manager_api.services.metrics_service import build_cluster_metrics
+from aerospike_cluster_manager_api.workspace_acl import cr_workspace_id
 
 logger = logging.getLogger(__name__)
 _tracer = trace.get_tracer("aerospike_cluster_manager_api.events.collector")
@@ -201,6 +202,18 @@ class EventCollector:
                     if not ns or not name:
                         logger.debug("Skipping cluster with missing metadata.namespace/name: %r", metadata)
                         continue
+                    # Stamp the CR's workspace onto every event this cluster
+                    # produces, so the per-subscriber filter in
+                    # ``routers/events`` can decide delivery without a K8s
+                    # round trip per subscriber per event. ``k8s.cluster.events``
+                    # and ``.health`` carry no labels of their own, so
+                    # attribution has to happen here, where the CR is in hand.
+                    #
+                    # ``workspaceId`` rides on the envelope, not inside
+                    # ``data``: ``_event_generator`` serialises only
+                    # event/data/id, so it never reaches the wire.
+                    workspace_id = cr_workspace_id(cluster)
+
                     try:
                         detail = await k8s_client.get_cluster(ns, name)
                         await broker.publish(
@@ -209,6 +222,7 @@ class EventCollector:
                                 "data": detail if isinstance(detail, dict) else detail.model_dump(),
                                 "id": f"k8s-detail-{ns}-{name}-{int(time.time() * 1000)}",
                                 "timestamp": int(time.time() * 1000),
+                                "workspaceId": workspace_id,
                             }
                         )
                     except Exception:
@@ -223,6 +237,7 @@ class EventCollector:
                                 "data": {"namespace": ns, "name": name, "events": events},
                                 "id": f"k8s-events-{ns}-{name}-{int(time.time() * 1000)}",
                                 "timestamp": int(time.time() * 1000),
+                                "workspaceId": workspace_id,
                             }
                         )
                     except Exception:
@@ -239,6 +254,7 @@ class EventCollector:
                                 "data": {"namespace": ns, "name": name, "health": health},
                                 "id": f"k8s-health-{ns}-{name}-{int(time.time() * 1000)}",
                                 "timestamp": int(time.time() * 1000),
+                                "workspaceId": workspace_id,
                             }
                         )
                     except Exception:
