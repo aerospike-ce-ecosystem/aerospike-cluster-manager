@@ -806,6 +806,32 @@ The following tables list environment variables, defaults, and descriptions. See
 | `UI_PORT`      | `3100`                                        | UI port (compose files)                                                                       |
 | `HOST`         | `0.0.0.0`                                     | API bind address                                                                              |
 | `PORT`         | `8000`                                        | API bind port                                                                                 |
+| `TRUSTED_PROXIES` | _(empty)_                                  | Comma-separated IPs or CIDRs whose `X-Forwarded-For` the API believes. **Set this to the web container's address** — see below |
+
+#### Per-user rate limiting requires `TRUSTED_PROXIES`
+
+The API rate-limits per client IP. In the split-container deployment every
+request reaches it through `ui/proxy.js`, so without configuration the API sees
+the **web container** as the peer for every request and the whole team shares
+one 60/min bucket — one active operator can throttle everybody.
+
+`proxy.js` sets `X-Forwarded-For` to the real socket address of the incoming
+connection, overwriting whatever the client sent. The API only believes that
+header when the immediate peer is on `TRUSTED_PROXIES`, so:
+
+```bash
+# The web container's address on the shared network, or the CIDR it sits in.
+TRUSTED_PROXIES=10.89.0.0/16
+```
+
+Leaving it empty is safe but collapses everyone into one bucket. Setting it is
+safe **because `proxy.js` overwrites the header** — before that fix, adding the
+web container here would have let any caller choose their own bucket key by
+sending their own `X-Forwarded-For` (#473).
+
+If you put another reverse proxy in front of the web container, that proxy —
+not this one — is the edge, and it should talk to the API directly. `proxy.js`
+cannot tell a legitimate upstream hop from a forged header.
 
 ### ACKO Agent — Embedded AI Copilot (UI)
 
