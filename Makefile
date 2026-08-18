@@ -3,6 +3,7 @@
 
 .PHONY: dev dev-up dev-down up down test test-api test-ui \
         lint lint-api lint-ui type-check build pre-commit clean \
+        generate-types generate-types-check \
         run-local run-local-down run-local-ui run-local-ui-local-build \
         kind-up kind-down kind-status \
         acko-install acko-uninstall acko-verify \
@@ -57,6 +58,23 @@ lint-api:
 
 lint-ui:
 	cd ui && npm run lint:fix && npm run format
+
+# ---------------------------------------------------------------------------
+# Backend -> frontend type generation (#165)
+# ---------------------------------------------------------------------------
+# Exports the FastAPI OpenAPI document (offline, no server needed), then
+# regenerates the TypeScript schema and the parity assertions that make
+# `npm run type-check` fail when a Pydantic model and its hand-written
+# TypeScript mirror drift apart. Run this after changing any Pydantic model.
+
+generate-types:
+	cd api && uv run python scripts/export_openapi.py
+	cd ui && npm run codegen
+
+# Same, but fails instead of writing — what CI runs.
+generate-types-check:
+	cd api && uv run python scripts/export_openapi.py --check
+	cd ui && npm run codegen:check
 
 # ---------------------------------------------------------------------------
 # Type checking & build

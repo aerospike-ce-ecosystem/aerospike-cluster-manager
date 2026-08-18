@@ -42,6 +42,14 @@ npm run type-check       # TypeScript strict check
 npm run test             # Vitest unit tests
 npm run test:watch       # Vitest watch mode
 npm run test:coverage    # Vitest + coverage (v8)
+npm run codegen          # regenerate TS schema + parity assertions from ui/openapi.json
+npm run codegen:check    # same, but fail if the committed files are stale
+```
+
+### Backend → Frontend type generation
+```bash
+make generate-types        # export OpenAPI + regenerate TS types & parity assertions
+make generate-types-check  # fail instead of writing (what CI runs)
 ```
 
 ### Pre-commit
@@ -109,7 +117,7 @@ Local dev with `compose.dev.yaml` requires setting `AEROSPIKE_HOST=localhost AER
 
 - **API Proxy**: `/api/*` requests are proxied to the API. In dev, Next.js `rewrites` forward to `API_URL` (default `http://localhost:8000`). In production the standalone bundle is wrapped by `ui/proxy.js`, which forwards `/api/*` to `API_URL` resolved at container start.
 - **State Management**: Zustand stores are separated by domain. Only `ui-store` persists to localStorage via `persist` middleware.
-- **Type Mirroring**: API Pydantic models and UI TypeScript types (`ui/src/lib/types/`) are manually synchronized. Both sides must be updated when models change.
+- **Type Mirroring**: API Pydantic models and UI TypeScript types (`ui/src/lib/types/`) must stay in sync, and that is now **enforced by codegen** rather than by review (#165). After changing any Pydantic model, run `make generate-types`. It exports the OpenAPI document offline (`api/scripts/export_openapi.py` — no server, no database) and regenerates `ui/src/lib/api/schema.generated.ts` plus `schema-parity.generated.ts`, which asserts every hand-written type against its schema component at compile time. `npm run type-check` fails when a mirror drifts; CI runs both checks in the `Backend/Frontend Type Sync` job. The hand-written types in `ui/src/lib/types/` remain the ones the app imports — the generated files exist to check them, not to replace them.
 - **Styling**: Tailwind CSS 3.4 + Tremor Raw component primitives (MIT). Inter font (UI) + JetBrains Mono (data). Indigo accent.
 - **Path Alias**: `@/` points to `ui/src/` (configured in both tsconfig and vitest).
 

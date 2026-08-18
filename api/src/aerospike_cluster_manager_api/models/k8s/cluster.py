@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, BeforeValidator, Field, field_validator, model_validator
 
 from .monitoring import MonitoringConfig
 from .network import (
@@ -66,6 +66,18 @@ class TemplateRefConfig(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+def _normalize_template_ref(v: Any) -> Any:
+    """Accept a bare template name in place of the object form.
+
+    Kept at module scope (rather than as a ``field_validator`` method) so it
+    can be referenced from the ``Annotated[...]`` metadata that also declares
+    the JSON-schema input type — see ``CreateK8sClusterRequest.template_ref``.
+    """
+    if isinstance(v, str):
+        return TemplateRefConfig(name=v)
+    return v
+
+
 class CreateK8sClusterRequest(BaseModel):
     name: str = Field(min_length=1, max_length=63, pattern=r"^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$")
     namespace: str = Field(
@@ -86,19 +98,30 @@ class CreateK8sClusterRequest(BaseModel):
     storage: StorageVolumeConfig | StorageSpec | None = None
     resources: ResourceConfig | None = None
     monitoring: MonitoringConfig | None = None
-    template_ref: TemplateRefConfig | None = Field(
+    # The endpoint really does accept a bare template name as well as the
+    # object form — ``_normalize_template_ref`` converts it. A
+    # ``mode="before"`` validator is invisible to schema generation, though, so
+    # OpenAPI advertised object-or-null only, and a client generated from that
+    # schema would refuse to send something the API handles fine. The codegen
+    # parity check added in #165 is what surfaced the gap.
+    #
+    # ``BeforeValidator(..., json_schema_input_type=...)`` fixes the schema
+    # without widening the *validated* type: the OpenAPI input union gains the
+    # string form, while ``req.template_ref`` stays ``TemplateRefConfig | None``
+    # for readers and for pyright. Annotating the field as
+    # ``... | str | None`` instead would have made every use site nominally
+    # capable of being a str, which it never is after validation.
+    template_ref: Annotated[
+        TemplateRefConfig | None,
+        BeforeValidator(_normalize_template_ref, json_schema_input_type=TemplateRefConfig | str | None),
+    ] = Field(
         default=None,
         alias="templateRef",
-        description="Reference to AerospikeClusterTemplate (name + optional namespace)",
+        description=(
+            "Reference to AerospikeClusterTemplate: an object (name + optional namespace), "
+            "or a bare template name string, which is normalised to the object form."
+        ),
     )
-
-    @field_validator("template_ref", mode="before")
-    @classmethod
-    def _normalize_template_ref(cls, v: Any) -> Any:
-        """Accept a plain string for backward compatibility."""
-        if isinstance(v, str):
-            return TemplateRefConfig(name=v)
-        return v
 
     @field_validator("storage", mode="before")
     @classmethod
