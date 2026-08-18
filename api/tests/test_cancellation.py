@@ -188,6 +188,75 @@ class TestServerCancellationIsNotAClientDisconnect:
         assert stopped.is_set(), "the inner read outlived the cancelled request"
 
 
+class TestTheReadIsFinishedBeforeWeReturn:
+    """``work.cancel()`` alone is not enough, on either exit path.
+
+    ``cancel()`` merely *schedules* cancellation. Without awaiting the task
+    afterwards, ``run_cancellable`` can raise while the read is still on the
+    event loop — the resource leak ADR-0021 exists to close, wearing the
+    appearance of a fix.
+
+    There are two such ``await asyncio.gather(work, ...)`` lines, one per exit
+    path, and each needs its own test. Deleting the client-disconnect one turns
+    ``test_the_work_is_actually_cancelled_not_merely_abandoned`` red; deleting
+    the server-cancellation one left the entire suite green until this class
+    existed.
+
+    Each test drives the work past its cancel point into a cleanup that takes
+    real time, then asserts the task is ``done()`` by the time the caller sees
+    the exception. A caller that returned early would observe it still running.
+    """
+
+    @staticmethod
+    def _slow_to_stop():
+        """Work whose cleanup outlives its cancel point.
+
+        Returns ``(state, coroutine)``. ``state["task"]`` is the task the work
+        runs as, captured from inside it; ``state["cleanup_finished"]`` flips
+        only after the post-cancel cleanup completes.
+        """
+        state: dict = {"cleanup_finished": False}
+
+        async def work():
+            state["task"] = asyncio.current_task()
+            try:
+                await asyncio.sleep(30)
+            except asyncio.CancelledError:
+                # Cleanup that runs *after* the cancel point and takes time —
+                # closing a scan cursor, releasing a client. A caller that does
+                # not wait returns while this is still going.
+                await asyncio.sleep(0.05)
+                state["cleanup_finished"] = True
+                raise
+
+        return state, work()
+
+    async def test_client_disconnect_path_waits_for_the_read_to_stop(self):
+        state, coro = self._slow_to_stop()
+
+        with pytest.raises(ClientDisconnected):
+            await run_cancellable(_FakeRequest(disconnect_after=1), coro, label="scan", poll_interval=0.01)
+
+        assert state["task"].done(), (
+            "run_cancellable raised while the read was still on the event loop; "
+            "work.cancel() only schedules cancellation — the await after it is load-bearing"
+        )
+        assert state["cleanup_finished"], "returned before the read finished unwinding"
+
+    async def test_server_cancellation_path_waits_for_the_read_to_stop(self):
+        state, coro = self._slow_to_stop()
+
+        task = asyncio.ensure_future(run_cancellable(_FakeRequest(), coro, label="scan", poll_interval=0.01))
+        await asyncio.sleep(0.05)
+        task.cancel()
+
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        assert state["task"].done(), "the request was torn down while the read was still on the event loop"
+        assert state["cleanup_finished"], "returned before the read finished unwinding"
+
+
 class TestOnlyReadsAreCancellable:
     """The safety rule, enforced mechanically.
 
@@ -196,15 +265,27 @@ class TestOnlyReadsAreCancellable:
     state nobody chose and nobody recorded. Abandoning a read costs only a
     wasted scan.
 
-    The check reads the router source files from disk rather than walking
-    ``app.routes`` and calling ``inspect.getsource``. An earlier version did
-    the latter and returned *nothing* once another test module had called
-    ``importlib.reload`` on ``main`` — it would have passed vacuously while
-    enforcing nothing. Reading files is deterministic and independent of
-    import state; ``test_the_scan_is_actually_covered`` is the vacuity guard.
+    The check parses every source file in the package from disk, rather than
+    walking ``app.routes`` and calling ``inspect.getsource``. Two reasons, both
+    learned the hard way:
+
+    * An earlier version walked the route table and returned *nothing* once
+      another test module had called ``importlib.reload`` on ``main`` — it
+      would have passed vacuously while enforcing nothing.
+      ``test_the_scan_is_actually_covered`` is the vacuity guard for that.
+    * A later version globbed ``routers/*.py`` only, while claiming to cover
+      the route table. A ``run_cancellable``-wrapped ``client.truncate(...)``
+      added to ``services/records_service.py`` passed every test. Reaching a
+      service normally requires a ``Request``, which services do not have — so
+      the likelihood was low — but the check now scans the whole package and
+      the docstring says what it actually does.
     """
 
-    ROUTERS = pathlib.Path(__file__).resolve().parents[1] / "src" / "aerospike_cluster_manager_api" / "routers"
+    PACKAGE = pathlib.Path(__file__).resolve().parents[1] / "src" / "aerospike_cluster_manager_api"
+
+    # ``run_cancellable`` is defined here, so its own module is the one place
+    # the name may appear without being a call site under review.
+    DEFINING_MODULE = "middleware/cancellation.py"
 
     # Handler names permitted to wrap work in ``run_cancellable``. Every one is
     # a read. Adding a name here is the moment to ask whether it mutates.
@@ -233,9 +314,14 @@ class TestOnlyReadsAreCancellable:
     }
 
     def _handlers_using_run_cancellable(self) -> set[str]:
-        """Return every ``async def`` whose body calls ``run_cancellable(``."""
+        """Return every function in the package whose body calls ``run_cancellable(``.
+
+        Whole package, not just ``routers/`` — see the class docstring.
+        """
         found: set[str] = set()
-        for path in sorted(self.ROUTERS.glob("*.py")):
+        for path in sorted(self.PACKAGE.rglob("*.py")):
+            if path.as_posix().endswith(self.DEFINING_MODULE):
+                continue
             tree = ast.parse(path.read_text(encoding="utf-8"))
             for node in ast.walk(tree):
                 if not isinstance(node, ast.AsyncFunctionDef | ast.FunctionDef):
@@ -252,21 +338,21 @@ class TestOnlyReadsAreCancellable:
     def test_the_scan_is_actually_covered(self):
         """Vacuity guard — the rest of this class is meaningless if empty."""
         assert self._handlers_using_run_cancellable(), (
-            "no router handler calls run_cancellable; the safety checks below would pass vacuously"
+            "nothing in the package calls run_cancellable; the safety checks below would pass vacuously"
         )
 
     def test_only_allowlisted_read_handlers_are_cancellable(self):
         used = self._handlers_using_run_cancellable()
         unexpected = used - self.ALLOWED_READ_HANDLERS
         assert not unexpected, (
-            f"handler(s) made cancellable without review: {sorted(unexpected)}. "
+            f"made cancellable without review: {sorted(unexpected)}. "
             "If it mutates anything, do not cancel it — see middleware/cancellation.py."
         )
 
     def test_no_known_mutation_is_cancellable(self):
         used = self._handlers_using_run_cancellable()
         offenders = used & self.KNOWN_MUTATIONS
-        assert not offenders, f"mutating handler(s) must never be cancellable: {sorted(offenders)}"
+        assert not offenders, f"mutating operation(s) must never be cancellable: {sorted(offenders)}"
 
     def test_the_allowlist_and_the_denylist_do_not_overlap(self):
         """Cheap contradiction check on the two lists above."""
