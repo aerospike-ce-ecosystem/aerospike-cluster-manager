@@ -50,6 +50,7 @@ above :data:`WRITE_INFO_VERBS`, and update
 
 from __future__ import annotations
 
+import re
 from typing import NamedTuple
 
 READ_ONLY_INFO_VERBS: frozenset[str] = frozenset(
@@ -221,6 +222,13 @@ class InfoCommandNotSingle(InfoCommandRejected):
 # whatever followed it. ``assert_single_command`` is the boundary: it runs
 # first and rejects any frame whose shape puts text beyond the verb's reach.
 #
+# Every member is handled there, which was not true before: ``/`` was the one
+# terminator the framing check ignored, so ``namespaces/truncate-namespace:namespace=test``
+# passed both gates and went to the wire. ``/`` is now framed by
+# ``_PATH_STYLE_VERBS``. ``:`` remains looser by design — it is the argument
+# separator, and the bare form ``namespace:test`` is legitimate; see
+# ``tests/test_info_verbs.py::TestPathStyleFraming::test_colon_keeps_its_looser_bare_argument_rule``.
+#
 # The whitespace entries overlap with the whitespace rule below, which makes
 # them unreachable on the validated path. They stay because ``extract_verb``
 # is public: called directly on ``"version <second command>"`` it must still
@@ -281,6 +289,39 @@ def extract_verb(command: str) -> str:
     return head
 
 
+# Verbs that legitimately take ``/``-separated arguments, mapped to the maximum
+# number of argument segments each accepts.
+#
+#   namespace/<ns>            sets/<ns>       sets/<ns>/<set>
+#   sindex/<ns>               sindex/<ns>/<idx>
+#   bins/<ns>
+#
+# ``/`` was the one member of :data:`_VERB_TERMINATORS` that
+# :func:`assert_single_command` did not treat as a separator, so text after a
+# slash was checked by neither gate: ``namespaces/truncate-namespace:namespace=test``
+# was accepted with ``verb='namespaces'`` and transmitted whole. Every other
+# terminator was rejected; this closes the asymmetry.
+#
+# The bound matters as much as the membership. ``namespaces`` takes no path
+# arguments at all, so ``namespaces/<anything>`` is never legitimate and is now
+# rejected outright rather than sent on the strength of its head.
+_PATH_STYLE_VERBS: dict[str, int] = {
+    "namespace": 1,
+    "sets": 2,
+    "sindex": 2,
+    # Framed here to match ``constants.info_bins``, but note ``bins`` is NOT on
+    # READ_ONLY_INFO_VERBS — ``bins/test`` still fails the verb check. This map
+    # governs framing only; it grants nothing.
+    "bins": 1,
+}
+
+# Aerospike namespace / set / index names. Deliberately narrow: a path segment
+# is an identifier, never a command, so anything carrying a ``:`` (the
+# colon-style argument separator) or a character outside this set is a second
+# command riding in the path.
+_PATH_SEGMENT_RE = re.compile(r"^[A-Za-z0-9_.$-]+$")
+
+
 def assert_single_command(command: str) -> str:
     """Return ``command`` stripped, having confirmed it holds ONE asinfo command.
 
@@ -329,6 +370,25 @@ def assert_single_command(command: str) -> str:
     # One trailing ';' terminates a single command, so take it off before
     # reasoning about the separators that remain.
     body = cmd[:-1] if cmd.endswith(";") else cmd
+
+    # Path-style framing. Checked before the ':' logic below, because a ':'
+    # appearing after a '/' is a colon-style command in the path rather than
+    # this command's own argument section.
+    if "/" in body:
+        verb, *segments = body.split("/")
+        allowed = _PATH_STYLE_VERBS.get(verb)
+        if allowed is None:
+            raise InfoCommandNotSingle(f"'/' after a verb that takes no path arguments ({verb!r})")
+        if len(segments) > allowed:
+            raise InfoCommandNotSingle(f"{len(segments)} '/'-separated arguments; {verb!r} accepts at most {allowed}")
+        for segment in segments:
+            if not _PATH_SEGMENT_RE.match(segment):
+                # Names the shape, never the content — the HTTP 400 must not
+                # echo an unvalidated string back to the caller.
+                reason = "':' inside a path argument" if ":" in segment else "non-identifier path argument"
+                raise InfoCommandNotSingle(reason)
+        return cmd
+
     head, colon, args = body.partition(":")
 
     # No argument section has started yet, so a ';' here separates commands.

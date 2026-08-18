@@ -557,3 +557,107 @@ class TestAssertWriteAllowed:
         assert "truncate-namespace" in message
         assert "set-config" in message
         assert exc_info.value.verb == "truncate-namespace"
+
+
+class TestPathStyleFraming:
+    """``/`` is a verb terminator too, and used to be the only one ignored.
+
+    Five of the six members of ``_VERB_TERMINATORS`` were rejected by
+    ``assert_single_command`` as command separators. ``/`` was not, so text
+    after a slash was checked by neither gate: ``extract_verb`` stopped at the
+    slash and the framing check never looked past it. The result was that
+    ``namespaces/truncate-namespace:namespace=test`` was accepted with
+    ``verb='namespaces'`` and transmitted whole, on the default, unauthenticated
+    read path.
+
+    Whether an Aerospike server actually dispatches a second verb from a
+    ``/``-suffixed name is **not established** — that needs a live cluster and
+    nobody has run it. What is established is that the server parses ``/``
+    meaningfully for some verbs (``sets/test/myset`` is a real command), and
+    that no gate examined the text after it. These tests pin the closed shape
+    either way.
+    """
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "namespaces/truncate-namespace:namespace=test",
+            "namespaces/recluster:",
+            "statistics/set-config:context=service;migrate-threads=2",
+            # No colon either — `namespaces` takes no path arguments at all, so
+            # anything after the slash is unexplainable.
+            "namespaces/truncate-namespace",
+            "version/recluster",
+            "roster/set-config",
+        ],
+    )
+    def test_path_smuggling_is_rejected(self, command: str) -> None:
+        with pytest.raises(InfoCommandNotSingle):
+            assert_read_only(command)
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            "sets/test",
+            "sets/test/myset",
+            "namespace/test",
+            "sindex/test",
+            "sindex/test/idx_name",
+            # Aerospike identifiers allow these characters.
+            "sets/my-set_1.$x/a",
+        ],
+    )
+    def test_legitimate_path_style_still_passes(self, command: str) -> None:
+        # The fix must not break the shapes ``constants.info_namespace`` /
+        # ``info_sets`` / ``info_sindex`` actually build.
+        assert assert_read_only(command).command == command
+
+    def test_segment_count_is_bounded(self) -> None:
+        """``sets`` takes at most ns/set — a third segment is not an argument."""
+        with pytest.raises(InfoCommandNotSingle):
+            assert_read_only("sets/test/myset/extra")
+
+    def test_colon_inside_a_path_segment_is_rejected(self) -> None:
+        """A ':' after a '/' starts a colon-style command, not this one's args."""
+        with pytest.raises(InfoCommandNotSingle):
+            assert_read_only("sets/test/myset:truncate")
+
+    @pytest.mark.parametrize("sep", ["/", ";", "\n", " ", "\t"])
+    def test_every_non_colon_terminator_is_a_separator(self, sep: str) -> None:
+        """Each of these puts a token beyond ``extract_verb``'s reach.
+
+        ``/`` is the one that was missing; the other four already held. ``:``
+        is excluded deliberately — see the next test.
+        """
+        with pytest.raises(InfoCommandRejected):
+            assert_read_only(f"namespaces{sep}recluster")
+
+    def test_colon_keeps_its_looser_bare_argument_rule(self) -> None:
+        """RESIDUAL, documented rather than fixed: ``verb:token`` still passes.
+
+        ``:`` is the argument separator, and the single-bare-argument form
+        (``namespace:test``) is legitimate and pinned by
+        ``test_colon_args_pass_when_verb_whitelisted``. A lone segment is
+        therefore accepted without being ``key=value``, so
+        ``namespaces:recluster`` passes framing on the same rule — even though
+        ``namespaces`` takes no arguments at all.
+
+        Closing it would mean allowlisting which verbs may take a bare colon
+        argument, the same treatment ``_PATH_STYLE_VERBS`` gives ``/``. That is
+        a deliberate behaviour change beyond the ``/`` gap this PR closes, and
+        it needs the same Aerospike CE 8.1 audit the module's "to add a verb"
+        checklist demands. Pinned here so the asymmetry is visible and a future
+        change to it is a decision, not a surprise.
+        """
+        assert assert_read_only("namespaces:recluster").verb == "namespaces"
+
+    def test_path_framing_grants_nothing_on_its_own(self) -> None:
+        """``bins`` is framed but not allowlisted — the verb check still bites."""
+        with pytest.raises(InfoVerbNotAllowed):
+            assert_read_only("bins/test")
+
+    def test_write_path_gets_the_same_framing(self) -> None:
+        # assert_write_allowed shares assert_single_command, so the fix covers
+        # the opt-in path without a second implementation.
+        with pytest.raises(InfoCommandNotSingle):
+            assert_write_allowed("set-config/truncate-namespace:namespace=test")
