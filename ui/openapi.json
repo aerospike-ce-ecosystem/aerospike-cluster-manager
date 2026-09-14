@@ -910,18 +910,21 @@
           "name": {
             "maxLength": 255,
             "minLength": 1,
+            "pattern": "^[^\\x00-\\x20\\x7f;:]+$",
             "title": "Name",
             "type": "string"
           },
           "namespace": {
             "maxLength": 31,
             "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
             "title": "Namespace",
             "type": "string"
           },
           "set": {
             "maxLength": 63,
             "minLength": 1,
+            "pattern": "^[^\\x00-\\x20\\x7f;:]+$",
             "title": "Set",
             "type": "string"
           },
@@ -1542,6 +1545,7 @@
           "namespace": {
             "maxLength": 31,
             "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_-]+$",
             "title": "Namespace",
             "type": "string"
           },
@@ -1556,6 +1560,7 @@
             "default": "sample_set",
             "maxLength": 63,
             "minLength": 1,
+            "pattern": "^[^\\x00-\\x20\\x7f;:]+$",
             "title": "Setname",
             "type": "string"
           }
@@ -8464,7 +8469,9 @@
             "name": "name",
             "required": true,
             "schema": {
+              "maxLength": 255,
               "minLength": 1,
+              "pattern": "^[^\\x00-\\x20\\x7f;:]+$",
               "title": "Name",
               "type": "string"
             }
@@ -11742,6 +11749,7 @@
             "schema": {
               "maxLength": 31,
               "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_-]+$",
               "title": "Namespace",
               "type": "string"
             }
@@ -11753,6 +11761,7 @@
             "schema": {
               "maxLength": 63,
               "minLength": 1,
+              "pattern": "^[^\\x00-\\x20\\x7f;:]+$",
               "title": "Set Name",
               "type": "string"
             }
@@ -11831,7 +11840,9 @@
             "name": "filename",
             "required": true,
             "schema": {
+              "maxLength": 255,
               "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_.-]{1,255}$",
               "title": "Filename",
               "type": "string"
             }

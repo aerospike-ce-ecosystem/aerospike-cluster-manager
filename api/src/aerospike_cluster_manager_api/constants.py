@@ -27,44 +27,96 @@ INFO_UDF_LIST = "udf-list"
 # guarded by the ``info_verbs`` allowlist (#469), but these builders are reached
 # from routes that never call it -- ``GET /records/{id}?ns=...`` and the index
 # routes -- so the frame has to be refused where it is built.
+INFO_NS_ARG_PATTERN = r"^[a-zA-Z0-9_-]+$"
 _INFO_NS_ARG_RE = re.compile(r"^[a-zA-Z0-9_-]{1,31}$")
+
+# The same boundary, for the *other* arguments that end up inside an info
+# command: set names (``truncate:namespace=..;set=<set>``) and secondary index
+# names (``sindex-create:..;indexname=<name>``, ``sindex-delete:..``). These
+# reach the wire from routes that never consult ``info_verbs`` either, so a
+# ``\n`` in them appends a second, unvalidated command to the frame.
+#
+# Unlike a namespace, these are *not* validated with an identifier allowlist.
+# Aerospike set names are liberal, and refusing e.g. ``my.set`` or ``cache$1``
+# here would make a legitimately named existing set impossible to truncate or
+# index through ACM. So reject exactly what breaks framing instead: control
+# characters, whitespace (``\n`` is the batch separator), ``;`` and ``:`` (the
+# info command's own parameter separators).
+INFO_NAME_ARG_PATTERN = r"^[^\x00-\x20\x7f;:]+$"
+_INFO_NAME_ARG_RE = re.compile(INFO_NAME_ARG_PATTERN)
+
+# ``udf-remove:filename=<f>;`` takes the same treatment, but here the strict
+# allowlist is free: it is the pattern ``UploadUDFRequest.filename`` already
+# enforces, and a module that could not be uploaded through ACM cannot need
+# deleting through ACM.
+UDF_FILENAME_PATTERN = r"^[a-zA-Z0-9_.-]{1,255}$"
+_UDF_FILENAME_RE = re.compile(UDF_FILENAME_PATTERN)
 
 
 class InvalidInfoArgument(ValueError):
-    """Raised when a namespace argument would not be a single safe info frame.
+    """Raised when an argument would not be a single safe info frame.
 
     Subclasses :class:`ValueError` so the routers' existing ``except ValueError``
     branches surface it as a 400 rather than a 500.
     """
 
-    def __init__(self, value: str) -> None:
+    def __init__(self, value: str, message: str | None = None) -> None:
         super().__init__(
-            f"namespace {value!r} is not a valid Aerospike namespace name "
-            "(letters, digits, underscore and hyphen, 1-31 characters)"
+            message
+            or (
+                f"namespace {value!r} is not a valid Aerospike namespace name "
+                "(letters, digits, underscore and hyphen, 1-31 characters)"
+            )
         )
         self.value = value
 
 
-def _checked_ns(ns: str) -> str:
+def checked_ns(ns: str) -> str:
+    """Return *ns* if it is safe to interpolate into an info command."""
     if not _INFO_NS_ARG_RE.fullmatch(ns):
         raise InvalidInfoArgument(ns)
     return ns
 
 
+def checked_info_name(value: str, *, label: str) -> str:
+    """Return *value* if it is safe to interpolate into an info command.
+
+    ``label`` names the field for the 400 the routers render (``"set name"``,
+    ``"index name"``).
+    """
+    if not _INFO_NAME_ARG_RE.fullmatch(value):
+        raise InvalidInfoArgument(
+            value,
+            f"{label} {value!r} is not valid: whitespace, control characters, ':' and ';' are not allowed",
+        )
+    return value
+
+
+def checked_udf_filename(filename: str) -> str:
+    """Return *filename* if it is safe to interpolate into ``udf-remove``."""
+    if not _UDF_FILENAME_RE.fullmatch(filename):
+        raise InvalidInfoArgument(
+            filename,
+            f"UDF module name {filename!r} is not valid "
+            "(letters, digits, underscore, dot and hyphen, 1-255 characters)",
+        )
+    return filename
+
+
 def info_namespace(ns: str) -> str:
-    return f"namespace/{_checked_ns(ns)}"
+    return f"namespace/{checked_ns(ns)}"
 
 
 def info_sets(ns: str) -> str:
-    return f"sets/{_checked_ns(ns)}"
+    return f"sets/{checked_ns(ns)}"
 
 
 def info_sindex(ns: str) -> str:
-    return f"sindex/{_checked_ns(ns)}"
+    return f"sindex/{checked_ns(ns)}"
 
 
 def info_bins(ns: str) -> str:
-    return f"bins/{_checked_ns(ns)}"
+    return f"bins/{checked_ns(ns)}"
 
 
 # Per-node command classification

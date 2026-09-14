@@ -13,7 +13,7 @@ import time
 from aerospike_py.exception import AerospikeError, IndexFoundError
 from opentelemetry import trace
 
-from aerospike_cluster_manager_api.constants import POLICY_WRITE
+from aerospike_cluster_manager_api.constants import POLICY_WRITE, checked_info_name, checked_ns
 from aerospike_cluster_manager_api.models.sample_data import CreateSampleDataResponse
 from aerospike_cluster_manager_api.sample_data_generator import SAMPLE_INDEXES, generate_record_bins
 
@@ -35,6 +35,12 @@ async def create_sample_records(
     reported in the response (issue #257) rather than aborting the whole call —
     so partial-success retries stay safe and 5xx never accompanies side effects.
     """
+    # ``set_name`` reaches ``sindex-create:namespace=..;set=..`` when
+    # ``create_indexes`` is on; refuse a chained info frame before the first
+    # record is written. ``InvalidInfoArgument`` is a ``ValueError``.
+    checked_ns(namespace)
+    checked_info_name(set_name, label="set name")
+
     start = time.monotonic()
 
     # 1. Insert records — track per-record failures instead of aborting

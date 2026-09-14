@@ -10,7 +10,12 @@ from aerospike_py.exception import AerospikeError
 from fastapi import APIRouter, HTTPException, Query, Request
 from starlette.responses import Response
 
-from aerospike_cluster_manager_api.constants import INFO_UDF_LIST
+from aerospike_cluster_manager_api.constants import (
+    INFO_UDF_LIST,
+    UDF_FILENAME_PATTERN,
+    InvalidInfoArgument,
+    checked_udf_filename,
+)
 from aerospike_cluster_manager_api.dependencies import AerospikeClient
 from aerospike_cluster_manager_api.info_parser import parse_records
 from aerospike_cluster_manager_api.models.udf import UDFModule, UploadUDFRequest
@@ -98,7 +103,7 @@ async def upload_udf(request: Request, body: UploadUDFRequest, client: Aerospike
 async def delete_udf(
     request: Request,
     client: AerospikeClient,
-    filename: str = Query(..., min_length=1),
+    filename: str = Query(..., min_length=1, max_length=255, pattern=UDF_FILENAME_PATTERN),
 ) -> Response:
     """Remove a registered UDF module from the Aerospike cluster by filename.
 
@@ -109,6 +114,13 @@ async def delete_udf(
     being swallowed by the global 500 handler — mirrors the 404 mapping
     that ``delete_index`` gets for ``IndexNotFound``.
     """
+    # Backstop for the ``pattern`` above: ``udf_remove`` becomes
+    # ``udf-remove:filename=<f>;`` on the wire and commands are joined with
+    # ``\n``, so an unvalidated filename appends a second info command.
+    try:
+        checked_udf_filename(filename)
+    except InvalidInfoArgument as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     try:
         await client.udf_remove(filename)
     except AerospikeError as exc:

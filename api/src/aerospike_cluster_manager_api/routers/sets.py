@@ -17,6 +17,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Path, Request
 from pydantic import BaseModel, Field
 
+from aerospike_cluster_manager_api.constants import INFO_NAME_ARG_PATTERN, INFO_NS_ARG_PATTERN
 from aerospike_cluster_manager_api.dependencies import AerospikeClient, VerifiedConnId
 from aerospike_cluster_manager_api.models.common import MessageResponse
 from aerospike_cluster_manager_api.rate_limit import limiter
@@ -67,8 +68,8 @@ async def truncate_set(
     client: AerospikeClient,
     conn_id: VerifiedConnId,
     body: TruncateSetRequest | None = None,
-    namespace: str = Path(..., min_length=1, max_length=31),
-    set_name: str = Path(..., min_length=1, max_length=63),
+    namespace: str = Path(..., min_length=1, max_length=31, pattern=INFO_NS_ARG_PATTERN),
+    set_name: str = Path(..., min_length=1, max_length=63, pattern=INFO_NAME_ARG_PATTERN),
 ) -> MessageResponse:
     """Truncate a set, optionally bounded by ``beforeLut``.
 

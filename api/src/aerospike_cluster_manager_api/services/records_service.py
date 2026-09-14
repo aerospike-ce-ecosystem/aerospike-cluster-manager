@@ -37,6 +37,8 @@ from aerospike_cluster_manager_api.constants import (
     POLICY_QUERY,
     POLICY_READ,
     POLICY_WRITE,
+    checked_info_name,
+    checked_ns,
     info_namespace,
     info_sets,
 )
@@ -396,6 +398,14 @@ async def truncate_set(
     [;lut=...]`` info command — aerospike-py's :meth:`AsyncClient.truncate`
     issues it for us so we don't have to format the wire string by hand.
     """
+    # ``truncate`` becomes ``truncate:namespace=<ns>;set=<set>`` on the wire
+    # and aerospike-core joins commands with ``\n`` -- a newline in either
+    # argument appends a second, unvalidated info command to the frame. The
+    # route params carry the same patterns; this is the backstop for any
+    # other caller of the service. ``InvalidInfoArgument`` is a ``ValueError``,
+    # so the router's existing handler renders it as a 400.
+    checked_ns(namespace)
+    checked_info_name(set_name, label="set name")
     if before_lut is not None and before_lut <= 0:
         raise ValueError(
             "before_lut must be a positive nanosecond value; pass before_lut=None to truncate every record in the set"

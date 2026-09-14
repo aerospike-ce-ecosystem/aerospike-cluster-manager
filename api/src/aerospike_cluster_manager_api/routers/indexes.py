@@ -7,7 +7,15 @@ from aerospike_py.exception import AerospikeError, IndexFoundError, IndexNotFoun
 from fastapi import APIRouter, HTTPException, Query, Request
 from starlette.responses import Response
 
-from aerospike_cluster_manager_api.constants import INFO_NAMESPACES, info_sindex
+from aerospike_cluster_manager_api.constants import (
+    INFO_NAME_ARG_PATTERN,
+    INFO_NAMESPACES,
+    INFO_NS_ARG_PATTERN,
+    InvalidInfoArgument,
+    checked_info_name,
+    checked_ns,
+    info_sindex,
+)
 from aerospike_cluster_manager_api.dependencies import AerospikeClient
 from aerospike_cluster_manager_api.info_parser import parse_list, parse_records
 from aerospike_cluster_manager_api.models.index import CreateIndexRequest, SecondaryIndex
@@ -16,6 +24,24 @@ from aerospike_cluster_manager_api.rate_limit import limiter
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/indexes", tags=["indexes"])
+
+
+def _check_sindex_args(namespace: str, name: str, set_name: str | None = None) -> None:
+    r"""Refuse anything that would chain a second command onto the sindex frame.
+
+    The request models / query params already carry the same patterns; this is
+    the backstop so a future caller of these handlers cannot reintroduce the
+    hole by relaxing one of them (aerospike-core string-concatenates these
+    into ``sindex-create``/``sindex-delete`` and joins commands with ``\n``).
+    """
+    try:
+        checked_ns(namespace)
+        checked_info_name(name, label="index name")
+        if set_name is not None:
+            checked_info_name(set_name, label="set name")
+    except InvalidInfoArgument as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
 
 _STATE_MAP = {"RW": "ready", "WO": "building", "D": "error"}
 _TYPE_MAP = {"numeric": "numeric", "string": "string", "geo2dsphere": "geo2dsphere"}
@@ -92,6 +118,7 @@ async def create_index(request: Request, body: CreateIndexRequest, client: Aeros
     retry/rollback logic (issue #260). When the create raises, we re-check the
     sindex list and treat a present index as success (state=building).
     """
+    _check_sindex_args(body.namespace, body.name, body.set)
     try:
         if body.type == "numeric":
             await client.index_integer_create(body.namespace, body.set, body.bin, body.name)
@@ -132,14 +159,15 @@ async def create_index(request: Request, body: CreateIndexRequest, client: Aeros
 async def delete_index(
     request: Request,
     client: AerospikeClient,
-    name: str = Query(..., min_length=1),
-    ns: str = Query(..., min_length=1, max_length=31, pattern=r"^[a-zA-Z0-9_-]+$"),
+    name: str = Query(..., min_length=1, max_length=255, pattern=INFO_NAME_ARG_PATTERN),
+    ns: str = Query(..., min_length=1, max_length=31, pattern=INFO_NS_ARG_PATTERN),
 ) -> Response:
     """Remove a secondary index by name from the specified namespace.
 
     Same idempotency guard as ``create_index`` (issue #260): if the drop call
     raises but the index is already gone, treat the operation as successful.
     """
+    _check_sindex_args(ns, name)
     try:
         await client.index_remove(ns, name)
     except IndexNotFound:

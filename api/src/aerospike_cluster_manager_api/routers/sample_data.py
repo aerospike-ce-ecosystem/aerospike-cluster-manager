@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 
+from aerospike_cluster_manager_api.constants import InvalidInfoArgument
 from aerospike_cluster_manager_api.dependencies import AerospikeClient
 from aerospike_cluster_manager_api.models.sample_data import CreateSampleDataRequest, CreateSampleDataResponse
 from aerospike_cluster_manager_api.rate_limit import limiter
@@ -23,10 +24,15 @@ async def create_sample_data(
     body: CreateSampleDataRequest,
     client: AerospikeClient,
 ) -> CreateSampleDataResponse:
-    return await create_sample_records(
-        client,
-        namespace=body.namespace,
-        set_name=body.set_name,
-        record_count=body.record_count,
-        create_indexes=body.create_indexes,
-    )
+    try:
+        return await create_sample_records(
+            client,
+            namespace=body.namespace,
+            set_name=body.set_name,
+            record_count=body.record_count,
+            create_indexes=body.create_indexes,
+        )
+    except InvalidInfoArgument as exc:
+        # Defence-in-depth: the request model carries the same patterns, so this
+        # only fires if a caller reaches the service some other way.
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
