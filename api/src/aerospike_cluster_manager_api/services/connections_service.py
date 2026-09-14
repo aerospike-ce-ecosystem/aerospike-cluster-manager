@@ -219,6 +219,13 @@ async def create_connection(
     return ConnectionProfileResponse.from_profile(conn)
 
 
+# Fields of :class:`UpdateConnectionRequest` that change *where* or *as whom*
+# the cached Aerospike client connects — i.e. the inputs
+# ``client_manager.get_client`` reads off the stored profile when it builds an
+# ``AsyncClient``. Updating any of them must evict the cached client.
+_CLIENT_AFFECTING_FIELDS = frozenset({"hosts", "port", "username", "password"})
+
+
 async def update_connection(
     conn_id: str,
     payload: UpdateConnectionRequest,
@@ -253,6 +260,25 @@ async def update_connection(
     conn = await db.update_connection(conn_id, update_data)
     if not conn:
         raise ConnectionNotFoundError(conn_id)
+
+    # ``client_manager`` caches one AsyncClient per connection and hands it
+    # back for as long as it reports ``is_connected()`` — it only re-reads
+    # the stored profile when it has to build a new one. So a profile that
+    # is repointed at a different cluster (or whose credentials are rotated)
+    # would keep serving every records/sets/indexes/admin/udf request from
+    # the client built against the OLD target until the process restarts.
+    # Evict here so the next request rebuilds from the row we just wrote
+    # (which also re-runs the stored-hosts SSRF gate in ``get_client``).
+    # ``close_client`` is best-effort — it pops the slot, closes the native
+    # client, invalidates ``info_cache`` and fixes the OTel gauge, and never
+    # raises on a close error — so the PUT keeps its success semantics.
+    #
+    # Only the caller's own slot is evicted, which for REST is the single
+    # shared ``session_id=None`` slot. If per-session client scoping is ever
+    # adopted, this needs a cross-session eviction instead.
+    if update_data.keys() & _CLIENT_AFFECTING_FIELDS:
+        await client_manager.close_client(conn_id)
+
     return ConnectionProfileResponse.from_profile(conn)
 
 
