@@ -107,6 +107,21 @@ class TestExecuteQueryPkLookup:
         assert first_call.args[0] == ("test", "demo", 42)
         assert second_call.args[0] == ("test", "demo", "42")
 
+    @pytest.mark.parametrize("pk", ["00042", "+5", " 7", "1_000", "-0", "\u0664\u0662"])
+    async def test_pk_lookup_auto_does_not_fall_back_to_int_for_non_canonical_pk(self, pk):
+        """Regression: non-canonical numeric strings stay STRING
+        keys, so a miss must return an empty result instead of silently reading
+        the record stored under the collapsed integer key."""
+        client = AsyncMock()
+        client.get = AsyncMock(side_effect=RecordNotFound("nope"))
+
+        body = QueryRequest(namespace="test", set="demo", primaryKey=pk, pkType="auto")
+        result = await query_service.execute_query(client, body)
+
+        assert result.records == []
+        assert client.get.await_count == 1
+        assert client.get.await_args_list[0].args[0] == ("test", "demo", pk)
+
     async def test_pk_lookup_without_set_raises_set_required(self):
         client = AsyncMock()
         body = QueryRequest(namespace="test", primaryKey="42")

@@ -116,6 +116,22 @@ class TestGetRecord:
         assert first_call.args[0] == ("test", "demo", 42)
         assert second_call.args[0] == ("test", "demo", "42")
 
+    @pytest.mark.parametrize("pk", ["00042", "+5", " 7", "1_000", "-0", "\u0664\u0662"])
+    async def test_auto_does_not_fall_back_to_int_for_non_canonical_numeric_pk(self, pk):
+        """Regression: ``resolve_pk("auto")`` deliberately keeps
+        non-canonical numeric strings — leading zeros, explicit sign, padding
+        whitespace, digit separators, non-ASCII digits — as STRING keys. A
+        NOT_FOUND on that string key must propagate; retrying with ``int(pk)``
+        would address a *different* record (e.g. "00042" -> integer key 42)."""
+        client = AsyncMock()
+        client.get = AsyncMock(side_effect=RecordNotFound("nope"))
+
+        with pytest.raises(RecordNotFound):
+            await records_service.get_record(client, "test", "demo", pk, "auto")
+
+        assert client.get.await_count == 1
+        assert client.get.await_args_list[0].args[0] == ("test", "demo", pk)
+
 
 # ---------------------------------------------------------------------------
 # delete_record
@@ -694,6 +710,19 @@ class TestFilterRecords:
 
         assert result.records == []
         assert result.has_more is False
+
+    async def test_exact_mode_non_canonical_numeric_pk_never_probes_int_key(self):
+        """Regression: the exact-PK short circuit must not turn a
+        miss on string key "00042" into a hit on integer key 42."""
+        client, _query = _build_query_mock()
+        client.get = AsyncMock(side_effect=RecordNotFound("nope"))
+
+        body = FilteredQueryRequest(namespace="test", set="demo", pkPattern="00042", pkMatchMode="exact")
+        result = await records_service.filter_records(client, body)
+
+        assert result.records == []
+        assert client.get.await_count == 1
+        assert client.get.await_args_list[0].args[0] == ("test", "demo", "00042")
 
     async def test_prefix_mode_uses_pk_filter_expression(self):
         client, query = _build_query_mock()
