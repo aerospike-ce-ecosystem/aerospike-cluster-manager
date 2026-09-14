@@ -28,7 +28,8 @@ from aerospike_py import Record
 from aerospike_py.exception import RecordNotFound
 
 # Explicit PK particle type selector. ``auto`` is a heuristic that tries
-# the most likely type then retries the alternate type on NOT_FOUND.
+# the integer type for canonical decimal PKs then retries as a string on
+# NOT_FOUND (see :func:`get_with_pk_fallback`).
 PkType = Literal["auto", "string", "int", "bytes"]
 
 
@@ -110,14 +111,23 @@ async def get_with_pk_fallback(
     pk_type: PkType,
     policy: dict[str, Any],
 ) -> Record:
-    """Read a record, retrying the alternate PK type if ``auto`` resolved wrong.
+    """Read a record, retrying as a STRING key if ``auto`` guessed INTEGER.
 
     When ``pk_type == "auto"`` and the first attempt raises
-    :class:`aerospike_py.exception.RecordNotFound`, retry with the
-    alternate string/int particle type (whichever the heuristic did *not*
-    pick). This makes the record browser work for both INTEGER-keyed and
-    STRING-keyed sets without the caller having to know upfront which
+    :class:`aerospike_py.exception.RecordNotFound`, retry with the raw
+    string form — but only when the heuristic resolved the key to an
+    ``int``. This makes the record browser work for both INTEGER-keyed
+    and STRING-keyed sets without the caller having to know upfront which
     one the record was written with.
+
+    There is deliberately **no** string→int fallback. ``resolve_pk("auto")``
+    already returns an ``int`` for every canonical decimal PK, so a ``str``
+    result means ``int(pk)`` either failed or was non-canonical
+    (``"00042"``, ``"+5"``, ``" 7"``, ``"1_000"``, ``"-0"``, non-ASCII
+    digits). Probing ``int(pk)`` in that case does not re-read the *same*
+    key under a different particle type — it reads a **different** record
+    (``"00042"`` → integer key ``42``), so the caller would be shown a
+    record it never asked for.
 
     Explicit pk types (``string`` / ``int`` / ``bytes``) never fall back —
     if the caller asserted a type, propagate the NOT_FOUND as-is so the
@@ -128,18 +138,11 @@ async def get_with_pk_fallback(
     except RecordNotFound:
         if pk_type != "auto":
             raise
-        # Heuristic picked one type; try the opposite. If the alternate
-        # type isn't applicable (e.g. non-numeric string can't become int),
-        # keep propagating the original RecordNotFound — never leak ValueError.
-        first = key_tuple[2]
-        alt: str | int | None = None
-        if isinstance(first, int):
-            alt = pk_raw  # retry as raw string
-        elif isinstance(first, str):
-            try:
-                alt = int(first)
-            except ValueError:
-                alt = None  # no integer alternative → fall through to re-raise
-        if alt is None:
+        # The heuristic collapsed a canonical decimal PK to an int; the same
+        # key may have been written with the STRING particle type, so retry
+        # with the raw string. Any other resolved type (including a string
+        # the heuristic kept on purpose) has no equivalent alternate key —
+        # propagate the original RecordNotFound.
+        if not isinstance(key_tuple[2], int):
             raise
-        return await client.get((key_tuple[0], key_tuple[1], alt), policy=policy)
+        return await client.get((key_tuple[0], key_tuple[1], pk_raw), policy=policy)
