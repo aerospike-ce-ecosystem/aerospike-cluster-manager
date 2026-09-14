@@ -15,6 +15,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, patch
+from urllib.parse import quote
 
 import pytest
 from fastapi import FastAPI
@@ -147,3 +148,174 @@ class TestChainedNamespaceNeverReachesTheWire:
 
         assert response.status_code >= 400, response.text
         mock_client.info_random_node.assert_not_awaited()
+
+
+# Set names, index names and UDF module names are interpolated into info
+# commands exactly the same way a namespace is --
+# ``truncate:namespace=<ns>;set=<set>``, ``sindex-create:...;indexname=<name>``,
+# ``sindex-delete:...;indexname=<name>``, ``udf-remove:filename=<f>;`` -- and
+# aerospike-core joins the commands it sends with ``\n``. #515 closed the
+# namespace half; these routes are the sibling inputs it never touched.
+CHAINED_NAMES = [
+    "s1\ntruncate-namespace:namespace=prod",
+    "s1\rtruncate-namespace:namespace=prod",
+    "s1;truncate-namespace:namespace=prod",
+    "s1:truncate",
+    "s1 truncate",
+    "s1\ttruncate",
+]
+
+
+def _patched(mock_client):
+    return (
+        patch(
+            "aerospike_cluster_manager_api.dependencies.db.get_connection",
+            AsyncMock(return_value={"id": "conn-test"}),
+        ),
+        patch(
+            "aerospike_cluster_manager_api.dependencies.client_manager.get_client",
+            AsyncMock(return_value=mock_client),
+        ),
+    )
+
+
+class TestChainedSetNameNeverReachesTruncate:
+    @pytest.mark.parametrize("set_name", CHAINED_NAMES)
+    async def test_truncate_is_refused(self, client: AsyncClient, set_name: str) -> None:
+        mock_client = AsyncMock()
+        conn_patch, client_patch = _patched(mock_client)
+        with conn_patch, client_patch:
+            response = await client.post(f"/api/sets/conn-test/test/{quote(set_name, safe='')}/truncate")
+
+        assert response.status_code >= 400, response.text
+        mock_client.truncate.assert_not_awaited()
+
+    @pytest.mark.parametrize("ns", ["test\ntruncate-namespace:namespace=prod", "test;truncate"])
+    async def test_truncate_namespace_is_refused(self, client: AsyncClient, ns: str) -> None:
+        mock_client = AsyncMock()
+        conn_patch, client_patch = _patched(mock_client)
+        with conn_patch, client_patch:
+            response = await client.post(f"/api/sets/conn-test/{quote(ns, safe='')}/s1/truncate")
+
+        assert response.status_code >= 400, response.text
+        mock_client.truncate.assert_not_awaited()
+
+    @pytest.mark.parametrize("set_name", ["demo", "orders-2024", "my.set", "cache$x", "sample_set"])
+    async def test_real_set_names_still_truncate(self, client: AsyncClient, set_name: str) -> None:
+        mock_client = AsyncMock()
+        conn_patch, client_patch = _patched(mock_client)
+        with conn_patch, client_patch:
+            response = await client.post(f"/api/sets/conn-test/test/{quote(set_name, safe='')}/truncate")
+
+        assert response.status_code == 200, response.text
+        mock_client.truncate.assert_awaited_once_with("test", set_name, 0)
+
+
+class TestChainedIndexNameNeverReachesSindex:
+    @pytest.mark.parametrize("name", CHAINED_NAMES)
+    async def test_delete_index_is_refused(self, client: AsyncClient, name: str) -> None:
+        mock_client = AsyncMock()
+        conn_patch, client_patch = _patched(mock_client)
+        with conn_patch, client_patch:
+            response = await client.delete("/api/indexes/conn-test", params={"ns": "test", "name": name})
+
+        assert response.status_code >= 400, response.text
+        mock_client.index_remove.assert_not_awaited()
+
+    @pytest.mark.parametrize("bad", CHAINED_NAMES)
+    @pytest.mark.parametrize("field", ["set", "name"])
+    async def test_create_index_is_refused(self, client: AsyncClient, field: str, bad: str) -> None:
+        mock_client = AsyncMock()
+        body = {"namespace": "test", "set": "s1", "bin": "b", "name": "idx1", "type": "string"}
+        body[field] = bad
+        conn_patch, client_patch = _patched(mock_client)
+        with conn_patch, client_patch:
+            response = await client.post("/api/indexes/conn-test", json=body)
+
+        assert response.status_code >= 400, response.text
+        mock_client.index_string_create.assert_not_awaited()
+
+    async def test_create_index_namespace_is_refused(self, client: AsyncClient) -> None:
+        mock_client = AsyncMock()
+        conn_patch, client_patch = _patched(mock_client)
+        with conn_patch, client_patch:
+            response = await client.post(
+                "/api/indexes/conn-test",
+                json={
+                    "namespace": "test\ntruncate-namespace:namespace=prod",
+                    "set": "s1",
+                    "bin": "b",
+                    "name": "idx1",
+                    "type": "string",
+                },
+            )
+
+        assert response.status_code >= 400, response.text
+        mock_client.index_string_create.assert_not_awaited()
+
+    async def test_real_index_names_still_drop(self, client: AsyncClient) -> None:
+        mock_client = AsyncMock()
+        conn_patch, client_patch = _patched(mock_client)
+        with conn_patch, client_patch:
+            response = await client.delete("/api/indexes/conn-test", params={"ns": "test", "name": "idx_bin_int-1"})
+
+        assert response.status_code == 204, response.text
+        mock_client.index_remove.assert_awaited_once_with("test", "idx_bin_int-1")
+
+    async def test_real_index_create_still_works(self, client: AsyncClient) -> None:
+        mock_client = AsyncMock()
+        conn_patch, client_patch = _patched(mock_client)
+        with conn_patch, client_patch:
+            response = await client.post(
+                "/api/indexes/conn-test",
+                json={"namespace": "test", "set": "my.set", "bin": "b", "name": "idx_1", "type": "string"},
+            )
+
+        assert response.status_code == 201, response.text
+        mock_client.index_string_create.assert_awaited_once_with("test", "my.set", "b", "idx_1")
+
+
+class TestChainedSampleDataSetNameNeverReachesSindex:
+    @pytest.mark.parametrize("set_name", CHAINED_NAMES)
+    async def test_sample_data_is_refused(self, client: AsyncClient, set_name: str) -> None:
+        mock_client = AsyncMock()
+        conn_patch, client_patch = _patched(mock_client)
+        with conn_patch, client_patch:
+            response = await client.post(
+                "/api/sample-data/conn-test",
+                json={"namespace": "test", "setName": set_name, "recordCount": 1},
+            )
+
+        assert response.status_code >= 400, response.text
+        mock_client.put.assert_not_awaited()
+        mock_client.index_integer_create.assert_not_awaited()
+
+
+class TestChainedUDFFilenameNeverReachesUdfRemove:
+    @pytest.mark.parametrize(
+        "filename",
+        [
+            "m.lua\ntruncate-namespace:namespace=prod",
+            "m.lua;truncate-namespace:namespace=prod",
+            "m.lua:truncate",
+            "m.lua truncate",
+            "../../etc/passwd",
+        ],
+    )
+    async def test_delete_udf_is_refused(self, client: AsyncClient, filename: str) -> None:
+        mock_client = AsyncMock()
+        conn_patch, client_patch = _patched(mock_client)
+        with conn_patch, client_patch:
+            response = await client.delete("/api/udfs/conn-test", params={"filename": filename})
+
+        assert response.status_code >= 400, response.text
+        mock_client.udf_remove.assert_not_awaited()
+
+    async def test_real_module_names_still_delete(self, client: AsyncClient) -> None:
+        mock_client = AsyncMock()
+        conn_patch, client_patch = _patched(mock_client)
+        with conn_patch, client_patch:
+            response = await client.delete("/api/udfs/conn-test", params={"filename": "my_module-1.lua"})
+
+        assert response.status_code == 204, response.text
+        mock_client.udf_remove.assert_awaited_once_with("my_module-1.lua")

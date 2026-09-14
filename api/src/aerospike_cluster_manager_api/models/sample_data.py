@@ -2,10 +2,16 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from aerospike_cluster_manager_api.constants import INFO_NAME_ARG_PATTERN, INFO_NS_ARG_PATTERN
+
 
 class CreateSampleDataRequest(BaseModel):
-    namespace: str = Field(min_length=1, max_length=31)
-    set_name: str = Field(default="sample_set", min_length=1, max_length=63, alias="setName")
+    # Both reach ``sindex-create:namespace=..;set=..`` when
+    # ``createIndexes`` is on -- same info-frame boundary as CreateIndexRequest.
+    namespace: str = Field(min_length=1, max_length=31, pattern=INFO_NS_ARG_PATTERN)
+    set_name: str = Field(
+        default="sample_set", min_length=1, max_length=63, alias="setName", pattern=INFO_NAME_ARG_PATTERN
+    )
     record_count: int = Field(default=1234, ge=1, le=10000, alias="recordCount")
     create_indexes: bool = Field(default=True, alias="createIndexes")
 
