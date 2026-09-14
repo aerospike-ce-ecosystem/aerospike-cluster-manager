@@ -213,6 +213,76 @@ class TestUpdateConnection:
         with pytest.raises(WorkspaceNotFoundError):
             await connections_service.update_connection(created.id, update)
 
+    @pytest.mark.parametrize(
+        "update_kwargs",
+        [
+            {"hosts": ["10.0.0.2"]},
+            {"port": 4000},
+            {"username": "other"},
+            {"password": "rotated"},
+        ],
+        ids=["hosts", "port", "username", "password"],
+    )
+    async def test_connection_affecting_update_evicts_cached_client(self, init_test_db, update_kwargs):
+        """A repointed/re-credentialed profile must drop its cached client.
+
+        Otherwise ``client_manager.get_client`` keeps handing out the client
+        built from the OLD profile for as long as it stays connected, and
+        every subsequent request lands on the previous cluster.
+        """
+        created = await connections_service.create_connection(_create_payload())
+        with patch.object(connections_service.client_manager, "close_client", new=AsyncMock()) as close_client:
+            await connections_service.update_connection(created.id, UpdateConnectionRequest(**update_kwargs))
+        close_client.assert_awaited_once_with(created.id)
+
+    async def test_cosmetic_update_keeps_cached_client(self, init_test_db):
+        """Renaming / recolouring does not change the target, so the live
+        client must survive — evicting it would drop a healthy connection."""
+        created = await connections_service.create_connection(_create_payload())
+        update = UpdateConnectionRequest(name="Renamed", color="#00FF00", note="n", labels={"a": "b"})
+        with patch.object(connections_service.client_manager, "close_client", new=AsyncMock()) as close_client:
+            await connections_service.update_connection(created.id, update)
+        close_client.assert_not_awaited()
+
+    async def test_next_client_is_rebuilt_against_the_new_target(self, init_test_db):
+        """End-to-end shape of the bug: before the fix ``get_client`` kept
+        returning the client built from the ORIGINAL hosts, so every request
+        after the PUT still hit the old cluster."""
+        from aerospike_cluster_manager_api.client_manager import client_manager
+
+        created = await connections_service.create_connection(_create_payload())
+        built: list[dict] = []
+
+        def _fake_client(as_config):
+            built.append(as_config)
+            client = AsyncMock()
+            client.is_connected = lambda: True
+            return client
+
+        with patch(
+            "aerospike_cluster_manager_api.client_manager.aerospike_py.AsyncClient",
+            side_effect=_fake_client,
+        ):
+            first = await client_manager.get_client(created.id)
+            await connections_service.update_connection(created.id, UpdateConnectionRequest(hosts=["10.0.0.2"]))
+            second = await client_manager.get_client(created.id)
+
+        try:
+            assert second is not first
+            assert [h[0] for h in built[0]["hosts"]] == ["10.0.0.1"]
+            assert [h[0] for h in built[1]["hosts"]] == ["10.0.0.2"]
+        finally:
+            await client_manager.close_client(created.id)
+
+    async def test_missing_connection_does_not_evict(self, init_test_db):
+        """No row updated → nothing was repointed, so nothing to evict."""
+        with (
+            patch.object(connections_service.client_manager, "close_client", new=AsyncMock()) as close_client,
+            pytest.raises(ConnectionNotFoundError),
+        ):
+            await connections_service.update_connection("conn-nonexistent", UpdateConnectionRequest(hosts=["10.0.0.2"]))
+        close_client.assert_not_awaited()
+
 
 # ---------------------------------------------------------------------------
 # delete_connection
