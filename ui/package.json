@@ -26,7 +26,7 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.111",
-    "@ai-sdk/openai": "^3.0.69",
+    "@ai-sdk/openai": "^3.0.112",
     "@copilotkit/react-core": "^1.60.1",
     "@copilotkit/runtime": "^1.59.5",
     "@internationalized/date": "^3.12.2",
@@ -47,7 +47,7 @@
     "@react-stately/datepicker": "^3.17.1",
     "@remixicon/react": "^4.6.0",
     "@tanstack/react-table": "^8.21.3",
-    "ai": "^6.0.201",
+    "ai": "^6.0.282",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "hono": "^4.13.7",
